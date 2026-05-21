@@ -1,0 +1,52 @@
+# Build outputs
+**/bin/
+**/obj/
+**/node_modules/
+**/dist/
+**/.vite/
+**/build/
+
+# IDE
+.vs/
+.vscode/
+*.user
+*.suo
+*.csproj.user
+
+# Local config (NEVER commit)
+appsettings.json
+appsettings.Local.json
+appsettings.Development.json
+.env
+.env.local
+.env.*.local
+
+# Runtime data
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/*.db.bak.*
+data/images/
+keys/
+**/MelonLoader/UserData/dorknet-clientmod.json
+**/MelonLoader/Latest.log
+**/MelonLoader/Logs/
+**/output_log.txt
+**/crash_reports/
+
+# Decompilation dumps — never ship Rec Room IP derivative works
+Cpp2IL_ISIL/
+Cpp2IL_CS/
+**/Recroom_Release_Data/
+**/Recroom_Release.exe
+**/GameAssembly.dll
+**/global-metadata.dat
+**/version.dll
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test outputs
+TestResults/
+*.coverage
