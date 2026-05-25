@@ -1,0 +1,23 @@
+{
+  "$schema_version": 1,
+  "$comment": "Branch-to-client-build manifest. The Easy launcher and install scripts read this to map a detected Rec Room install to the right DorkNet branch + release. When adding a branch, append here AND to BRANCHES.md.",
+  "branches": [
+    {
+      "branch": "december-2020-12-18",
+      "client_build": "2020.12.18",
+      "alt_builds": [],
+      "version_key": "december_2020_12_18",
+      "release_tag_prefix": "v1-december",
+      "supported": true
+    },
+    {
+      "branch": "march-2020-03-10",
+      "client_build": "2020.03.10",
+      "alt_builds": ["2020.03.06"],
+      "version_key": "march_2020_03_10",
+      "release_tag_prefix": "v1-march",
+      "supported": false,
+      "supported_note": "branch import pending"
+    }
+  ]
+}

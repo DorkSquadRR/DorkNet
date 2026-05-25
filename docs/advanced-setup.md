@@ -29,9 +29,22 @@ Tunnel) this should comfortably run 50+ concurrent players on a $20/mo VPS.
 
 ## Setup
 
+### 1. Pick the branch matching your client build
+
+DorkNet keeps one branch per supported Rec Room build. See
+[`../BRANCHES.md`](../BRANCHES.md) for the full chart. Quick map:
+
+| Your Rec Room install | Branch to clone |
+|---|---|
+| 2020.12.18 (most common DorkNet target) | `december-2020-12-18` |
+| 2020.03.10 (or 2020.03.06) | `march-2020-03-10` |
+
+### 2. Clone + configure
+
 ```bash
-git clone https://github.com/YOUR_GH_USERNAME/dorknet
-cd dorknet/docker
+# Replace the branch in --branch with the row that matched above.
+git clone --branch december-2020-12-18 https://github.com/DorkSquadRR/DorkNet
+cd DorkNet/docker
 
 cp .env.example .env
 $EDITOR .env  # fill in the values noted below
@@ -93,12 +106,14 @@ server is ready at `https://api.your-server.example.com/healthz`.
 Same patcher as Easy mode, but you'll run it from the command line:
 
 ```powershell
-.\tools\patch-client.ps1 `
-  -RecRoomDir "C:\path\to\Recroom_Release" `
-  -ServerHost "your-server.example.com" `
-  -PhotonAppId "your-photon-realtime-appid" `
-  -PhotonRegion "eu"
+.\tools\install-plugin.ps1 `
+  -RecRoomPath "C:\path\to\Recroom_Release_Data" `
+  -PhotonAppId "<your-photon-realtime-app-id>" `
+  -PhotonVoiceAppId "<your-photon-voice-app-id>"
 ```
+
+The installer drops the DorkNet BepInEx plugin into the client's
+`BepInEx/plugins/` and writes its config under `BepInEx/config/`.
 
 ## Admin UI
 
@@ -119,7 +134,7 @@ docker compose exec postgres pg_dump -U dorknet dorknet > backup.sql
 ## Updating
 
 ```bash
-cd dorknet
+cd DorkNet
 git pull
 docker compose pull
 docker compose up -d
@@ -127,3 +142,10 @@ docker compose up -d
 
 The server runs all idempotent migrations on boot, so version upgrades
 are zero-downtime as long as the schema changes are additive.
+
+> ⚠️ `git pull` only fetches updates for **your current branch**.
+> DorkNet branches are independent — updates on `december-2020-12-18`
+> don't flow to `march-2020-03-10` and vice versa. If you've checked
+> out the wrong branch for your client, switching is a fresh
+> `git clone --branch ...` (the schema and Photon AppId requirements
+> differ).
