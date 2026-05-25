@@ -5,7 +5,7 @@ client; run a private server for yourself and your friends.
 
 > ⚠️ **Not affiliated with Rec Room Inc. or Against Gravity.**
 > See [DISCLAIMER.md](DISCLAIMER.md). DorkNet ships no Rec Room game assets or
-> modified binaries — you supply your own legally-acquired Rec Room 2020.03.10
+> modified binaries — you supply your own legally-acquired Rec Room 2020.12.18
 > install.
 
 ---

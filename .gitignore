@@ -43,6 +43,21 @@ Cpp2IL_CS/
 **/global-metadata.dat
 **/version.dll
 
+# TLS certs / private keys — never ship under any name
+*.pem
+*.key
+*.crt
+*.cer
+*.pfx
+*.p12
+*.jks
+*.asc
+*.gpg
+*.kdbx
+
+# Maintainer-side scrub tool — operates ON this repo, must not be IN it
+tools/scrub-for-public.ps1
+
 # OS
 .DS_Store
 Thumbs.db
