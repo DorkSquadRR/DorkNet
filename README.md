@@ -19,7 +19,7 @@ tuned to that build's wire protocol.
 | Client build | Branch | Status |
 |---|---|---|
 | **Rec Room 2020.12.18** (December) | [`december-2020-12-18`](../../tree/december-2020-12-18) | Active |
-| **Rec Room 2020.03.10** (March) | [`march-2020-03-10`](../../tree/march-2020-03-10) | Pending import |
+| **Rec Room 2020.03.10** (March) | [`march-2020-03-10`](../../tree/march-2020-03-10) | Active |
 
 See [BRANCHES.md](BRANCHES.md) for the full per-branch breakdown
 (supported features, schema notes, plugin compatibility). Programs that

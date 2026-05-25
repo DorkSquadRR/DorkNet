@@ -16,8 +16,7 @@
       "alt_builds": ["2020.03.06"],
       "version_key": "march_2020_03_10",
       "release_tag_prefix": "v1-march",
-      "supported": false,
-      "supported_note": "branch import pending"
+      "supported": true
     }
   ]
 }

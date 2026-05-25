@@ -20,8 +20,8 @@ tuned to that build's wire protocol. Pick the one matching your install.
 
 ### `march-2020-03-10`
 
-- **Client build:** Rec Room 2020.03.10
-- **Status:** pending import
+- **Client build:** Rec Room 2020.03.10 (also serves 2020.03.06)
+- **Status:** active
 - **Notes:**
   - Earlier wire shape — no clubs, no playlists, simpler store catalog.
   - Diverges from `december-2020-12-18` by ~170 files; cannot be
