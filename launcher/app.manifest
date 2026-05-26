@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<assembly manifestVersion="1.0" xmlns="urn:schemas-microsoft-com:asm.v1">
+  <assemblyIdentity version="0.1.0.0" name="DorkNet.EasyApp"/>
+  <!-- High-DPI awareness so the launcher window doesn't render blurry on
+       4K displays. PerMonitorV2 = correct scaling when the user moves the
+       window between monitors with different DPIs. -->
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+    </windowsSettings>
+  </application>
+  <!-- No requestedExecutionLevel — DorkNet doesn't need admin. The
+       Rec Room install path is user-readable, the patcher writes into
+       it without elevation, and the server binds to high ports. -->
+</assembly>
