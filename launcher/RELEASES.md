@@ -95,6 +95,7 @@ Defaults:
 | `{HOST}` | Host's tunnel hostname (or join code's `host` field) |
 | `{PHOTON_APPID}` | Host's Photon Realtime AppId |
 | `{PHOTON_VOICE_APPID}` | Host's Photon Voice AppId (falls back to Realtime if empty) |
+| `{PHOTON_REGION}` | Photon Cloud region (us/eu/asia/jp/sa/kr/in/au); defaults to `us` |
 
 Example template:
 

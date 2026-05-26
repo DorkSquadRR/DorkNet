@@ -28,7 +28,8 @@ namespace DorkNet.Launcher.Backend;
 /// }
 /// </code>
 /// Config template placeholders: <c>{HOST}</c>, <c>{PHOTON_APPID}</c>,
-/// <c>{PHOTON_VOICE_APPID}</c>. Anything else passes through unchanged.</para></summary>
+/// <c>{PHOTON_VOICE_APPID}</c>, <c>{PHOTON_REGION}</c>. Anything else
+/// passes through unchanged.</para></summary>
 public sealed class ClientPatcher
 {
     private const string DefaultPluginDest = "MelonLoader/Mods";
@@ -39,11 +40,12 @@ public sealed class ClientPatcher
         string recRoomDataPath,
         string photonAppId,
         string photonVoiceAppId,
+        string photonRegion,
         string apexHost,
         CancellationToken ct = default)
     {
         return Task.Run(() => ApplyCore(patcherDir, recRoomDataPath,
-            photonAppId, photonVoiceAppId, apexHost), ct);
+            photonAppId, photonVoiceAppId, photonRegion, apexHost), ct);
     }
 
     private PatchResult ApplyCore(
@@ -51,6 +53,7 @@ public sealed class ClientPatcher
         string recRoomDataPath,
         string photonAppId,
         string photonVoiceAppId,
+        string photonRegion,
         string apexHost)
     {
         var log = new System.Text.StringBuilder();
@@ -133,7 +136,8 @@ public sealed class ClientPatcher
                     .Replace("{HOST}", apexHost ?? "")
                     .Replace("{PHOTON_APPID}", photonAppId ?? "")
                     .Replace("{PHOTON_VOICE_APPID}",
-                        string.IsNullOrEmpty(photonVoiceAppId) ? photonAppId ?? "" : photonVoiceAppId);
+                        string.IsNullOrEmpty(photonVoiceAppId) ? photonAppId ?? "" : photonVoiceAppId)
+                    .Replace("{PHOTON_REGION}", string.IsNullOrEmpty(photonRegion) ? "us" : photonRegion);
                 File.WriteAllText(configDest, rendered);
                 log.AppendLine($"[patch] wrote config: {Path.GetFileName(configDest)}");
             }

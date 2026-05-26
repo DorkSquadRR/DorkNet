@@ -224,7 +224,7 @@ public partial class MainWindow : Window
             HostStatusText.Text = "Patching your Rec Room client…";
             var patch = await _patcher.ApplyAsync(
                 patcherDir, _state.RecRoomPath!,
-                _state.PhotonAppId, _state.PhotonVoiceAppId, _hostApex);
+                _state.PhotonAppId, _state.PhotonVoiceAppId, _state.PhotonRegion, _hostApex);
             if (!patch.Ok) { ShowError("Patcher failed: " + Truncate(patch.Log, 500)); return; }
 
             var code = JoinCode.Encode(new JoinPayload
@@ -324,7 +324,7 @@ public partial class MainWindow : Window
             JoinStatusText.Text = "Patching your Rec Room client…";
             var patch = await _patcher.ApplyAsync(
                 patcherDir, _state.RecRoomPath!,
-                payload.PhotonAppId, payload.PhotonVoiceAppId, payload.Host);
+                payload.PhotonAppId, payload.PhotonVoiceAppId, payload.PhotonRegion, payload.Host);
             if (!patch.Ok) { ShowError("Patcher failed: " + Truncate(patch.Log, 500)); return; }
 
             JoinStatusText.Text = $"Patched and ready. Connecting to {payload.Host}. " +
