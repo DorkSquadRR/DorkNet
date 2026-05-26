@@ -238,7 +238,8 @@ public partial class MainWindow : Window
             });
             JoinCodeText.Text = code;
             JoinCodePanel.Visibility = Visibility.Visible;
-            HostStatusText.Text = $"Hosting at {publicUrl}";
+            HostStatusText.Text = $"Hosting at {publicUrl}. Share the join code below or launch Rec Room to test.";
+            HostLaunchBtn.Visibility = Visibility.Visible;
         }
         catch (Exception ex)
         {
@@ -253,6 +254,7 @@ public partial class MainWindow : Window
         await ShutdownServerAsync();
         HostStartBtn.IsEnabled = true;
         HostStopBtn.Visibility = Visibility.Collapsed;
+        HostLaunchBtn.Visibility = Visibility.Collapsed;
         JoinCodePanel.Visibility = Visibility.Collapsed;
         HostStatusText.Text = "Stopped.";
     }
@@ -325,10 +327,20 @@ public partial class MainWindow : Window
                 payload.PhotonAppId, payload.PhotonVoiceAppId, payload.Host);
             if (!patch.Ok) { ShowError("Patcher failed: " + Truncate(patch.Log, 500)); return; }
 
-            JoinStatusText.Text = "Patched. Launch Rec Room from Steam to connect.";
+            JoinStatusText.Text = $"Patched and ready. Connecting to {payload.Host}. " +
+                "Click Launch Rec Room when you're ready to play.";
+            JoinLaunchBtn.Visibility = Visibility.Visible;
         }
         catch (Exception ex) { ShowError(ex.Message); }
         finally { RefreshJoinReadiness(); }
+    }
+
+    private void OnLaunchRecRoom(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(_state.RecRoomPath))
+        { ShowError("Pick your Rec Room install first."); return; }
+        if (!RecRoomLauncher.TryLaunch(_state.RecRoomPath, out var error))
+            ShowError(error);
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────

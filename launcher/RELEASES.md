@@ -6,8 +6,8 @@ branch, then fetches release artifacts from each branch's GitHub
 Releases.
 
 Per-version branches must publish releases that follow this contract,
-otherwise the launcher reports "no release found" to users on host /
-join.
+otherwise the launcher reports "no release found" / "manifest missing"
+to users on host / join.
 
 ## Tag naming
 
@@ -26,11 +26,9 @@ Examples (matching the current `release_tag_prefix` values):
 | `march-2020-03-10` | `v1-march` | `v1-march-2026.06.15` |
 
 The launcher picks the most-recent release (by `published_at`) whose
-tag starts with the prefix, then looks for the asset names below.
+tag starts with the prefix, then looks for the two asset names below.
 
 ## Required assets
-
-Each release must attach these two files:
 
 ### 1. `dorknet-server-{version_key}-win-x64.zip`
 
@@ -42,42 +40,93 @@ Build with:
 ```pwsh
 cd DorkNet.Server
 dotnet publish -c Release -r win-x64 --self-contained -p:PublishSingleFile=true
-# Then zip the publish dir's contents (NOT the dir itself):
 cd bin/Release/net9.0/win-x64/publish
 Compress-Archive -Path * -DestinationPath ../../../../../dorknet-server-{version_key}-win-x64.zip
 ```
 
 The zip's root must contain `DorkNet.Server.exe` (or any `.exe`; the
-launcher scans for it). Folder layout below that is preserved as-is.
+launcher scans for it).
 
 ### 2. `dorknet-clientpatch-{version_key}.zip`
 
-The contents of the per-version branch's `tools/` directory limited
-to the patcher scripts the launcher invokes:
+The MelonLoader-based client patcher, packed into a single zip with a
+**manifest.json** at the zip root telling the launcher what to do.
+The launcher performs every step in C# — no PowerShell scripts run.
 
-- `install-plugin.ps1` (preferred — BepInEx route)
-- `install-legacy-client.ps1` (fallback — direct byte-patch route)
-- Any helper scripts these reference
-- The compiled `DorkNet.ClientPatch.dll` if `install-plugin.ps1`
-  expects a prebuilt DLL
-
-The launcher invokes the patcher script with these arguments:
+**Required layout inside the zip:**
 
 ```
-powershell -NoProfile -ExecutionPolicy Bypass -File install-plugin.ps1 `
-  -RecRoomPath <user's path> `
-  -PhotonAppId <user's> `
-  -PhotonVoiceAppId <user's> `
-  -ServerHost <apex host or join-code host>
+manifest.json                       (described below)
+MelonLoader.zip                     (optional — the MelonLoader install tree)
+DorkNet.ClientMod.dll               (required — the DorkNet MelonLoader plugin)
+dorknet-clientmod.json.template     (optional — UserData config template)
 ```
 
-So the script must accept those four parameters. If your branch's
-patcher needs additional config, default to safe values.
+**`manifest.json` schema (v1):**
+
+```json
+{
+  "$schema_version": 1,
+  "loader_archive": "MelonLoader.zip",
+  "plugin_dll": "DorkNet.ClientMod.dll",
+  "plugin_dest": "MelonLoader/Mods",
+  "config_template": "dorknet-clientmod.json.template",
+  "config_dest": "MelonLoader/UserData/dorknet-clientmod.json",
+  "old_plugin_paths": [
+    "BepInEx/plugins/DorkNet.ClientPatch.dll"
+  ]
+}
+```
+
+All fields except `$schema_version` and `plugin_dll` are optional.
+Defaults:
+
+| Field | Default |
+|---|---|
+| `plugin_dest` | `MelonLoader/Mods` |
+| `config_dest` | `MelonLoader/UserData/dorknet-clientmod.json` |
+| `loader_archive` | (none — assumes user has MelonLoader installed) |
+| `config_template` | (none — no config written) |
+
+**`config_template` placeholders** rendered before write:
+
+| Placeholder | Source |
+|---|---|
+| `{HOST}` | Host's tunnel hostname (or join code's `host` field) |
+| `{PHOTON_APPID}` | Host's Photon Realtime AppId |
+| `{PHOTON_VOICE_APPID}` | Host's Photon Voice AppId (falls back to Realtime if empty) |
+
+Example template:
+
+```json
+{
+  "ServerHost": "{HOST}",
+  "PhotonAppId": "{PHOTON_APPID}",
+  "PhotonVoiceAppId": "{PHOTON_VOICE_APPID}"
+}
+```
+
+## What the launcher does on Apply
+
+Given the manifest above, the launcher does (in this order):
+
+1. Extracts `loader_archive` over the user's Rec Room install root
+   (the parent of `Recroom_Release_Data`). MelonLoader's `version.dll`
+   and `MelonLoader/` tree land in the right places.
+2. Deletes any `old_plugin_paths` (cleans up an old BepInEx-era DLL,
+   a previous plugin filename, etc.).
+3. Copies `plugin_dll` to `<recroom-root>/<plugin_dest>/`.
+4. Renders `config_template` (placeholder substitution) and writes
+   to `<recroom-root>/<config_dest>`.
+
+No PowerShell, no separate Steamless invocation, no byte-level
+metadata patching in v1 — keep the patcher zip declarative. Future
+schema versions can add fields for those without breaking older
+launchers (they ignore unknown fields).
 
 ## Verifying a release before publishing
 
 ```pwsh
-# Locally simulate the launcher's fetch.
 $tag = "v1-december-2026.06.15"
 gh release view $tag --repo DorkSquadRR/DorkNet
 gh release download $tag --repo DorkSquadRR/DorkNet `
@@ -85,12 +134,12 @@ gh release download $tag --repo DorkSquadRR/DorkNet `
   --pattern "dorknet-clientpatch-december_2020_12_18.zip"
 ```
 
-Then unzip + boot the server locally to confirm it starts, and
-unzip + run the patcher against a clean Rec Room install to confirm
-patching works.
+Then unzip + inspect: the patcher zip should have `manifest.json` at
+root, the named DLL should exist, the `config_template` (if listed)
+should exist, etc.
 
 ## Future: GitHub Actions workflow
 
 Each per-version branch should land a `.github/workflows/release.yml`
-that builds + zips + publishes the two artifacts on tag push. Not yet
-implemented; releases are manual for now.
+that builds + packages the artifacts on tag push. Not yet implemented;
+releases are manual for now.

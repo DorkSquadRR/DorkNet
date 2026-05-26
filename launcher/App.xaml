@@ -4,47 +4,118 @@
              StartupUri="MainWindow.xaml">
 
     <Application.Resources>
-        <!-- ── Dark theme palette ─────────────────────────────────────── -->
-        <SolidColorBrush x:Key="Bg" Color="#0E0F13" />
-        <SolidColorBrush x:Key="BgElev" Color="#181A21" />
-        <SolidColorBrush x:Key="BgElev2" Color="#21232D" />
-        <SolidColorBrush x:Key="Border" Color="#2A2D3A" />
-        <SolidColorBrush x:Key="Ink" Color="#E8EBF3" />
-        <SolidColorBrush x:Key="InkSoft" Color="#9AA0B4" />
-        <SolidColorBrush x:Key="InkFaint" Color="#5E6478" />
-        <SolidColorBrush x:Key="Brand" Color="#7C5CFF" />
-        <SolidColorBrush x:Key="BrandHover" Color="#9A7EFF" />
-        <SolidColorBrush x:Key="Danger" Color="#FF6B6B" />
-        <SolidColorBrush x:Key="Ok" Color="#44D68A" />
+        <!-- ── Palette ─────────────────────────────────────────────────
+             Rec Room-adjacent — warm coral + teal on a deep purple-navy.
+             Avoids the cold-grey "developer tool" look in favour of the
+             friendly game-launcher aesthetic. -->
+        <SolidColorBrush x:Key="Bg" Color="#16102A" />
+        <SolidColorBrush x:Key="BgDeeper" Color="#0E0A1F" />
+        <SolidColorBrush x:Key="BgElev" Color="#221833" />
+        <SolidColorBrush x:Key="BgElev2" Color="#2E2245" />
+        <SolidColorBrush x:Key="Border" Color="#3A2C56" />
+        <SolidColorBrush x:Key="BorderSoft" Color="#2A2042" />
+        <SolidColorBrush x:Key="Ink" Color="#F7F3FF" />
+        <SolidColorBrush x:Key="InkSoft" Color="#B8AED4" />
+        <SolidColorBrush x:Key="InkFaint" Color="#6E608E" />
 
-        <!-- ── TextBox / PasswordBox base ──────────────────────────────── -->
+        <!-- Brand: warm coral, with teal as the secondary accent. -->
+        <SolidColorBrush x:Key="Brand" Color="#FF7B5C" />
+        <SolidColorBrush x:Key="BrandHover" Color="#FF9277" />
+        <SolidColorBrush x:Key="BrandDeep" Color="#E55F40" />
+        <SolidColorBrush x:Key="Teal" Color="#44D6C4" />
+        <SolidColorBrush x:Key="TealDeep" Color="#2DB8A6" />
+        <SolidColorBrush x:Key="Sunshine" Color="#FFD555" />
+        <SolidColorBrush x:Key="Ok" Color="#5BE0A6" />
+        <SolidColorBrush x:Key="Danger" Color="#FF6B8A" />
+
+        <!-- Wordmark gradient: coral → pink → teal across the "DorkNet" letters. -->
+        <LinearGradientBrush x:Key="WordmarkBrush" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#FF7B5C" Offset="0" />
+            <GradientStop Color="#FF5C95" Offset="0.55" />
+            <GradientStop Color="#44D6C4" Offset="1" />
+        </LinearGradientBrush>
+
+        <!-- Subtle card-back gradient — radial illusion via linear top-left
+             tint into the base elev colour. -->
+        <LinearGradientBrush x:Key="CardBg" StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#2A1F40" Offset="0" />
+            <GradientStop Color="#221833" Offset="1" />
+        </LinearGradientBrush>
+
+        <LinearGradientBrush x:Key="CardBgHost" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#3A1F35" Offset="0" />
+            <GradientStop Color="#221833" Offset="1" />
+        </LinearGradientBrush>
+
+        <LinearGradientBrush x:Key="CardBgJoin" StartPoint="0,0" EndPoint="1,1">
+            <GradientStop Color="#1F3540" Offset="0" />
+            <GradientStop Color="#221833" Offset="1" />
+        </LinearGradientBrush>
+
+        <!-- Soft drop-shadow effect used on cards / primary buttons. -->
+        <DropShadowEffect x:Key="CardShadow" BlurRadius="24" ShadowDepth="0"
+                          Color="#000000" Opacity="0.45" />
+        <DropShadowEffect x:Key="BtnShadow" BlurRadius="16" ShadowDepth="2"
+                          Color="#FF5C40" Opacity="0.35" />
+
+        <!-- ── TextBox ─────────────────────────────────────────────────── -->
         <Style TargetType="TextBox">
             <Setter Property="Background" Value="{StaticResource BgElev}" />
             <Setter Property="Foreground" Value="{StaticResource Ink}" />
             <Setter Property="CaretBrush" Value="{StaticResource Ink}" />
             <Setter Property="BorderBrush" Value="{StaticResource Border}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Padding" Value="8,6" />
-            <Setter Property="FontFamily" Value="Segoe UI" />
-            <Setter Property="FontSize" Value="13" />
+            <Setter Property="BorderThickness" Value="1.5" />
+            <Setter Property="Padding" Value="12,10" />
+            <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="10">
+                            <ScrollViewer x:Name="PART_ContentHost"
+                                          Margin="{TemplateBinding Padding}"
+                                          VerticalScrollBarVisibility="Auto" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsFocused" Value="True">
+                                <Setter Property="BorderBrush" Value="{StaticResource Brand}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
+        <!-- ── ComboBox ────────────────────────────────────────────────── -->
         <Style TargetType="ComboBox">
             <Setter Property="Background" Value="{StaticResource BgElev}" />
             <Setter Property="Foreground" Value="{StaticResource Ink}" />
             <Setter Property="BorderBrush" Value="{StaticResource Border}" />
-            <Setter Property="Padding" Value="8,6" />
-            <Setter Property="FontSize" Value="13" />
+            <Setter Property="BorderThickness" Value="1.5" />
+            <Setter Property="Padding" Value="12,10" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI" />
         </Style>
 
-        <!-- ── Button styles ───────────────────────────────────────────── -->
+        <Style TargetType="ComboBoxItem">
+            <Setter Property="Background" Value="{StaticResource BgElev}" />
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+            <Setter Property="Padding" Value="10,8" />
+        </Style>
+
+        <!-- ── Buttons ─────────────────────────────────────────────────── -->
         <Style x:Key="Btn" TargetType="Button">
             <Setter Property="Background" Value="{StaticResource BgElev2}" />
             <Setter Property="Foreground" Value="{StaticResource Ink}" />
             <Setter Property="BorderBrush" Value="{StaticResource Border}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="BorderThickness" Value="1.5" />
+            <Setter Property="Padding" Value="16,10" />
             <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Template">
                 <Setter.Value>
@@ -52,7 +123,7 @@
                         <Border Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="6">
+                                CornerRadius="10">
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center"
                                               Margin="{TemplateBinding Padding}" />
@@ -63,64 +134,116 @@
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{StaticResource Border}" />
+                    <Setter Property="BorderBrush" Value="{StaticResource BorderSoft}" />
                 </Trigger>
                 <Trigger Property="IsEnabled" Value="False">
                     <Setter Property="Foreground" Value="{StaticResource InkFaint}" />
+                    <Setter Property="Background" Value="{StaticResource BgElev}" />
                 </Trigger>
             </Style.Triggers>
         </Style>
 
         <Style x:Key="PrimaryBtn" TargetType="Button" BasedOn="{StaticResource Btn}">
             <Setter Property="Background" Value="{StaticResource Brand}" />
-            <Setter Property="BorderBrush" Value="{StaticResource Brand}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BrandDeep}" />
             <Setter Property="Foreground" Value="White" />
+            <Setter Property="Padding" Value="22,12" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Effect" Value="{StaticResource BtnShadow}" />
             <Style.Triggers>
                 <Trigger Property="IsMouseOver" Value="True">
                     <Setter Property="Background" Value="{StaticResource BrandHover}" />
-                    <Setter Property="BorderBrush" Value="{StaticResource BrandHover}" />
+                    <Setter Property="BorderBrush" Value="{StaticResource Brand}" />
                 </Trigger>
                 <Trigger Property="IsEnabled" Value="False">
                     <Setter Property="Background" Value="{StaticResource BgElev2}" />
                     <Setter Property="BorderBrush" Value="{StaticResource Border}" />
+                    <Setter Property="Foreground" Value="{StaticResource InkFaint}" />
+                    <Setter Property="Effect" Value="{x:Null}" />
                 </Trigger>
             </Style.Triggers>
         </Style>
 
-        <!-- ── Card button for first-run wizard ────────────────────────── -->
-        <Style x:Key="CardBtn" TargetType="Button">
-            <Setter Property="Background" Value="{StaticResource BgElev}" />
+        <Style x:Key="TealBtn" TargetType="Button" BasedOn="{StaticResource Btn}">
+            <Setter Property="Background" Value="{StaticResource Teal}" />
+            <Setter Property="BorderBrush" Value="{StaticResource TealDeep}" />
+            <Setter Property="Foreground" Value="#0E0A1F" />
+            <Setter Property="Padding" Value="22,12" />
+            <Setter Property="FontSize" Value="14" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="#5DE8D6" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="GhostBtn" TargetType="Button" BasedOn="{StaticResource Btn}">
+            <Setter Property="Background" Value="Transparent" />
+        </Style>
+
+        <!-- ── Card buttons for first-run wizard ───────────────────────── -->
+        <Style x:Key="ChoiceCardBtn" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource CardBg}" />
             <Setter Property="Foreground" Value="{StaticResource Ink}" />
             <Setter Property="BorderBrush" Value="{StaticResource Border}" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Padding" Value="20" />
+            <Setter Property="BorderThickness" Value="1.5" />
+            <Setter Property="Padding" Value="28" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="VerticalContentAlignment" Value="Stretch" />
+            <Setter Property="Effect" Value="{StaticResource CardShadow}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
+                        <Border x:Name="cardBorder"
+                                Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="10">
+                                CornerRadius="18">
                             <ContentPresenter Margin="{TemplateBinding Padding}" />
                         </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="cardBorder" Property="BorderBrush"
+                                        Value="{StaticResource Brand}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="BorderBrush" Value="{StaticResource Brand}" />
-                </Trigger>
-            </Style.Triggers>
         </Style>
 
-        <!-- ── Section header text ─────────────────────────────────────── -->
+        <!-- ── Section panel — used to group form fields ───────────────── -->
+        <Style x:Key="Panel" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource BgElev}" />
+            <Setter Property="BorderBrush" Value="{StaticResource BorderSoft}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="Padding" Value="20" />
+        </Style>
+
+        <!-- ── Field label text ────────────────────────────────────────── -->
         <Style x:Key="FieldLabel" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource InkSoft}" />
             <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="Margin" Value="0,0,0,8" />
+            <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI" />
+        </Style>
+
+        <Style x:Key="SectionTitle" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+            <Setter Property="FontSize" Value="16" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Margin" Value="0,0,0,4" />
-            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,0,0,12" />
+            <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI" />
+        </Style>
+
+        <!-- Pill-style "status chip" used in section headers. -->
+        <Style x:Key="StatusChip" TargetType="Border">
+            <Setter Property="Background" Value="{StaticResource BgElev2}" />
+            <Setter Property="CornerRadius" Value="999" />
+            <Setter Property="Padding" Value="10,4" />
         </Style>
     </Application.Resources>
 </Application>
