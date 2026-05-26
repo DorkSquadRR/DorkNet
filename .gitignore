@@ -1,0 +1,64 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+.vs/
+.vscode/
+*.csproj.bak
+dist/
+## Data / secrets
+# Local SQLite + uploaded blobs only — DON'T match the source-tree
+# DorkNet.Server/Data/ folder (which holds DbContext + Entities/) on
+# case-insensitive filesystems. Use the precise runtime data dirs.
+DorkNet.Server/bin/Debug/net9.0/data/
+DorkNet.Server/bin/Release/net9.0/data/
+# appsettings.Production.json is intentionally versioned — contains
+# only the Postgres provider switch + Kestrel bind address. All real
+# secrets come from Coolify env vars at runtime.
+tmp/
+## OS
+.DS_Store
+Thumbs.db
+
+## Reverse-engineered artifacts (Il2CppDumper / Cpp2IL output, not for commit)
+dump.cs
+il2cpp.h
+script.json
+stringliteral.json
+Il2CppDump/
+Cpp2ILOutput/
+Cpp2IL_CS/
+Cpp2IL_ISIL/
+RoomPersistenceManager_decompiled.txt
+
+## Per-machine editor / agent settings
+.claude/
+global-metadata.dat
+GameAssembly.dll
+_wildcard.rec.net+1.pem
+_wildcard.rec.net+1-key.pem
+dist$ZIPNAME.zip
+
+## Vite admin SPA build output — derived from DorkNet.Server/admin-ui/
+## via `npm run build` (local) or the admin-ui Dockerfile stage (deploy).
+## Each build emits a new hash (assets/index-<hash>.js) so committing
+## these files leaves a stale index.html → JS hash mismatch the next
+## time someone rebuilds. Keep the source committed, regenerate output.
+DorkNet.Server/wwwroot/admin/index.html
+DorkNet.Server/wwwroot/admin/assets/
+DorkNet.Server/wwwroot/admin/*.map
+DorkNet.Server/admin-ui/node_modules/
+DorkNet.Server/admin-ui/dist/
+DorkNet.Server/admin-ui/.vite/
+DorkNet.Server/admin-ui/tsconfig.tsbuildinfo
+
+## Public-facing site (Vite + React, DorkNet.Server/site/)
+## Same reasoning as admin-ui above: hashed output, regenerate per build.
+DorkNet.Server/wwwroot/site/index.html
+DorkNet.Server/wwwroot/site/assets/
+DorkNet.Server/wwwroot/site/*.map
+DorkNet.Server/site/node_modules/
+DorkNet.Server/site/dist/
+DorkNet.Server/site/.vite/
+DorkNet.Server/site/tsconfig.tsbuildinfo

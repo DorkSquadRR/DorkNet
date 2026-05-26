@@ -1,0 +1,76 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <RootNamespace>DorkNet.ClientMod</RootNamespace>
+    <AssemblyName>DorkNet.ClientMod</AssemblyName>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <NoWarn>$(NoWarn);CS8602;CS8604;CS0436</NoWarn>
+  </PropertyGroup>
+
+  <!--
+    MelonLoader 0.6.x build of the DorkNet client patches. This is the
+    MelonLoader-targeted twin of DorkNet.ClientPatch (which is a BepInEx
+    plugin). Both apply the same Harmony patches needed for the watch
+    to point at a DorkNet server — Photon AppId override, .rec.net →
+    custom-host URI rewrite, Photon CustomAuth identity injection, TLS
+    trust bypass, Photon region shortcut.
+
+    Set MelonLoaderDir to <RecRoomInstall>\MelonLoader. Override on the
+    command line:
+      dotnet build -p:MelonLoaderDir=C:\... -p:Il2CppAssembliesDir=C:\...
+  -->
+  <PropertyGroup>
+    <RecRoomDir Condition="'$(RecRoomDir)' == ''">C:\Users\you\Documents\Recnet\dist\RecRoom-Clean-2020.03.10</RecRoomDir>
+    <MelonLoaderDir Condition="'$(MelonLoaderDir)' == ''">$(RecRoomDir)\MelonLoader</MelonLoaderDir>
+    <Il2CppAssembliesDir Condition="'$(Il2CppAssembliesDir)' == ''">$(MelonLoaderDir)\Il2CppAssemblies</Il2CppAssembliesDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="MelonLoader">
+      <HintPath>$(MelonLoaderDir)\net6\MelonLoader.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(MelonLoaderDir)\net6\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Runtime">
+      <HintPath>$(MelonLoaderDir)\net6\Il2CppInterop.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Common">
+      <HintPath>$(MelonLoaderDir)\net6\Il2CppInterop.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+
+    <Reference Include="Il2Cppmscorlib">
+      <HintPath>$(Il2CppAssembliesDir)\Il2Cppmscorlib.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppSystem">
+      <HintPath>$(Il2CppAssembliesDir)\Il2CppSystem.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp">
+      <HintPath>$(Il2CppAssembliesDir)\Assembly-CSharp.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Assembly-CSharp-firstpass">
+      <HintPath>$(Il2CppAssembliesDir)\Assembly-CSharp-firstpass.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Photon3Unity3D">
+      <HintPath>$(Il2CppAssembliesDir)\Photon3Unity3D.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="UnityEngine.CoreModule">
+      <HintPath>$(Il2CppAssembliesDir)\UnityEngine.CoreModule.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>

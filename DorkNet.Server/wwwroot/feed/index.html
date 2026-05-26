@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>DorkNet — Feed</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header class="site-header">
+        <a href="/" class="logo">
+            <span class="logo-mark">●</span>
+            <span class="logo-text">DorkNet</span>
+        </a>
+        <nav class="site-nav">
+            <a href="/" class="nav-link active" data-route="feed">Feed</a>
+            <a href="/?room" class="nav-link" data-route="rooms">Rooms</a>
+            <a href="/?about" class="nav-link" data-route="about">About</a>
+        </nav>
+    </header>
+
+    <main id="main">
+        <section id="feed-view" class="view">
+            <div class="hero">
+                <h1>The Feed</h1>
+                <p class="muted">Photos taken by players around the server, newest first.</p>
+            </div>
+            <div id="grid" class="grid"></div>
+            <div id="loadMore" class="load-more" hidden>
+                <button id="loadMoreBtn" class="primary">Load more</button>
+            </div>
+            <div id="empty" class="empty" hidden>
+                <p>No photos yet — be the first to share one from the in-game camera.</p>
+            </div>
+        </section>
+
+        <section id="photo-view" class="view" hidden>
+            <button id="backBtn" class="ghost back">← back to feed</button>
+            <div id="photoDetail"></div>
+        </section>
+
+        <section id="profile-view" class="view" hidden>
+            <button class="ghost back" onclick="goFeed()">← back to feed</button>
+            <div id="profileDetail"></div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <p>DorkNet · a private Rec Room server · <a href="https://github.com/Alexa-RR/Dorknet">GitHub</a></p>
+    </footer>
+
+    <div id="toast" class="toast" hidden></div>
+    <script src="app.js"></script>
+</body>
+</html>

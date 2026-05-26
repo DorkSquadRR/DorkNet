@@ -1,0 +1,987 @@
+syntax = "proto3";
+
+package recroom;
+option csharp_namespace = "RecRoom.Protobuf2020";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
+message AcceleratedMovementData {
+  float acceleration_time = 1;
+  bool uses_target_value = 2;
+}
+
+message AmmunitionData {
+  int32 ammo_gear_type = 1;
+  int32 ammo_amount = 2;
+}
+
+message AnimationData {
+  repeated KeyFrameData key_frames = 2;
+  int32 speed_percentage = 5;
+  int32 priority = 6;
+  int32 flags = 7;
+}
+
+message AudioSamplerDataBlob {
+  int32 creator_id = 1;
+  float duration = 2;
+  AudioStreamData audio_data = 3;
+}
+
+message AudioSamplerPersistenceData {
+  string blob_name = 1;
+  bool use2d_audio = 3;
+  int32 channel = 4;
+  float start_offset = 5;
+  float end_offset = 6;
+  bool interrupt_current_sound = 7;
+}
+
+message AudioStreamData {
+  int32 channels = 1;
+  int32 sample_rate = 2;
+  int32 sample_count = 3;
+  int32 format = 10;
+  repeated float uncompressed_samples = 11;
+  bytes compressed_data = 12;
+  float compressed_bitrate = 13;
+  repeated int32 compressed_packet_sizes = 14;
+}
+
+message AutosaveData {
+  repeated string referenced_filenames = 1;
+  repeated string legacy_additional_referenced_filenames = 2;
+  repeated int64 invention_ids = 3;
+  repeated int32 invention_references = 4;
+}
+
+message AvatarItemSelectionData {
+  string avatar_item_rec_net_string = 1;
+  int32 body_part = 2;
+  bool is_trial_item = 3;
+}
+
+message AvatarItemSelectionDataCollection {
+  repeated AvatarItemSelectionData avatar_item_selections = 1;
+}
+
+message BackgroundObjectData {
+  int32 object_id = 1;
+  int32 color = 2;
+  float alpha = 3;
+  float rotation = 4;
+}
+
+message BackgroundObjectsCircuitData {
+  repeated BackgroundObjectData object_data = 1;
+}
+
+message BattleRoyaleArsenalData {
+  repeated BattleRoyaleGearData gear = 1;
+}
+
+message BattleRoyaleGearData {
+  string display_name = 1;
+  bool is_available = 2;
+  int32 gear_type = 3;
+  int32 quality = 4;
+  int32 drop_weight = 5;
+  int32 equipment_id = 6;
+  RangedWeaponData ranged_weapon_data = 7;
+  HealthPotionData health_potion_data = 8;
+  AmmunitionData ammunition_data = 9;
+}
+
+message BloomCircuitData {
+  float bloom_intensity = 1;
+  float bloom_threshold = 2;
+  float bloom_diffusion = 3;
+  int32 bloom_color = 4;
+}
+
+message BouncePadData {
+  int32 mode = 1;
+  bool is_additive = 2;
+  float velocity_multiplier = 3;
+  float velocity_additive = 4;
+  float max_velocity = 5;
+  float impulse_velocity = 6;
+  int32 air_control_percentage = 7;
+}
+
+message BreakableObjectData {
+  bool is_breakable = 1;
+}
+
+message ButtonData {
+  bool signal_is_player_id = 1;
+}
+
+message CharadesCoOpClassicGameRuleData {
+  float max_game_duration = 1;
+  float max_round_duration = 2;
+}
+
+message CharadesTeamLightningGameRuleData {
+  int32 max_round_count = 1;
+  float performer_duration = 2;
+  float team_round_duration = 3;
+}
+
+message CheckpointData {
+  string spawn_point_tag = 1;
+}
+
+message ChildPersistenceViewData {
+  int32 child_id = 1;
+  PersistenceViewData data = 2;
+}
+
+message CircuitGroupCircuitReferenceData {
+  bytes circuit_node_id = 1;
+  int32 slot = 2;
+  bool is_input = 3;
+}
+
+message CircuitGroupConnectionData {
+  bytes circuit_reference_data = 1;
+  bytes interface_node_reference_data = 2;
+}
+
+message CircuitGroupData {
+  repeated CircuitGroupInterfaceNodeData input_interface_nodes = 1;
+  repeated CircuitGroupInterfaceNodeData output_interface_nodes = 2;
+  string name = 3;
+  repeated TransformData local_transforms = 4;
+}
+
+message CircuitGroupInterfaceNodeData {
+  CircuitGroupConnectionData internal_connection = 1;
+  CircuitGroupConnectionData external_connection = 2;
+  string name = 3;
+}
+
+message CircuitGroupInterfaceNodeReferenceData {
+  bytes circuit_group_id = 1;
+  int32 index = 2;
+  bool is_input = 3;
+}
+
+message CircuitNodeData {
+  int32 circuit_node_id = 1;
+  string node_message = 2;
+}
+
+message ColorData {
+  float r = 1;
+  float g = 2;
+  float b = 3;
+  float a = 4;
+}
+
+message ColorGradingCircuitData {
+  float color_grading_temp = 1;
+  float color_grading_tint = 2;
+  float color_grading_exposure = 3;
+  int32 color_grading_color_filter = 4;
+  float color_grading_color_filter_intensity = 5;
+  float color_grading_hue_shift = 6;
+  float color_grading_saturation = 7;
+  float color_grading_contrast = 8;
+}
+
+message ConnectableGraphData {
+  ConnectableNodeData root_node = 1;
+}
+
+message ConnectableNodeData {
+  bytes persistence_id = 1;
+  int32 slot_index = 2;
+  int32 parent_slot_index = 3;
+  Vector3Data position_relative_to_parent = 4;
+  Vector3Data rotation_relative_to_parent = 5;
+  repeated ConnectableNodeData children = 6;
+  bool is_root = 7;
+  bytes photon_id = 8;
+}
+
+message ControlPointData {
+  Vector3Data position = 1;
+  Vector3Data normal = 2;
+  float radius = 3;
+}
+
+message CreationObjectData {
+  ColorData color_override = 2;
+  int32 team_override = 3;
+  bool is_frozen = 4;
+  InventionPieceData invention_piece_data = 5;
+  bool is_grabbable = 6;
+  bool is_climbable = 7;
+  bool prevents_wall_run = 8;
+  bool prevents_clambering = 9;
+}
+
+message CurveShapeData {
+  repeated ControlPointData control_points = 1;
+  bool flat_shaded = 2;
+  float tube_height_scale = 3;
+  int32 tube_ring_points = 4;
+}
+
+message Deprecated_GameSettingsData {
+  int32 deprecated_mode_type = 1;
+}
+
+message Deprecated_HostSettingsData {
+  bool deprecated_enforce_host_only_areas = 2;
+  bool deprecated_only_hosts_can_invite = 3;
+  bool deprecated_only_hosts_can_print_polaroids = 4;
+  int32 deprecated_flying_permission = 6;
+  bool deprecated_hide_scoreboards = 7;
+  int32 deprecated_circuit_editing_permission = 8;
+  bool deprecated_only_hosts_can_start_games = 9;
+  bool deprecated_only_hosts_can_vote_kick = 11;
+}
+
+message Deprecated_SandboxSettingsData {
+  bool deprecated_limit_teleport_speed = 1;
+  int32 deprecated_time_limit_seconds = 2;
+}
+
+message Deprecated_ToolData {
+  bool is_frozen = 1;
+}
+
+message DodgeballGameRuleData {
+  int32 score_to_win = 1;
+}
+
+message DrawingSurfaceData {
+  bool is_modified = 1;
+}
+
+message DynamicLightData {
+  int32 intensity = 1;
+  int32 range = 2;
+}
+
+message FogCircuitData {
+  int32 color = 1;
+  float start_distance = 2;
+  float fade_distance = 3;
+}
+
+message GameCombatAutoHealConfigurationData {
+  float delay = 1;
+  float duration = 2;
+}
+
+message GameCombatDownButNotOutConfigurationData {
+  float deprecated_max_value = 1;
+  float max_depletion_duration = 2;
+  float invincibility_duration = 3;
+}
+
+message GameCombatEnemyUIConfigurationData {
+  bool opponent_ui_supported = 1;
+  bool teammate_ui_supported = 2;
+}
+
+message GameCombatFriendlyFireConfigurationData {
+  bool player_on_player_friendly_fire_supported = 1;
+  bool player_on_enemy_friendly_fire_supported = 2;
+  bool enemy_on_player_friendly_fire_supported = 3;
+  bool enemy_on_enemy_friendly_fire_supported = 4;
+}
+
+message GameCombatPlayerUIConfigurationData {
+  bool local_player_ui_supported = 1;
+  bool opponent_ui_supported = 2;
+  bool teammate_ui_supported = 3;
+  bool teammate_ui_always_visible = 4;
+  bool opponent_ui_always_visible = 5;
+}
+
+message GameCombatRespawnConfigurationData {
+  float auto_respawn_delay = 1;
+  bool restore_health_on_respawn = 2;
+  float respawn_invincibility_duration = 3;
+}
+
+message GameCombatReviveConfigurationData {
+  float required_delay = 1;
+  float max_revive_normalized_health = 2;
+  float min_revive_normalized_health = 3;
+  float multiplier_per_revive_normalized_health = 4;
+  bool pickup_tools_on_revive = 5;
+  float reviver_invincibility_duration = 6;
+  float revivee_invincibility_duration = 7;
+  float handshake_revive_hold_duration = 8;
+}
+
+message GameConfigurationData {
+  string name = 1;
+  GameStartRequirementConfigurationData manual_start_requirement_configuration_data = 3;
+  GameStartRequirementConfigurationData automatic_start_requirement_configuration_data = 4;
+  bool join_in_progress_supported = 5;
+  bool automatic_start_supported = 6;
+  int32 load_priority = 7;
+  bool respawn_on_game_start_supported = 8;
+  bool respawn_on_game_over_supported = 9;
+  bool pregame_voice_over_supported = 10;
+  bool results_voice_over_supported = 11;
+  bool end_game_if_start_requirements_not_met = 12;
+  bool countdown_voice_over_supported = 13;
+  float game_start_delay = 14;
+  float end_game_results_duration = 15;
+  bool game_mode_notifications_supported = 16;
+  bool in_game_player_notifications_supported = 17;
+  repeated GameTeamConfigurationData team_configurations = 101;
+  int32 team_selection_method = 102;
+  bool team_change_during_game_supported = 103;
+  bool explicit_team_selection_supported = 104;
+  bool spectating_supported = 105;
+  GameTeamPlayerVisualConfigurationData team_player_visual_configuration_data = 106;
+  bool team_radios_supported = 107;
+  GameTeamRadioConfigurationData team_radio_configuration_data = 108;
+  bool respawn_on_team_change_during_game_supported = 109;
+  bool show_open_slots_on_scoreboard = 110;
+  bool clear_teams_after_game = 111;
+  repeated GameStatConfigurationData stat_configurations = 202;
+  bool persist_stats_on_game_start = 203;
+  int32 max_health = 301;
+  int32 max_shield = 302;
+  bool auto_heal_supported = 303;
+  GameCombatAutoHealConfigurationData auto_heal_configuration_data = 304;
+  bool dbno_supported = 305;
+  GameCombatDownButNotOutConfigurationData dbno_configuration_data = 306;
+  bool auto_respawn_supported = 307;
+  GameCombatRespawnConfigurationData respawn_configuration_data = 308;
+  int32 revive_mode = 309;
+  GameCombatReviveConfigurationData revive_configuration_data = 310;
+  GameCombatFriendlyFireConfigurationData friendly_fire_configuration_data = 311;
+  GameCombatPlayerUIConfigurationData combat_player_ui_configuration_data = 312;
+  GameCombatEnemyUIConfigurationData combat_enemy_ui_configuration_data = 313;
+  bool monochrome_dead_effect_supported = 314;
+  bool monochrome_dbno_effect_supported = 315;
+  bool damage_red_flash_effect_supported = 316;
+  bool dead_persistent_notification_supported = 317;
+  bool deprecated_dbno_persistent_notification_supported = 318;
+  bool deprecated_revive_cooldown_persistent_notification_supported = 319;
+  bool deprecated_respawn_timer_persistent_notification_supported = 320;
+  bool combat_hud_supported = 322;
+  bool suppress_weapon_damage = 323;
+  bool default_hit_feedback_supported = 350;
+  bool default_revive_feedback_supported = 351;
+  bool default_downed_opponent_feedback_supported = 352;
+  bool default_downed_local_player_feedback_supported = 353;
+  bool default_downed_teammate_feedback_supported = 354;
+  int32 spawn_point_selection_mode = 401;
+  bytes main_hand_spawn_equipment_type = 501;
+  bytes off_hand_spawn_equipment_type = 502;
+  bool reset_tools_on_game_start_supported = 503;
+  int32 broken_tool_behavior = 504;
+  bool infinite_reserve_ammmunition_supported = 505;
+  bool tool_beacons_supported = 507;
+  bool movement_buffer_distance_restricted = 601;
+  bool out_of_bounds_supported = 701;
+  float out_of_bounds_grace_period = 702;
+  float out_of_bounds_max_duration = 703;
+  bool out_of_bounds_spectators_supported = 704;
+  bool down_out_of_bounds_players = 705;
+}
+
+message GameRoleNodeData {
+  int32 game_role = 1;
+}
+
+message GameRuleWrapperData {
+  CharadesCoOpClassicGameRuleData charades_coop_classic_game_rule_data = 1;
+  CharadesTeamLightningGameRuleData charades_team_lightning_game_rule_data = 2;
+  DodgeballGameRuleData dodgeball_game_rule_data = 3;
+  LaserTagGameRuleData laser_tag_game_rule_data = 4;
+  PaddleballGameRuleData paddleball_game_rule_data = 5;
+  PaintballCaptureTheFlagGameRuleData paintball_capture_the_flag_game_rule_data = 6;
+  PaintballTeamBattleGameRuleData paintball_team_battle_game_rule_data = 7;
+  SoccerGameRuleData soccer_game_rule_data = 9;
+  StuntrunnerGameRuleData stuntrunner_game_rule_data = 10;
+}
+
+message GameStartRequirementConfigurationData {
+  int32 min_player_count = 1;
+  int32 min_team_count = 2;
+  int32 min_team_size = 3;
+}
+
+message GameStatConfigurationData {
+  string stat_name = 1;
+  bool visible_in_ui = 2;
+  int32 stat_format = 3;
+  bool visible_in_hud = 4;
+}
+
+message GameTeamConfigurationData {
+  int32 team_size = 1;
+}
+
+message GameTeamPlayerVisualConfigurationData {
+  bool team_outfits_supported = 1;
+  bool team_name_in_feedback_supported = 2;
+  bool team_color_in_feedback_supported = 3;
+  int32 team_color_mode = 4;
+  int32 teammate_beacon_mode = 5;
+  int32 opponent_beacon_mode = 6;
+}
+
+message GameTeamRadioConfigurationData {
+  float volume = 1;
+  float enter_distance = 2;
+  float exit_distance = 3;
+}
+
+message HealthPotionData {
+  float health_restore_amount = 1;
+  float health_restore_duration = 2;
+  float shield_restore_amount = 3;
+  float shield_restore_duration = 4;
+}
+
+message HolotarDataBlob {
+  int32 creator_id = 1;
+  float duration = 2;
+  int32 pose_data = 3;
+  OutfitData outfit_data = 4;
+  AudioStreamData audio_data = 5;
+  int32 voip_filter = 6;
+  int32 version = 7;
+}
+
+message HolotarPersistenceData {
+  string blob_name = 1;
+  bool billboard = 2;
+}
+
+message ImageData {
+  string image_name = 1;
+}
+
+message InventionPieceData {
+  bytes instance_id = 1;
+  int64 invention_id = 2;
+  int32 version_number = 3;
+  bool originally_from_other_invention = 4;
+}
+
+message InvisibleCollisionData {
+  bool collide_with_players = 1;
+  bool collide_with_objects = 2;
+  repeated string filter_roles = 3;
+  bool restrict_roles = 4;
+}
+
+message KeyFrameData {
+  float time = 1;
+  repeated ObjectKeyFrameData object_key_frames = 2;
+}
+
+message LaserTagGameRuleData {
+  int32 score_to_win = 1;
+  float max_game_duration = 2;
+}
+
+message LeaderboardData {
+  repeated int32 stat_configs = 1;
+  string stat_full_name = 2;
+  string stat_short_name = 3;
+  bool stat_sort_ascending = 4;
+  int32 formatting_mode = 5;
+}
+
+message MeshShapeData {
+  Vector3Data legacy_scale = 1;
+  Vector3Data aspect_ratio = 2;
+}
+
+message MessageData {
+  string message = 1;
+  repeated string messages = 2;
+}
+
+message MoodCircuitData {
+  int32 priority = 1;
+  float blend_in_time = 2;
+  bytes sky_box_data = 3;
+  bytes sun_data = 4;
+  bytes bloom_data = 5;
+  bytes color_grading_data = 6;
+  bytes fog_data = 7;
+  bytes background_objects_data = 8;
+  string role_guid = 9;
+  float blend_out_time = 10;
+  int32 ease_in_out = 11;
+}
+
+message ObjectGroupData {
+  repeated bytes group_member_ids = 1;
+  bytes circuit_group_data = 2;
+  bytes animation_data = 3;
+}
+
+message ObjectGroupDataCollection {
+  repeated int32 object_groups = 1;
+  ObjectGroupData object_group = 2;
+  bool unchanged = 3;
+}
+
+message ObjectKeyFrameData {
+  Vector3Data position = 1;
+  Vector3Data rotation = 2;
+  int32 flags = 3;
+}
+
+message ObjectSpawnPointData {
+  string item_tag = 1;
+  bool take_from_holder = 2;
+  bool clear_velocity_on_respawn = 3;
+  bool use_respawner_rotation = 4;
+}
+
+message OutfitData {
+  string outfit_selections = 1;
+  string hair_color = 2;
+  string skin_color = 3;
+  string face_settings = 4;
+}
+
+message OverridableBoolData {
+  bool overrides = 1;
+  bool inner_value = 2;
+}
+
+message OverridableColorData {
+  bool overrides = 1;
+  ColorData inner_value = 2;
+}
+
+message OverridableFloatData {
+  bool overrides = 1;
+  float inner_value = 2;
+}
+
+message OverridableIntData {
+  bool overrides = 1;
+  int32 inner_value = 2;
+}
+
+message OverridableListBoolData {
+  bool overrides = 1;
+  repeated bool inner_value = 2;
+}
+
+message OverridableListColorData {
+  bool overrides = 1;
+  repeated ColorData inner_value = 2;
+}
+
+message OverridableListFloatData {
+  bool overrides = 1;
+  repeated float inner_value = 2;
+}
+
+message OverridableListIntData {
+  bool overrides = 1;
+  repeated int32 inner_value = 2;
+}
+
+message OverridableListStringData {
+  bool overrides = 1;
+  repeated string inner_value = 2;
+}
+
+message OverridableListVector3Data {
+  bool overrides = 1;
+  repeated Vector3Data inner_value = 2;
+}
+
+message OverridableStringData {
+  bool overrides = 1;
+  string inner_value = 2;
+}
+
+message OverridableVector3Data {
+  bool overrides = 1;
+  Vector3Data inner_value = 2;
+}
+
+message PaddleballGameRuleData {
+  int32 score_to_win = 1;
+  float max_game_duration = 2;
+}
+
+message PaintballCaptureTheFlagGameRuleData {
+  int32 scores_to_win = 1;
+  float max_game_duration = 2;
+  bool music_enabled = 3;
+}
+
+message PaintballTeamBattleGameRuleData {
+  int32 score_to_win = 1;
+  float max_game_duration = 2;
+  bool music_enabled = 3;
+}
+
+message ParticleEmitterData {
+  bytes effect_id = 1;
+  bool looping = 2;
+  bool use_sandbox_recolor = 3;
+}
+
+message PersistedRoomData {
+  int32 version = 1;
+  repeated PersistenceViewData persistence_views = 2;
+  google.protobuf.Timestamp last_save_time = 3;
+  string activity_id = 4;
+  string output_log = 5;
+  int64 sub_room_id = 6;
+  Deprecated_HostSettingsData deprecated_host_settings = 16;
+  Deprecated_SandboxSettingsData deprecated_sandbox_settings = 17;
+  bytes circuit_data = 18;
+  Deprecated_GameSettingsData deprecated_game_settings = 19;
+  ToolTagSettingsData tool_tag_settings_data = 20;
+  ConnectableGraphData connectable_graph_data = 21;
+  int32 game_role_data = 22;
+  int32 room_role_data = 23;
+  SceneSettingsData scene_settings_data = 24;
+  AutosaveData autosave_data = 25;
+}
+
+message PersistedSFXData {
+  bytes track_id = 1;
+  bool loop = 2;
+  bool shuffle = 3;
+  bool paused = 4;
+  bool use_spatial_audio = 5;
+  bool interrupt_current_sound = 6;
+  int32 volume_modifier = 7;
+}
+
+message PersistenceViewData {
+  bytes id = 1;
+  repeated ChildPersistenceViewData child_views = 3;
+  ToolEntityData tool_entity_data = 9;
+  TransformData transform = 10;
+  SpawnableToolData spawnable_tool_data = 11;
+  ShapeContainerData shape_container_data = 12;
+  Deprecated_ToolData deprecated_tool_data = 13;
+  CreationObjectData creation_object_data = 14;
+  TaggedToolData tagged_tool_data = 15;
+  StickyData sticky_data = 16;
+  DrawingSurfaceData drawing_surface_data = 17;
+  ImageData image_data = 18;
+  ToolHolderData tool_holder_data = 19;
+  RemoteControlData remote_control_data = 20;
+  RoomDoorData room_door_data = 21;
+  ToolCleanupData tool_cleanup_data = 22;
+  SpawnPointSpawnerData spawnpoint_spawner_data = 23;
+  PersistedSFXData persisted_sfx_data = 24;
+  CircuitNodeData circuit_node_data = 25;
+  MessageData message_data = 26;
+  HolotarPersistenceData holotar_persistence_data = 27;
+  SpawnPointData spawn_point_data = 28;
+  AudioSamplerPersistenceData audio_sampler_persistence_data = 29;
+  ButtonData button_data = 30;
+  TriggerVolumeData trigger_volume_data = 31;
+  SandboxGizmoData sandbox_gizmo_data = 32;
+  ObjectSpawnPointData object_spawn_point_data = 33;
+  SetTagsNodeData set_tags_node_data = 34;
+  BreakableObjectData breakable_object_data = 35;
+  SandboxColorableData sandbox_colorable_data = 36;
+  ParticleEmitterData particle_emitter_data = 37;
+  ObjectGroupData object_group_data = 38;
+  StateMachineStateData state_machine_state_data = 39;
+  GameConfigurationData game_configuration_data = 40;
+  GameRuleWrapperData game_rule_wrapper_data = 41;
+  HealthPotionData health_potion_data = 42;
+  ScoreboardSetupData scoreboard_setup_data = 43;
+  SpotlightData spotlight_data = 44;
+  DynamicLightData dynamic_light_data = 45;
+  BouncePadData bounce_pad_data = 46;
+  CheckpointData checkpoint_data = 47;
+  LeaderboardData leaderboard_data = 48;
+  SetLeaderboardStatData set_leaderboard_stat_data = 49;
+  GameRoleNodeData game_role_node_data = 50;
+  PlayerAttractorData player_attractor_data = 51;
+  ToggleButtonData toggle_button_data = 52;
+  SandboxDeformationData sandbox_deformation_data = 53;
+  TextLabelData text_label_data = 54;
+  ProximityMineData proximity_mine_data = 55;
+  InvisibleCollisionData invisible_collision_data = 56;
+  MoodCircuitData mood_circuit_data = 57;
+}
+
+message PhysicsThrusterData {
+  int32 thrust_mode = 1;
+}
+
+message PistonData {
+  float max_travel_distance = 1;
+}
+
+message PlayerAttractorData {
+  bool enabled = 1;
+}
+
+message ProximityMineData {
+  bool triggered_by_teammates = 1;
+}
+
+message RangedWeaponData {
+  int32 ammo_magazine_capacity = 1;
+  int32 ammo_total_capacity = 2;
+  bool reset_on_total_ammo_exhaustion = 3;
+  float projectile_damage = 4;
+  float rate_of_fire = 5;
+  float automatic_rate_of_fire = 6;
+  float max_projectile_speed = 7;
+  float critical_hit_damage_multiplier = 8;
+  float explosive_damage_radius = 9;
+  float explosive_damage_delay = 10;
+}
+
+message RemoteControlData {
+  bytes controlled_object_view_id = 2;
+}
+
+message RoomDoorData {
+  bytes room_id_deprecated = 1;
+  bytes target_name = 2;
+  int32 target_type = 3;
+  int32 invite_mode = 4;
+}
+
+message SandboxColorableData {
+  int32 color = 1;
+  int32 material = 2;
+}
+
+message SandboxDeformationData {
+  Vector3Data deformation = 1;
+}
+
+message SandboxGizmoData {
+  AcceleratedMovementData accelerated_movement_data = 1;
+  bytes thruster_data = 3;
+  bytes look_at_data = 5;
+  bytes piston_data = 6;
+}
+
+message SceneSettingsData {
+  bytes mood_id = 1;
+  bool movement_blockers_disabled = 2;
+  bool enforce_host_only_areas = 3;
+  bool show_gadgets_to_everyone = 4;
+}
+
+message ScoreboardSetupData {
+  string score_name = 1;
+}
+
+message SetLeaderboardStatData {
+  int32 set_mode = 1;
+}
+
+message SetTagsNodeData {
+  TagData set_tag = 1;
+}
+
+message ShapeContainerData {
+  ShapeDataCollection shape_collection = 1;
+  int32 physics_mode = 2;
+}
+
+message ShapeContainerDataCollection {
+  repeated int32 shape_containers = 1;
+  ShapeDataCollection shapes = 2;
+  bool unchanged = 4;
+}
+
+message ShapeData {
+  int32 shape_type = 1;
+  int32 shape_color = 2;
+  Vector3Data deprecated_initial_local_position = 5;
+  Vector3Data deprecated_initial_local_rotation = 6;
+  Vector3Data current_local_position = 7;
+  Vector3Data current_local_rotation = 8;
+  Vector3Data deprecated_scale_non_uniform = 9;
+  bool use_uncompressed_rotation = 10;
+  float density = 11;
+  bytes id = 12;
+  float scale = 13;
+  bytes mesh_shape_data = 16;
+  bytes curve_shape_data = 17;
+  int32 shape_material = 18;
+}
+
+message ShapeDataCollection {
+  repeated ShapeData shapes = 1;
+}
+
+message SkyBoxCircuitData {
+  int32 sky_top_color = 1;
+  int32 sky_bottom_color = 2;
+  int32 ground_top_color = 3;
+  int32 ground_bottom_color = 4;
+  int32 horizon_color = 5;
+  float horizon_size = 6;
+  float horizon_strength = 7;
+  float ambient_light_intensity = 8;
+}
+
+message SmoothLookAtData {
+  int32 smoothness = 1;
+  TagData tag_data = 2;
+  int32 tracking_mode = 3;
+  int32 target_type = 4;
+  string role_guid = 5;
+  int32 body_part = 6;
+}
+
+message SoccerGameRuleData {
+  float max_game_duration = 1;
+}
+
+message SpawnableTemplateData {
+  int32 room_data_version = 1;
+  repeated PersistenceViewData persistence_views = 2;
+  string output_log = 3;
+  bytes circuit_data = 4;
+  ConnectableGraphData connectable_graph_data = 5;
+  Vector3Data extents = 6;
+}
+
+message SpawnableToolData {
+  bytes prefab_id = 1;
+}
+
+message SpawnPointData {
+  int32 team_id = 1;
+  string primary_hand_hold_tag = 2;
+  bool primary_hand_take_from_holder = 3;
+  string secondary_hand_hold_tag = 4;
+  bool secondary_hand_take_from_holder = 5;
+  bool is_pre_post_game_spawn_point = 6;
+  float spawn_precision_radius = 7;
+  int32 spawn_point_purpose = 8;
+  bool keep_held_tools = 9;
+}
+
+message SpawnPointSpawnerData {
+  int64 room_id = 1;
+}
+
+message SpotlightData {
+  int32 angle = 1;
+}
+
+message StateMachineStateData {
+  int32 state_idx = 1;
+  bytes state_machine_view_id = 2;
+  string name = 3;
+  int32 val1 = 4;
+  int32 val2 = 5;
+  int32 val3 = 6;
+  int32 min_time_in_state = 7;
+}
+
+message StickyData {
+  bool is_attached = 1;
+  bytes connected_view_id = 2;
+  Vector3Data attached_relative_position = 3;
+  Vector3Data attached_relative_rotation = 4;
+}
+
+message StuntrunnerGameRuleData {
+  bool music_enabled = 1;
+  bool announcer_enabled = 2;
+  bool ambience_enabled = 3;
+  bool spotlights_enabled = 4;
+  int32 max_course_time = 5;
+}
+
+message SunCircuitData {
+  int32 sun_color = 1;
+  float disc_size = 2;
+  float intensity = 3;
+  float shadow_strength = 4;
+  int32 glow_color = 5;
+  float glow_size = 6;
+  float glow_strength = 7;
+  float glow_horizon = 8;
+  int32 blend_sun_direction = 9;
+  int32 clip_sun = 10;
+  float reflection_intensity = 11;
+}
+
+message TagData {
+  repeated string tags = 1;
+}
+
+message TaggedToolData {
+  TagData tag_data = 1;
+}
+
+message TextLabelData {
+  int32 horizontal_alignment = 1;
+  int32 character_spacing = 2;
+  int32 line_spacing = 3;
+  int32 paragraph_spacing = 4;
+  float text_thickness = 5;
+}
+
+message ToggleButtonData {
+  bool default_toggle_state = 1;
+  bool signal_is_player_id = 2;
+  bool projectile_collision_enabled = 3;
+}
+
+message ToolCleanupData {
+  int32 overrides = 1;
+  bool is_allowed = 2;
+  float delay = 3;
+}
+
+message ToolEntityData {
+  bool hidden_during_games = 32;
+}
+
+message ToolHolderData {
+  bytes held_view_id = 2;
+}
+
+message ToolTagSettingsData {
+  TagData runtime_tag_data = 1;
+}
+
+message TransformData {
+  Vector3Data position = 1;
+  Vector3Data rotation = 2;
+  Vector3Data deprecated_scale_non_uniform = 3;
+  float scale = 5;
+}
+
+message TriggerVolumeData {
+  int32 mode_id = 1;
+  Vector3Data deprecated_scale = 2;
+  Vector3Data deprecated_position = 3;
+  TagData filter_tags = 4;
+  string filter_role = 5;
+}
+
+message Vector3Data {
+  float x = 1;
+  float y = 2;
+  float z = 3;
+}
+

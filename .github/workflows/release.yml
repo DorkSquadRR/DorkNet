@@ -1,0 +1,55 @@
+name: Release (march-2020-03-10)
+
+# Auto-publishes dorknet-server + dorknet-clientpatch zips to a
+# GitHub Release on tag push. The launcher (on the public main
+# branch) fetches the most-recent tag matching its prefix and
+# downloads these assets, so the tag format MUST start with the
+# branch's release_tag_prefix declared in versions.json.
+
+on:
+  push:
+    tags:
+      - 'v1-march-*'
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    env:
+      VERSION_KEY: march_2020_03_10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      # ── Server self-contained publish ────────────────────────────────
+      - name: Publish DorkNet.Server (win-x64, self-contained)
+        run: |
+          dotnet publish DorkNet.Server/DorkNet.Server.csproj `
+            -c Release -r win-x64 --self-contained `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=true `
+            -o publish/server
+
+      - name: Zip server publish
+        run: |
+          Compress-Archive -Path publish/server/* `
+            -DestinationPath dorknet-server-${{ env.VERSION_KEY }}-win-x64.zip
+
+      # ── Client patcher zip (built via tools/build-patcher-zip.ps1) ───
+      - name: Build client patcher zip
+        run: |
+          .\tools\build-patcher-zip.ps1 -VersionKey ${{ env.VERSION_KEY }}
+
+      # ── Publish both as Release assets ───────────────────────────────
+      - name: Upload Release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dorknet-server-${{ env.VERSION_KEY }}-win-x64.zip
+            dist/dorknet-clientpatch-${{ env.VERSION_KEY }}.zip
+          fail_on_unmatched_files: true

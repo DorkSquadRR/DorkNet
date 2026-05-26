@@ -1,0 +1,106 @@
+{
+  "rooms": [
+    {
+      "Name": "River",
+      "ReplicationId": "84545710-2bb4-4867-ad8b-24863a16d1b2",
+      "Description": "e122fe98-e7db-49e8-a1b1-105424b6e1f0",
+      "Scenes": [
+        {
+          "Name": "Homestead",
+          "ReplicationId": "f6709dc2-af81-46fc-88ba-f88f6c5035aa",
+          "RoomSceneLocationId": "a785267d-c579-42ea-be43-fec1992d1ca7"
+        },
+        {
+          "Name": "",
+          "ReplicationId": "",
+          "RoomSceneLocationId": "\u0002\u0000\u0000\u0000\u0006\u0000\u0000\u0000"
+        }
+      ]
+    },
+    {
+      "Name": "Clearcut",
+      "ReplicationId": "28363a22-f0bb-4e46-8346-d76e8ac634f7",
+      "Description": "380d18b5-de9c-49f3-80f7-f4a95c1de161",
+      "Scenes": [
+        {
+          "Name": "Spillway",
+          "ReplicationId": "7d661e29-f036-4fe9-8e9d-4b919fee638d",
+          "RoomSceneLocationId": "58763055-2dfb-4814-80b8-16fac5c85709"
+        },
+        {
+          "Name": "",
+          "ReplicationId": "",
+          "RoomSceneLocationId": "\u0002\u0000\u0000\u0000\b\u0000\u0000\u0000"
+        }
+      ]
+    },
+    {
+      "Name": "a4d7afc1-ae7a-8e04-1bea-f7d71df384fd",
+      "ReplicationId": "e122fe98-e7db-49e8-a1b1-105424b6e1f0",
+      "Description": "",
+      "Scenes": [
+        {
+          "Name": "Homestead",
+          "ReplicationId": "d686129f-fdf7-1954-a9f6-f0a80d1af234",
+          "RoomSceneLocationId": "a785267d-c579-42ea-be43-fec1992d1ca7"
+        },
+        {
+          "Name": "",
+          "ReplicationId": "",
+          "RoomSceneLocationId": "\u0002\u0000\u0000\u0000\u0006\u0000\u0000\u0000"
+        }
+      ]
+    },
+    {
+      "Name": "1636a319-9826-bfc4-18f8-ee1b1be6f806",
+      "ReplicationId": "380d18b5-de9c-49f3-80f7-f4a95c1de161",
+      "Description": "",
+      "Scenes": [
+        {
+          "Name": "Spillway",
+          "ReplicationId": "9a5a9875-67bb-f444-e804-0e0296d3c19c",
+          "RoomSceneLocationId": "58763055-2dfb-4814-80b8-16fac5c85709"
+        },
+        {
+          "Name": "",
+          "ReplicationId": "",
+          "RoomSceneLocationId": "\u0002\u0000\u0000\u0000\f\u0000\u0000\u0000"
+        }
+      ]
+    },
+    {
+      "Name": "Hangar",
+      "ReplicationId": "8f8fcaf8-7b13-e114-880c-72ee8c9fcb78",
+      "Description": "239e676c-f12f-489f-bf3a-d4c383d692c3",
+      "Scenes": [
+        {
+          "Name": "CyberJunkCity",
+          "ReplicationId": "333f409d-f9ad-46c9-b6fb-b0bbd30cb0b2",
+          "RoomSceneLocationId": "9d6456ce-6264-48b4-808d-2d96b3d91038"
+        },
+        {
+          "Name": "",
+          "ReplicationId": "",
+          "RoomSceneLocationId": "\u0002\u0000\u0000\u0000\u0011\u0000\u0000\u0000"
+        }
+      ]
+    },
+    {
+      "Name": "StuntRunner",
+      "ReplicationId": "f8a71ce1-c989-4e00-9e10-3f04c241f6f3",
+      "Description": "b7281665-a715-4051-826b-8e08e69c6172",
+      "Scenes": [
+        {
+          "Name": "TheMainEvent",
+          "ReplicationId": "cacc6e68-644a-448d-b83f-59ea690318ec",
+          "RoomSceneLocationId": "3a636bd2-f896-424c-9225-c184522c0d87"
+        },
+        {
+          "Name": "",
+          "ReplicationId": "",
+          "RoomSceneLocationId": "\u0002\u0000\u0000\u0000"
+        }
+      ]
+    }
+  ]
+}
