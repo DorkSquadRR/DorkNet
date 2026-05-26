@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+// Trimmed subset of Rec Room's persistence schema. Only the messages and
+// fields we actually populate when handing the client a "default-but-with-
+// permissions" room blob. Wire-compatible with the full schema in
+// RR_ProtobufDefinitions.zip because proto3 ignores unknown fields and
+// uses defaults for missing ones — so the client deserializes the bytes we
+// emit into its richer types just fine.
+//
+// Field numbers MUST match the upstream schema exactly; deviating breaks
+// the wire format.
+
+package rec_room;
+option csharp_namespace = "RecRoom.Protobuf";
+
+// ── Overridable wrappers (rec_room/persistence/overridable_field_data.proto)
+
+message OverridableIntData {
+  bool overrides = 1;
+  int32 inner_value = 2;
+}
+
+message OverridableBoolData {
+  bool overrides = 1;
+  bool inner_value = 2;
+}
+
+message OverridableStringData {
+  bool overrides = 1;
+  string inner_value = 2;
+}
+
+message OverridableListStringData {
+  bool overrides = 1;
+  repeated string inner_value = 2;
+}
+
+// ── Per-role permission grants (rec_room/player_roles/player_room_role_data.proto)
+//
+// Field numbers verified against the dump's `*FieldNumber` constants
+// (TypeDefIndex 15953-ish in the 2020 build) and against the 2026 .proto.
+
+message PlayerRoomRoleData {
+  reserved 15;
+
+  int32 DEPRECATED_role_id = 1;
+  int32 DEPRECATED_role_rank = 2;
+  bool DEPRECATED_is_role_active = 3;
+  bool DEPRECATED_is_ag_role = 4;
+  string role_name = 5;
+
+  OverridableStringData name = 6;
+  OverridableBoolData can_assign_roles = 7;
+  OverridableIntData vote_kick_permission = 8;
+  OverridableBoolData can_invite = 9;
+  OverridableBoolData DEPRECATED_can_edit_circuits = 10;
+  OverridableBoolData can_start_games = 11;
+  OverridableBoolData can_talk = 12;
+  OverridableBoolData can_print_photos = 13;
+  OverridableBoolData can_edit_room_roles = 14;
+  OverridableBoolData can_self_revive = 16;
+  OverridableBoolData can_end_games_early = 17;
+  bool is_modified_by_player = 18;
+  OverridableListStringData auto_assigned_game_roles = 19;
+  int32 role_version = 20;
+  OverridableBoolData can_change_game_mode = 21;
+  OverridableBoolData can_use_maker_pen = 22;
+  OverridableBoolData can_use_delete_all_button = 23;
+  OverridableBoolData can_save_inventions = 24;
+  OverridableBoolData disable_mic_auto_mute = 25;
+  OverridableBoolData can_use_share_cam = 26;
+  string role_guid = 27;
+}
+
+// ── Role collection (rec_room/player_roles/room_role_collection_data.proto)
+
+message RoomRoleCollectionData {
+  repeated PlayerRoomRoleData room_roles = 1;
+  // field 2 (rec_net_migration_version) intentionally omitted — its enum
+  // type doesn't exist in the 2020 build, and proto3 default 0 is fine.
+}
+
+// ── PersistedRoomData top-level (rec_room/persistence/persisted_room_data.proto)
+//
+// The 2026 schema has 30+ fields — we only set field 23 (room_role_data).
+// Everything else stays at proto3 defaults, which the client treats as
+// "no saved state for this room" — exactly what we want for a fresh dorm
+// /clone with the role config injected.
+
+message PersistedRoomData {
+  // field 1 (DEPRECATED_version) — reserved, do not set.
+  // field 2 (persistence_views) — repeated, default empty list.
+  // fields 3..22 — left at defaults.
+  RoomRoleCollectionData room_role_data = 23;
+  // field 24+ — left at defaults.
+}

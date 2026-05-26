@@ -1,0 +1,112 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# DorkNet — Rec Room private server hosts file entries
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# Append this entire block to the bottom of:
+#     C:\Windows\System32\drivers\etc\hosts
+#
+# Open Notepad as Administrator (right-click → Run as administrator), File →
+# Open → set the file-type filter to "All Files (*.*)", navigate to
+# C:\Windows\System32\drivers\etc\, pick `hosts`, paste, save.
+#
+# After saving, flush the resolver cache so Windows picks up the changes:
+#     ipconfig /flushdns
+#
+# Replace 127.0.0.1 with your server's LAN IP (e.g. 192.168.1.50) on every
+# line if you're hosting for other machines on your network. Each client
+# machine needs its own copy of these entries pointing at the server's IP.
+#
+# Why every subdomain is listed individually: the Windows hosts file (and
+# /etc/hosts on Linux/Mac) does NOT support wildcards. *.rec.net won't work.
+# If you want true wildcard resolution, install Acrylic DNS Proxy on Windows
+# or dnsmasq on Linux instead — but the explicit list below is sufficient
+# for a single-host setup.
+#
+# Every entry below corresponds to a [Host("xxx.rec.net")] controller in
+# DorkNet.Server, plus a few subdomains the client sometimes hits that
+# fall through to GlobalCatchAllController.
+
+127.0.0.1   rec.net
+127.0.0.1   admin.rec.net
+127.0.0.1   api.rec.net
+127.0.0.1   feed.rec.net
+127.0.0.1   accounts.rec.net
+127.0.0.1   auth.rec.net
+127.0.0.1   bugreporting.rec.net
+127.0.0.1   cards.rec.net
+127.0.0.1   cdn.rec.net
+127.0.0.1   chat.rec.net
+127.0.0.1   clubs.rec.net
+127.0.0.1   cms.rec.net
+127.0.0.1   commerce.rec.net
+127.0.0.1   data.rec.net
+127.0.0.1   datacollection.rec.net
+127.0.0.1   discovery.rec.net
+127.0.0.1   econ.rec.net
+127.0.0.1   gamelogs.rec.net
+127.0.0.1   geo.rec.net
+127.0.0.1   img.rec.net
+127.0.0.1   leaderboard.rec.net
+127.0.0.1   link.rec.net
+127.0.0.1   lists.rec.net
+127.0.0.1   match.rec.net
+127.0.0.1   moderation.rec.net
+127.0.0.1   ns.rec.net
+127.0.0.1   notify.rec.net
+127.0.0.1   platformnotifications.rec.net
+127.0.0.1   playersettings.rec.net
+127.0.0.1   roomcomments.rec.net
+127.0.0.1   roomieintegrations.rec.net
+127.0.0.1   rooms.rec.net
+127.0.0.1   storage.rec.net
+127.0.0.1   strings.rec.net
+127.0.0.1   strings-cdn.rec.net
+127.0.0.1   studio.rec.net
+127.0.0.1   thorn.rec.net
+127.0.0.1   videos.rec.net
+
+# ── DorkNet's own domain (localhost) — same subdomains as rec.net but
+#    points at the public domain we own. The patch-domain.ps1 script
+#    rewrites every "rec.net" string in the client binaries to
+#    "localhost" (same length, byte-for-byte), so a freshly-patched
+#    client connects here. The rec.net entries above stay so an
+#    unpatched client still works against the local server.
+
+127.0.0.1   localhost
+127.0.0.1   admin.localhost
+127.0.0.1   api.localhost
+127.0.0.1   accounts.localhost
+127.0.0.1   auth.localhost
+127.0.0.1   bugreporting.localhost
+127.0.0.1   cards.localhost
+127.0.0.1   cdn.localhost
+127.0.0.1   chat.localhost
+127.0.0.1   clubs.localhost
+127.0.0.1   cms.localhost
+127.0.0.1   commerce.localhost
+127.0.0.1   data.localhost
+127.0.0.1   datacollection.localhost
+127.0.0.1   discovery.localhost
+127.0.0.1   econ.localhost
+127.0.0.1   feed.localhost
+127.0.0.1   gamelogs.localhost
+127.0.0.1   geo.localhost
+127.0.0.1   img.localhost
+127.0.0.1   leaderboard.localhost
+127.0.0.1   link.localhost
+127.0.0.1   lists.localhost
+127.0.0.1   match.localhost
+127.0.0.1   moderation.localhost
+127.0.0.1   ns.localhost
+127.0.0.1   notify.localhost
+127.0.0.1   platformnotifications.localhost
+127.0.0.1   playersettings.localhost
+127.0.0.1   roomcomments.localhost
+127.0.0.1   roomieintegrations.localhost
+127.0.0.1   rooms.localhost
+127.0.0.1   storage.localhost
+127.0.0.1   strings.localhost
+127.0.0.1   strings-cdn.localhost
+127.0.0.1   studio.localhost
+127.0.0.1   thorn.localhost
+127.0.0.1   videos.localhost

@@ -1,0 +1,154 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="9.0.4" />
+    <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.15" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="9.0.4">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.4" />
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
+    <!-- RenderedCompactJsonFormatter for stdout JSON logs in production
+         (Coolify-friendly). The host pipeline reads stdout line-by-line,
+         and structured JSON lets a future Loki/Datadog ingest parse fields
+         without regex. Local dev still gets human-readable output via the
+         default text formatter (configured by environment in Program.cs). -->
+    <PackageReference Include="Serilog.Formatting.Compact" Version="3.0.0" />
+    <!-- Redis backplane + ephemeral state store. Required for horizontal
+         scale: SignalR group fanout, OrphanAccountTracker (sticky-session
+         account-creation flow), and PlayerPresenceService heartbeats all
+         need shared state across replicas. -->
+    <PackageReference Include="StackExchange.Redis" Version="2.8.16" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="9.0.4" />
+    <!-- S3-compatible object storage. Production target: Garage in
+         Coolify (one-click). Dev fallback: local MinIO for parity
+         testing. The SDK speaks plain S3, so swapping endpoints
+         (Garage → R2 → real AWS) is a config change, not a code
+         change. ForcePathStyle=true is required for both Garage and
+         MinIO since neither implements virtual-host-style addressing. -->
+    <PackageReference Include="AWSSDK.S3" Version="3.7.412.5" />
+    <!-- Password hashing for the real account auth flow. BCrypt embeds
+         cost+salt in the output string so we only need one column. -->
+    <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
+    <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.3.1" />
+    <!-- Server-side crop/resize for img.* CDN transforms (?cropSquare=1&width=N
+         on profile thumbnails). The 2020 client treats this as part of the
+         image CDN contract — it uploads a full-frame capture and expects the
+         server to return a center-cropped, downsized version. SkiaSharp ships
+         the native Skia binary per RID; the runtime package below pulls in
+         Linux+Windows so Docker publishes correctly. -->
+    <PackageReference Include="SkiaSharp" Version="3.116.1" />
+    <PackageReference Include="SkiaSharp.NativeAssets.Linux.NoDependencies" Version="3.116.1" />
+    <!-- Protobuf encoding for the room data blob (PersistedRoomData → granted maker pen). -->
+    <PackageReference Include="Google.Protobuf" Version="3.28.3" />
+    <PackageReference Include="Grpc.Tools" Version="2.66.0">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Compiles the trimmed proto schema in Protos/ to C# at build time.
+         Only what we need to encode a minimum-viable PersistedRoomData. -->
+    <Protobuf Include="Protos\dorknet_room_data.proto" GrpcServices="None" />
+    <!-- Full 2020.03.06 PersistedRoomData schema, generated from
+         Cpp2IL_CS/.../RecRoom/Protobuf/*.cs by
+         tools/gen-proto-from-decompiled.py. csharp_namespace =
+         RecRoom.Protobuf2020 (so the small trimmed schema in the
+         file above can keep using RecRoom.Protobuf.PersistedRoomData
+         without colliding). RoomBlobNormalizerService uses the
+         generated PersistedRoomData here to ParseFrom + ToByteArray
+         any uploaded room blob, normalising newer-format encodings
+         that the watch's stricter 2020 parser rejects. -->
+    <Protobuf Include="Protos\recroom_2020.proto" GrpcServices="None" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DorkNet.Models\DorkNet.Models.csproj" />
+  </ItemGroup>
+
+  <!-- Vite admin SPA build. Source at admin-ui/, output goes to
+       wwwroot/admin/ which the per-host static file middleware
+       already serves on admin.rec.net / admin.localhost.
+       BeforeTargets=Publish so `dotnet publish` always rebuilds the
+       SPA into the publish output. Local `dotnet build` skips this
+       (use `npm run build` from admin-ui/ directly while iterating
+       on the SPA), keeping the .NET build fast.
+       SkipAdminUIBuild=true bypasses this entirely — used by the
+       Dockerfile, which builds the SPA in a dedicated node:* stage
+       and copies the dist into wwwroot/admin/ before `dotnet publish`
+       runs (the .NET SDK image doesn't ship npm). -->
+  <Target Name="BuildAdminUI" BeforeTargets="Publish"
+          Condition="Exists('admin-ui\package.json') AND '$(SkipAdminUIBuild)' != 'true'">
+    <Message Text="[admin-ui] npm ci + npm run build" Importance="high" />
+    <Exec Command="npm ci --no-fund --no-audit --loglevel=error" WorkingDirectory="admin-ui" />
+    <Exec Command="npm run build" WorkingDirectory="admin-ui" />
+  </Target>
+
+  <!-- Public-facing site (localhost / rec.net). Same shape as the
+       admin-ui target above — separate Vite project under site/,
+       output into wwwroot/site/. Dockerfile builds this in its own
+       node stage and sets SkipSiteBuild=true so this no-ops there. -->
+  <Target Name="BuildSite" BeforeTargets="Publish"
+          Condition="Exists('site\package.json') AND '$(SkipAdminUIBuild)' != 'true'">
+    <Message Text="[site] npm ci + npm run build" Importance="high" />
+    <Exec Command="npm ci --no-fund --no-audit --loglevel=error" WorkingDirectory="site" />
+    <Exec Command="npm run build" WorkingDirectory="site" />
+  </Target>
+
+  <!-- Web SDK auto-includes Content items from the project tree, but
+       defaults to CopyToOutputDirectory=Never, AND only auto-includes
+       a fixed list of extensions. CDN-hash-named PNGs sourced from
+       tools/fetch-room-images.py (e.g. 50xrbhogfdae0mcgzfkomlghu.png)
+       end up in Data\images\ on a case-insensitive filesystem but the
+       <Content Update="data\..."> rule, lowercased to match the
+       runtime path the loader looks under, doesn't touch them.
+       Resort to <None Include> with a forced output path: None+CopyToOutputDirectory
+       reliably copies regardless of the auto-Content set, and using
+       <Link> places them under the lowercase data\images\ that
+       AppContext.BaseDirectory + "data/images" resolves to at
+       runtime in the merged CdnController (img.* branch). -->
+  <ItemGroup>
+    <Content Update="data\**\*.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="data\images\**\*.png" CopyToOutputDirectory="PreserveNewest" />
+    <Content Update="data\images\**\*.jpg" CopyToOutputDirectory="PreserveNewest" />
+    <!-- Top-level data/*.json (avatar_item_lookup.json, room_images.json,
+         etc.) — the source files are tracked at <c>DorkNet.Server/Data/</c>
+         (uppercase) in git but the runtime loaders look in the lowercase
+         <c>data/</c> dir. On Windows (case-insensitive fs) the
+         <c>Content Update="data\**\*.json"</c> above silently matches the
+         uppercase tree; on the Linux build container (case-sensitive) it
+         does NOT, so the JSONs are skipped during dotnet publish and
+         AvatarItemsController loads an empty catalog (which collapses
+         the stale-row cleanup in StoreService.SeedAsync and leaves
+         hundreds of swatch-GUID rows live → every store tile substitutes
+         to Hat_Angler). Force-copy via <None>+<Link> to the lowercase
+         path so both filesystems see the file at runtime.
+
+         IMPORTANT: keep the Exclude — Data\images\ has its own copy rule
+         above for PNG/JPG, and a stray *.json in there (none today, but
+         defence in depth) would otherwise get linked into the wrong
+         place. -->
+    <None Include="Data\*.json">
+      <Link>data\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Data\images\*.png" Exclude="Data\images\image_*.png">
+      <Link>data\images\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="Data\images\*.jpg">
+      <Link>data\images\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

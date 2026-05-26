@@ -1,0 +1,72 @@
+# DorkNet Cloudflare Tunnel config — Coolify production target.
+# ────────────────────────────────────────────────────────────────────
+# Routes every localhost subdomain through the tunnel into the server
+# container running on Coolify. The tunnel runs as its own Coolify
+# service (or as a sidecar in the same project) and reaches the
+# server over the internal Docker network.
+#
+# Two upstream options, pick one for {{UPSTREAM}}:
+#
+#   a) Internal Docker DNS (preferred when cloudflared runs in the
+#      same Coolify project as the server):
+#          http://dorknet-server:8080
+#      The server image binds Kestrel to 0.0.0.0:8080 (HTTP only —
+#      this leg of traffic is already inside the project network).
+#
+#   b) Coolify-published HTTPS endpoint (when cloudflared runs in a
+#      separate project or on a different host):
+#          https://dorknet.<your-coolify-domain>
+#      Requires Coolify to be issuing a real TLS cert for that
+#      hostname. originRequest.noTLSVerify can stay off.
+#
+# Origin TLS is now off the critical path because the server speaks
+# plain HTTP inside the project network. Traffic between cloudflared
+# and Cloudflare's edge is still TLS-encrypted; the only unencrypted
+# leg is server → cloudflared inside the same Docker network.
+
+tunnel: {{TUNNEL_ID}}
+credentials-file: {{CREDENTIALS_FILE}}
+
+# Defaults that apply to every ingress rule unless overridden. The
+# notify.* SignalR hub needs long-lived WebSockets — cloudflared's
+# defaults are conservative and can tear idle connections down, which
+# the 2020 watch surfaces as "check your internet" mid-session. Two
+# levers matter:
+#   * keepAliveTimeout — how long cloudflared keeps the origin
+#     connection pooled and alive between requests; long-lived
+#     WebSockets stay open well past the default 1m30s, raise it.
+#   * connectTimeout — initial origin handshake; bumping it past the
+#     default avoids spurious 502s when the server is warm-booting
+#     after a Coolify deploy.
+# These pair with the matching Program.cs SignalR + WebSocket
+# KeepAliveInterval values (15s / 30s) so traffic flows continuously
+# in both directions and the tunnel never marks the stream idle.
+originRequest:
+  connectTimeout: 30s
+  tlsTimeout: 10s
+  tcpKeepAlive: 30s
+  keepAliveConnections: 100
+  keepAliveTimeout: 10m
+  noHappyEyeballs: false
+
+# Ingress rules are evaluated top-down. The wildcard catches every
+# subdomain we don't list explicitly, so when the 2020 Rec Room client
+# (post-domain-patch) hits a niche subdomain like roomieintegrations.
+# localhost, the request still reaches the server.
+ingress:
+  - hostname: localhost
+    service: {{UPSTREAM}}
+    originRequest:
+      httpHostHeader: localhost
+
+  - hostname: "*.localhost"
+    service: {{UPSTREAM}}
+    # cloudflared forwards the original Host header by default, which
+    # is what the server's [Host("api.localhost")] etc. attributes match
+    # against. No explicit httpHostHeader here so wildcards stay
+    # transparent.
+
+  # Catch-all rejects anything that didn't match (defensive — the
+  # tunnel only routes traffic for hostnames we've added DNS records
+  # for, so this is rarely reached).
+  - service: http_status:404

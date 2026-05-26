@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>DorkNet Admin</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="login" class="card">
+        <h1>DorkNet Admin</h1>
+        <p class="muted">Sign in with an admin account.</p>
+        <form id="loginForm">
+            <label>Username<input id="loginUsername" autocomplete="username" required></label>
+            <label>Password<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+            <button type="submit">Sign in</button>
+            <div id="loginError" class="error"></div>
+        </form>
+    </div>
+
+    <div id="app" hidden>
+        <header>
+            <h1>DorkNet Admin</h1>
+            <div class="who">
+                Signed in as <span id="meName"></span>
+                <button id="logoutBtn" class="link">log out</button>
+            </div>
+        </header>
+        <nav>
+            <button data-tab="dashboard" class="tab active">Dashboard</button>
+            <button data-tab="players" class="tab">Players</button>
+            <button data-tab="store" class="tab">Store</button>
+            <button data-tab="reports" class="tab">Reports</button>
+            <button data-tab="ipbans" class="tab">IP Bans</button>
+            <button data-tab="audit" class="tab">Audit</button>
+            <button data-tab="playerlogs" class="tab">Player Logs</button>
+            <button data-tab="broadcast" class="tab">Broadcast</button>
+            <button data-tab="importroom" class="tab">Import Room</button>
+        </nav>
+
+        <section id="tab-dashboard" class="tab-panel">
+            <h2>Server snapshot</h2>
+            <div id="statsGrid" class="grid"></div>
+            <h3>Top rooms by visits</h3>
+            <table id="topRoomsTable" class="table"></table>
+            <h3>Recent joins</h3>
+            <table id="recentJoinsTable" class="table"></table>
+        </section>
+
+        <section id="tab-players" class="tab-panel" hidden>
+            <h2>Players</h2>
+            <div class="row">
+                <input id="playerSearch" placeholder="search by name…">
+                <button id="refreshPlayers">Refresh</button>
+            </div>
+            <table id="playersTable" class="table"></table>
+        </section>
+
+        <section id="tab-store" class="tab-panel" hidden>
+            <h2>Store catalog</h2>
+            <div class="row">
+                <select id="storeFilterStorefront">
+                    <option value="">All storefronts</option>
+                    <option value="main">main</option>
+                    <option value="watch">watch</option>
+                    <option value="all">all</option>
+                    <option value="rro">rro</option>
+                    <option value="giftdrop:1">giftdrop:1</option>
+                    <option value="giftdrop:2">giftdrop:2</option>
+                    <option value="giftdrop:100">giftdrop:100</option>
+                    <option value="giftdrop:101">giftdrop:101</option>
+                    <option value="giftdrop:102">giftdrop:102</option>
+                    <option value="giftdrop:103">giftdrop:103</option>
+                    <option value="giftdrop:200">giftdrop:200</option>
+                    <option value="giftdrop:300">giftdrop:300</option>
+                    <option value="giftdrop:400">giftdrop:400</option>
+                    <option value="giftdrop:401">giftdrop:401</option>
+                    <option value="giftdrop:402">giftdrop:402</option>
+                    <option value="giftdrop:403">giftdrop:403</option>
+                    <option value="giftdrop:404">giftdrop:404</option>
+                    <option value="giftdrop:405">giftdrop:405</option>
+                    <option value="giftdrop:406">giftdrop:406</option>
+                    <option value="giftdrop:500">giftdrop:500</option>
+                    <option value="giftdrop:600">giftdrop:600</option>
+                    <option value="giftdrop:700">giftdrop:700</option>
+                    <option value="season:1">season:1</option>
+                </select>
+                <select id="storeFilterCategory">
+                    <option value="">All categories</option>
+                    <option value="head">head</option>
+                    <option value="torso">torso</option>
+                    <option value="legs">legs</option>
+                    <option value="feet">feet</option>
+                    <option value="accessory">accessory</option>
+                    <option value="hair">hair</option>
+                    <option value="face">face</option>
+                    <option value="consumable">consumable</option>
+                    <option value="roomtemplate">roomtemplate</option>
+                </select>
+                <button id="refreshStore">Refresh</button>
+                <button id="newStoreItemBtn" class="primary">+ New item</button>
+            </div>
+            <table id="storeTable" class="table"></table>
+        </section>
+
+        <section id="tab-reports" class="tab-panel" hidden>
+            <h2>Open reports</h2>
+            <button id="refreshReports">Refresh</button>
+            <table id="reportsTable" class="table"></table>
+        </section>
+
+        <section id="tab-ipbans" class="tab-panel" hidden>
+            <h2>IP bans</h2>
+            <form id="ipBanForm" class="row">
+                <input id="cidrInput" placeholder="1.2.3.4 or 10.0.0.0/24" required>
+                <input id="cidrReason" placeholder="reason">
+                <input id="cidrDays" type="number" min="1" max="3650" placeholder="days (blank = forever)">
+                <button type="submit">Add ban</button>
+            </form>
+            <table id="ipBansTable" class="table"></table>
+        </section>
+
+        <section id="tab-audit" class="tab-panel" hidden>
+            <h2>Audit log</h2>
+            <button id="refreshAudit">Refresh</button>
+            <table id="auditTable" class="table"></table>
+        </section>
+
+        <section id="tab-playerlogs" class="tab-panel" hidden>
+            <h2>Player request log</h2>
+            <p class="muted">
+                Last <strong>500</strong> HTTP calls made by a single player (newest first), pulled from
+                Redis. Useful for diagnosing what API call a player was making when something broke.
+            </p>
+            <form id="playerLogsForm" class="row">
+                <label style="flex:2">
+                    Player
+                    <select id="playerLogsSelect">
+                        <option value="">— pick an account —</option>
+                    </select>
+                </label>
+                <label style="flex:1">
+                    Filter (case-insensitive)
+                    <input id="playerLogsFilter" placeholder="path or status">
+                </label>
+                <label style="flex:0 0 90px">
+                    Take
+                    <input id="playerLogsTake" type="number" min="10" max="500" value="200">
+                </label>
+                <button type="button" id="refreshPlayerLogs">Refresh</button>
+                <label class="row" style="gap:.4rem;align-items:center;flex:0 0 auto;margin-top:1.4rem">
+                    <input id="playerLogsAuto" type="checkbox"> auto-refresh 5 s
+                </label>
+            </form>
+            <p id="playerLogsSummary" class="muted" style="margin-top:.5rem"></p>
+            <table id="playerLogsTable" class="table"></table>
+        </section>
+
+        <section id="tab-broadcast" class="tab-panel" hidden>
+            <h2>Broadcast message</h2>
+            <p class="muted">Pushes a server-maintenance notification to every connected player.</p>
+            <form id="broadcastForm">
+                <textarea id="broadcastMessage" rows="4" placeholder="Server going down for maintenance in 5 minutes…" required></textarea>
+                <button type="submit">Send broadcast</button>
+            </form>
+        </section>
+
+        <section id="tab-importroom" class="tab-panel" hidden>
+            <h2>Import a room</h2>
+            <p class="muted">
+                Upload a folder containing per-scene <code>.room</code> blobs, or pick the .room files individually.
+                Each scene gets its own sub-room; the one named <strong>Lobby</strong> (or the entry-scene field below) becomes the
+                entry. All scenes default to the Maker Room (Basement) stage GUID — edit per row in SQL after import if a different
+                base stage is needed.
+            </p>
+            <form id="importRoomForm">
+                <div class="row">
+                    <label style="flex:2">Room name<input id="importName" placeholder="YarrHarrHeist" required></label>
+                    <label style="flex:1">Entry scene<input id="importEntry" placeholder="Lobby"></label>
+                </div>
+                <label>Description (optional)<input id="importDesc" placeholder="Imported from archive"></label>
+                <div class="row">
+                    <label style="flex:2">
+                        Owner
+                        <select id="importOwner" required>
+                            <option value="">— pick an account —</option>
+                        </select>
+                    </label>
+                    <label style="flex:1">
+                        Filter
+                        <input id="importOwnerFilter" placeholder="search by name…">
+                    </label>
+                </div>
+                <div class="row">
+                    <label style="flex:1">
+                        Pick a folder
+                        <input id="importFolder" type="file" webkitdirectory directory multiple>
+                    </label>
+                    <label style="flex:1">
+                        …or pick individual <code>.room</code> files
+                        <input id="importFiles" type="file" multiple accept=".room">
+                    </label>
+                </div>
+                <p id="importFileSummary" class="muted"></p>
+                <table id="importPreviewTable" class="table" hidden>
+                    <thead><tr><th>Scene</th><th>File</th><th>Bytes</th></tr></thead>
+                    <tbody></tbody>
+                </table>
+                <button type="submit" id="importSubmit" disabled>Import</button>
+                <div id="importStatus" class="muted" style="margin-top:.5rem"></div>
+            </form>
+
+            <h3 style="margin-top:2rem">Re-mirror .htr assets for an existing room</h3>
+            <p class="muted">
+                Forces a synchronous re-scan of an already-imported room's blobs and downloads any
+                Holotar / AudioSampler <code>.htr</code> refs that aren't yet in <code>RoomDataBlobs</code>.
+                Use to backfill rooms imported before the auto-mirror existed, or to debug whether the
+                C# extractor is finding refs.
+            </p>
+            <div class="row">
+                <select id="mirrorHtrRoomSelect" style="flex:2">
+                    <option value="">— loading rooms… —</option>
+                </select>
+                <button type="button" id="mirrorHtrBtn">Mirror .htr</button>
+            </div>
+            <pre id="mirrorHtrStatus" class="muted" style="margin-top:.5rem;white-space:pre-wrap"></pre>
+        </section>
+
+        <div id="playerModal" class="modal" hidden>
+            <div class="modal-content card">
+                <button class="close" data-close>&times;</button>
+                <h2 id="modalTitle">Player</h2>
+                <div id="modalBody"></div>
+            </div>
+        </div>
+
+        <div id="storeModal" class="modal" hidden>
+            <div class="modal-content card">
+                <button class="close" data-close-store>&times;</button>
+                <h2 id="storeModalTitle">Store item</h2>
+                <div id="storeModalBody"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast" hidden></div>
+    <script src="app.js?v=20260510-playerlogs"></script>
+</body>
+</html>

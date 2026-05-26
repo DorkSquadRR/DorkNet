@@ -1,0 +1,72 @@
+# Keep the build context small + reproducible. Anything not strictly
+# needed for `dotnet restore && dotnet publish` is excluded.
+
+# Build artefacts
+**/bin/
+**/obj/
+**/*.user
+**/*.suo
+
+# Dev-only configs (Local layer must NEVER ship into a container —
+# secrets are passed by env vars on Coolify).
+**/appsettings.Local.json
+**/appsettings.Development.json
+
+# Local runtime data
+**/data/
+**/server.log
+**/*.log
+
+# IDE noise
+.vs/
+.vscode/
+.idea/
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Reverse-engineering scratch (not needed for production server)
+Cpp2ILOutput/
+Cpp2IL_CS/
+Cpp2IL_ISIL/
+Il2CppDump/
+RR_protos/
+RR_ProtobufDefinitions.zip
+GameAssembly.dll
+global-metadata.dat
+il2cpp.h
+dump.cs
+script.json
+RoomPersistenceManager_decompiled.txt
+
+# Local TLS certs (mkcert) — never copy into the image
+*.pem
+hosts.dorknet.txt
+
+# Tools that aren't part of the server runtime
+tools/
+Tools/
+
+# Vite SPA build leftovers — node_modules is huge and the dist is
+# rebuilt fresh by the npm-build stage in the Dockerfile, so neither
+# should ship into the docker context. The source under admin-ui/src
+# and admin-ui/{package.json,vite.config.ts,...} is what we copy in.
+DorkNet.Server/admin-ui/node_modules/
+DorkNet.Server/admin-ui/dist/
+DorkNet.Server/admin-ui/.vite/
+DorkNet.Server/wwwroot/admin/assets/
+DorkNet.Server/wwwroot/admin/index.html
+DorkNet.Server/wwwroot/admin/*.map
+
+# Top-level docs / planning
+README.md
+LICENSE
+NOTICE
+BUILD_PROPER_PLAN.md
+nginx.conf
+
+# Other stages of the workflow
+*.md
+docs/

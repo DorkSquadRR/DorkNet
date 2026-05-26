@@ -1,0 +1,2092 @@
+[
+  {
+    "name": "Hat_Knight_Helmet_Mask",
+    "guid": "0dd6596c-b4ea-4d55-a219-e1f44e4a376d",
+    "category": "head"
+  },
+  {
+    "name": "TShirt_SquadGoals_Swatch",
+    "guid": "941c046e-4e95-49f8-a7d7-19071fcc3c94",
+    "category": "torso"
+  },
+  {
+    "name": "ZebraWhite_Swatch",
+    "guid": "48abd952-214f-48b2-a8f1-1146f6f69aa2",
+    "category": "accessory"
+  },
+  {
+    "name": "FootballHelmet_Mask",
+    "guid": "7660e11a-7ef0-43d3-bc02-76b3a4aab064",
+    "category": "head"
+  },
+  {
+    "name": "SpaceMarine_Red_Swatch",
+    "guid": "d78643e4-c0d2-4836-bf22-b5a0e2d65b28",
+    "category": "accessory"
+  },
+  {
+    "name": "Hibiscus_Yellow_Swatch",
+    "guid": "596097a8-d545-4256-959d-1d3cd96fc64c",
+    "category": "accessory"
+  },
+  {
+    "name": "Polkadot_Mask",
+    "guid": "b292eb4b-07e3-4a48-99b5-3c6587a1e02e",
+    "category": "face"
+  },
+  {
+    "name": "Artist_Hat_Mask",
+    "guid": "3485a30d-27f8-450b-b5aa-1ff3cd227d19",
+    "category": "head"
+  },
+  {
+    "name": "Boxer_Red_Swatch",
+    "guid": "8c7b09f2-6213-4ef9-87ab-a2df72d07a22",
+    "category": "accessory"
+  },
+  {
+    "name": "Baseball_Torso_Mask",
+    "guid": "ca37823a-b8f3-4414-b38b-de0dc7fa4295",
+    "category": "face"
+  },
+  {
+    "name": "TShirt_Male_Mask",
+    "guid": "0440f08f-ef1d-49d8-942b-523056e8bb45",
+    "category": "torso"
+  },
+  {
+    "name": "Aviator_Shirt_Mask",
+    "guid": "9009bcdf-b6f7-4dae-b2ec-895511d118ff",
+    "category": "torso"
+  },
+  {
+    "name": "PoofyDress_Purple_Swatch",
+    "guid": "31ac9d4d-3d6b-48f2-85d5-dc4b8165a17a",
+    "category": "accessory"
+  },
+  {
+    "name": "Baseball_Red_Swatch",
+    "guid": "de0a5a3a-8aff-4799-8269-9efa3aeb383a",
+    "category": "accessory"
+  },
+  {
+    "name": "ButtonTop_Orange_Swatch",
+    "guid": "e0397982-c2c2-4733-9a40-46e18675b5af",
+    "category": "accessory"
+  },
+  {
+    "name": "CowboyCherry_Swatch",
+    "guid": "624c85e5-095a-48b6-85fb-c9bbade19a8d",
+    "category": "accessory"
+  },
+  {
+    "name": "Mobster_HerringBone_Tan_Swatch",
+    "guid": "531b4297-b38b-4362-9854-4f2139ea43be",
+    "category": "accessory"
+  },
+  {
+    "name": "Punk_Pink_Swatch",
+    "guid": "4169bfed-8403-4590-a29d-4941275ac0b6",
+    "category": "accessory"
+  },
+  {
+    "name": "Golfer_Shirt_Mask",
+    "guid": "6ce21c65-f4e9-41ac-be94-8eb1a08d5c76",
+    "category": "torso"
+  },
+  {
+    "name": "EquestrianJacket_Maroon_Swatch",
+    "guid": "d6823e01-69f0-4f85-b94a-74894356a2cf",
+    "category": "torso"
+  },
+  {
+    "name": "FighterPilot_Gloves_Orange_Swatch",
+    "guid": "18b52db5-0261-46a0-9214-ff510d455ed9",
+    "category": "accessory"
+  },
+  {
+    "name": "Aviator_Gloves_Tan_Swatch",
+    "guid": "7fb8496f-0e6c-4e48-b8fa-5709ebbf4820",
+    "category": "accessory"
+  },
+  {
+    "name": "Plaid_LightBlue_Swatch",
+    "guid": "d6edbc00-3c1d-4f49-8412-3ef8c7c5f4c2",
+    "category": "accessory"
+  },
+  {
+    "name": "Fatigue_Swatch",
+    "guid": "6d703981-2734-4c45-8983-cdd5f328902f",
+    "category": "accessory"
+  },
+  {
+    "name": "Hat_Safari_Mask",
+    "guid": "0dabda0d-842c-4d39-a6b9-a8ca3ec20825",
+    "category": "head"
+  },
+  {
+    "name": "Cream_Swatch",
+    "guid": "7d8e55fe-3c34-4b4b-9753-0021f6cc6454",
+    "category": "accessory"
+  },
+  {
+    "name": "ArtistHat_Red_Swatch",
+    "guid": "5c8f36c5-07da-49f4-af02-d23207a43216",
+    "category": "head"
+  },
+  {
+    "name": "Dodgeball_Mask",
+    "guid": "944d934d-5e21-42d7-8196-fff9a81ee469",
+    "category": "face"
+  },
+  {
+    "name": "ArcherBlack_Quiver_Swatch",
+    "guid": "74b009f4-e128-4c59-8a6a-4c0ba6119bde",
+    "category": "accessory"
+  },
+  {
+    "name": "ArcherYellow_Swatch",
+    "guid": "6e152cc7-e93a-4408-8092-236db420b680",
+    "category": "accessory"
+  },
+  {
+    "name": "Torso_YellowPoofyDress_Mask",
+    "guid": "d30e3afe-414c-4b60-8be9-6fa4156a4b65",
+    "category": "face"
+  },
+  {
+    "name": "PurpleJacket_Red_Swatch",
+    "guid": "657f28d5-672a-4f27-86c6-3cb00f25bb84",
+    "category": "torso"
+  },
+  {
+    "name": "FighterPilot_Orange_Swatch",
+    "guid": "cea53c7f-24a9-4e3b-80b9-fbf95738f973",
+    "category": "accessory"
+  },
+  {
+    "name": "BabydollDress_Green_Swatch",
+    "guid": "c9589974-c261-485e-b571-cb2f34fb178f",
+    "category": "accessory"
+  },
+  {
+    "name": "TennisSkirt_Mask",
+    "guid": "b75ef67d-00c3-4ac1-9b72-212032460294",
+    "category": "legs"
+  },
+  {
+    "name": "Eye_MirroredGlasses_Silver_swatch",
+    "guid": "f841cdfa-45ba-4f09-a117-503eef34cb4b",
+    "category": "face"
+  },
+  {
+    "name": "Beekeeper_Glove_Mask",
+    "guid": "1f18670d-df52-4d2b-8009-a32cf7c67b40",
+    "category": "face"
+  },
+  {
+    "name": "2017_Member_Decal",
+    "guid": "75162f12-44e7-499f-bc6c-9b0612e9164b",
+    "category": "accessory"
+  },
+  {
+    "name": "HeadFlowers_Mask",
+    "guid": "7d040391-03f7-4b3d-bcfd-a1278ff459c9",
+    "category": "face"
+  },
+  {
+    "name": "Tshirt_Squad_Goals_Decal",
+    "guid": "6c395d04-2aa6-4a3e-8c2c-695932bc9736",
+    "category": "torso"
+  },
+  {
+    "name": "Hat_SeaCaptainDarkDarkGold_Swatch",
+    "guid": "70112887-dc8d-49d5-96ed-0845204e0b58",
+    "category": "head"
+  },
+  {
+    "name": "ScoutSkirt_Shirt_Mask",
+    "guid": "e65530f7-543c-43e9-bf12-b6cda2bc755c",
+    "category": "torso"
+  },
+  {
+    "name": "PolkaBlue_Swatch",
+    "guid": "ad61c418-6d77-4a99-8ac5-9f10f5a3d42f",
+    "category": "accessory"
+  },
+  {
+    "name": "Wrist_CowboyCherry_Swatch",
+    "guid": "17e44296-1cd9-4f8e-9aa7-3837dc69279a",
+    "category": "accessory"
+  },
+  {
+    "name": "Yellow_Swatch",
+    "guid": "d2b40639-5d34-45b6-904e-6dd29030ff44",
+    "category": "accessory"
+  },
+  {
+    "name": "WitchHunter_Purple_Swatch",
+    "guid": "71e5a0fe-fc8d-420b-af3b-e74160e0d1f3",
+    "category": "accessory"
+  },
+  {
+    "name": "Plaid_Mask",
+    "guid": "cf119781-5bd9-4b85-9a0b-12e82e988c23",
+    "category": "face"
+  },
+  {
+    "name": "Smuggler_Green_Swatch",
+    "guid": "076c96ae-9f9b-45bf-9dc7-ce73d5ddf422",
+    "category": "accessory"
+  },
+  {
+    "name": "Scallywag_Torso_Swatch_Red",
+    "guid": "39f04eee-3a58-4e53-9f5e-7e995d46ed71",
+    "category": "accessory"
+  },
+  {
+    "name": "Red_Swatch",
+    "guid": "8377ab96-c908-457f-9fee-b784c9a759f3",
+    "category": "accessory"
+  },
+  {
+    "name": "TShirt_Male_LaserTag_Alpha_Mask",
+    "guid": "3259238f-4a9e-4e06-99de-6e7324fa0894",
+    "category": "torso"
+  },
+  {
+    "name": "PirateCaptain_Hat_Black_Swatch",
+    "guid": "f9aaa7c5-59bc-486c-9a6e-27a8ac618f84",
+    "category": "head"
+  },
+  {
+    "name": "Grey_Swatch",
+    "guid": "0ecb8a2a-cffc-47db-aeda-fb0684aef1e5",
+    "category": "accessory"
+  },
+  {
+    "name": "BaseballHelmet_Red_Swatch",
+    "guid": "a1c51d1e-1d5f-4f8a-bc0f-6a20eddfe58a",
+    "category": "head"
+  },
+  {
+    "name": "PirateCaptain_Black_Swatch",
+    "guid": "d81d0b62-e052-46c2-9252-4bc5fb219f53",
+    "category": "head"
+  },
+  {
+    "name": "BlazerGreyDark_Swatch",
+    "guid": "9374bf66-2ee5-493b-8439-efce4b201904",
+    "category": "accessory"
+  },
+  {
+    "name": "Tshirt_LaserTag_Alpha_Decal",
+    "guid": "e38294cf-6279-4863-9aea-1a19aeaf8476",
+    "category": "torso"
+  },
+  {
+    "name": "PirateCaptain_Belt_Black_Swatch",
+    "guid": "f4ad4b9e-dd42-4711-9437-5beae51966f6",
+    "category": "head"
+  },
+  {
+    "name": "Firefighter_Hat_Mask",
+    "guid": "c8ccb85e-52cd-4b3b-aadf-289819067125",
+    "category": "head"
+  },
+  {
+    "name": "Barbershop_Torso_Mask",
+    "guid": "15edb8d7-2ff6-4170-a7e6-acd9e965cab5",
+    "category": "face"
+  },
+  {
+    "name": "BabydollDress_Black_Swatch",
+    "guid": "e13cf33d-7588-4e2e-955e-f0a29d6380b7",
+    "category": "accessory"
+  },
+  {
+    "name": "Barber_Torso_Formal_Swatch",
+    "guid": "a5925738-a451-4f25-b622-ccbfa12bd88c",
+    "category": "accessory"
+  },
+  {
+    "name": "FlowerSwimsuit_Mask",
+    "guid": "3248a3ec-50d1-4c0a-96ae-25eb9d8ed622",
+    "category": "face"
+  },
+  {
+    "name": "FlapperGlove_Black_Swatch",
+    "guid": "30c61e63-5e09-4a6f-8915-1e1fe4d55cf0",
+    "category": "accessory"
+  },
+  {
+    "name": "ButtonTop_Tan_Swatch",
+    "guid": "49f5864f-9d40-497c-88c8-e87f64d41d74",
+    "category": "accessory"
+  },
+  {
+    "name": "Tshirt_SciFi_Face_Decal",
+    "guid": "4ca3347a-dc87-412f-9eb1-799372e6fdd1",
+    "category": "torso"
+  },
+  {
+    "name": "Scifi_Carpet_Mask",
+    "guid": "3290f148-1bd1-4ffd-a947-61fd0529af05",
+    "category": "face"
+  },
+  {
+    "name": "Aviator_Goggles_Gray_Swatch",
+    "guid": "23428ca9-be75-4146-b400-df01d1dadac9",
+    "category": "face"
+  },
+  {
+    "name": "Knight_Blue_Swatch",
+    "guid": "ed134bee-d199-43eb-98bd-206571603f40",
+    "category": "accessory"
+  },
+  {
+    "name": "SafariTorso_Green_Swatch",
+    "guid": "49bbd11a-e5c9-47ff-b04d-72eb321e8a57",
+    "category": "accessory"
+  },
+  {
+    "name": "Scallywag_Hat_Blue_Swatch",
+    "guid": "53dd9e44-7096-438e-a7c3-11d7c307426f",
+    "category": "head"
+  },
+  {
+    "name": "Wizard_Wrist_Mask",
+    "guid": "47514b9b-0d17-4727-97ed-dab67e7fe031",
+    "category": "face"
+  },
+  {
+    "name": "ArcherTunic_Mask",
+    "guid": "f88178b8-b204-4fa5-9dfd-6e438bf1e247",
+    "category": "face"
+  },
+  {
+    "name": "Ranger_Hat_Mask",
+    "guid": "0272eb19-fc0e-4ad6-8db9-cc0cda2528b0",
+    "category": "head"
+  },
+  {
+    "name": "SolidRed_Mask",
+    "guid": "0b2395e1-ebcc-47e9-aaf1-faf9e9cec4cd",
+    "category": "face"
+  },
+  {
+    "name": "TShirt_Laser_Unicorn_Purple_Swatch",
+    "guid": "befa2f11-b9fd-457c-b1d5-9d82e90b70ce",
+    "category": "torso"
+  },
+  {
+    "name": "Hat_SpaceMarine_Mask",
+    "guid": "b94411f6-5b71-48d0-ace1-ac6f63167065",
+    "category": "head"
+  },
+  {
+    "name": "EquestrianJacket_Gray_Swatch",
+    "guid": "4828b50c-95b6-466a-bb25-514891d78202",
+    "category": "torso"
+  },
+  {
+    "name": "Tshirt_Laser_Unicorn_Decal",
+    "guid": "770e7674-6f9b-41f8-b023-ae79738db0d3",
+    "category": "torso"
+  },
+  {
+    "name": "AnglerHat_Blue_Swatch",
+    "guid": "d7f0ffd3-ccf9-465e-8afe-4d7efb78dd2c",
+    "category": "head"
+  },
+  {
+    "name": "Lacrosse_Hat_Mask",
+    "guid": "7e688b30-ed13-4790-9ad8-c49885d1b7e8",
+    "category": "head"
+  },
+  {
+    "name": "FurCoat_Black_Swatch",
+    "guid": "43501b0c-eaaa-4ab3-9d03-2ca61d2e8fc9",
+    "category": "accessory"
+  },
+  {
+    "name": "Angler_Torso_Mask",
+    "guid": "cdbe2cc8-4fd7-451f-9b66-0df0e0e7a85e",
+    "category": "face"
+  },
+  {
+    "name": "FlapperHeadband_Gold_Swatch",
+    "guid": "b6c25a3b-125b-4aab-bed0-e6e5ced2c21c",
+    "category": "accessory"
+  },
+  {
+    "name": "Golfer_Shirt_Blue_Swatch",
+    "guid": "96e2b29e-e553-40f1-9eb6-8a9f7e64da39",
+    "category": "torso"
+  },
+  {
+    "name": "Hibiscus_White_Swatch",
+    "guid": "ce465d53-3807-423f-baa0-bdba2a75ceb3",
+    "category": "accessory"
+  },
+  {
+    "name": "FlapperHeadband_Black_Swatch",
+    "guid": "565c17e0-496d-45bd-a2c3-564e118c06cc",
+    "category": "accessory"
+  },
+  {
+    "name": "Argyle_Mask",
+    "guid": "d015cae7-a905-49e4-8823-6dec069689a6",
+    "category": "face"
+  },
+  {
+    "name": "Scout_RaccoonHat_Mask",
+    "guid": "f1cd10fb-3d0b-436f-a173-65bc0d88d8bf",
+    "category": "head"
+  },
+  {
+    "name": "Blue_Swatch",
+    "guid": "dee70c38-7a99-4c2b-9181-665f1bf75aca",
+    "category": "accessory"
+  },
+  {
+    "name": "Shirt_Knight_Armor_Mask",
+    "guid": "51a1809d-becd-42e0-8dfb-188d6f07ba1c",
+    "category": "torso"
+  },
+  {
+    "name": "Barber_Hat_Formal_Swatch",
+    "guid": "631c9015-2a00-47ea-bb35-465a2ddbca5d",
+    "category": "head"
+  },
+  {
+    "name": "DrumMajorHat_Mask",
+    "guid": "a8a91216-0fcc-461e-a682-95ee82509cce",
+    "category": "head"
+  },
+  {
+    "name": "Torso_Flapper_Mask",
+    "guid": "a240d44f-963d-4d35-b22f-980938c7788d",
+    "category": "face"
+  },
+  {
+    "name": "Artist_Torso_Mask",
+    "guid": "5a6db6ba-2a0f-4399-b537-dd78db94bf90",
+    "category": "face"
+  },
+  {
+    "name": "Blazer_Mask",
+    "guid": "be2b9293-1d3c-4b1c-b4c5-fad3ab16cf54",
+    "category": "face"
+  },
+  {
+    "name": "TShirt_Female_Mask",
+    "guid": "05f0ee6e-c824-470e-9178-5ed576c6fe0c",
+    "category": "torso"
+  },
+  {
+    "name": "Shirt_Knight_Cape_Mask",
+    "guid": "15099be7-38b7-4b0b-ac13-1bacedbf5fb2",
+    "category": "head"
+  },
+  {
+    "name": "Aviator_Hat_Mask",
+    "guid": "ff5ae41e-e446-4a96-8c11-49d85556fa81",
+    "category": "head"
+  },
+  {
+    "name": "FighterPilot_Glove_Mask",
+    "guid": "7869b2a5-cd89-4033-b9f7-4f1451ecb47b",
+    "category": "face"
+  },
+  {
+    "name": "Torso_OrangeDress_Mask",
+    "guid": "2c8924aa-68f8-4912-9759-18992f72f08a",
+    "category": "face"
+  },
+  {
+    "name": "TShirt_HangInThere_Swatch",
+    "guid": "815138e6-b0dc-459c-9538-20f5bbd37d6b",
+    "category": "torso"
+  },
+  {
+    "name": "Knight_Red_Swatch",
+    "guid": "59866578-d4e0-417b-9483-233ab108b1ac",
+    "category": "accessory"
+  },
+  {
+    "name": "Hat_CatEars_Gray_Swatch",
+    "guid": "96e42c7a-2881-4299-a2fe-80c0d4d5ca26",
+    "category": "head"
+  },
+  {
+    "name": "Boxer_Torso_Mask",
+    "guid": "0ec6628c-a106-4452-af82-105a3e3a9f2e",
+    "category": "face"
+  },
+  {
+    "name": "PirateCaptain_Hat_Red_Mask",
+    "guid": "71fd06e3-cac8-4923-a09c-ef91183712d2",
+    "category": "head"
+  },
+  {
+    "name": "Fatigue_Mask",
+    "guid": "a0271cd0-e172-4d3f-aa2f-9806f21a82d2",
+    "category": "face"
+  },
+  {
+    "name": "Hat_CatEars_Brown_Swatch",
+    "guid": "713781e5-ce47-41c6-a24f-94d42a565e30",
+    "category": "head"
+  },
+  {
+    "name": "FurCoat_Mask",
+    "guid": "2c0d912d-c184-4eab-8ee4-73b90ba7b0a6",
+    "category": "face"
+  },
+  {
+    "name": "WitchHunter_Green_Swatch",
+    "guid": "64545dcc-a8eb-4c69-a539-78ee73a2d327",
+    "category": "accessory"
+  },
+  {
+    "name": "Tshirt_Alpaca_Decal",
+    "guid": "703ff56b-560d-4ff4-8c63-d195e879a328",
+    "category": "torso"
+  },
+  {
+    "name": "Scout_Sash_Blue_Swatch",
+    "guid": "67490e3b-0f9d-4bf8-84fb-54957b981c8c",
+    "category": "accessory"
+  },
+  {
+    "name": "Hat_CatEars_Mask",
+    "guid": "1e3195ab-f7f6-41f4-a5ec-378d09ecdf69",
+    "category": "head"
+  },
+  {
+    "name": "TShirt_Orange_Swatch",
+    "guid": "95e4cc30-cb68-473d-a395-feadf5b51512",
+    "category": "torso"
+  },
+  {
+    "name": "SpaceMarine_Pink_Swatch",
+    "guid": "a36d252b-16ac-4a82-bece-de145147e7d9",
+    "category": "accessory"
+  },
+  {
+    "name": "Torso_PinkStollDress_Mask",
+    "guid": "91a451c1-b285-4c48-b14d-59ded8cc006f",
+    "category": "face"
+  },
+  {
+    "name": "Mobster_Hat_Brown_Swatch",
+    "guid": "1421caa9-9a0d-42c2-b847-1500ba2e483a",
+    "category": "head"
+  },
+  {
+    "name": "ElectricianTorso_Gray_Swatch",
+    "guid": "b995b419-1897-4c1d-98be-83d551f7ba71",
+    "category": "accessory"
+  },
+  {
+    "name": "White_Swatch",
+    "guid": "724c79a3-822c-422f-9462-a5374ee0211c",
+    "category": "accessory"
+  },
+  {
+    "name": "2016_Member_swatch",
+    "guid": "5864d23d-1a86-40a6-a52c-46ee670e4508",
+    "category": "accessory"
+  },
+  {
+    "name": "BeltDress_Green_Swatch",
+    "guid": "5b58d879-2bc4-47ed-a996-1af2ace16425",
+    "category": "accessory"
+  },
+  {
+    "name": "SmallBrimHat_Mask",
+    "guid": "65ed43ff-dfc4-4cab-b0b9-77dc94165e24",
+    "category": "head"
+  },
+  {
+    "name": "FootballHelmet_Orange_Swatch",
+    "guid": "d8d490aa-7088-4163-9305-1441367f490c",
+    "category": "head"
+  },
+  {
+    "name": "Flower_3_Mask",
+    "guid": "27a5df72-4095-4837-bf24-cdd3d95a43e9",
+    "category": "face"
+  },
+  {
+    "name": "RedFlowerDress_Gray_Swatch",
+    "guid": "1acb1f56-4509-449f-9c6a-065bdeaa9ee3",
+    "category": "accessory"
+  },
+  {
+    "name": "Aviator_Jacket_Tan_Swatch",
+    "guid": "bea795cc-aabd-4229-84dd-49ab4f91a445",
+    "category": "torso"
+  },
+  {
+    "name": "FootballPads_Mask",
+    "guid": "e17481fc-b2b6-47a5-91e5-7205f45a3247",
+    "category": "feet"
+  },
+  {
+    "name": "Tennis_Mask",
+    "guid": "90e0da8b-1941-4ca8-b7e5-b4e31921873c",
+    "category": "face"
+  },
+  {
+    "name": "Punk_WristPink_Swatch",
+    "guid": "f3b2330a-b981-4c7e-902f-1f57382f2388",
+    "category": "accessory"
+  },
+  {
+    "name": "BeltDress_Black_Swatch",
+    "guid": "d320ad9b-ba5c-45ea-b2b8-0d3e409a9db1",
+    "category": "accessory"
+  },
+  {
+    "name": "FighterPilot_Black_Swatch",
+    "guid": "8c74ee27-3d56-401b-8a8c-7868a80770e8",
+    "category": "accessory"
+  },
+  {
+    "name": "TShirt_KO_Skull_Swatch",
+    "guid": "381a9f13-5b44-48e6-8a49-221422a963f5",
+    "category": "torso"
+  },
+  {
+    "name": "TShirt_Scifi_Face_BLue_Swatch",
+    "guid": "bda7a57e-5227-49f4-a119-e3f166604738",
+    "category": "torso"
+  },
+  {
+    "name": "YellowBlueDress_White_Swatch",
+    "guid": "bbfa08e3-8e6b-4e0f-b264-1b398d7cd44a",
+    "category": "accessory"
+  },
+  {
+    "name": "Green_Swatch",
+    "guid": "f8b0cfe8-e129-4578-8bb5-f60af5d38599",
+    "category": "accessory"
+  },
+  {
+    "name": "TennisSkirt_Yellow_Swatch",
+    "guid": "c5deba2a-6e35-4b13-8e94-8ba5457f39df",
+    "category": "legs"
+  },
+  {
+    "name": "Smuggler_Grey_Swatch",
+    "guid": "90869e86-cbc5-4024-9d08-fcdc41c64eb5",
+    "category": "accessory"
+  },
+  {
+    "name": "ArcherBlack_Swatch",
+    "guid": "9ad37173-e640-4b9e-a474-716d482b73d2",
+    "category": "accessory"
+  },
+  {
+    "name": "Beekeeper_Shirt_Mask",
+    "guid": "afd88a79-7f03-40f6-bcb4-c247dd86edc4",
+    "category": "torso"
+  },
+  {
+    "name": "LaserTag_Cyan_Swatch",
+    "guid": "08b7c12d-3317-4d27-9b40-34737a709454",
+    "category": "accessory"
+  },
+  {
+    "name": "BlazerDark_Swatch",
+    "guid": "05ac07e1-67f0-486c-abf5-a62866475abb",
+    "category": "accessory"
+  },
+  {
+    "name": "DrumMajorTorso_Mask",
+    "guid": "b0298c45-0dd1-453e-bad4-41e4656bb38e",
+    "category": "face"
+  },
+  {
+    "name": "TrackSuit_Pink_Swatch",
+    "guid": "026ca50e-3a81-43cf-87f5-950687b7bbdd",
+    "category": "accessory"
+  },
+  {
+    "name": "Golfer_Glove_Mask",
+    "guid": "f4cea991-fc3d-4715-bf82-8a8fb60e8799",
+    "category": "face"
+  },
+  {
+    "name": "Aviator_Hat_Tan_Swatch",
+    "guid": "c6cf096c-f0cb-4500-80a0-bc2916b5a426",
+    "category": "head"
+  },
+  {
+    "name": "MobsterWrist_HerringBone_Mask",
+    "guid": "c2a9c007-2748-4fa2-ab9b-0081eef792f1",
+    "category": "face"
+  },
+  {
+    "name": "Baseball_Green_Swatch",
+    "guid": "e5de2e45-207c-46af-9a5e-eb01a0c621fe",
+    "category": "accessory"
+  },
+  {
+    "name": "GreenFlower_Swatch",
+    "guid": "d66aa400-aa5a-4539-a25d-5f8ce94dc281",
+    "category": "accessory"
+  },
+  {
+    "name": "Ranger_Torso_Mask",
+    "guid": "d21e1b6f-9c9e-42b4-bad5-201ec43161e9",
+    "category": "face"
+  },
+  {
+    "name": "Dodgeball_Gray_Swatch",
+    "guid": "0ba92db2-690a-44ce-92f4-130e9503b6c1",
+    "category": "accessory"
+  },
+  {
+    "name": "Aviator_Gloves_Black_Swatch",
+    "guid": "97bbb384-b37e-4ea1-902c-88fbd6854ab5",
+    "category": "accessory"
+  },
+  {
+    "name": "MobsterTorso_HerringBone_Mask",
+    "guid": "33ee376a-586e-4aff-a7e4-4213445a3e92",
+    "category": "face"
+  },
+  {
+    "name": "Birthday01_Swatch",
+    "guid": "922f229c-124f-4f07-b4e3-19138420ca19",
+    "category": "accessory"
+  },
+  {
+    "name": "Wizard_White_Swatch",
+    "guid": "d3a9b576-5433-4305-bd96-b08820c09212",
+    "category": "accessory"
+  },
+  {
+    "name": "PurpleJacket_Mask",
+    "guid": "3ba69a39-a4e7-4505-bae7-8db31360ec1c",
+    "category": "torso"
+  },
+  {
+    "name": "Quest_Crown_Decal",
+    "guid": "f5270130-6634-4052-aa3e-9849ddf5314e",
+    "category": "head"
+  },
+  {
+    "name": "Lacross_Stripe_Mask",
+    "guid": "da36bbcc-2a9a-4ba2-9e4a-6f52c9b1ef74",
+    "category": "face"
+  },
+  {
+    "name": "Happy_Tree_Decal",
+    "guid": "d461ca71-45c9-415e-8e09-ba93e8d73450",
+    "category": "accessory"
+  },
+  {
+    "name": "Ranger_Shirt_Green_Swatch",
+    "guid": "b415fe60-3e9d-4f4d-a53a-ca15eac6af7d",
+    "category": "torso"
+  },
+  {
+    "name": "Helixx_swatch",
+    "guid": "f8635fe2-90bc-42c8-9bbe-3387b5157e18",
+    "category": "accessory"
+  },
+  {
+    "name": "Scifi_Carpet_Swatch",
+    "guid": "0809a5cf-a0f3-4614-9f98-71518524518a",
+    "category": "accessory"
+  },
+  {
+    "name": "Golfer_Hat_Mask",
+    "guid": "ddf429fd-a883-48a5-869b-bc12e44d30bf",
+    "category": "head"
+  },
+  {
+    "name": "Teal_Swatch",
+    "guid": "90bc2d31-1715-4d1a-813a-7c57e66cb017",
+    "category": "accessory"
+  },
+  {
+    "name": "ElectricianTorso_Yellow_Swatch",
+    "guid": "b539777f-48b2-44a2-9d63-17ac703e4d57",
+    "category": "accessory"
+  },
+  {
+    "name": "WitchHunterShirt_Mask",
+    "guid": "0f49ac81-63bd-4845-8bdc-1944181a8aa3",
+    "category": "torso"
+  },
+  {
+    "name": "Scallywag_Torso_Swatch_Blue",
+    "guid": "85eb7f47-bb31-4c66-a8b3-562d35028e6c",
+    "category": "accessory"
+  },
+  {
+    "name": "Charcoal_Swatch",
+    "guid": "1b1d08f2-12ca-43dd-a44f-ea2820b919b4",
+    "category": "accessory"
+  },
+  {
+    "name": "Paintball_Red_Swatch",
+    "guid": "2913bd93-bf35-4bdf-b83a-d40a10213adc",
+    "category": "accessory"
+  },
+  {
+    "name": "Jazzercise_Black_Swatch",
+    "guid": "3b2cfc85-4e2a-4e0d-b738-c296ae8692f8",
+    "category": "accessory"
+  },
+  {
+    "name": "FieldHockey_Blue_Swatch",
+    "guid": "7b0d6661-e856-4ec1-ab90-d89c28a70826",
+    "category": "accessory"
+  },
+  {
+    "name": "ArcherTan_Glove_Swatch",
+    "guid": "d5987fee-e3cc-4336-853a-5df57f73df05",
+    "category": "accessory"
+  },
+  {
+    "name": "BicycleJacket_Black_Swatch",
+    "guid": "83522c12-9549-4d74-8c87-bae210bcd2bf",
+    "category": "torso"
+  },
+  {
+    "name": "Hat_FlapperHeadband_Mask",
+    "guid": "d9be3a98-9da9-419e-9dce-fe58a3ad9c4e",
+    "category": "head"
+  },
+  {
+    "name": "TShirt_Scifi_Face_Pink_Swatch",
+    "guid": "4d52bbd6-ef74-45ae-a6c2-bde10ab8eb16",
+    "category": "torso"
+  },
+  {
+    "name": "FlowerSwimsuit_Green_Swatch",
+    "guid": "cf515c87-3c0a-4443-9f63-5ea1bdbaa61a",
+    "category": "accessory"
+  },
+  {
+    "name": "Beekeeper_Shirt_Gold_Swatch",
+    "guid": "1919d319-6cce-4500-8766-15fed6a13fa8",
+    "category": "torso"
+  },
+  {
+    "name": "Argyle_Brown_Swatch",
+    "guid": "bf82f2f6-9af8-431e-a296-0890dea48ba7",
+    "category": "accessory"
+  },
+  {
+    "name": "Paintball_Blue_Swatch",
+    "guid": "178c6beb-c737-434c-a53b-d14f438f6a98",
+    "category": "accessory"
+  },
+  {
+    "name": "Tshirt_KO_Skull_Decal",
+    "guid": "9e782751-71c6-4208-87da-3a3cffa6a4f0",
+    "category": "torso"
+  },
+  {
+    "name": "Torso_SeaCaptain_Mask",
+    "guid": "8ec5de40-73fc-4f09-9bf3-ddf4701107bc",
+    "category": "head"
+  },
+  {
+    "name": "BasketballShirt_Purple_Swatch",
+    "guid": "4effd67c-a52f-4b41-a5b0-04287f91a7bc",
+    "category": "torso"
+  },
+  {
+    "name": "Purple_Swatch",
+    "guid": "c72911d0-453f-4732-b1bd-dad520220a06",
+    "category": "accessory"
+  },
+  {
+    "name": "Scout_Shirt_Mask",
+    "guid": "5814a331-6155-4df4-b921-3ffc6059e44c",
+    "category": "torso"
+  },
+  {
+    "name": "Angler_Blue_Swatch",
+    "guid": "6e0f3af8-297f-4ea7-8f9e-4a1bc57d3e35",
+    "category": "accessory"
+  },
+  {
+    "name": "Hat_CatEars_White_Swatch",
+    "guid": "c1e430c5-fd8d-4032-9e3f-8d87cc8784da",
+    "category": "head"
+  },
+  {
+    "name": "Smuggler_Dark_Swatch",
+    "guid": "e821aa74-2d47-4388-bcfb-1893b8a83a52",
+    "category": "accessory"
+  },
+  {
+    "name": "ScoutSkirt_Shirt_Red_Swatch",
+    "guid": "2bb65868-ee12-4871-b50d-64bbc9066f0b",
+    "category": "torso"
+  },
+  {
+    "name": "Artist_Blue_Swatch",
+    "guid": "8c94e45c-6605-4b4f-9ba4-2c6c6e557228",
+    "category": "accessory"
+  },
+  {
+    "name": "Knight_Black_Swatch",
+    "guid": "e1f49b74-b071-4bd1-9c4b-af36d24d45c5",
+    "category": "accessory"
+  },
+  {
+    "name": "Hat_CatEars_Gold_Swatch",
+    "guid": "37f8378b-b98c-477a-b8c9-9340772800b5",
+    "category": "head"
+  },
+  {
+    "name": "TShirt_KO_Skull_Pink_Swatch",
+    "guid": "fe304452-b57b-45bc-9c1c-b85b70bcec12",
+    "category": "torso"
+  },
+  {
+    "name": "BeltDress_Yellow_Swatch",
+    "guid": "d61711fd-589a-4669-b991-9408a58fffd9",
+    "category": "accessory"
+  },
+  {
+    "name": "ArcherYellow_Glove_Swatch",
+    "guid": "47da86b9-4e6e-423c-b8c4-ea6bf8472509",
+    "category": "accessory"
+  },
+  {
+    "name": "PirateCaptain_Belt_Mask",
+    "guid": "9b2102f0-e16b-464f-9f1c-f068de52bb89",
+    "category": "head"
+  },
+  {
+    "name": "Luchador_Torso_Mask",
+    "guid": "7ef7d0cf-99f1-4872-9d3d-8230cc9fa368",
+    "category": "face"
+  },
+  {
+    "name": "HockeyShirt_Red_Swatch",
+    "guid": "b1ea158d-1663-4db1-bb09-9847f6e9d1e6",
+    "category": "torso"
+  },
+  {
+    "name": "YellowBlueDress_Purple_Swatch",
+    "guid": "830be2fa-60a5-48cc-931f-34b670eae4bd",
+    "category": "accessory"
+  },
+  {
+    "name": "Electrician_Torso_Mask",
+    "guid": "daa38a31-fb7b-4e26-a2f5-728d6dcec81a",
+    "category": "face"
+  },
+  {
+    "name": "Torso_Cowboy_Mask",
+    "guid": "98553538-cafd-4df9-8f37-bb0a4bb478a5",
+    "category": "face"
+  },
+  {
+    "name": "Firefighter_Hat_Yellow_Swatch",
+    "guid": "4c26d1e7-2382-4478-b9c4-a068ed01a607",
+    "category": "head"
+  },
+  {
+    "name": "Aviator_Goggles_Mask",
+    "guid": "556f876a-70da-4104-b792-fca8ad67be0c",
+    "category": "face"
+  },
+  {
+    "name": "Scallywag_Bracelet_Red_Swatch",
+    "guid": "62bd5dda-08da-4528-83c1-f0ca3812dc6e",
+    "category": "accessory"
+  },
+  {
+    "name": "Hat_Hockey_Mask",
+    "guid": "7c4d447c-6594-4bd8-9510-12ad683ab116",
+    "category": "head"
+  },
+  {
+    "name": "DrumMajorGlove_Mask",
+    "guid": "6b38ab79-142b-446e-978c-ad829ade8823",
+    "category": "face"
+  },
+  {
+    "name": "Hat_Cowboy_Mask",
+    "guid": "54778d93-2cff-48db-b25b-65c08b0e5be8",
+    "category": "head"
+  },
+  {
+    "name": "Scout_RaccoonHat_Gray_Swatch",
+    "guid": "926ae943-76cb-46dd-9c66-a6ee44ea9194",
+    "category": "head"
+  },
+  {
+    "name": "Scallywag_Hat_Mask",
+    "guid": "a4903da3-249d-4f0a-a746-b547fda371ff",
+    "category": "head"
+  },
+  {
+    "name": "Denim_Mask",
+    "guid": "f600037d-c9c0-43fa-b45b-02f456f9dd5f",
+    "category": "face"
+  },
+  {
+    "name": "DrumMajor_Orange_Swatch",
+    "guid": "82de1ca3-67d6-454d-84fb-0eeece71fcbc",
+    "category": "accessory"
+  },
+  {
+    "name": "LaserTag_Wrist_Mask",
+    "guid": "3b825377-d2eb-41e4-a736-b107f88f62d6",
+    "category": "face"
+  },
+  {
+    "name": "PurpleJacket_Blue_Swatch",
+    "guid": "b42d903b-b393-4f49-af5e-38d0fb6c42b0",
+    "category": "torso"
+  },
+  {
+    "name": "Angler_Tan_Swatch",
+    "guid": "cac27853-e2df-4d77-b3fd-af3bc0813f01",
+    "category": "accessory"
+  },
+  {
+    "name": "MobsterWrist_Fashion_Gold_Mask",
+    "guid": "05cff8b8-d437-485a-b4b8-41d35becd022",
+    "category": "face"
+  },
+  {
+    "name": "Scout_Sash_Brown_Swatch",
+    "guid": "639f5e2c-6fbd-4ab4-aa10-7772e0932798",
+    "category": "accessory"
+  },
+  {
+    "name": "Torso_SeaCaptainBlueWhite_Swatch",
+    "guid": "857fdcd8-704f-43d0-92b9-bca26619b153",
+    "category": "head"
+  },
+  {
+    "name": "Scallywag_Torso_Stripped_Mask",
+    "guid": "9f1dd474-34a3-47eb-bb72-dbfc8d2d6ecf",
+    "category": "face"
+  },
+  {
+    "name": "Zebra_Mask",
+    "guid": "b78008e8-abbd-4ece-be34-9a911f721fcc",
+    "category": "face"
+  },
+  {
+    "name": "Smuggler_Cherry_Swatch",
+    "guid": "fed760b2-15e2-46b2-b1e3-cc3c8d780d5d",
+    "category": "accessory"
+  },
+  {
+    "name": "Beekeeper_Hat_Mask",
+    "guid": "e4b53a9a-ac95-49ae-bf68-615bb23fa075",
+    "category": "head"
+  },
+  {
+    "name": "HeadBand_Royal_Mask",
+    "guid": "56a92c8d-af53-413e-929e-4a9a3cfad780",
+    "category": "face"
+  },
+  {
+    "name": "AnglerHat_Gray_Swatch",
+    "guid": "225209dc-3afc-40cf-858e-89f7afa00c0d",
+    "category": "head"
+  },
+  {
+    "name": "BaseballHelmet_Green_Swatch",
+    "guid": "9967ce54-c2b7-437a-946e-11f8ee6d6fdd",
+    "category": "head"
+  },
+  {
+    "name": "Glasses_Smuggler_Mask",
+    "guid": "fe01b6ed-3c36-47b6-bcfa-47864ef9d610",
+    "category": "face"
+  },
+  {
+    "name": "Scallywag_Bracelet_Blue_Swatch",
+    "guid": "cdca593a-8840-4140-9145-fe962732040c",
+    "category": "accessory"
+  },
+  {
+    "name": "Wrist_Smuggler_Mask",
+    "guid": "8ffce0d6-d03e-4097-bc46-09b8894bc1d3",
+    "category": "face"
+  },
+  {
+    "name": "CowboyDark_Swatch",
+    "guid": "192ba73d-6990-42da-8fe0-914c2a7181eb",
+    "category": "accessory"
+  },
+  {
+    "name": "BikeHelmet_Mask",
+    "guid": "5fd9e83a-cfaf-4c98-bd31-91a7484c26dd",
+    "category": "head"
+  },
+  {
+    "name": "Torso_ButtonTop_Mask",
+    "guid": "dafa658e-753b-46cb-bd85-85c1de5e6ea7",
+    "category": "face"
+  },
+  {
+    "name": "FlowerSwimsuit_Pink_Swatch",
+    "guid": "27680277-aec1-41be-a476-9f51cf775580",
+    "category": "accessory"
+  },
+  {
+    "name": "Artist_Red_Swatch",
+    "guid": "17b16982-871c-476a-860f-f6953c89ee8c",
+    "category": "accessory"
+  },
+  {
+    "name": "2016_Member_Decal",
+    "guid": "167ba0d4-4fac-4143-b5ae-1dbd8e02dc76",
+    "category": "accessory"
+  },
+  {
+    "name": "Scout_Sash_Red_Swatch",
+    "guid": "b520f3bc-599a-498c-8a4f-97cc25aa741f",
+    "category": "accessory"
+  },
+  {
+    "name": "Glove_Safari_Mask",
+    "guid": "fa9a3d8e-16c9-4a7e-9166-3226e0d13c39",
+    "category": "face"
+  },
+  {
+    "name": "DrumMajor_Green_Swatch",
+    "guid": "fe5288bc-0e02-4ea3-b17d-dee0e576979d",
+    "category": "accessory"
+  },
+  {
+    "name": "CheerDress_Blue_Swatch",
+    "guid": "faedf215-289b-40f7-90cc-f5b98517d133",
+    "category": "accessory"
+  },
+  {
+    "name": "SpaceMarine_Cyan_Swatch",
+    "guid": "c8cc9589-4831-4e73-a865-ef8c139a2ba7",
+    "category": "accessory"
+  },
+  {
+    "name": "Denim_Swatch",
+    "guid": "55901f12-d5b5-4fa8-b4c8-e479689ee39d",
+    "category": "accessory"
+  },
+  {
+    "name": "FootballPads_Orange_Swatch",
+    "guid": "32dde6dc-e3dc-43ee-9b7c-987bc6778c17",
+    "category": "feet"
+  },
+  {
+    "name": "SFVRCC_swatch",
+    "guid": "14afd295-bcd0-4595-80dc-d477618b9ab9",
+    "category": "accessory"
+  },
+  {
+    "name": "BikeJersey_Mask",
+    "guid": "1695608b-e9cc-4a03-b56d-0f09d2804379",
+    "category": "face"
+  },
+  {
+    "name": "Torso_SeaCaptainBlueDark2_Swatch",
+    "guid": "3df5d13b-ba77-4b51-90b2-7a946e4d0be7",
+    "category": "head"
+  },
+  {
+    "name": "PirateCaptain_Hat_Red_Swatch",
+    "guid": "17040a88-87f1-4613-b439-3316e33dbd48",
+    "category": "head"
+  },
+  {
+    "name": "CollarDress_Pink_Swatch",
+    "guid": "6564acf1-4d70-4f92-92ac-08e2b76dbb6b",
+    "category": "accessory"
+  },
+  {
+    "name": "Torso_SeaCaptainDark_Swatch",
+    "guid": "b9f51861-ad10-4878-a9b1-d849bccf532a",
+    "category": "head"
+  },
+  {
+    "name": "PurpleJacket_Black_Swatch",
+    "guid": "8cab8cc6-9a2d-434c-8b72-e66edbdd223c",
+    "category": "torso"
+  },
+  {
+    "name": "Hat_SeaCaptainFushia_Swatch",
+    "guid": "2738ab5f-8c94-46b3-bac6-4a8111c41c21",
+    "category": "head"
+  },
+  {
+    "name": "Luchador_Red_Swatch",
+    "guid": "916384ca-e209-42a0-bd64-c64f5a40b56f",
+    "category": "accessory"
+  },
+  {
+    "name": "FlapperGlove_Gold_Swatch",
+    "guid": "2cf2b644-3fa6-449c-9fe8-d0ab917f3106",
+    "category": "accessory"
+  },
+  {
+    "name": "BlueJacket_Mint_Swatch",
+    "guid": "cd5d7285-202d-42d0-b93f-04245875793e",
+    "category": "torso"
+  },
+  {
+    "name": "FootballPads_Dark_Swatch",
+    "guid": "88c3ed05-ce41-4a9d-a4a7-8a428d240b3f",
+    "category": "feet"
+  },
+  {
+    "name": "Pink_Swatch",
+    "guid": "cbe29e9f-f2ac-47fb-97e1-8bad16abb89d",
+    "category": "accessory"
+  },
+  {
+    "name": "Aviator_Hat_Black_Swatch",
+    "guid": "a8de80d3-286a-4fdc-bed2-75d52f8c0964",
+    "category": "head"
+  },
+  {
+    "name": "Aviator_Goggles_Black_Swatch",
+    "guid": "7b82c3c5-fd1f-45ec-b83f-e32668aa8dce",
+    "category": "face"
+  },
+  {
+    "name": "Mobster_Fashion_Gold_Swatch",
+    "guid": "46970903-9799-4d25-b90a-7162c1f5dbef",
+    "category": "accessory"
+  },
+  {
+    "name": "Golfer_Shirt_Grey_Swatch",
+    "guid": "4c845dbb-26c3-48a1-b562-e28a7416b154",
+    "category": "torso"
+  },
+  {
+    "name": "Royal_Swatch",
+    "guid": "6dd95046-acf8-42fe-ab78-80a334096a9d",
+    "category": "accessory"
+  },
+  {
+    "name": "GoldYellow_Swatch",
+    "guid": "67bcca75-4ab1-4964-8688-9908c464d355",
+    "category": "accessory"
+  },
+  {
+    "name": "Hat_SeaCaptainDarkGold_Swatch",
+    "guid": "f5403c89-9769-479b-8a05-c71607f9b189",
+    "category": "head"
+  },
+  {
+    "name": "LaserTag_Torso_Mask",
+    "guid": "959ed05b-0215-4bbe-bb3d-64e4448d676b",
+    "category": "face"
+  },
+  {
+    "name": "DrumMajor_Purple_Swatch",
+    "guid": "54d3c589-30ba-44c1-a77c-8f9e16eb0b20",
+    "category": "accessory"
+  },
+  {
+    "name": "Hat_TopHat_Mask",
+    "guid": "ccf1ccc1-e229-4157-bb74-f2cdef01e547",
+    "category": "head"
+  },
+  {
+    "name": "PirateCaptain_Belt_Red_Swatch",
+    "guid": "0f71b9a2-dd88-435c-a571-4503d12dcf2d",
+    "category": "head"
+  },
+  {
+    "name": "ArcherBlack_Glove_Swatch",
+    "guid": "2be2f040-68e4-44dd-9099-29f11110f3a4",
+    "category": "accessory"
+  },
+  {
+    "name": "Barbershop_Hat_Mask",
+    "guid": "83158223-e268-4036-8a6a-218a8430eb2c",
+    "category": "head"
+  },
+  {
+    "name": "Wizard_Torso_Mask",
+    "guid": "8768aa33-b014-4062-b323-b146dd7d78d2",
+    "category": "face"
+  },
+  {
+    "name": "JerseyOutline_Mask",
+    "guid": "d2a692e6-e1a9-4cfe-8154-10b52be7f8c8",
+    "category": "face"
+  },
+  {
+    "name": "Hat_HairBow_Mask",
+    "guid": "e0186718-4a18-434b-b96e-0c9c912f0d1f",
+    "category": "head"
+  },
+  {
+    "name": "Basketball_Shirt_Mask",
+    "guid": "54a5c055-f757-4c00-a1e1-8b0b6552c608",
+    "category": "torso"
+  },
+  {
+    "name": "Equestrian_Jacket_Mask",
+    "guid": "d344b8cc-85a8-4ace-9f92-38c84f396e99",
+    "category": "torso"
+  },
+  {
+    "name": "Barber_Torso_Green_Swatch",
+    "guid": "c64ac7a9-7fd4-4587-8626-0413a190b706",
+    "category": "accessory"
+  },
+  {
+    "name": "FighterPilot_Blue_Swatch",
+    "guid": "e37b07d1-6b9d-49b9-94ca-1c728e228cfe",
+    "category": "accessory"
+  },
+  {
+    "name": "MobsterTorso_Fashion_Gold_Mask",
+    "guid": "c2052d8c-fbcd-4462-8f08-bcf5b3dfde2f",
+    "category": "face"
+  },
+  {
+    "name": "AnglerHat_Tan_Swatch",
+    "guid": "3f6c8bd2-2c1d-4c8c-a9de-16600fee9645",
+    "category": "head"
+  },
+  {
+    "name": "CheerDress_Red_Swatch",
+    "guid": "1773d5d8-4714-4721-b30c-97e25d6f2a5a",
+    "category": "accessory"
+  },
+  {
+    "name": "FlatCap_Hat_Mask",
+    "guid": "73fc2e2a-a036-410b-bafa-3a07658245b5",
+    "category": "head"
+  },
+  {
+    "name": "Golfer_Glove_Blue_Swatch",
+    "guid": "32a5e42d-2b60-40b1-a145-ed96fc91af8e",
+    "category": "accessory"
+  },
+  {
+    "name": "TShirt_RECS_Logo_Blue_Swatch",
+    "guid": "bde08851-a9e4-4faa-8f04-a0a661672472",
+    "category": "torso"
+  },
+  {
+    "name": "Scout_Shirt_Blue_Swatch",
+    "guid": "0d2830e7-8eb0-4fa3-99bc-7c80f01dd991",
+    "category": "torso"
+  },
+  {
+    "name": "DrumMajorGlove_Purple_Swatch",
+    "guid": "8053b5e5-0f67-4329-a45d-1ee9fc830820",
+    "category": "accessory"
+  },
+  {
+    "name": "Shirt_SpaceMarine_Mask",
+    "guid": "7ac81d60-05b8-4a85-982c-f69213a93818",
+    "category": "torso"
+  },
+  {
+    "name": "SFVRCC_Decal",
+    "guid": "a74e6c0d-1300-4928-9141-977a711b71c4",
+    "category": "accessory"
+  },
+  {
+    "name": "BlueJacket_Torso_Mask",
+    "guid": "0f36bb97-c61b-4281-929f-ff1d0d11be86",
+    "category": "torso"
+  },
+  {
+    "name": "Wizard_Hat_Mask",
+    "guid": "abdf525b-b871-41be-a1c8-810f49740ad4",
+    "category": "head"
+  },
+  {
+    "name": "Wrist_SpaceMarine_Mask",
+    "guid": "7634b7ef-9607-497a-b41f-c0191dc75998",
+    "category": "face"
+  },
+  {
+    "name": "ElectricianTorso_Green_Swatch",
+    "guid": "67fc9269-8dd8-4d6f-b594-c77e716f2482",
+    "category": "accessory"
+  },
+  {
+    "name": "TrackSuit_Mask",
+    "guid": "adae82eb-a4b9-4541-acf2-76cea839a593",
+    "category": "face"
+  },
+  {
+    "name": "Tshirt_HangInThere_Decal",
+    "guid": "8f19d7f9-4f28-48ab-a1c5-d8f4f788514c",
+    "category": "torso"
+  },
+  {
+    "name": "DrumMajorGlove_Orange_Swatch",
+    "guid": "b444ed0a-eab5-4bd6-af34-d080de74a149",
+    "category": "accessory"
+  },
+  {
+    "name": "Punk_WristRed_Swatch",
+    "guid": "baffdefe-de21-4551-9330-b50873965bdd",
+    "category": "accessory"
+  },
+  {
+    "name": "PirateCaptain_Wrist_Red_Mask",
+    "guid": "7a7bc314-4ffd-4ac8-9ed6-6ca73589c132",
+    "category": "head"
+  },
+  {
+    "name": "Punk_Green_Swatch",
+    "guid": "0724b166-9ace-46ff-a191-b13f135b00a8",
+    "category": "accessory"
+  },
+  {
+    "name": "ArcherRed_Glove_Swatch",
+    "guid": "0c433086-9501-48c4-8d0e-4474eb420c61",
+    "category": "accessory"
+  },
+  {
+    "name": "Tshirt_KO_Skull_Pink_Decal",
+    "guid": "6a007c73-d930-408a-93df-041a715e0dd4",
+    "category": "torso"
+  },
+  {
+    "name": "Wrist_Knight_Gauntlet_Mask",
+    "guid": "fd67ec40-f898-4df6-b846-8bf350f362b8",
+    "category": "face"
+  },
+  {
+    "name": "Lacrosse_Stripe_Purple_Swatch",
+    "guid": "e3454bc7-c88d-4958-8b81-db3fe5472a1e",
+    "category": "accessory"
+  },
+  {
+    "name": "SciFi_CarpetTie_Mask",
+    "guid": "8212812b-e7e7-4f6d-aa27-d1112af45473",
+    "category": "face"
+  },
+  {
+    "name": "PirateCaptain_Torso_Mask",
+    "guid": "52053afd-9f12-4fec-a358-7eb3fe8c19bb",
+    "category": "head"
+  },
+  {
+    "name": "Scallywag_Bracer_Mask",
+    "guid": "ce3782aa-56cc-40d7-9019-8ce714cb7748",
+    "category": "face"
+  },
+  {
+    "name": "CheerDress_Mask",
+    "guid": "93987d32-7a6e-45df-af56-76f912969ce7",
+    "category": "face"
+  },
+  {
+    "name": "TShirt_RECS_Logo_Green_Swatch",
+    "guid": "5e7a48ed-8f08-4990-a3ae-05722c9f59a8",
+    "category": "torso"
+  },
+  {
+    "name": "Wrist_Cowboy_Mask",
+    "guid": "8eef8837-9141-4088-835a-b2f47f4126f8",
+    "category": "face"
+  },
+  {
+    "name": "HorizontalStripe3_Mask",
+    "guid": "9c03f381-7357-4d0f-8cda-8737d4c43d25",
+    "category": "face"
+  },
+  {
+    "name": "PirateCaptain_Torso_Striped_Mask",
+    "guid": "00ac4e37-6eac-4ed5-b46c-2c075038bc3f",
+    "category": "head"
+  },
+  {
+    "name": "Wizard_Green_Swatch",
+    "guid": "357eb160-360b-4a63-840d-65d11cc8ffc2",
+    "category": "accessory"
+  },
+  {
+    "name": "Angler_Gray_Swatch",
+    "guid": "97938f4c-52b8-4c85-8575-856654666316",
+    "category": "accessory"
+  },
+  {
+    "name": "FootballHelmet_Dark_Swatch",
+    "guid": "61ff7a02-50ff-49ea-b95e-c31b95a30c8e",
+    "category": "head"
+  },
+  {
+    "name": "Torso_BabydollDress_Mask",
+    "guid": "cb9e9e05-c481-4397-86e7-c2111bc0e817",
+    "category": "face"
+  },
+  {
+    "name": "LaserTagVisor_Cyan_Swatch",
+    "guid": "426d0592-f8e4-4bc6-9fe1-a62b91fd57d5",
+    "category": "accessory"
+  },
+  {
+    "name": "Torso_SeaCaptainWhiteDark_Swatch",
+    "guid": "b5d62931-e756-4a8a-8f3b-760beba49319",
+    "category": "head"
+  },
+  {
+    "name": "Wrist_FlapperGlove_Mask",
+    "guid": "0e42108e-3b08-49b4-86c0-7984719e8380",
+    "category": "face"
+  },
+  {
+    "name": "LightBlue_Swatch",
+    "guid": "484b6c13-af22-4ad5-8c43-34c0de095d49",
+    "category": "accessory"
+  },
+  {
+    "name": "Aviator_Gloves_Mask",
+    "guid": "5659ce2c-9cb0-49da-8c39-4b7df0f8deec",
+    "category": "face"
+  },
+  {
+    "name": "Hat_SeaCaptain_Mask",
+    "guid": "a4e51b6b-fdfd-47dc-9d0e-f26f383e03e9",
+    "category": "head"
+  },
+  {
+    "name": "CowboyLight_Swatch",
+    "guid": "5e00a832-3f25-4dd3-84d2-b6ed6a4b4c37",
+    "category": "accessory"
+  },
+  {
+    "name": "Happy_Tree_Swatch",
+    "guid": "ba6b6e1a-a09a-4ba0-9523-552869f03336",
+    "category": "accessory"
+  },
+  {
+    "name": "Smuggler_Yellow_Swatch",
+    "guid": "002b07bb-4256-44ce-8ca4-25510e70b6b5",
+    "category": "accessory"
+  },
+  {
+    "name": "BlazerMidnightBlue_Swatch",
+    "guid": "6f2e74bf-1e95-463d-97db-d5d1a53b2c28",
+    "category": "accessory"
+  },
+  {
+    "name": "BicycleJacket_Blue_Swatch",
+    "guid": "c5884778-a87f-4612-9717-86fbb65d440f",
+    "category": "torso"
+  },
+  {
+    "name": "Mobster_WhiteHatHacker_Swatch",
+    "guid": "40283127-2ffc-4989-82f6-29c3381bf9e2",
+    "category": "head"
+  },
+  {
+    "name": "Torso_SeaCaptainBlackDark_Swatch",
+    "guid": "6145292a-9002-41c6-8cd5-43679b6f542f",
+    "category": "head"
+  },
+  {
+    "name": "Mobster_Hat_Gray_Swatch",
+    "guid": "390a476a-5545-48eb-955c-1bf1a16012bf",
+    "category": "head"
+  },
+  {
+    "name": "SpaceMarine_Light_Swatch",
+    "guid": "68273c9e-96d6-4ddb-aaab-d99229e864d5",
+    "category": "accessory"
+  },
+  {
+    "name": "Shirt_Punk_Mask",
+    "guid": "d738ad4c-c9b5-41e6-8979-d586c964fb6c",
+    "category": "torso"
+  },
+  {
+    "name": "Aviator_Jacket_Black_Swatch",
+    "guid": "da185fbb-ad2b-4f30-87a2-491f24b78ebb",
+    "category": "torso"
+  },
+  {
+    "name": "Scifi_Carpet_TopHat_Swatch",
+    "guid": "bd4a84e2-b67a-4269-a26a-17fb23ddb09e",
+    "category": "head"
+  },
+  {
+    "name": "Torso_Jazzercise_Mask",
+    "guid": "f6f26e2b-657b-454a-8663-55d6b9b6e50c",
+    "category": "face"
+  },
+  {
+    "name": "RedFlowerDress_Yellow_Swatch",
+    "guid": "e98c3f98-7844-4d6e-a21c-05027033c18c",
+    "category": "accessory"
+  },
+  {
+    "name": "Eye_MirroredGlasses_Mask",
+    "guid": "9c55b609-b7dc-4070-a3ad-6351a0054a06",
+    "category": "face"
+  },
+  {
+    "name": "Plaid_Red_Swatch",
+    "guid": "827a1538-51bb-4fef-99c1-7f1bebd9866c",
+    "category": "accessory"
+  },
+  {
+    "name": "Scout_Sash_Mask",
+    "guid": "66cc536d-8cb5-4262-b7f0-49a33b97ea10",
+    "category": "face"
+  },
+  {
+    "name": "ArcherGlove_Mask",
+    "guid": "7b187c06-7ba2-4f3c-bca9-fdf98146f385",
+    "category": "face"
+  },
+  {
+    "name": "Wizard_Black_Swatch",
+    "guid": "7afe1bb0-5ca9-4263-8f85-49d3a18353c7",
+    "category": "accessory"
+  },
+  {
+    "name": "Wrist_CowboyLight_Swatch",
+    "guid": "c0c33a35-494c-4a1a-aa53-d27d9b9ef5a4",
+    "category": "accessory"
+  },
+  {
+    "name": "FlowerSwimsuit_Gray_Swatch",
+    "guid": "5a96ac4d-03c3-4214-9dcb-c2044ff28f2e",
+    "category": "accessory"
+  },
+  {
+    "name": "SafariTorso_Mask",
+    "guid": "84c016ad-133f-45e3-a412-cac35612540b",
+    "category": "face"
+  },
+  {
+    "name": "BabydollDress_Pink_Swatch",
+    "guid": "da6d0ced-3d43-4878-a868-925f2ed6fd5b",
+    "category": "accessory"
+  },
+  {
+    "name": "Barber_Wrist_Formal_Swatch",
+    "guid": "bb01b51e-a95f-441e-8c52-abc3aeed7145",
+    "category": "accessory"
+  },
+  {
+    "name": "PirateCaptain_Red_Swatch",
+    "guid": "556141f7-6fbc-4065-9faa-8d8240a93d7f",
+    "category": "head"
+  },
+  {
+    "name": "FighterPilot_Mask",
+    "guid": "435eba0d-d8f9-43cc-91aa-2959d63c6fa7",
+    "category": "face"
+  },
+  {
+    "name": "Luchador_Blue_Swatch",
+    "guid": "0217fd2e-ff9d-49f7-9bc8-8d0d6b8bf250",
+    "category": "accessory"
+  },
+  {
+    "name": "Jazzercise_Yellow_Swatch",
+    "guid": "78eb0969-f246-4cac-acd6-295df7c092e4",
+    "category": "accessory"
+  },
+  {
+    "name": "RecRoom_FACE_DEFAULT_Decal",
+    "guid": "0c496f32-0011-4c4d-9778-59446f70c032",
+    "category": "accessory"
+  },
+  {
+    "name": "HockeyShirt_Mask",
+    "guid": "e5635772-4e84-4b30-b77f-4a1196cb599b",
+    "category": "torso"
+  },
+  {
+    "name": "2016Member_Mask",
+    "guid": "2ee3944d-e9fb-4959-973e-570a7fc6cc57",
+    "category": "face"
+  },
+  {
+    "name": "Tshirt_RECS_Logo_Decal",
+    "guid": "237e0aa2-5911-4704-8d2a-d446ddd2d842",
+    "category": "torso"
+  },
+  {
+    "name": "Barbershop_Wrist_Mask",
+    "guid": "f7c7d05f-5454-445a-af38-25f110bd204a",
+    "category": "face"
+  },
+  {
+    "name": "VerticalStripe_Mask",
+    "guid": "c2a91a10-2f5b-4ab0-a79f-51408cf4b047",
+    "category": "face"
+  },
+  {
+    "name": "Scallywag_Torso_Mask",
+    "guid": "005699fe-2c69-4bec-831f-031fe8ad7f0a",
+    "category": "face"
+  },
+  {
+    "name": "Golfer_Glove_Grey_Swatch",
+    "guid": "72a010c0-bddd-4e5d-bca6-9821d82de9a6",
+    "category": "accessory"
+  },
+  {
+    "name": "StollDress_Green_Swatch",
+    "guid": "a819f49b-6c7a-49d3-9e6a-d9d79ef5019f",
+    "category": "accessory"
+  },
+  {
+    "name": "Torso_SeaCaptainBlueDark_Swatch",
+    "guid": "7c1aaa7e-503b-46ef-b1c5-0c61a75b916e",
+    "category": "head"
+  },
+  {
+    "name": "BlazerSeaDark_Swatch",
+    "guid": "0ffad843-d6c9-425a-8686-7217009c867e",
+    "category": "accessory"
+  },
+  {
+    "name": "Torso_SeaCaptainBlue_Swatch",
+    "guid": "27af51bc-8226-4911-8d47-22d28ea8e378",
+    "category": "head"
+  },
+  {
+    "name": "Helixx_Decal",
+    "guid": "49934059-cc45-46ce-8277-f96959e1f6ba",
+    "category": "accessory"
+  },
+  {
+    "name": "HibiscusFlower_Mask",
+    "guid": "65b89eae-347e-4eff-9ff3-7f25cace0125",
+    "category": "face"
+  },
+  {
+    "name": "HeadBand_Trim_Mask",
+    "guid": "018a5c07-e956-457d-a540-a5e2cd68da09",
+    "category": "face"
+  },
+  {
+    "name": "HockeyShirt_Teal_Swatch",
+    "guid": "fcbdfbfd-254a-4538-b119-43e23404b8b5",
+    "category": "torso"
+  },
+  {
+    "name": "Orange_Swatch",
+    "guid": "51ef8d39-2b94-4f9e-9620-07b6b0a913a5",
+    "category": "accessory"
+  },
+  {
+    "name": "Shirt_Smuggler_Mask",
+    "guid": "970a8c7e-d091-4719-bb9c-e3be8d46ee68",
+    "category": "torso"
+  },
+  {
+    "name": "LaserTag_Head_Mask",
+    "guid": "4e378419-d043-4e86-ad0e-66288ac21cf4",
+    "category": "face"
+  },
+  {
+    "name": "ArcherTan_Quiver_Swatch",
+    "guid": "d1eb3573-672c-4bb4-9ec5-7c81e6a38d3d",
+    "category": "accessory"
+  },
+  {
+    "name": "Barber_Hat_Green_Swatch",
+    "guid": "7f9cb939-36a4-40da-8337-025e1d7bf8e5",
+    "category": "head"
+  },
+  {
+    "name": "Punk_WristGreen_Swatch",
+    "guid": "a6796264-9c7e-4605-830c-06db8d0dc780",
+    "category": "accessory"
+  },
+  {
+    "name": "FieldHockey_Mask",
+    "guid": "1fede91a-434e-49a5-882e-e6db107112a8",
+    "category": "face"
+  },
+  {
+    "name": "Firefighter_Hat_White_Swatch",
+    "guid": "891d902e-3257-4a8c-9001-858046007997",
+    "category": "head"
+  },
+  {
+    "name": "Scallywag_Hat_Red_Swatch",
+    "guid": "c3c9f89c-580c-43c4-b38b-07394044e0e1",
+    "category": "head"
+  },
+  {
+    "name": "SpaceMarine_Dark_Swatch",
+    "guid": "a089bcc6-798d-4777-98e2-7afd290dc6b6",
+    "category": "accessory"
+  },
+  {
+    "name": "PirateCaptain_Hat_Black_Mask",
+    "guid": "4cc0ea9f-65af-486f-8319-02b85ab5197f",
+    "category": "head"
+  },
+  {
+    "name": "DrumMajorHat_Green_Swatch",
+    "guid": "5a614f97-ef7f-4b70-afff-9ed837a86407",
+    "category": "head"
+  },
+  {
+    "name": "Golfer_Hat_Blue_Swatch",
+    "guid": "6584dada-499e-4d7c-958d-466955b20640",
+    "category": "head"
+  },
+  {
+    "name": "RecRoom_Birthday01_Decal",
+    "guid": "ceb07e4f-50a9-4ed0-b50b-c59d92ba66b5",
+    "category": "accessory"
+  },
+  {
+    "name": "Black_Swatch",
+    "guid": "e69372eb-2fd8-4e17-a448-ee0be61a2c7a",
+    "category": "accessory"
+  },
+  {
+    "name": "ArcherRed_Swatch",
+    "guid": "5b5281c9-b795-4bb2-ba7b-ba52047ebe3f",
+    "category": "accessory"
+  },
+  {
+    "name": "CollarDress_LightBlue_Swatch",
+    "guid": "f750de46-3758-4f7d-9709-0a84b1027009",
+    "category": "accessory"
+  },
+  {
+    "name": "StollDress_Blue_Swatch",
+    "guid": "761a3193-60f0-4190-80c7-285b8192e794",
+    "category": "accessory"
+  },
+  {
+    "name": "Torso_YellowBlueDress_Mask",
+    "guid": "cfabdefe-0890-436e-b2a3-b5c712e22955",
+    "category": "face"
+  },
+  {
+    "name": "Boxer_Glove_Mask",
+    "guid": "f79f8a46-ef1d-4d8c-a4fc-383e3a9eb10b",
+    "category": "face"
+  },
+  {
+    "name": "Torso_RedBeltDress_Mask",
+    "guid": "3d971439-41d1-43a2-8434-704f9ec8d906",
+    "category": "face"
+  },
+  {
+    "name": "Argyle_Red_Swatch",
+    "guid": "071d1bf3-86dc-4a31-b54a-e6579fab8649",
+    "category": "accessory"
+  },
+  {
+    "name": "WitchHunter_White_Swatch",
+    "guid": "e02838f8-4029-455a-b35c-dd40f972b05b",
+    "category": "accessory"
+  },
+  {
+    "name": "RedFlowerDress_Mask",
+    "guid": "2d7361d2-31a2-404b-90da-10e89114e1f2",
+    "category": "face"
+  },
+  {
+    "name": "TShirt_LaserTag_Alpha_Swatch",
+    "guid": "c0ff7719-c56a-4934-831b-506ad0f51cca",
+    "category": "torso"
+  },
+  {
+    "name": "Wrist_Punk_Mask",
+    "guid": "dd7472ed-bdcb-4811-81ba-5ed682fb7675",
+    "category": "face"
+  },
+  {
+    "name": "Angler_Hat_Mask",
+    "guid": "efeb07ab-6253-436d-bb66-991ddad72e58",
+    "category": "head"
+  },
+  {
+    "name": "ArcherHat_Mask",
+    "guid": "1ba65dd5-9df9-4ff3-be96-f83a7abf67b3",
+    "category": "head"
+  },
+  {
+    "name": "ArcherRed_Quiver_Swatch",
+    "guid": "7221132e-053a-4c58-b719-ed3c8558907d",
+    "category": "accessory"
+  },
+  {
+    "name": "Luchador_Head_Mask",
+    "guid": "96b36c98-cba1-4337-91dd-c74c00316f97",
+    "category": "face"
+  },
+  {
+    "name": "Tennis_Pink_Swatch",
+    "guid": "304e5cf1-5c94-481f-8e49-e6a943e6b300",
+    "category": "accessory"
+  },
+  {
+    "name": "PoofyDress_Orange_Swatch",
+    "guid": "64850553-cdfe-455a-ac00-dafbe63d613e",
+    "category": "accessory"
+  },
+  {
+    "name": "ElectricianTorso_Beige_Swatch",
+    "guid": "5fb2e235-8c67-4335-b432-edb10db2b139",
+    "category": "accessory"
+  },
+  {
+    "name": "WitchHunterGlove_Mask",
+    "guid": "5b8d9490-e5bc-480e-91bc-65d1797b52ad",
+    "category": "face"
+  },
+  {
+    "name": "Knight_White_Swatch",
+    "guid": "22dc463a-a89b-46ad-9a0d-557c742b4a80",
+    "category": "accessory"
+  },
+  {
+    "name": "Mobster_Hat_Mask",
+    "guid": "d759c88d-a159-4c26-86dd-b054bb05b3ed",
+    "category": "head"
+  },
+  {
+    "name": "BicycleHelmet_Yellow_Swatch",
+    "guid": "4398ce1a-e6ee-4da4-ad0d-7abfab41020c",
+    "category": "head"
+  },
+  {
+    "name": "Golfer_Hat_Grey_Swatch",
+    "guid": "48c18418-01dd-40ff-9dfe-c4cf5f4e1245",
+    "category": "head"
+  },
+  {
+    "name": "BasketballShirt_Blue_Swatch",
+    "guid": "59a62fa3-9e15-463e-9bd5-3aecdf604c1b",
+    "category": "torso"
+  },
+  {
+    "name": "FurCoat_White_Swatch",
+    "guid": "643b5f2d-0666-4869-b699-03742de34d16",
+    "category": "accessory"
+  },
+  {
+    "name": "Wrist_CowboyDark_Swatch",
+    "guid": "c4ebfd1a-fcda-4b98-a151-a941b1801867",
+    "category": "accessory"
+  },
+  {
+    "name": "Hat_SeaCaptainDarkSilver_Swatch",
+    "guid": "36e63797-5a42-4779-a5cc-ef5c2e7d17d4",
+    "category": "head"
+  },
+  {
+    "name": "HockeyShirt_Purple_Swatch",
+    "guid": "d5efaf80-7f34-4c9a-bc3a-b80b1ac70ace",
+    "category": "torso"
+  },
+  {
+    "name": "ArcherYellow_Quiver_Swatch",
+    "guid": "e548124c-d7f3-45de-aaa0-f66130eca576",
+    "category": "accessory"
+  },
+  {
+    "name": "ArcherTan_Swatch",
+    "guid": "9b35ae52-febe-486a-8557-ec7190a9756e",
+    "category": "accessory"
+  },
+  {
+    "name": "Paintball_Torso_Mask",
+    "guid": "0189ec4c-0389-4ebc-b9ba-32303a6341c2",
+    "category": "face"
+  },
+  {
+    "name": "Boxer_Helmet_Mask",
+    "guid": "92714eac-cc07-4f74-a6f5-cfbbadd07e06",
+    "category": "head"
+  },
+  {
+    "name": "FighterPilot_Hat_Mask",
+    "guid": "9d6ac0b7-bbef-40bc-9173-effe65d7c0ff",
+    "category": "head"
+  },
+  {
+    "name": "WitchHunter_Red_Swatch",
+    "guid": "909ed249-ce09-4304-8b02-56794fa7567d",
+    "category": "accessory"
+  },
+  {
+    "name": "Dodgeball_Black_Swatch",
+    "guid": "4a85c181-92fe-47a5-925e-05f0ccb25006",
+    "category": "accessory"
+  },
+  {
+    "name": "BlazerGrey_Swatch",
+    "guid": "272fe8eb-5061-4729-a7a8-414ff667a82f",
+    "category": "accessory"
+  },
+  {
+    "name": "TennisSkirt_Red_Swatch",
+    "guid": "758752bd-db2f-43d2-b580-55b3e1efffd5",
+    "category": "legs"
+  },
+  {
+    "name": "Hat_Equestrian_Mask",
+    "guid": "be6b3fa1-3388-48ac-8957-d7b8c85ff968",
+    "category": "head"
+  },
+  {
+    "name": "Wizard_Red_Swatch",
+    "guid": "a38254c0-00e3-429b-9d5d-b9e6a9812e69",
+    "category": "accessory"
+  },
+  {
+    "name": "FighterPilot_Gloves_Blue_Swatch",
+    "guid": "55b4e661-43e1-4708-82d5-2dd2bebd4f45",
+    "category": "accessory"
+  },
+  {
+    "name": "WitchHunterHat_Mask",
+    "guid": "32d91d32-b102-4093-927a-6dc3ac2e9e86",
+    "category": "head"
+  },
+  {
+    "name": "Stripe3_Swatch",
+    "guid": "5c4a2b35-0e1c-44de-8c3a-96d4a6458b1b",
+    "category": "accessory"
+  },
+  {
+    "name": "ArtistHat_Blue_Swatch",
+    "guid": "14b43bf9-5ba0-484e-ae5d-55cfeb09a70d",
+    "category": "head"
+  },
+  {
+    "name": "ArcherQuiver_Mask",
+    "guid": "6094370d-5e28-473a-b422-f3f1c75d5db8",
+    "category": "face"
+  },
+  {
+    "name": "Scout_Hat_Mask",
+    "guid": "464fcf20-361f-4dc9-b074-150c3bc27523",
+    "category": "head"
+  },
+  {
+    "name": "Ranger_Hat_Green_Swatch",
+    "guid": "d0bb468c-b78f-4e80-916d-65fec3ec0010",
+    "category": "head"
+  }
+]
