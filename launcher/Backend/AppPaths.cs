@@ -1,3 +1,4 @@
+using System.IO;
 namespace DorkNet.Launcher.Backend;
 
 /// <summary>Single source of truth for where the Easy app stores

@@ -1,8 +1,8 @@
 # DorkNet Launcher
 
 Single-download desktop launcher for self-hosting / joining DorkNet
-servers. PhotinoNET-wrapped WebView2 with the orchestration logic in
-C#.
+servers. **Native WPF** — no embedded browser, no WebView2 dependency.
+.NET 9 single-file self-contained build.
 
 This README is for **developers** of the launcher. End-users see
 [the main README](../README.md) and download a prebuilt `.exe` from
@@ -18,34 +18,31 @@ This README is for **developers** of the launcher. End-users see
   patcher from GitHub Releases, patches the user's Rec Room install
   to point at the host.
 
-## How it's wired
+## Layout
 
 ```
 launcher/
-├── DorkNet.Launcher.csproj    .NET 9 single-file self-contained exe (Photino.NET dep)
-├── Program.cs                  PhotinoNET window + message-bridge wiring
-├── app.manifest                Windows DPI-awareness manifest
-├── Backend/                    Orchestration (C#)
-│   ├── AppPaths.cs            %APPDATA%\DorkNet layout
-│   ├── AppState.cs            Persisted user choices (mode, paths, Photon AppId)
-│   ├── VersionsManifest.cs    Fetches versions.json from main
-│   ├── ReleaseDownloader.cs   GitHub Releases API + artifact unpack
-│   ├── ServerProcess.cs       Spawns the downloaded server binary
-│   ├── ClientPatcher.cs       Invokes install-plugin.ps1 from the unpacked patcher zip
-│   ├── Tunnel.cs              Wraps `cloudflared tunnel --url …`
-│   ├── RecRoomPicker.cs       Windows folder dialog
-│   ├── JoinCode.cs            base64url-encoded {host, version, photonAppId, …}
-│   └── MessageBridge.cs       JSON envelope router between JS ↔ C#
-└── ui/                         Single-file frontend (no build step)
-    ├── index.html
-    ├── style.css
-    └── app.js
+├── DorkNet.Launcher.csproj    .NET 9 WPF, single-file self-contained
+├── App.xaml + App.xaml.cs     WPF Application bootstrap, dark-theme palette
+├── MainWindow.xaml            All views (first-run / host / join / settings)
+├── MainWindow.xaml.cs         Code-behind: event handlers → Backend/* calls
+├── app.manifest               Windows DPI-awareness manifest
+└── Backend/                   Orchestration — UI-framework-agnostic
+    ├── AppPaths.cs            %APPDATA%\DorkNet layout
+    ├── AppState.cs            Persisted user choices (mode, paths, Photon AppId)
+    ├── VersionsManifest.cs    Fetches versions.json from main
+    ├── ReleaseDownloader.cs   GitHub Releases API + artifact unpack
+    ├── ServerProcess.cs       Spawns the downloaded server binary
+    ├── ClientPatcher.cs       Invokes install-plugin.ps1 from the unpacked patcher
+    ├── Tunnel.cs              Wraps `cloudflared tunnel --url …`
+    ├── RecRoomPicker.cs       Microsoft.Win32.OpenFolderDialog
+    └── JoinCode.cs            base64url-encoded {host, version, photonAppId, …}
 ```
 
-Message protocol: both directions use
-`{ "type": "command-or-event-name", "payload": { ... } }`. New
-commands go in `MessageBridge.HandleAsync`'s switch; new outbound
-events use `bridge.SendEvent(name, payload)`.
+`MainWindow.xaml` holds all four views (first-run wizard, host, join,
+settings) as sibling panels; code-behind toggles `Visibility` to
+switch between them. No MVVM framework — direct event handlers in
+the code-behind read/write `Backend/*` services.
 
 ## Build + run
 
@@ -54,18 +51,17 @@ cd launcher
 dotnet run
 ```
 
-Watch the launcher window open. C# stderr lands in the console;
-the WebView2 devtools open with F12 (PhotinoNET passes them through).
+Window opens immediately on the first-run wizard.
 
 ## Publish a self-contained .exe
 
 ```pwsh
 dotnet publish -c Release
-# Output: bin\Release\net9.0-windows\win-x64\publish\dorknet.exe (~80 MB)
+# Output: bin\Release\net9.0-windows\win-x64\publish\dorknet.exe (~70 MB)
 ```
 
 The published exe is what ships in GitHub Releases on `main` (use the
-`Easy launcher release` workflow when it exists).
+launcher release workflow once it exists).
 
 ## Dependencies on per-version branches
 
@@ -73,15 +69,12 @@ The launcher fetches release artifacts from GitHub Releases tagged on
 the per-version branches. See [RELEASES.md](RELEASES.md) for the
 exact naming convention each branch must follow.
 
-## Adding a new command
+## Adding a new feature
 
-1. Add a new `case` in `MessageBridge.HandleAsync`.
-2. Implement the work in a `Backend/*` class.
-3. In `ui/app.js`, call `bridge.send({ type: 'your-command', payload: {...} })`
-   from wherever the user triggers it.
-4. If the command needs to push events back, call
-   `bridge.SendEvent('your-event-name', { ... })` from the handler
-   and add a case in `app.js`'s `handleEvent` switch.
+1. New backend logic → add to (or create) a `Backend/*.cs` class.
+2. New UI controls → add XAML in `MainWindow.xaml`.
+3. New event handlers → method in `MainWindow.xaml.cs` calling the
+   backend service.
 
-Keep the bridge handlers tight — they're routing + state mutation;
-long work goes in `Backend/*`.
+Keep code-behind handlers small: they marshal between WPF dispatcher
+thread + the backend services. Long work goes in `Backend/*`.

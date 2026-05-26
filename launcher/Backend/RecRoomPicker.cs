@@ -1,24 +1,27 @@
-using System.Windows.Forms;
+using System.IO;
+using Microsoft.Win32;
 
 namespace DorkNet.Launcher.Backend;
 
 /// <summary>Windows folder picker for the user's
 /// <c>Recroom_Release_Data</c> directory. Per project policy: never
-/// auto-detect via Steam library scanning, always ask the user.</summary>
+/// auto-detect via Steam library scanning, always ask the user.
+///
+/// <para>Uses <see cref="OpenFolderDialog"/> (added in .NET 8) so we
+/// don't need to drag WinForms into a WPF project for one dialog.</para></summary>
 public static class RecRoomPicker
 {
     public static string? Pick(string? initialPath = null)
     {
-        using var dlg = new FolderBrowserDialog
+        var dlg = new OpenFolderDialog
         {
-            Description = "Select your Rec Room install's *_Data folder " +
-                          "(e.g. Recroom_Release_Data inside the install).",
-            UseDescriptionForTitle = true,
-            ShowNewFolderButton = false,
+            Title = "Select your Rec Room install's *_Data folder " +
+                    "(e.g. Recroom_Release_Data inside the install).",
             InitialDirectory = initialPath ?? Environment.GetFolderPath(
                 Environment.SpecialFolder.ProgramFilesX86),
+            Multiselect = false,
         };
-        return dlg.ShowDialog() == DialogResult.OK ? dlg.SelectedPath : null;
+        return dlg.ShowDialog() == true ? dlg.FolderName : null;
     }
 
     /// <summary>Quick sanity check that the picked path looks like a

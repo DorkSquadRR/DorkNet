@@ -1,0 +1,126 @@
+<Application x:Class="DorkNet.Launcher.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             StartupUri="MainWindow.xaml">
+
+    <Application.Resources>
+        <!-- ── Dark theme palette ─────────────────────────────────────── -->
+        <SolidColorBrush x:Key="Bg" Color="#0E0F13" />
+        <SolidColorBrush x:Key="BgElev" Color="#181A21" />
+        <SolidColorBrush x:Key="BgElev2" Color="#21232D" />
+        <SolidColorBrush x:Key="Border" Color="#2A2D3A" />
+        <SolidColorBrush x:Key="Ink" Color="#E8EBF3" />
+        <SolidColorBrush x:Key="InkSoft" Color="#9AA0B4" />
+        <SolidColorBrush x:Key="InkFaint" Color="#5E6478" />
+        <SolidColorBrush x:Key="Brand" Color="#7C5CFF" />
+        <SolidColorBrush x:Key="BrandHover" Color="#9A7EFF" />
+        <SolidColorBrush x:Key="Danger" Color="#FF6B6B" />
+        <SolidColorBrush x:Key="Ok" Color="#44D68A" />
+
+        <!-- ── TextBox / PasswordBox base ──────────────────────────────── -->
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="{StaticResource BgElev}" />
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+            <Setter Property="CaretBrush" Value="{StaticResource Ink}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Border}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="FontFamily" Value="Segoe UI" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+
+        <Style TargetType="ComboBox">
+            <Setter Property="Background" Value="{StaticResource BgElev}" />
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Border}" />
+            <Setter Property="Padding" Value="8,6" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+
+        <!-- ── Button styles ───────────────────────────────────────────── -->
+        <Style x:Key="Btn" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource BgElev2}" />
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Border}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="14,8" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{StaticResource Border}" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Foreground" Value="{StaticResource InkFaint}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <Style x:Key="PrimaryBtn" TargetType="Button" BasedOn="{StaticResource Btn}">
+            <Setter Property="Background" Value="{StaticResource Brand}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Brand}" />
+            <Setter Property="Foreground" Value="White" />
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Background" Value="{StaticResource BrandHover}" />
+                    <Setter Property="BorderBrush" Value="{StaticResource BrandHover}" />
+                </Trigger>
+                <Trigger Property="IsEnabled" Value="False">
+                    <Setter Property="Background" Value="{StaticResource BgElev2}" />
+                    <Setter Property="BorderBrush" Value="{StaticResource Border}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- ── Card button for first-run wizard ────────────────────────── -->
+        <Style x:Key="CardBtn" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource BgElev}" />
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Border}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="20" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="10">
+                            <ContentPresenter Margin="{TemplateBinding Padding}" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="BorderBrush" Value="{StaticResource Brand}" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- ── Section header text ─────────────────────────────────────── -->
+        <Style x:Key="FieldLabel" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource InkSoft}" />
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="0,0,0,4" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+    </Application.Resources>
+</Application>
