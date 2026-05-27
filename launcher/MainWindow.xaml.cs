@@ -288,6 +288,7 @@ public partial class MainWindow : Window
         HostStatusText.Text = "";
 
         StartupStep? activeStep = null;
+        HostRetryPanel.Visibility = Visibility.Collapsed;
         try
         {
             activeStep = StartStep(_hostSteps, 0);
@@ -331,7 +332,8 @@ public partial class MainWindow : Window
                 _state.PhotonAppId, _state.PhotonVoiceAppId, _state.PhotonRegion, _hostApex);
             if (!patch.Ok)
             {
-                FailStep(activeStep, "Patcher failed: " + Truncate(patch.Log, 300));
+                FailStepWithFriendly(activeStep, ErrorTranslator.TranslateMessage(patch.Log));
+                ShowHostRetry();
                 return;
             }
             CompleteStep(activeStep);
@@ -356,11 +358,24 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            if (activeStep is not null) FailStep(activeStep, ex.Message);
-            else HostStatusText.Text = ex.Message;
+            var friendly = ErrorTranslator.Translate(ex);
+            if (activeStep is not null) FailStepWithFriendly(activeStep, friendly);
+            else HostStatusText.Text = $"{friendly.Title} {friendly.Explanation}";
+            ShowHostRetry();
             HostStartBtn.IsEnabled = true;
             HostStopBtn.Visibility = Visibility.Collapsed;
         }
+    }
+
+    private void ShowHostRetry()
+    {
+        HostRetryPanel.Visibility = Visibility.Visible;
+    }
+
+    private void OnHostRetry(object sender, RoutedEventArgs e)
+    {
+        HostRetryPanel.Visibility = Visibility.Collapsed;
+        OnHostStart(sender, e);
     }
 
     // ── Step helpers ────────────────────────────────────────────────────
@@ -377,11 +392,11 @@ public partial class MainWindow : Window
         step.Progress = null;
     }
 
-    private static void FailStep(StartupStep step, string detail)
+    private static void FailStepWithFriendly(StartupStep step, FriendlyError err)
     {
         step.State = StepState.Failed;
         step.Progress = null;
-        step.Detail = detail;
+        step.Detail = $"{err.Title} {err.Explanation}";
     }
 
     private static void UpdateStepProgress(StartupStep step, DownloadProgress p)
@@ -411,6 +426,7 @@ public partial class MainWindow : Window
         HostStepsList.ItemsSource = null;
         _hostSteps = null;
         HostStatusText.Text = "";
+        HostRetryPanel.Visibility = Visibility.Collapsed;
     }
 
     private async Task ShutdownServerAsync()
@@ -503,6 +519,7 @@ public partial class MainWindow : Window
         JoinStepsList.ItemsSource = _joinSteps;
         JoinStepsPanel.Visibility = Visibility.Visible;
         JoinStatusText.Text = "";
+        JoinRetryPanel.Visibility = Visibility.Collapsed;
 
         StartupStep? activeStep = null;
         try
@@ -518,7 +535,8 @@ public partial class MainWindow : Window
                 payload.PhotonAppId, payload.PhotonVoiceAppId, payload.PhotonRegion, payload.Host);
             if (!patch.Ok)
             {
-                FailStep(activeStep, "Patcher failed: " + Truncate(patch.Log, 300));
+                FailStepWithFriendly(activeStep, ErrorTranslator.TranslateMessage(patch.Log));
+                JoinRetryPanel.Visibility = Visibility.Visible;
                 return;
             }
             CompleteStep(activeStep);
@@ -530,10 +548,29 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            if (activeStep is not null) FailStep(activeStep, ex.Message);
-            else JoinStatusText.Text = ex.Message;
+            var friendly = ErrorTranslator.Translate(ex);
+            if (activeStep is not null) FailStepWithFriendly(activeStep, friendly);
+            else JoinStatusText.Text = $"{friendly.Title} {friendly.Explanation}";
+            JoinRetryPanel.Visibility = Visibility.Visible;
         }
         finally { RefreshJoinReadiness(); }
+    }
+
+    private void OnJoinRetry(object sender, RoutedEventArgs e)
+    {
+        JoinRetryPanel.Visibility = Visibility.Collapsed;
+        OnJoinApply(sender, e);
+    }
+
+    private void OnOpenTroubleshooting(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo(
+                "https://github.com/DorkSquadRR/DorkNet/blob/main/README.md#troubleshooting")
+                { UseShellExecute = true });
+        }
+        catch (Exception ex) { ShowError("Couldn't open help: " + ex.Message); }
     }
 
     private void OnLaunchRecRoom(object sender, RoutedEventArgs e)
@@ -545,9 +582,6 @@ public partial class MainWindow : Window
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────
-    private static string Truncate(string s, int max)
-        => s.Length <= max ? s : s[..max] + "...";
-
     private void ShowError(string message)
         => System.Windows.MessageBox.Show(this, message, "DorkNet",
             MessageBoxButton.OK, MessageBoxImage.Warning);
