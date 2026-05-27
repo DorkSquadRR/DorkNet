@@ -27,4 +27,17 @@
     <PackageReference Include="QRCoder" Version="1.6.0" />
   </ItemGroup>
 
+  <!-- Dev convenience: copy the repo-root versions.json next to dorknet.exe
+       on build, so a dev checkout works against the private repo without
+       needing DORKNET_LOCAL_MANIFEST set. LocalOverrides picks this up as
+       a side-by-side fallback. The file is harmless to ship in release
+       builds too — VersionsManifest still prefers the live GitHub fetch
+       when reachable. -->
+  <ItemGroup>
+    <None Include="..\versions.json" Condition="Exists('..\versions.json')">
+      <Link>versions.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>

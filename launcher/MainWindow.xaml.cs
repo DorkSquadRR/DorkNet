@@ -184,13 +184,25 @@ public partial class MainWindow : Window
     private async Task RefreshManifestAsync()
     {
         _manifest = await new VersionsManifest().FetchAsync();
+        VersionSelect.Items.Clear();
         if (_manifest is null)
         {
-            HostStatusText.Text = "Couldn't load versions.json from GitHub. " +
-                "Check internet, then reopen.";
+            // Empty placeholder so the user sees *something* in the
+            // dropdown instead of a silent blank — helps when the public
+            // repo is unreachable (e.g. private repo + no env override).
+            var placeholder = new ComboBoxItem
+            {
+                Content = "(no versions — check internet or set DORKNET_LOCAL_MANIFEST)",
+                IsEnabled = false,
+                Tag = null,
+            };
+            VersionSelect.Items.Add(placeholder);
+            placeholder.IsSelected = true;
+            HostStatusText.Text = "Couldn't load versions.json. " +
+                "Either the repo isn't reachable, or DORKNET_LOCAL_MANIFEST " +
+                "points at a missing/invalid file — check Settings.";
             return;
         }
-        VersionSelect.Items.Clear();
         foreach (var v in _manifest.Branches.Where(b => b.Supported))
         {
             var item = new ComboBoxItem

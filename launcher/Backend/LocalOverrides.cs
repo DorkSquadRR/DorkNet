@@ -26,14 +26,21 @@ public static class LocalOverrides
     public const string ManifestEnvVar = "DORKNET_LOCAL_MANIFEST";
     public const string ReleasesEnvVar = "DORKNET_LOCAL_RELEASES";
 
-    /// <summary>Returns the configured manifest path if the env var is
-    /// set AND the file exists; null otherwise. Caller decides whether
-    /// to fall back to the network.</summary>
+    /// <summary>Returns a local manifest path to use instead of the
+    /// GitHub fetch. Prefers <c>DORKNET_LOCAL_MANIFEST</c> when set; if
+    /// that's unset, falls back to a side-by-side <c>versions.json</c>
+    /// next to <c>dorknet.exe</c> (so dev checkouts against a private
+    /// repo work without env-var wiring — the launcher's csproj copies
+    /// the repo-root versions.json to its bin output on build).</summary>
     public static string? GetLocalManifestPath()
     {
         var path = Environment.GetEnvironmentVariable(ManifestEnvVar);
-        if (string.IsNullOrEmpty(path)) return null;
-        return File.Exists(path) ? path : null;
+        if (!string.IsNullOrEmpty(path) && File.Exists(path)) return path;
+
+        var sideBySide = Path.Combine(AppContext.BaseDirectory, "versions.json");
+        if (File.Exists(sideBySide)) return sideBySide;
+
+        return null;
     }
 
     /// <summary>Returns the configured releases-root if the env var is
@@ -86,5 +93,24 @@ public static class LocalOverrides
         parts.Add(exists
             ? $"{envVar} -> {raw}  [active]"
             : $"{envVar} -> {raw}  [SET BUT NOT FOUND on disk]");
+    }
+
+    /// <summary>Best-effort description of where the manifest is
+    /// actually coming from this session. Mainly for the Settings UI
+    /// so the user can tell at a glance "side-by-side dev manifest"
+    /// vs "live GitHub fetch" vs "broken env-var path".</summary>
+    public static string DescribeManifestSource()
+    {
+        var env = Environment.GetEnvironmentVariable(ManifestEnvVar);
+        if (!string.IsNullOrEmpty(env))
+        {
+            return File.Exists(env)
+                ? $"manifest source: {env} (env var)"
+                : $"manifest source: {env} (env var, NOT FOUND — falling back)";
+        }
+        var sideBySide = Path.Combine(AppContext.BaseDirectory, "versions.json");
+        if (File.Exists(sideBySide))
+            return $"manifest source: {sideBySide} (side-by-side fallback)";
+        return "manifest source: live GitHub fetch (no local override)";
     }
 }
