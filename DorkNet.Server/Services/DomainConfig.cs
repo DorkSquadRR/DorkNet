@@ -13,12 +13,17 @@ public sealed class DomainConfig
     public string Apex { get; }
     public string Scheme { get; }
     public string? Port { get; }
+    public string? SingleOriginBaseUrl { get; }
+    public bool SingleOriginEnabled => !string.IsNullOrWhiteSpace(SingleOriginBaseUrl);
 
-    public DomainConfig(string apex, string scheme = "https", string? port = null)
+    public DomainConfig(string apex, string scheme = "https", string? port = null, string? singleOriginBaseUrl = null)
     {
         Apex = apex;
         Scheme = string.IsNullOrWhiteSpace(scheme) ? "https" : scheme.TrimEnd(':', '/', '\\');
         Port = string.IsNullOrWhiteSpace(port) ? null : port.Trim().TrimStart(':');
+        SingleOriginBaseUrl = string.IsNullOrWhiteSpace(singleOriginBaseUrl)
+            ? null
+            : singleOriginBaseUrl.Trim().TrimEnd('/');
     }
 
     public string Sub(string prefix) => $"{prefix}.{Apex}";

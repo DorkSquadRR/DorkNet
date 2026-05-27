@@ -23,7 +23,9 @@ public class ConfigService(IConfiguration config, DomainConfig domain)
         return new RecRoomConfig
         {
             MessageOfTheDay = config["Server:MOTD"] ?? "Welcome to the private server!",
-            CdnBaseUri = domain.SubUrl("cdn"),
+            CdnBaseUri = domain.SingleOriginEnabled
+                ? $"{domain.SingleOriginBaseUrl}/__dn/cdn"
+                : domain.SubUrl("cdn"),
             PhotonConfig = photon,
             ServiceUrls = BuildServiceUrlMap(domain),
             ConfigTable = new Dictionary<string, string>
@@ -110,6 +112,12 @@ public class ConfigService(IConfiguration config, DomainConfig domain)
         var map = new Dictionary<string, string>(ServiceSubdomains.Length);
         foreach (var (service, sub) in ServiceSubdomains)
         {
+            if (domain.SingleOriginEnabled)
+            {
+                var prefix = string.IsNullOrEmpty(sub) ? "www" : sub;
+                map[service] = $"{domain.SingleOriginBaseUrl}/__dn/{prefix}";
+                continue;
+            }
             var host = string.IsNullOrEmpty(sub) ? domain.Apex : domain.Sub(sub);
             map[service] = domain.Url(host);
         }

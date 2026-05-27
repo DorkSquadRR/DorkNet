@@ -55,6 +55,7 @@ public class Mod : MelonMod
     public static class Cfg
     {
         public static string ServerHost          = "localhost";
+        public static string SingleOriginBaseUrl = "";
         public static string PhotonAppId         = "";
         public static string PhotonVoiceAppId    = "";
         // Forced PhotonServerSettings.PreferredRegion (with HostType
@@ -281,12 +282,13 @@ public class Mod : MelonMod
             var doc = JsonDocument.Parse(File.ReadAllText(path));
             var r = doc.RootElement;
             if (r.TryGetProperty("ServerHost", out var v))           Cfg.ServerHost = v.GetString() ?? Cfg.ServerHost;
+            if (r.TryGetProperty("SingleOriginBaseUrl", out v))      Cfg.SingleOriginBaseUrl = (v.GetString() ?? "").TrimEnd('/');
             if (r.TryGetProperty("PhotonAppId", out v))              Cfg.PhotonAppId = v.GetString() ?? Cfg.PhotonAppId;
             if (r.TryGetProperty("PhotonVoiceAppId", out v))         Cfg.PhotonVoiceAppId = v.GetString() ?? Cfg.PhotonVoiceAppId;
             if (r.TryGetProperty("PhotonCloudRegion", out v))        Cfg.PhotonCloudRegion = v.GetString() ?? Cfg.PhotonCloudRegion;
             if (r.TryGetProperty("InjectAuthValues", out v))         Cfg.InjectAuthValues = v.GetBoolean();
             if (r.TryGetProperty("EnableTlsTrustBypass", out v))     Cfg.EnableTlsTrustBypass = v.GetBoolean();
-            Log.Msg($"[config] loaded: ServerHost={Cfg.ServerHost}, PhotonAppId={(string.IsNullOrEmpty(Cfg.PhotonAppId) ? "<unset>" : "<set>")}, " +
+            Log.Msg($"[config] loaded: ServerHost={Cfg.ServerHost}, SingleOrigin={(string.IsNullOrEmpty(Cfg.SingleOriginBaseUrl) ? "<off>" : Cfg.SingleOriginBaseUrl)}, PhotonAppId={(string.IsNullOrEmpty(Cfg.PhotonAppId) ? "<unset>" : "<set>")}, " +
                     $"InjectAuthValues={Cfg.InjectAuthValues}, EnableTlsTrustBypass={Cfg.EnableTlsTrustBypass}");
         }
         catch (Exception ex)
@@ -554,9 +556,22 @@ internal static class UriPatches
     private static void RewriteString(ref string uriString, string label)
     {
         if (string.IsNullOrEmpty(uriString)) return;
+        if (uriString.IndexOf(".rec.net", StringComparison.OrdinalIgnoreCase) < 0) return;
+
+        if (!string.IsNullOrEmpty(Mod.Cfg.SingleOriginBaseUrl) &&
+            Uri.TryCreate(uriString, UriKind.Absolute, out var uri))
+        {
+            var rewrittenUri = RewriteUri(uri);
+            if (rewrittenUri is null) return;
+            var rewrittenText = rewrittenUri.ToString();
+            if (rewrittenText == uriString) return;
+            Mod.Log.Msg($"[{label}] {uriString} → {rewrittenText}");
+            uriString = rewrittenText;
+            return;
+        }
+
         var host = Mod.Cfg.ServerHost;
         if (string.IsNullOrEmpty(host)) return;
-        if (uriString.IndexOf(".rec.net", StringComparison.OrdinalIgnoreCase) < 0) return;
         var rewritten = uriString.Replace(".rec.net", "." + host);
         if (rewritten == uriString) return;
         Mod.Log.Msg($"[{label}] {uriString} → {rewritten}");
@@ -572,10 +587,32 @@ internal static class UriPatches
         var service = uri.Host[..^".rec.net".Length];
         if (string.IsNullOrWhiteSpace(service)) return null;
 
+        if (!string.IsNullOrEmpty(Mod.Cfg.SingleOriginBaseUrl) &&
+            Uri.TryCreate(Mod.Cfg.SingleOriginBaseUrl, UriKind.Absolute, out var baseUri))
+        {
+            var path = CombinePath(baseUri.AbsolutePath, "__dn/" + service, uri.AbsolutePath);
+            return new UriBuilder(baseUri)
+            {
+                Path = path,
+                Query = uri.Query.TrimStart('?'),
+            }.Uri;
+        }
+
         return new UriBuilder(uri)
         {
             Host = service + "." + host,
         }.Uri;
+    }
+
+    private static string CombinePath(params string[] parts)
+    {
+        var cleaned = new List<string>();
+        foreach (var part in parts)
+        {
+            var p = (part ?? "").Trim('/');
+            if (p.Length > 0) cleaned.Add(p);
+        }
+        return "/" + string.Join("/", cleaned);
     }
 }
 

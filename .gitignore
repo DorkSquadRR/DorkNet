@@ -64,3 +64,4 @@ DorkNet.Server/site/node_modules/
 DorkNet.Server/site/dist/
 DorkNet.Server/site/.vite/
 DorkNet.Server/site/tsconfig.tsbuildinfo
+local-releases.zip

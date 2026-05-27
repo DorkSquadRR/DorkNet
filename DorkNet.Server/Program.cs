@@ -65,7 +65,15 @@ builder.Services.AddDbContext<DorkNetDbContext>(opt =>
     }
     else
     {
-        var dbPath = Path.Combine(AppContext.BaseDirectory, "data", "dorknet.db");
+        // Honor an explicit path the host can set via env var
+        // (Database__SqlitePath) or appsettings (Database:SqlitePath).
+        // The Windows launcher sets this to %APPDATA%\DorkNet\dorknet.db
+        // so server installs don't accumulate state under <bin>\data\.
+        // Existing Docker / standalone deploys that mounted <bin>\data\
+        // keep working because that's still the fallback.
+        var dbPath = builder.Configuration["Database:SqlitePath"];
+        if (string.IsNullOrWhiteSpace(dbPath))
+            dbPath = Path.Combine(AppContext.BaseDirectory, "data", "dorknet.db");
         Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
         opt.UseSqlite($"Data Source={dbPath}", lite => lite.MigrationsAssembly("DorkNet.Server"));
     }
@@ -94,14 +102,17 @@ var domainScheme =
 var domainPort =
     builder.Configuration["Domain:Port"]
     ?? Environment.GetEnvironmentVariable("DORKNET_DOMAIN_PORT");
-builder.Services.AddSingleton(new DomainConfig(apex, domainScheme, domainPort));
+var singleOriginBaseUrl =
+    builder.Configuration["Domain:SingleOriginBaseUrl"]
+    ?? Environment.GetEnvironmentVariable("DORKNET_SINGLE_ORIGIN_BASE_URL");
+builder.Services.AddSingleton(new DomainConfig(apex, domainScheme, domainPort, singleOriginBaseUrl));
 builder.Services.Configure<Microsoft.AspNetCore.HostFiltering.HostFilteringOptions>(opt =>
 {
     opt.AllowedHosts = new[] { apex, $"*.{apex}", "localhost", "127.0.0.1" };
     opt.AllowEmptyHosts = true;
     opt.IncludeFailureMessage = true;
 });
-Console.WriteLine($"[domain] apex={apex}, scheme={domainScheme}, port={domainPort}, allowedHosts=[{apex}, *.{apex}, localhost]");
+Console.WriteLine($"[domain] apex={apex}, scheme={domainScheme}, port={domainPort}, singleOrigin={singleOriginBaseUrl}, allowedHosts=[{apex}, *.{apex}, localhost]");
 
 // ── Services ──────────────────────────────────────────────────────────────────
 builder.Services.AddScoped<PlayerService>();
@@ -316,6 +327,30 @@ var app = builder.Build();
 // host-mount / redirect / hub binding below uses this instead of
 // hardcoded rec.net/localhost literals.
 var domainCfg = app.Services.GetRequiredService<DomainConfig>();
+
+// Easy Launcher single-origin mode. localtunnel gives us one public
+// hostname, so the launcher name-server emits URLs like
+// https://abc.loca.lt/__dn/api/...; this middleware maps those path
+// prefixes back into the same internal host layout used by advanced
+// wildcard deployments. If Domain:SingleOriginBaseUrl is unset this is
+// inert, preserving the normal subdomain behavior.
+app.Use(async (ctx, next) =>
+{
+    if (domainCfg.SingleOriginEnabled &&
+        TryMapSingleOriginPath(ctx.Request.Path, out var service, out var rest))
+    {
+        ctx.Request.Host = new HostString(service == "www" ? domainCfg.Apex : domainCfg.Sub(service));
+        ctx.Request.Path = string.IsNullOrEmpty(rest) ? "/" : rest;
+    }
+
+    await next();
+});
+
+// Keep endpoint selection after the single-origin path rewrite. Without an
+// explicit routing point here, WebApplication can auto-insert routing before
+// the rewrite middleware, causing /__dn/api/... requests to stay route misses
+// even though the trace logs show the rewritten /api/... path.
+app.UseRouting();
 
 // Request/response tracing — emits one structured log per non-health request,
 // with the response body included for any 4xx/5xx so we can see exactly what
@@ -1070,6 +1105,22 @@ app.MapHub<DorkNet.Server.Hubs.NotifyHub>("/hub/v1", opts =>
 }).RequireHost(domainCfg.Sub("notify"));
 
 app.Run();
+
+static bool TryMapSingleOriginPath(PathString path, out string service, out PathString rest)
+{
+    service = "";
+    rest = PathString.Empty;
+    if (!path.StartsWithSegments("/__dn", out var tail)) return false;
+
+    var value = tail.Value ?? "";
+    if (value.Length <= 1) return false;
+    var slash = value.IndexOf('/', 1);
+    service = slash < 0 ? value[1..] : value[1..slash];
+    if (string.IsNullOrWhiteSpace(service)) return false;
+
+    rest = slash < 0 ? "/" : value[slash..];
+    return true;
+}
 
 static bool IsHealthProbe(HttpRequest request)
 {
