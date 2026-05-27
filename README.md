@@ -1,7 +1,5 @@
 # DorkNet
 
-A self-hostable reimplementation of the 2020 Rec Room backend. Bring your
-own client; run a private server for yourself and your friends.
 
 > ⚠️ **Not affiliated with Rec Room Inc. or Against Gravity.**
 > See [DISCLAIMER.md](DISCLAIMER.md). DorkNet ships no Rec Room game assets
