@@ -30,11 +30,50 @@ public partial class MainWindow : Window
 
     private async void OnWindowLoaded(object sender, RoutedEventArgs e)
     {
+        // First-run convenience: if the user has never picked a Rec Room
+        // install, try the common manual-install paths. Most grandmas
+        // unzipped a build into Documents — auto-pick the newest match so
+        // they never see the file dialog.
+        if (string.IsNullOrEmpty(_state.RecRoomPath))
+        {
+            var detected = RecRoomPicker.Detect();
+            if (detected is not null)
+            {
+                _state.RecRoomPath = detected;
+                _state.Save();
+            }
+        }
+
         // Hydrate UI from persisted state, then fetch the manifest in the
         // background so the user can start clicking immediately even if the
         // version list is slow.
         ReflectStateInUi();
         await RefreshManifestAsync();
+        AutoSelectVersionFromInstall();
+    }
+
+    /// <summary>If the user's install path resolves to a known build,
+    /// pre-select the matching version in the dropdown so the field
+    /// isn't a meaningless "december_2020_12_18" string. No-op if the
+    /// build can't be identified — falls back to whatever the user (or
+    /// the dropdown default) picks.</summary>
+    private void AutoSelectVersionFromInstall()
+    {
+        if (_manifest is null || string.IsNullOrEmpty(_state.RecRoomPath)) return;
+        var detected = RecRoomVersionDetector.Detect(_state.RecRoomPath);
+        if (detected is null) return;
+        var match = RecRoomVersionDetector.MatchToManifest(detected.ClientBuild, _manifest);
+        if (match is null) return;
+        foreach (var item in VersionSelect.Items.OfType<ComboBoxItem>())
+        {
+            if (string.Equals(item.Tag?.ToString(), match.VersionKey, StringComparison.OrdinalIgnoreCase))
+            {
+                item.IsSelected = true;
+                _state.SelectedVersion = match.VersionKey;
+                _state.Save();
+                break;
+            }
+        }
     }
 
     // ── View routing ────────────────────────────────────────────────────
@@ -68,6 +107,15 @@ public partial class MainWindow : Window
         PhotonVoiceAppIdInput.Text = _state.PhotonVoiceAppId;
         SelectComboBoxByTag(PhotonRegionSelect, _state.PhotonRegion);
         ServerNameInput.Text = _state.ServerName;
+        // Hosting mode radio — reflect persisted choice; defaults to Internet
+        // since that's the install-and-play case most users want.
+        if (HostModeLocal is not null && HostModeInternet is not null)
+        {
+            if (_state.HostingMode == HostingMode.LocalNetwork)
+                HostModeLocal.IsChecked = true;
+            else
+                HostModeInternet.IsChecked = true;
+        }
 
         CachePathsText.Text =
             $"State:   {AppPaths.StateFile}\n" +
@@ -180,6 +228,18 @@ public partial class MainWindow : Window
         _state.Save();
     }
 
+    private void OnHostingModeChanged(object sender, RoutedEventArgs e)
+    {
+        // RadioButton.Checked fires twice on selection-change (once for
+        // the un-checked, once for the new-checked). HostModeLocal/Internet
+        // could be null during InitializeComponent so guard against that.
+        if (HostModeLocal is null || HostModeInternet is null) return;
+        _state.HostingMode = HostModeLocal.IsChecked == true
+            ? HostingMode.LocalNetwork
+            : HostingMode.Internet;
+        _state.Save();
+    }
+
     // ── Host flow ───────────────────────────────────────────────────────
     private async void OnHostStart(object sender, RoutedEventArgs e)
     {
@@ -208,10 +268,24 @@ public partial class MainWindow : Window
             HostStatusText.Text = "Downloading server binary…";
             var serverDir = await _releases.EnsureServerAsync(version, progress);
 
-            HostStatusText.Text = "Opening Cloudflare tunnel…";
-            _tunnel = new Tunnel();
-            var publicUrl = await _tunnel.StartAsync(localPort: 5005);
-            _hostApex = new Uri(publicUrl).Host;
+            // Hosting mode branch — Internet (Cloudflare tunnel, joiners
+            // anywhere) vs LocalNetwork (LAN IP, joiners on same network,
+            // zero internet dependency).
+            if (_state.HostingMode == HostingMode.LocalNetwork)
+            {
+                _hostApex = LocalNetwork.GetLanIp();
+                HostStatusText.Text = $"Local-network mode: hosting on {_hostApex}";
+            }
+            else
+            {
+                HostStatusText.Text = "Setting up Cloudflare tunnel (first run downloads ~17 MB)…";
+                _tunnel = new Tunnel();
+                var publicUrl = await _tunnel.StartAsync(
+                    localPort: 5005,
+                    downloadProgress: new Progress<DownloadProgress>(p =>
+                        HostStatusText.Text = FormatProgress("Downloading Cloudflare tunnel", p)));
+                _hostApex = new Uri(publicUrl).Host;
+            }
 
             HostStatusText.Text = "Starting the server…";
             await _server.StartAsync(serverDir, _state, _hostApex);
@@ -238,7 +312,9 @@ public partial class MainWindow : Window
             });
             JoinCodeText.Text = code;
             JoinCodePanel.Visibility = Visibility.Visible;
-            HostStatusText.Text = $"Hosting at {publicUrl}. Share the join code below or launch Rec Room to test.";
+            HostStatusText.Text = _state.HostingMode == HostingMode.LocalNetwork
+                ? $"Hosting on your local network at {_hostApex}. Share the join code with friends on the same WiFi."
+                : $"Hosting at https://{_hostApex}. Share the join code below or launch Rec Room to test.";
             HostLaunchBtn.Visibility = Visibility.Visible;
         }
         catch (Exception ex)

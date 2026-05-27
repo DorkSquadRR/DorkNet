@@ -8,22 +8,23 @@ namespace DorkNet.Launcher.Backend;
 /// host doesn't need to open ports / configure DNS. Each launch gets
 /// a fresh random <c>*.trycloudflare.com</c> URL.
 ///
-/// <para>Requires <c>cloudflared.exe</c> on PATH or alongside the
-/// launcher binary. If absent, returns a clear error and the host
-/// can fall back to LAN-only play.</para></summary>
+/// <para>cloudflared.exe is resolved via
+/// <see cref="CloudflaredInstaller.EnsureAsync"/>, which checks
+/// side-by-side first, then PATH, then downloads the latest official
+/// release from Cloudflare's GitHub mirror on first run. Grandma never
+/// has to "install Cloudflare Tunnel" manually.</para></summary>
 public sealed class Tunnel : IAsyncDisposable
 {
     private Process? _process;
     private TaskCompletionSource<string>? _urlReady;
     public string? PublicUrl { get; private set; }
 
-    public async Task<string> StartAsync(int localPort, CancellationToken ct = default)
+    public async Task<string> StartAsync(
+        int localPort,
+        IProgress<DownloadProgress>? downloadProgress = null,
+        CancellationToken ct = default)
     {
-        var exe = FindCloudflared() ??
-            throw new FileNotFoundException(
-                "cloudflared not found. Install from " +
-                "https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/ " +
-                "and put cloudflared.exe on PATH (or next to the DorkNet launcher).");
+        var exe = await CloudflaredInstaller.EnsureAsync(downloadProgress, ct);
 
         _urlReady = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -62,17 +63,6 @@ public sealed class Tunnel : IAsyncDisposable
         if (line is null || _urlReady is null || _urlReady.Task.IsCompleted) return;
         var match = UrlRegex.Match(line);
         if (match.Success) _urlReady.TrySetResult(match.Value);
-    }
-
-    private static string? FindCloudflared()
-    {
-        var sideBySide = Path.Combine(AppContext.BaseDirectory, "cloudflared.exe");
-        if (File.Exists(sideBySide)) return sideBySide;
-        var onPath = Environment.GetEnvironmentVariable("PATH")?
-            .Split(';')
-            .Select(p => Path.Combine(p, "cloudflared.exe"))
-            .FirstOrDefault(File.Exists);
-        return onPath;
     }
 
     public async ValueTask DisposeAsync()

@@ -24,6 +24,53 @@ public static class RecRoomPicker
         return dlg.ShowDialog() == true ? dlg.FolderName : null;
     }
 
+    /// <summary>Scan common manual-install paths and return the newest
+    /// valid <c>*_Data</c> folder, or null if nothing matches. First-run
+    /// uses this to skip the file dialog when the user has Rec Room in
+    /// an obvious spot. Never touches Steam library folders.</summary>
+    public static string? Detect()
+    {
+        var user = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        var roots = new[]
+        {
+            Path.Combine(user, "Documents", "Recnet", "dist"),
+            Path.Combine(user, "Documents", "Recnet-old", "dist"),
+            Path.Combine(user, "Documents", "DorkNet", "dist"),
+            Path.Combine(user, "Documents", "dorknet"),
+            Path.Combine(user, "Documents", "RecRoom"),
+            Path.Combine(user, "Downloads"),
+            @"C:\Games",
+            @"C:\RecRoom",
+            @"D:\Games",
+            @"D:\RecRoom",
+        };
+
+        var candidates = new List<(string Path, DateTime LastWrite)>();
+        foreach (var root in roots)
+        {
+            if (!Directory.Exists(root)) continue;
+            try
+            {
+                foreach (var dir in Directory.EnumerateDirectories(root))
+                {
+                    var data = Path.Combine(dir, "Recroom_Release_Data");
+                    if (!Directory.Exists(data)) continue;
+                    if (!Validate(data).ok) continue;
+                    candidates.Add((data, Directory.GetLastWriteTimeUtc(data)));
+                }
+                var directData = Path.Combine(root, "Recroom_Release_Data");
+                if (Directory.Exists(directData) && Validate(directData).ok)
+                    candidates.Add((directData, Directory.GetLastWriteTimeUtc(directData)));
+            }
+            catch { /* permission denied — skip */ }
+        }
+
+        return candidates
+            .OrderByDescending(c => c.LastWrite)
+            .Select(c => c.Path)
+            .FirstOrDefault();
+    }
+
     /// <summary>Quick sanity check that the picked path looks like a
     /// Rec Room install. Doesn't validate the build version — that's
     /// the patcher's job. Just checks for the canonical files so we

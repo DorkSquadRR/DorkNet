@@ -14,9 +14,10 @@ public sealed class AppState
     [JsonPropertyName("mode")]
     public AppMode Mode { get; set; } = AppMode.Unset;
 
-    /// <summary>Path to the user's Recroom_Release_Data folder. Picked
-    /// via the folder dialog; never auto-detected per project policy
-    /// (no Steam library scanning).</summary>
+    /// <summary>Path to the user's Recroom_Release_Data folder. First
+    /// run auto-fills via <see cref="RecRoomPicker.Detect"/> (scans
+    /// common manual-install paths only, never Steam library); user
+    /// can override via the folder dialog.</summary>
     [JsonPropertyName("recRoomPath")]
     public string? RecRoomPath { get; set; }
 
@@ -37,6 +38,14 @@ public sealed class AppState
 
     [JsonPropertyName("photonRegion")]
     public string PhotonRegion { get; set; } = "us";
+
+    /// <summary>How the host exposes the server: <c>Internet</c> uses
+    /// a Cloudflare quick-tunnel (works for friends anywhere with the
+    /// join code); <c>LocalNetwork</c> binds the LAN IP and skips the
+    /// tunnel entirely (no internet dependency, joiners must be on
+    /// the same network).</summary>
+    [JsonPropertyName("hostingMode")]
+    public HostingMode HostingMode { get; set; } = HostingMode.Internet;
 
     /// <summary>Host's server name shown in the join code. Empty until
     /// the user fills it in on first-run host setup.</summary>
@@ -80,4 +89,15 @@ public enum AppMode
     Unset,
     Host,
     Join,
+}
+
+public enum HostingMode
+{
+    /// <summary>Default — Cloudflare quick-tunnel, public over the
+    /// internet, works for joiners anywhere.</summary>
+    Internet,
+    /// <summary>LAN only — bind the machine's local IP, skip the
+    /// tunnel, no internet dependency. Joiners must be on the same
+    /// network.</summary>
+    LocalNetwork,
 }

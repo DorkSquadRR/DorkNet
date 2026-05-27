@@ -155,7 +155,19 @@
                                          LostFocus="OnServerNameChanged" />
 
                                 <TextBlock Style="{StaticResource FieldLabel}" Text="REC ROOM VERSION TO HOST FOR" />
-                                <ComboBox x:Name="VersionSelect" />
+                                <ComboBox x:Name="VersionSelect" Margin="0,0,0,16" />
+
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="WHO CAN JOIN?" />
+                                <StackPanel Orientation="Horizontal">
+                                    <RadioButton x:Name="HostModeInternet" GroupName="HostingMode"
+                                                 Content="Friends anywhere (internet via Cloudflare)"
+                                                 IsChecked="True" Checked="OnHostingModeChanged"
+                                                 Foreground="{StaticResource Ink}" />
+                                    <RadioButton x:Name="HostModeLocal" GroupName="HostingMode"
+                                                 Content="Same WiFi only (no internet needed)"
+                                                 Margin="22,0,0,0" Checked="OnHostingModeChanged"
+                                                 Foreground="{StaticResource Ink}" />
+                                </StackPanel>
                             </StackPanel>
                         </Border>
 
