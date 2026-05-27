@@ -20,14 +20,12 @@ public class ConfigService(IConfiguration config, DomainConfig domain)
         // the client used to hit us. The baseUrl parameter is kept
         // for API stability but is no longer dereferenced.
         _ = baseUrl;
-        var apex = domain.Apex;
-
         return new RecRoomConfig
         {
             MessageOfTheDay = config["Server:MOTD"] ?? "Welcome to the private server!",
-            CdnBaseUri = $"https://{domain.Sub("cdn")}",
+            CdnBaseUri = domain.SubUrl("cdn"),
             PhotonConfig = photon,
-            ServiceUrls = BuildServiceUrlMap(apex),
+            ServiceUrls = BuildServiceUrlMap(domain),
             ConfigTable = new Dictionary<string, string>
             {
                 // Season keys the 2019/2020 client checks at startup
@@ -103,6 +101,17 @@ public class ConfigService(IConfiguration config, DomainConfig domain)
         {
             var host = string.IsNullOrEmpty(sub) ? apex : $"{sub}.{apex}";
             map[service] = $"https://{host}";
+        }
+        return map;
+    }
+
+    public static Dictionary<string, string> BuildServiceUrlMap(DomainConfig domain)
+    {
+        var map = new Dictionary<string, string>(ServiceSubdomains.Length);
+        foreach (var (service, sub) in ServiceSubdomains)
+        {
+            var host = string.IsNullOrEmpty(sub) ? domain.Apex : domain.Sub(sub);
+            map[service] = domain.Url(host);
         }
         return map;
     }

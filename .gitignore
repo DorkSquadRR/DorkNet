@@ -1,12 +1,14 @@
 ## .NET
 bin/
 obj/
+build/
 *.user
 *.suo
 .vs/
 .vscode/
 *.csproj.bak
 dist/
+local-releases/
 ## Data / secrets
 # Local SQLite + uploaded blobs only — DON'T match the source-tree
 # DorkNet.Server/Data/ folder (which holds DbContext + Entities/) on

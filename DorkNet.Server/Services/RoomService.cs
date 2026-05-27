@@ -923,14 +923,27 @@ public class RoomService(DorkNetDbContext db)
         // Name="BloodMoon" because SaveChanges hadn't fired yet, so
         // the image binding silently no-op'd. Mutating the already-
         // loaded entity sidesteps that race.
-        var bloodmoon = await db.Rooms.FirstOrDefaultAsync(r => r.Name == "BloodMoon" || r.Name == "Crescendo");
-        if (bloodmoon is not null)
+        var crescendoRooms = await db.Rooms
+            .Where(r => r.Name.ToLower() == "bloodmoon" || r.Name.ToLower() == "crescendo")
+            .ToListAsync();
+        var crescendo = crescendoRooms.FirstOrDefault(r =>
+            string.Equals(r.Name, "Crescendo", StringComparison.OrdinalIgnoreCase));
+        var bloodMoon = crescendoRooms.FirstOrDefault(r =>
+            string.Equals(r.Name, "BloodMoon", StringComparison.OrdinalIgnoreCase));
+        var shouldRenameBloodMoon = crescendo is null;
+        crescendo ??= bloodMoon;
+        if (crescendo is not null)
         {
-            if (bloodmoon.Name != "Crescendo") bloodmoon.Name = "Crescendo";
-            if (string.IsNullOrWhiteSpace(bloodmoon.Description))
-                bloodmoon.Description = "Brave the haunted halls of Castle Dracula and survive the night.";
-            if (bloodmoon.ImageName != "image_Crescendo.png")
-                bloodmoon.ImageName = "image_Crescendo.png";
+            if (shouldRenameBloodMoon && crescendo.Name != "Crescendo")
+                crescendo.Name = "Crescendo";
+            if (string.IsNullOrWhiteSpace(crescendo.Description))
+                crescendo.Description = "Brave the haunted halls of Castle Dracula and survive the night.";
+            if (crescendo.ImageName != "image_Crescendo.png")
+                crescendo.ImageName = "image_Crescendo.png";
+        }
+        foreach (var duplicate in crescendoRooms.Where(r => r.Id != crescendo?.Id))
+        {
+            duplicate.HiddenFromBrowse = true;
         }
 
         var paintball = await db.Rooms.FirstOrDefaultAsync(r => r.Name == "Paintball");

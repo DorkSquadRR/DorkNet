@@ -11,8 +11,19 @@ namespace DorkNet.Server.Services;
 public sealed class DomainConfig
 {
     public string Apex { get; }
-    public DomainConfig(string apex) { Apex = apex; }
+    public string Scheme { get; }
+    public string? Port { get; }
+
+    public DomainConfig(string apex, string scheme = "https", string? port = null)
+    {
+        Apex = apex;
+        Scheme = string.IsNullOrWhiteSpace(scheme) ? "https" : scheme.TrimEnd(':', '/', '\\');
+        Port = string.IsNullOrWhiteSpace(port) ? null : port.Trim().TrimStart(':');
+    }
+
     public string Sub(string prefix) => $"{prefix}.{Apex}";
+    public string Url(string host) => Port is null ? $"{Scheme}://{host}" : $"{Scheme}://{host}:{Port}";
+    public string SubUrl(string prefix) => Url(Sub(prefix));
     public static bool MatchesSubdomain(string host, string prefix)
         => host.StartsWith(prefix + ".", StringComparison.OrdinalIgnoreCase);
 }

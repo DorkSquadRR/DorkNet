@@ -87,14 +87,21 @@ var apex =
     builder.Configuration["Domain:Apex"]
     ?? Environment.GetEnvironmentVariable("DORKNET_DOMAIN")
     ?? "localhost";
-builder.Services.AddSingleton(new DomainConfig(apex));
+var domainScheme =
+    builder.Configuration["Domain:Scheme"]
+    ?? Environment.GetEnvironmentVariable("DORKNET_DOMAIN_SCHEME")
+    ?? "https";
+var domainPort =
+    builder.Configuration["Domain:Port"]
+    ?? Environment.GetEnvironmentVariable("DORKNET_DOMAIN_PORT");
+builder.Services.AddSingleton(new DomainConfig(apex, domainScheme, domainPort));
 builder.Services.Configure<Microsoft.AspNetCore.HostFiltering.HostFilteringOptions>(opt =>
 {
     opt.AllowedHosts = new[] { apex, $"*.{apex}", "localhost", "127.0.0.1" };
     opt.AllowEmptyHosts = true;
     opt.IncludeFailureMessage = true;
 });
-Console.WriteLine($"[domain] apex={apex}, allowedHosts=[{apex}, *.{apex}, localhost]");
+Console.WriteLine($"[domain] apex={apex}, scheme={domainScheme}, port={domainPort}, allowedHosts=[{apex}, *.{apex}, localhost]");
 
 // ── Services ──────────────────────────────────────────────────────────────────
 builder.Services.AddScoped<PlayerService>();
@@ -441,28 +448,18 @@ app.Use(async (ctx, next) =>
     }
 });
 
-// ── Migrate DB ────────────────────────────────────────────────────────────────
-// EF Core migrations under Migrations/. On boot we apply any pending ones —
-// `Migrate()` is a no-op when the DB is already up to date and applies the
-// missing migrations in order otherwise. Schema evolution is now exclusively
-// done via `dotnet ef migrations add <Name>`; never call `EnsureCreated` (it
-// bypasses the migration history table and leaves the db in a broken
-// "exists but no __EFMigrationsHistory entries" state that future Migrate
-// calls can't reason about).
-//
-// One-time upgrade path: DBs created by the previous EnsureCreated boot
-// path already contain the Initial schema but have no __EFMigrationsHistory
-// entries. The baseline detector below catches that case and inserts a
-// row marking Initial as already applied, so Migrate() will only apply the
-// Phase1+Phase2 deltas (column adds) instead of trying to re-CREATE TABLE.
+// ── Create/repair DB ──────────────────────────────────────────────────────────
+// Local launcher installs use SQLite as an appliance database. For that path,
+// create the current EF model directly instead of replaying the migration chain;
+// then run small idempotent repair patches for DBs made by older launcher builds.
+// Hosted Postgres keeps its existing EnsureCreated + explicit patch path below.
 using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<DorkNetDbContext>();
     if (db.Database.IsSqlite())
     {
-        // Sqlite-only legacy baseline path — sqlite_master probes inside.
-        BaselineExistingSchemaIfNeeded(db);
-        db.Database.Migrate();
+        db.Database.EnsureCreated();
+        ApplySqliteCompatibilityPatches(db);
     }
     else
     {
@@ -1184,4 +1181,48 @@ static void BaselineExistingSchemaIfNeeded(DorkNetDbContext db)
 
     Log.Information(
         "[migrations] Detected legacy EnsureCreated DB; baselined as 20260508092637_Initial. Subsequent migrations will apply normally.");
+}
+
+static void ApplySqliteCompatibilityPatches(DorkNetDbContext db)
+{
+    if (!db.Database.IsSqlite()) return;
+    AddSqliteColumnIfMissing(db, "Rooms", "HiddenFromBrowse",
+        @"""HiddenFromBrowse"" INTEGER NOT NULL DEFAULT 0");
+}
+
+static void AddSqliteColumnIfMissing(DorkNetDbContext db, string table, string column, string definition)
+{
+    var conn = db.Database.GetDbConnection();
+    var shouldClose = conn.State == System.Data.ConnectionState.Closed;
+    if (shouldClose) conn.Open();
+    try
+    {
+        var exists = false;
+        using var check = conn.CreateCommand();
+        check.CommandText = $"PRAGMA table_info(\"{table.Replace("\"", "\"\"")}\");";
+        {
+            using var reader = check.ExecuteReader();
+            while (reader.Read())
+            {
+                if (!string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase)) continue;
+                exists = true;
+                break;
+            }
+        }
+
+        if (exists)
+        {
+            Log.Information("[sqlite-compat] {Table}.{Column} already exists", table, column);
+            return;
+        }
+
+        using var alter = conn.CreateCommand();
+        alter.CommandText = $"ALTER TABLE \"{table.Replace("\"", "\"\"")}\" ADD COLUMN {definition};";
+        alter.ExecuteNonQuery();
+        Log.Information("[sqlite-compat] Added {Table}.{Column}", table, column);
+    }
+    finally
+    {
+        if (shouldClose) conn.Close();
+    }
 }

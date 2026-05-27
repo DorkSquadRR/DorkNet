@@ -120,6 +120,7 @@ try {
         'config_dest' = 'MelonLoader/UserData/dorknet-clientmod.json'
         'old_plugin_paths' = @(
             'BepInEx/plugins/DorkNet.ClientPatch.dll'
+            'MelonLoader/Mods/DorkNet.ClientMod.dll'
         )
         'steam_stub' = @{
             'api_dll' = 'steam_api64.dll'
