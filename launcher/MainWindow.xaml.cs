@@ -331,6 +331,7 @@ public partial class MainWindow : Window
                 Name = _state.ServerName,
             });
             JoinCodeText.Text = code;
+            JoinCodeQrImage.Source = QrCodeRenderer.Render(code);
             JoinCodePanel.Visibility = Visibility.Visible;
             HostStatusText.Text = _state.HostingMode == HostingMode.LocalNetwork
                 ? $"Hosting on your local network at {_hostApex}. Share the join code with friends on the same WiFi."
@@ -406,6 +407,38 @@ public partial class MainWindow : Window
     {
         try { Clipboard.SetText(JoinCodeText.Text); }
         catch (Exception ex) { ShowError("Copy failed: " + ex.Message); }
+    }
+
+    private void OnCopyJoinCodeMessage(object sender, RoutedEventArgs e)
+    {
+        var name = string.IsNullOrWhiteSpace(_state.ServerName)
+            ? "my DorkNet server"
+            : _state.ServerName;
+        var msg =
+            $"Join {name} on DorkNet! Grab the launcher at " +
+            "https://github.com/DorkSquadRR/DorkNet and paste this code:\n\n" +
+            JoinCodeText.Text;
+        try { Clipboard.SetText(msg); }
+        catch (Exception ex) { ShowError("Copy failed: " + ex.Message); }
+    }
+
+    private void OnEmailJoinCode(object sender, RoutedEventArgs e)
+    {
+        var name = string.IsNullOrWhiteSpace(_state.ServerName)
+            ? "my DorkNet server"
+            : _state.ServerName;
+        // mailto: body is URL-encoded; Uri.EscapeDataString handles
+        // the newlines + code text without trashing slashes or =.
+        var subject = Uri.EscapeDataString($"Join {name} on DorkNet");
+        var body = Uri.EscapeDataString(
+            $"Hey! Want to play on {name}?\n\n" +
+            "1. Download the DorkNet launcher: https://github.com/DorkSquadRR/DorkNet\n" +
+            "2. Open it and pick \"Join a friend\"\n" +
+            "3. Paste this code:\n\n" +
+            JoinCodeText.Text);
+        try { Process.Start(new ProcessStartInfo($"mailto:?subject={subject}&body={body}")
+            { UseShellExecute = true }); }
+        catch (Exception ex) { ShowError("Email failed: " + ex.Message); }
     }
 
     // ── Join flow ───────────────────────────────────────────────────────

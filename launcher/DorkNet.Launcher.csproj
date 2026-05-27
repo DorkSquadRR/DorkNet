@@ -20,4 +20,11 @@
        The Backend/* classes (release downloader, server process, etc.) are
        UI-framework-agnostic and stay unchanged from the PhotinoNET draft. -->
 
+  <ItemGroup>
+    <!-- QR rendering for the share panel — generates the code as raw
+         module bytes, MainWindow draws it onto a WPF Image. No System.Drawing
+         dependency that way, so it stays portable. -->
+    <PackageReference Include="QRCoder" Version="1.6.0" />
+  </ItemGroup>
+
 </Project>

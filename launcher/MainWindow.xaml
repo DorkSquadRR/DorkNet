@@ -235,28 +235,63 @@
                             </StackPanel>
                         </Border>
 
-                        <!-- Join code -->
+                        <!-- Join code panel — appears once the host is up.
+                             QR encodes the same code text; friends can
+                             scan with a phone to grab it without typing. -->
                         <Border x:Name="JoinCodePanel" Visibility="Collapsed"
                                 Style="{StaticResource Panel}"
                                 Background="{StaticResource CardBgHost}">
                             <StackPanel>
                                 <TextBlock Style="{StaticResource SectionTitle}"
                                            Text="🎉 Share this with friends" />
-                                <DockPanel>
-                                    <Button DockPanel.Dock="Right" Style="{StaticResource PrimaryBtn}"
-                                            Content="Copy" Click="OnCopyJoinCode" Margin="10,0,0,0" />
-                                    <Border Background="{StaticResource BgDeeper}"
-                                            BorderBrush="{StaticResource Border}" BorderThickness="1"
-                                            CornerRadius="10" Padding="12,10">
-                                        <TextBox x:Name="JoinCodeText" IsReadOnly="True"
-                                                 FontFamily="Cascadia Mono, Consolas" FontSize="12"
-                                                 Background="Transparent" BorderThickness="0"
-                                                 TextWrapping="Wrap" />
+
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <Border Grid.Column="0" Background="White"
+                                            CornerRadius="10" Padding="8"
+                                            VerticalAlignment="Top"
+                                            Margin="0,0,16,0">
+                                        <Image x:Name="JoinCodeQrImage"
+                                               Width="180" Height="180"
+                                               RenderOptions.BitmapScalingMode="NearestNeighbor"
+                                               SnapsToDevicePixels="True"
+                                               UseLayoutRounding="True" />
                                     </Border>
-                                </DockPanel>
-                                <TextBlock Foreground="{StaticResource InkFaint}" FontSize="11"
-                                           Text="Paste this in their DorkNet launcher's Join screen."
-                                           Margin="0,8,0,0" />
+
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Style="{StaticResource FieldLabel}"
+                                                   Text="JOIN CODE" />
+                                        <Border Background="{StaticResource BgDeeper}"
+                                                BorderBrush="{StaticResource Border}" BorderThickness="1"
+                                                CornerRadius="10" Padding="12,10">
+                                            <TextBox x:Name="JoinCodeText" IsReadOnly="True"
+                                                     FontFamily="Cascadia Mono, Consolas" FontSize="12"
+                                                     Background="Transparent" BorderThickness="0"
+                                                     TextWrapping="Wrap" />
+                                        </Border>
+
+                                        <WrapPanel Margin="0,12,0,0">
+                                            <Button Style="{StaticResource PrimaryBtn}"
+                                                    Content="Copy code" Click="OnCopyJoinCode" />
+                                            <Button Style="{StaticResource Btn}"
+                                                    Content="Copy as message"
+                                                    Click="OnCopyJoinCodeMessage"
+                                                    Margin="10,0,0,0" />
+                                            <Button Style="{StaticResource Btn}"
+                                                    Content="Email to friend"
+                                                    Click="OnEmailJoinCode"
+                                                    Margin="10,0,0,0" />
+                                        </WrapPanel>
+
+                                        <TextBlock Foreground="{StaticResource InkFaint}" FontSize="11"
+                                                   TextWrapping="Wrap" Margin="0,12,0,0"
+                                                   Text="Your friend opens DorkNet, picks &quot;Join a friend&quot;, and pastes the code. The QR encodes the same text — handy for getting it onto a phone for forwarding." />
+                                    </StackPanel>
+                                </Grid>
                             </StackPanel>
                         </Border>
                     </StackPanel>
