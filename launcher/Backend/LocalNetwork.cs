@@ -6,8 +6,8 @@ namespace DorkNet.Launcher.Backend;
 
 /// <summary>Finds the machine's preferred LAN IPv4 address for
 /// "local network" hosting mode. Skip Cloudflare entirely, hand
-/// out the LAN IP in the join code, and players on the same network
-/// connect direct.
+/// out an sslip.io hostname derived from the LAN IP in the join code,
+/// and players on the same network connect direct.
 ///
 /// <para>Selection priority: an "Up" non-loopback network interface
 /// with a private (RFC1918) IPv4 address. Falls back to 127.0.0.1
@@ -16,6 +16,8 @@ namespace DorkNet.Launcher.Backend;
 /// Cloudflare mode.</para></summary>
 public static class LocalNetwork
 {
+    private const string SslipDomain = "sslip.io";
+
     public static string GetLanIp()
     {
         try
@@ -48,6 +50,28 @@ public static class LocalNetwork
         return "127.0.0.1";
     }
 
+    /// <summary>Turns a LAN IPv4 address into an sslip.io apex host.
+    /// For example, <c>192.168.1.25</c> becomes
+    /// <c>192-168-1-25.sslip.io</c>. Keeping the IP in one DNS label
+    /// makes derived hosts like <c>api.192-168-1-25.sslip.io</c> and
+    /// <c>cdn.192-168-1-25.sslip.io</c> resolve cleanly too.</summary>
+    public static string ToSslipHost(string lanIp)
+    {
+        if (IPAddress.TryParse(lanIp, out var parsed) &&
+            parsed.AddressFamily == AddressFamily.InterNetwork)
+        {
+            return $"{parsed.ToString().Replace('.', '-')}.{SslipDomain}";
+        }
+
+        return lanIp;
+    }
+
+    public static LocalNetworkAddress GetLanAddress()
+    {
+        var ip = GetLanIp();
+        return new LocalNetworkAddress(ip, ToSslipHost(ip));
+    }
+
     private static bool IsPrivate(IPAddress ip)
     {
         var b = ip.GetAddressBytes();
@@ -61,3 +85,5 @@ public static class LocalNetwork
         };
     }
 }
+
+public sealed record LocalNetworkAddress(string Ip, string Host);

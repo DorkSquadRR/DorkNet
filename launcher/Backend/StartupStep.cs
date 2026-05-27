@@ -72,10 +72,15 @@ public enum StepState
 /// obvious what stages a user will see.</summary>
 public static class StartupFlow
 {
-    public static ObservableCollection<StartupStep> NewHostFlow(bool isLocalNetwork) => new()
+    public static ObservableCollection<StartupStep> NewHostFlow(HostingMode mode) => new()
     {
         new StartupStep("Download server binary"),
-        new StartupStep(isLocalNetwork ? "Find your local network address" : "Set up Cloudflare tunnel"),
+        new StartupStep(mode switch
+        {
+            HostingMode.LocalNetwork => "Set up local sslip.io address",
+            HostingMode.RemoteWildcard => "Set up Tunnelto tunnel",
+            _ => "Set up Tunnelto tunnel",
+        }),
         new StartupStep("Start the server"),
         new StartupStep("Download client patcher"),
         new StartupStep("Unlock Rec Room from Steam (if needed)"),

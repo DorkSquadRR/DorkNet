@@ -45,6 +45,11 @@ public sealed class ClientPatcher
     // Mod.cs hardcodes when reading its config.
     private const string DefaultPluginDest = "Mods";
     private const string DefaultConfigDest = "MelonLoader/UserData/dorknet-clientmod.json";
+    private static readonly string[] BuiltInOldPluginPaths =
+    [
+        "BepInEx/plugins/DorkNet.ClientPatch.dll",
+        "MelonLoader/Mods/DorkNet.ClientMod.dll",
+    ];
 
     public Task<PatchResult> ApplyAsync(
         string patcherDir,
@@ -107,7 +112,9 @@ public sealed class ClientPatcher
             }
 
             // 2. Remove stale plugin paths (e.g. a previous BepInEx-era DLL).
-            foreach (var old in manifest.OldPluginPaths ?? Array.Empty<string>())
+            foreach (var old in BuiltInOldPluginPaths
+                         .Concat(manifest.OldPluginPaths ?? Array.Empty<string>())
+                         .Distinct(StringComparer.OrdinalIgnoreCase))
             {
                 var stale = Path.Combine(recRoomRoot, old.Replace('/', Path.DirectorySeparatorChar));
                 if (File.Exists(stale))
@@ -123,8 +130,9 @@ public sealed class ClientPatcher
             var dllSrc = Path.Combine(patcherDir, manifest.PluginDll);
             if (!File.Exists(dllSrc))
                 return PatchResult.Failure($"plugin DLL listed in manifest but missing on disk: {dllSrc}");
+            var pluginDestRel = NormalizePluginDest(manifest.PluginDest, log);
             var pluginDestDir = Path.Combine(recRoomRoot,
-                (manifest.PluginDest ?? DefaultPluginDest).Replace('/', Path.DirectorySeparatorChar));
+                pluginDestRel.Replace('/', Path.DirectorySeparatorChar));
             Directory.CreateDirectory(pluginDestDir);
             var dllDest = Path.Combine(pluginDestDir, Path.GetFileName(manifest.PluginDll));
             File.Copy(dllSrc, dllDest, overwrite: true);
@@ -214,6 +222,8 @@ public sealed class ClientPatcher
                 log.AppendLine($"[patch] wrote config: {Path.GetFileName(configDest)}");
             }
 
+            PatchNamespaceBootstrap(recRoomRoot, log);
+
             log.AppendLine("[patch] done.");
             return PatchResult.Success(log.ToString());
         }
@@ -223,6 +233,85 @@ public sealed class ClientPatcher
             log.AppendLine("[patch] FAILED: " + ex.Message);
             return PatchResult.Failure(log.ToString());
         }
+    }
+
+    private static string NormalizePluginDest(string? pluginDest, System.Text.StringBuilder log)
+    {
+        var dest = string.IsNullOrWhiteSpace(pluginDest) ? DefaultPluginDest : pluginDest;
+        if (string.Equals(dest.Replace('\\', '/'), "MelonLoader/Mods", StringComparison.OrdinalIgnoreCase))
+        {
+            log.AppendLine("[patch] manifest uses legacy MelonLoader/Mods destination; installing to top-level Mods instead");
+            return DefaultPluginDest;
+        }
+
+        return dest;
+    }
+
+    private static void PatchNamespaceBootstrap(string recRoomRoot, System.Text.StringBuilder log)
+    {
+        var metadata = Path.Combine(recRoomRoot,
+            "Recroom_Release_Data", "il2cpp_data", "Metadata", "global-metadata.dat");
+        if (!File.Exists(metadata))
+        {
+            log.AppendLine("[patch] namespace bootstrap skipped: global-metadata.dat not found");
+            return;
+        }
+
+        var original = "https://ns.rec.net/?v=2"u8.ToArray();
+        var patched = "http://127.0.0.1:0080/#"u8.ToArray();
+        var legacyPatched = "http://127.0.0.1:5005/#"u8.ToArray();
+        if (original.Length != patched.Length)
+            throw new InvalidOperationException("namespace bootstrap patch length mismatch");
+        if (legacyPatched.Length != patched.Length)
+            throw new InvalidOperationException("legacy namespace bootstrap patch length mismatch");
+
+        var bytes = File.ReadAllBytes(metadata);
+        var patchOffset = IndexOf(bytes, patched);
+        if (patchOffset >= 0)
+        {
+            log.AppendLine("[patch] namespace bootstrap already points at local server");
+            return;
+        }
+
+        var offset = IndexOf(bytes, original);
+        var wasLegacyPatch = false;
+        if (offset < 0)
+        {
+            offset = IndexOf(bytes, legacyPatched);
+            wasLegacyPatch = offset >= 0;
+            if (offset < 0)
+            {
+                log.AppendLine("[patch] namespace bootstrap skipped: original ns.rec.net literal not found");
+                return;
+            }
+        }
+
+        var backup = metadata + ".dorknet-original";
+        if (!File.Exists(backup) && !wasLegacyPatch)
+            File.Copy(metadata, backup);
+
+        Buffer.BlockCopy(patched, 0, bytes, offset, patched.Length);
+        File.WriteAllBytes(metadata, bytes);
+        log.AppendLine(wasLegacyPatch
+            ? "[patch] namespace bootstrap: http://127.0.0.1:5005/# -> http://127.0.0.1:0080/#"
+            : "[patch] namespace bootstrap: https://ns.rec.net/?v=2 -> http://127.0.0.1:0080/#");
+    }
+
+    private static int IndexOf(byte[] haystack, byte[] needle)
+    {
+        if (needle.Length == 0 || haystack.Length < needle.Length) return -1;
+        for (var i = 0; i <= haystack.Length - needle.Length; i++)
+        {
+            var matched = true;
+            for (var j = 0; j < needle.Length; j++)
+            {
+                if (haystack[i + j] == needle[j]) continue;
+                matched = false;
+                break;
+            }
+            if (matched) return i;
+        }
+        return -1;
     }
 
     /// <summary>Extracts a zip on top of an existing directory, replacing

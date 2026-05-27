@@ -10,8 +10,10 @@ public static class RecRoomLauncher
 {
     /// <summary>The picked install path is the <c>Recroom_Release_Data</c>
     /// folder; the executable lives at <c>&lt;parent&gt;\Recroom_Release.exe</c>.
-    /// Returns true if Process.Start succeeded.</summary>
-    public static bool TryLaunch(string recRoomDataPath, out string error)
+    /// Returns true if Process.Start succeeded. <paramref name="screenMode"/>
+    /// passes Rec Room's <c>+forcemode:screen</c> arg so the game opens
+    /// in 2D desktop mode instead of trying to bind a headset.</summary>
+    public static bool TryLaunch(string recRoomDataPath, bool screenMode, out string error)
     {
         error = "";
         if (string.IsNullOrEmpty(recRoomDataPath))
@@ -39,6 +41,7 @@ public static class RecRoomLauncher
                 FileName = exe,
                 WorkingDirectory = parent,
                 UseShellExecute = true,
+                Arguments = screenMode ? "+forcemode:screen" : "",
             });
             return true;
         }

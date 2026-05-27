@@ -40,12 +40,19 @@ public sealed class AppState
     public string PhotonRegion { get; set; } = "us";
 
     /// <summary>How the host exposes the server: <c>Internet</c> uses
-    /// a Cloudflare quick-tunnel (works for friends anywhere with the
-    /// join code); <c>LocalNetwork</c> binds the LAN IP and skips the
-    /// tunnel entirely (no internet dependency, joiners must be on
-    /// the same network).</summary>
+    /// Tunnelto (works for friends anywhere with the join code);
+    /// <c>LocalNetwork</c> binds on the LAN and uses an sslip.io
+    /// hostname in the join code (joiners must be on the same
+    /// network).</summary>
     [JsonPropertyName("hostingMode")]
     public HostingMode HostingMode { get; set; } = HostingMode.Internet;
+
+    /// <summary>Provider-owned wildcard tunnel base for remote hosting
+    /// without Cloudflare, e.g. <c>dorknet.tunnelto.me</c>. The server
+    /// publishes service URLs under <c>api.{base}</c>,
+    /// <c>auth.{base}</c>, etc.</summary>
+    [JsonPropertyName("remoteWildcardApex")]
+    public string RemoteWildcardApex { get; set; } = string.Empty;
 
     /// <summary>Host's server name shown in the join code. Empty until
     /// the user fills it in on first-run host setup.</summary>
@@ -64,6 +71,12 @@ public sealed class AppState
     /// this if the user wants to walk through again.</summary>
     [JsonPropertyName("setupComplete")]
     public bool SetupComplete { get; set; }
+
+    /// <summary>When true, Launch Rec Room passes <c>+forcemode:screen</c>
+    /// so the game opens in 2D desktop mode instead of looking for a
+    /// VR headset. Toggled from a checkbox next to the Launch button.</summary>
+    [JsonPropertyName("launchInScreenMode")]
+    public bool LaunchInScreenMode { get; set; }
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -125,11 +138,15 @@ public enum AppMode
 
 public enum HostingMode
 {
-    /// <summary>Default — Cloudflare quick-tunnel, public over the
-    /// internet, works for joiners anywhere.</summary>
+    /// <summary>Default — Tunnelto tunnel, public over the internet,
+    /// works for joiners anywhere.</summary>
     Internet,
-    /// <summary>LAN only — bind the machine's local IP, skip the
-    /// tunnel, no internet dependency. Joiners must be on the same
-    /// network.</summary>
+    /// <summary>LAN only — bind on all local interfaces, skip the
+    /// tunnel, and publish an sslip.io hostname for the machine's LAN
+    /// IP. Joiners must be on the same network.</summary>
     LocalNetwork,
+    /// <summary>Remote tunnel supplied by another provider. The user
+    /// provides a wildcard-capable provider hostname, and the launcher
+    /// uses service subdomains under that base.</summary>
+    RemoteWildcard,
 }

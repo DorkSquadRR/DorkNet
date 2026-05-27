@@ -48,8 +48,12 @@ public static class LocalOverrides
     public static string? GetLocalReleasesRoot()
     {
         var path = Environment.GetEnvironmentVariable(ReleasesEnvVar);
-        if (string.IsNullOrEmpty(path)) return null;
-        return Directory.Exists(path) ? path : null;
+        if (!string.IsNullOrEmpty(path)) return Directory.Exists(path) ? path : null;
+
+        var sideBySide = Path.Combine(AppContext.BaseDirectory, "local-releases");
+        if (Directory.Exists(sideBySide)) return sideBySide;
+
+        return null;
     }
 
     /// <summary>Returns the local server-dir for <paramref name="versionKey"/>
@@ -82,6 +86,9 @@ public static class LocalOverrides
         var parts = new List<string>();
         Describe(ManifestEnvVar, isDir: false, parts);
         Describe(ReleasesEnvVar, isDir: true, parts);
+        var sideBySide = Path.Combine(AppContext.BaseDirectory, "local-releases");
+        if (Directory.Exists(sideBySide))
+            parts.Add($"{ReleasesEnvVar} -> {sideBySide}  [side-by-side fallback]");
         return string.Join("\n", parts);
     }
 

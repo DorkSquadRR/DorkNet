@@ -17,7 +17,7 @@ public partial class MainWindow : Window
     private readonly ReleaseDownloader _releases = new();
     private readonly ClientPatcher _patcher = new();
     private readonly ServerProcess _server = new();
-    private Tunnel? _tunnel;
+    private IAsyncDisposable? _tunnel;
     private VersionsManifest? _manifest;
     private string? _hostApex;
     private ObservableCollection<StartupStep>? _hostSteps;
@@ -128,22 +128,27 @@ public partial class MainWindow : Window
         SelectComboBoxByTag(PhotonRegionSelect, _state.PhotonRegion);
         ServerNameInput.Text = _state.ServerName;
         SetupServerName.Text = _state.ServerName;
+        EnsureRemoteWildcardApex();
+        RemoteWildcardInput.Text = _state.RemoteWildcardApex;
+        SetupRemoteWildcardInput.Text = _state.RemoteWildcardApex;
+        if (HostScreenModeChk is not null)
+            HostScreenModeChk.IsChecked = _state.LaunchInScreenMode;
+        if (JoinScreenModeChk is not null)
+            JoinScreenModeChk.IsChecked = _state.LaunchInScreenMode;
 
         // Hosting mode radios — reflect persisted choice on both the
         // main HostView and the setup wizard's matching step.
-        if (HostModeLocal is not null && HostModeInternet is not null)
+        if (HostModeLocal is not null && HostModeInternet is not null && HostModeRemote is not null)
         {
-            if (_state.HostingMode == HostingMode.LocalNetwork)
-                HostModeLocal.IsChecked = true;
-            else
-                HostModeInternet.IsChecked = true;
+            HostModeInternet.IsChecked = _state.HostingMode == HostingMode.Internet;
+            HostModeLocal.IsChecked = _state.HostingMode == HostingMode.LocalNetwork;
+            HostModeRemote.IsChecked = _state.HostingMode == HostingMode.RemoteWildcard;
         }
-        if (SetupHostLocal is not null && SetupHostInternet is not null)
+        if (SetupHostLocal is not null && SetupHostInternet is not null && SetupHostRemote is not null)
         {
-            if (_state.HostingMode == HostingMode.LocalNetwork)
-                SetupHostLocal.IsChecked = true;
-            else
-                SetupHostInternet.IsChecked = true;
+            SetupHostInternet.IsChecked = _state.HostingMode == HostingMode.Internet;
+            SetupHostLocal.IsChecked = _state.HostingMode == HostingMode.LocalNetwork;
+            SetupHostRemote.IsChecked = _state.HostingMode == HostingMode.RemoteWildcard;
         }
 
         // Setup step 2 banner — surface the auto-detected install so the
@@ -358,16 +363,19 @@ public partial class MainWindow : Window
 
     private void OnSetupHostingModeChanged(object sender, RoutedEventArgs e)
     {
-        if (SetupHostLocal is null || SetupHostInternet is null) return;
-        _state.HostingMode = SetupHostLocal.IsChecked == true
-            ? HostingMode.LocalNetwork
-            : HostingMode.Internet;
+        if (SetupHostLocal is null || SetupHostInternet is null || SetupHostRemote is null) return;
+        _state.HostingMode = SetupHostRemote.IsChecked == true
+            ? HostingMode.RemoteWildcard
+            : SetupHostLocal.IsChecked == true
+                ? HostingMode.LocalNetwork
+                : HostingMode.Internet;
         _state.Save();
         // Mirror to main HostView radios.
-        if (HostModeLocal is not null && HostModeInternet is not null)
+        if (HostModeLocal is not null && HostModeInternet is not null && HostModeRemote is not null)
         {
-            if (_state.HostingMode == HostingMode.LocalNetwork) HostModeLocal.IsChecked = true;
-            else HostModeInternet.IsChecked = true;
+            HostModeInternet.IsChecked = _state.HostingMode == HostingMode.Internet;
+            HostModeLocal.IsChecked = _state.HostingMode == HostingMode.LocalNetwork;
+            HostModeRemote.IsChecked = _state.HostingMode == HostingMode.RemoteWildcard;
         }
     }
 
@@ -441,6 +449,14 @@ public partial class MainWindow : Window
         _state.Save();
     }
 
+    private void OnRemoteWildcardChanged(object sender, RoutedEventArgs e)
+    {
+        _state.RemoteWildcardApex = TunneltoTunnel.NormalizeHost((sender as TextBox)?.Text ?? "");
+        RemoteWildcardInput.Text = _state.RemoteWildcardApex;
+        SetupRemoteWildcardInput.Text = _state.RemoteWildcardApex;
+        _state.Save();
+    }
+
     private void OnPhotonChanged(object sender, RoutedEventArgs e)
     {
         _state.PhotonAppId = PhotonAppIdInput.Text.Trim();
@@ -469,12 +485,14 @@ public partial class MainWindow : Window
     private void OnHostingModeChanged(object sender, RoutedEventArgs e)
     {
         // RadioButton.Checked fires twice on selection-change (once for
-        // the un-checked, once for the new-checked). HostModeLocal/Internet
+        // the un-checked, once for the new-checked). HostMode* controls
         // could be null during InitializeComponent so guard against that.
-        if (HostModeLocal is null || HostModeInternet is null) return;
-        _state.HostingMode = HostModeLocal.IsChecked == true
-            ? HostingMode.LocalNetwork
-            : HostingMode.Internet;
+        if (HostModeLocal is null || HostModeInternet is null || HostModeRemote is null) return;
+        _state.HostingMode = HostModeRemote.IsChecked == true
+            ? HostingMode.RemoteWildcard
+            : HostModeLocal.IsChecked == true
+                ? HostingMode.LocalNetwork
+                : HostingMode.Internet;
         _state.Save();
     }
 
@@ -485,6 +503,16 @@ public partial class MainWindow : Window
         { ShowError("Pick your Rec Room install first."); return; }
         if (string.IsNullOrEmpty(_state.PhotonAppId))
         { ShowError("Photon AppId required (free at dashboard.photonengine.com)."); return; }
+        if (_state.HostingMode != HostingMode.LocalNetwork)
+        {
+            var typed = TunneltoTunnel.NormalizeHost(RemoteWildcardInput.Text);
+            _state.RemoteWildcardApex = string.IsNullOrWhiteSpace(typed)
+                ? TunneltoTunnel.GenerateBaseHost()
+                : typed;
+            RemoteWildcardInput.Text = _state.RemoteWildcardApex;
+            SetupRemoteWildcardInput.Text = _state.RemoteWildcardApex;
+            _state.Save();
+        }
 
         if (_manifest is null) await RefreshManifestAsync();
         if (VersionSelect.SelectedItem is not ComboBoxItem item || item.Tag is null)
@@ -501,7 +529,7 @@ public partial class MainWindow : Window
         // Build a fresh step list so progress is visible the moment the
         // user clicks. Steps advance via StartStep/CompleteStep helpers
         // below so flow stays readable.
-        _hostSteps = StartupFlow.NewHostFlow(_state.HostingMode == HostingMode.LocalNetwork);
+        _hostSteps = StartupFlow.NewHostFlow(_state.HostingMode);
         HostStepsList.ItemsSource = _hostSteps;
         HostStepsPanel.Visibility = Visibility.Visible;
         HostStatusText.Text = "";
@@ -518,24 +546,41 @@ public partial class MainWindow : Window
             activeStep = StartStep(_hostSteps, 1);
             if (_state.HostingMode == HostingMode.LocalNetwork)
             {
-                _hostApex = LocalNetwork.GetLanIp();
-                activeStep.Detail = $"Hosting on {_hostApex}";
+                var lan = LocalNetwork.GetLanAddress();
+                _hostApex = lan.Host;
+                activeStep.Detail = $"LAN address {lan.Ip} via {_hostApex}";
+            }
+            else if (_state.HostingMode == HostingMode.RemoteWildcard)
+            {
+                var tunnel = new TunneltoTunnel();
+                _tunnel = tunnel;
+                activeStep.Detail = $"Connecting Tunnelto for {_state.RemoteWildcardApex}";
+                var publicUrl = await tunnel.StartAsync(
+                    _state.RemoteWildcardApex,
+                    ServerProcess.DefaultLocalPort);
+                var publicHost = new Uri(publicUrl).Host;
+                _hostApex = TunneltoTunnel.NormalizeHost(_state.RemoteWildcardApex);
+                activeStep.Detail = $"Tunnel ready: {publicHost}; services under {_hostApex}";
             }
             else
             {
-                _tunnel = new Tunnel();
-                activeStep.Detail = "Connecting to Cloudflare (first run downloads cloudflared, ~17 MB)";
-                var publicUrl = await _tunnel.StartAsync(
-                    localPort: 5005,
-                    downloadProgress: new Progress<DownloadProgress>(p => UpdateStepProgress(activeStep!, p)));
-                _hostApex = new Uri(publicUrl).Host;
-                activeStep.Detail = $"Tunnel ready: {_hostApex}";
+                var tunnel = new TunneltoTunnel();
+                _tunnel = tunnel;
+                activeStep.Detail = $"Connecting Tunnelto for {_state.RemoteWildcardApex}";
+                var publicUrl = await tunnel.StartAsync(
+                    _state.RemoteWildcardApex,
+                    ServerProcess.DefaultLocalPort);
+                var publicHost = new Uri(publicUrl).Host;
+                _hostApex = TunneltoTunnel.NormalizeHost(_state.RemoteWildcardApex);
+                activeStep.Detail = $"Tunnel ready: {publicHost}; services under {_hostApex}";
                 activeStep.Progress = null;
             }
             CompleteStep(activeStep);
 
             activeStep = StartStep(_hostSteps, 2);
-            await _server.StartAsync(serverDir, _state, _hostApex);
+            await _server.StartAsync(
+                serverDir, _state, _hostApex,
+                hostingMode: _state.HostingMode);
             _state.SelectedVersion = version.VersionKey;
             _state.Save();
             CompleteStep(activeStep);
@@ -816,11 +861,29 @@ public partial class MainWindow : Window
         catch (Exception ex) { ShowError("Couldn't open help: " + ex.Message); }
     }
 
+    private void OnScreenModeChanged(object sender, RoutedEventArgs e)
+    {
+        var enabled = (sender as CheckBox)?.IsChecked == true;
+        _state.LaunchInScreenMode = enabled;
+        if (HostScreenModeChk is not null && !ReferenceEquals(sender, HostScreenModeChk))
+            HostScreenModeChk.IsChecked = enabled;
+        if (JoinScreenModeChk is not null && !ReferenceEquals(sender, JoinScreenModeChk))
+            JoinScreenModeChk.IsChecked = enabled;
+        _state.Save();
+    }
+
+    private void EnsureRemoteWildcardApex()
+    {
+        if (!string.IsNullOrWhiteSpace(_state.RemoteWildcardApex)) return;
+        _state.RemoteWildcardApex = TunneltoTunnel.GenerateBaseHost();
+        _state.Save();
+    }
+
     private void OnLaunchRecRoom(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrEmpty(_state.RecRoomPath))
         { ShowError("Pick your Rec Room install first."); return; }
-        if (!RecRoomLauncher.TryLaunch(_state.RecRoomPath, out var error))
+        if (!RecRoomLauncher.TryLaunch(_state.RecRoomPath, _state.LaunchInScreenMode, out var error))
             ShowError(error);
     }
 

@@ -5,6 +5,7 @@
 **/dist/
 **/.vite/
 **/build/
+local-releases/
 
 # IDE
 .vs/

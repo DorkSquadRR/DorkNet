@@ -61,7 +61,7 @@ public static class ErrorTranslator
 
     private static FriendlyError? TryMatch(Exception ex)
     {
-        // Network — GitHub releases, Cloudflare quick-tunnel API, etc.
+        // Network — GitHub releases, Tunnelto tunnel API, etc.
         if (ex is HttpRequestException http)
         {
             return new FriendlyError(
@@ -85,6 +85,23 @@ public static class ErrorTranslator
             return new FriendlyError(
                 "Network error.",
                 $"Couldn't open a connection ({sock.SocketErrorCode}). Check your firewall isn't blocking DorkNet, then retry.",
+                "Retry");
+        }
+
+        // Tunnelto specifics
+        if (ex.Message.Contains("tunnelto", StringComparison.OrdinalIgnoreCase))
+        {
+            if (ex is FileNotFoundException)
+            {
+                return new FriendlyError(
+                    "Tunnelto isn't installed.",
+                    TrimToSentence(ex.Message),
+                    "Retry");
+            }
+            return new FriendlyError(
+                "Tunnelto tunnel didn't start.",
+                TrimToSentence(ex.Message) +
+                " Check that Tunnelto is signed in and that the base host is available, then retry.",
                 "Retry");
         }
 
@@ -113,32 +130,14 @@ public static class ErrorTranslator
                 "Pick folder again");
         }
 
-        // cloudflared specifics
-        if (ex is InvalidOperationException inv &&
-            inv.Message.Contains("cloudflared", StringComparison.OrdinalIgnoreCase))
-        {
-            if (inv.Message.Contains("unexpectedly small", StringComparison.OrdinalIgnoreCase))
-            {
-                return new FriendlyError(
-                    "cloudflared download was interrupted.",
-                    "The launcher needs to download a small (~17 MB) Cloudflare helper on first run. Try again — if it keeps failing, switch to \"Same WiFi only\" mode under WHO CAN JOIN.",
-                    "Retry");
-            }
-            return new FriendlyError(
-                "Cloudflare tunnel didn't start.",
-                TrimToSentence(inv.Message) +
-                " Try again, or switch to \"Same WiFi only\" mode if you only need LAN players.",
-                "Retry");
-        }
-
         // Server port already in use
         if (ex.Message.Contains("address already in use", StringComparison.OrdinalIgnoreCase) ||
             ex.Message.Contains("Only one usage of each socket address",
                 StringComparison.OrdinalIgnoreCase))
         {
             return new FriendlyError(
-                "Port 5005 is already in use.",
-                "Another DorkNet server (or some other app) is already listening on port 5005. Close it and retry, or reboot.",
+                "Server port is already in use.",
+                "Another DorkNet server (or some other app) is already listening on the required port. Close it and retry, or reboot.",
                 "Retry");
         }
 

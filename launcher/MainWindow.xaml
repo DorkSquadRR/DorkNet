@@ -227,18 +227,27 @@
                             <TextBlock Style="{StaticResource FieldLabel}" Text="WHO CAN JOIN?" />
                             <StackPanel Margin="0,0,0,16">
                                 <RadioButton x:Name="SetupHostInternet" GroupName="SetupHostingMode"
-                                             Content="Friends anywhere (internet via Cloudflare)"
+                                             Content="Friends anywhere (Tunnelto)"
                                              IsChecked="True" Margin="0,0,0,6"
                                              Checked="OnSetupHostingModeChanged"
                                              Foreground="{StaticResource Ink}" />
+                                <RadioButton x:Name="SetupHostRemote" GroupName="SetupHostingMode"
+                                             Content="Friends anywhere (Tunnelto wildcard base)"
+                                             Margin="0,0,0,6"
+                                             Checked="OnSetupHostingModeChanged"
+                                             Foreground="{StaticResource Ink}" />
                                 <RadioButton x:Name="SetupHostLocal" GroupName="SetupHostingMode"
-                                             Content="Same WiFi only (no internet needed)"
+                                             Content="Same WiFi only (sslip.io)"
                                              Checked="OnSetupHostingModeChanged"
                                              Foreground="{StaticResource Ink}" />
                             </StackPanel>
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="TUNNELTO BASE HOST" />
+                            <TextBox x:Name="SetupRemoteWildcardInput" Margin="0,0,0,12"
+                                     LostFocus="OnRemoteWildcardChanged"
+                                     ToolTip="Auto-generated. Service URLs become api.base, auth.base, etc." />
                             <TextBlock Foreground="{StaticResource InkFaint}" FontSize="11"
                                        TextWrapping="Wrap"
-                                       Text="Cloudflare mode works for friends anywhere. Same-WiFi mode is fastest but only works for people on your local network." />
+                                       Text="Tunnelto mode works for friends anywhere. For subdomain support, use a base host whose provider routes wildcard subdomains to the same tunnel." />
                         </StackPanel>
 
                         <!-- Setup step 4 (HOST only): Photon AppIds -->
@@ -352,16 +361,25 @@
                                 <ComboBox x:Name="VersionSelect" Margin="0,0,0,16" />
 
                                 <TextBlock Style="{StaticResource FieldLabel}" Text="WHO CAN JOIN?" />
-                                <StackPanel Orientation="Horizontal">
+                                <StackPanel>
                                     <RadioButton x:Name="HostModeInternet" GroupName="HostingMode"
-                                                 Content="Friends anywhere (internet via Cloudflare)"
+                                                 Content="Friends anywhere (Tunnelto)"
+                                                 Margin="0,0,0,6"
                                                  IsChecked="True" Checked="OnHostingModeChanged"
                                                  Foreground="{StaticResource Ink}" />
+                                    <RadioButton x:Name="HostModeRemote" GroupName="HostingMode"
+                                                 Content="Tunnelto wildcard base"
+                                                 Margin="0,0,0,6" Checked="OnHostingModeChanged"
+                                                 Foreground="{StaticResource Ink}" />
                                     <RadioButton x:Name="HostModeLocal" GroupName="HostingMode"
-                                                 Content="Same WiFi only (no internet needed)"
-                                                 Margin="22,0,0,0" Checked="OnHostingModeChanged"
+                                                 Content="Same WiFi only (sslip.io)"
+                                                 Checked="OnHostingModeChanged"
                                                  Foreground="{StaticResource Ink}" />
                                 </StackPanel>
+                                <TextBlock Style="{StaticResource FieldLabel}" Text="TUNNELTO BASE HOST" Margin="0,14,0,6" />
+                                <TextBox x:Name="RemoteWildcardInput" Margin="0,0,0,0"
+                                         LostFocus="OnRemoteWildcardChanged"
+                                         ToolTip="Auto-generated. Service URLs become api.base, auth.base, etc." />
                             </StackPanel>
                         </Border>
 
@@ -417,6 +435,11 @@
                             <Button x:Name="HostLaunchBtn" Style="{StaticResource TealBtn}"
                                     Content="Launch Rec Room" Click="OnLaunchRecRoom"
                                     Margin="10,0,0,0" Visibility="Collapsed" />
+                            <CheckBox x:Name="HostScreenModeChk" Content="Screen mode"
+                                      VerticalAlignment="Center" Margin="14,0,0,0"
+                                      Foreground="{StaticResource Ink}"
+                                      ToolTip="Launch in 2D desktop mode (passes +forcemode:screen) instead of VR."
+                                      Checked="OnScreenModeChanged" Unchecked="OnScreenModeChanged" />
                         </StackPanel>
 
                         <!-- Progress steps — populated when the user hits
@@ -586,6 +609,11 @@
                             <Button x:Name="JoinLaunchBtn" Style="{StaticResource TealBtn}"
                                     Content="Launch Rec Room" Click="OnLaunchRecRoom"
                                     Margin="10,0,0,0" Visibility="Collapsed" />
+                            <CheckBox x:Name="JoinScreenModeChk" Content="Screen mode"
+                                      VerticalAlignment="Center" Margin="14,0,0,0"
+                                      Foreground="{StaticResource Ink}"
+                                      ToolTip="Launch in 2D desktop mode (passes +forcemode:screen) instead of VR."
+                                      Checked="OnScreenModeChanged" Unchecked="OnScreenModeChanged" />
                         </StackPanel>
 
                         <Border x:Name="JoinStepsPanel" Style="{StaticResource Panel}"

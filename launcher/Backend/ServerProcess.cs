@@ -1,6 +1,7 @@
 using System.IO;
 using System.Diagnostics;
 using System.Text;
+using Microsoft.Data.Sqlite;
 
 namespace DorkNet.Launcher.Backend;
 
@@ -9,6 +10,9 @@ namespace DorkNet.Launcher.Backend;
 /// previous one is killed before starting a new one.</summary>
 public sealed class ServerProcess : IAsyncDisposable
 {
+    public const int DefaultLocalPort = 5005;
+    public const int LanPort = 80;
+
     private Process? _process;
     private readonly StringBuilder _stderrBuffer = new();
     public string? StdoutLogPath { get; private set; }
@@ -21,12 +25,14 @@ public sealed class ServerProcess : IAsyncDisposable
         string serverDir,
         AppState state,
         string apex,
+        HostingMode hostingMode,
         CancellationToken ct = default)
     {
         if (IsRunning)
             throw new InvalidOperationException("A server is already running; stop it first.");
 
         var exe = FindServerExecutable(serverDir);
+        ApplySqliteCompatibilityPatches(serverDir);
         StdoutLogPath = Path.Combine(AppPaths.LogsRoot, $"server-{DateTime.UtcNow:yyyyMMdd-HHmmss}.log");
 
         var psi = new ProcessStartInfo
@@ -39,7 +45,9 @@ public sealed class ServerProcess : IAsyncDisposable
             RedirectStandardError = true,
         };
         psi.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
-        psi.Environment["ASPNETCORE_URLS"] = "http://127.0.0.1:5005";
+        psi.Environment["ASPNETCORE_URLS"] = hostingMode == HostingMode.LocalNetwork
+            ? $"http://0.0.0.0:{LanPort}"
+            : $"http://127.0.0.1:{DefaultLocalPort}";
         psi.Environment["Database__Provider"] = "sqlite";
         psi.Environment["Jwt__Secret"] = EnsureJwtSecret();
         psi.Environment["Photon__AppId"] = state.PhotonAppId;
@@ -47,6 +55,13 @@ public sealed class ServerProcess : IAsyncDisposable
             string.IsNullOrEmpty(state.PhotonVoiceAppId) ? state.PhotonAppId : state.PhotonVoiceAppId;
         psi.Environment["Photon__CloudRegion"] = state.PhotonRegion;
         psi.Environment["Domain__Apex"] = apex;
+        psi.Environment["Domain__Scheme"] = hostingMode == HostingMode.LocalNetwork ? "http" : "https";
+        psi.Environment["Domain__Port"] = "";
+
+        AppendLog($"[launcher] serverDir={serverDir}");
+        AppendLog($"[launcher] exe={exe}");
+        AppendLog($"[launcher] urls={psi.Environment["ASPNETCORE_URLS"]}");
+        AppendLog($"[launcher] domain apex={apex}, scheme={psi.Environment["Domain__Scheme"]}, port={psi.Environment["Domain__Port"]}");
 
         _process = new Process { StartInfo = psi, EnableRaisingEvents = true };
         _process.OutputDataReceived += (_, e) => AppendLog(e.Data);
@@ -98,6 +113,40 @@ public sealed class ServerProcess : IAsyncDisposable
             throw new FileNotFoundException(
                 $"No .exe found in {serverDir}. The release artifact may be corrupt.");
         return any;
+    }
+
+    private static void ApplySqliteCompatibilityPatches(string serverDir)
+    {
+        var dbPath = Path.Combine(serverDir, "data", "dorknet.db");
+        if (!File.Exists(dbPath)) return;
+
+        using var conn = new SqliteConnection($"Data Source={dbPath}");
+        conn.Open();
+        AddSqliteColumnIfMissing(conn, "Rooms", "HiddenFromBrowse",
+            @"""HiddenFromBrowse"" INTEGER NOT NULL DEFAULT 0");
+    }
+
+    private static void AddSqliteColumnIfMissing(
+        SqliteConnection conn,
+        string table,
+        string column,
+        string definition)
+    {
+        var tableSql = table.Replace("\"", "\"\"");
+        using (var check = conn.CreateCommand())
+        {
+            check.CommandText = $"PRAGMA table_info(\"{tableSql}\");";
+            using var reader = check.ExecuteReader();
+            while (reader.Read())
+            {
+                if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
+                    return;
+            }
+        }
+
+        using var alter = conn.CreateCommand();
+        alter.CommandText = $"ALTER TABLE \"{tableSql}\" ADD COLUMN {definition};";
+        alter.ExecuteNonQuery();
     }
 
     /// <summary>JWT signing key — random per-machine, persisted under

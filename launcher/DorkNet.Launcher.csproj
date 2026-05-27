@@ -25,6 +25,7 @@
          module bytes, MainWindow draws it onto a WPF Image. No System.Drawing
          dependency that way, so it stays portable. -->
     <PackageReference Include="QRCoder" Version="1.6.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.4" />
   </ItemGroup>
 
   <!-- Dev convenience: copy the repo-root versions.json next to dorknet.exe
@@ -36,6 +37,10 @@
   <ItemGroup>
     <None Include="..\versions.json" Condition="Exists('..\versions.json')">
       <Link>versions.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\local-releases\**\*" Condition="Exists('..\local-releases')">
+      <Link>local-releases\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
