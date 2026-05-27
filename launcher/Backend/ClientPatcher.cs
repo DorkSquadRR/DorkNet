@@ -21,7 +21,7 @@ namespace DorkNet.Launcher.Backend;
 ///   "$schema_version": 1,
 ///   "loader_archive": "MelonLoader.zip",                       // optional — unzipped into &lt;recroom-root&gt;\
 ///   "plugin_dll": "DorkNet.ClientMod.dll",                     // required — copied to plugin_dest
-///   "plugin_dest": "MelonLoader/Mods",                         // optional — defaults to "MelonLoader/Mods"
+///   "plugin_dest": "Mods",                                     // optional — defaults to "Mods" (top-level, MelonLoader scans it)
 ///   "config_template": "dorknet-clientmod.json.template",      // optional — rendered with {HOST}/{PHOTON_APPID}/{PHOTON_VOICE_APPID}
 ///   "config_dest": "MelonLoader/UserData/dorknet-clientmod.json",  // optional — defaults shown
 ///   "old_plugin_paths": ["BepInEx/plugins/DorkNet.ClientPatch.dll"], // optional — deleted before install
@@ -39,7 +39,11 @@ namespace DorkNet.Launcher.Backend;
 /// passes through unchanged.</para></summary>
 public sealed class ClientPatcher
 {
-    private const string DefaultPluginDest = "MelonLoader/Mods";
+    // MelonLoader 0.6.x scans <install root>\Mods\ for plugin DLLs —
+    // NOT <install root>\MelonLoader\Mods\. UserData is correctly under
+    // <install root>\MelonLoader\UserData\ though, since that's what
+    // Mod.cs hardcodes when reading its config.
+    private const string DefaultPluginDest = "Mods";
     private const string DefaultConfigDest = "MelonLoader/UserData/dorknet-clientmod.json";
 
     public Task<PatchResult> ApplyAsync(
