@@ -1,0 +1,221 @@
+# Tagged release pipeline for the host-side tooling on `main` —
+# the Windows GUI launcher (installer + portable) and the
+# cross-platform dorknet-server CLI. Triggers on a SemVer tag like
+# v0.2.0 (or v0.2.0-rc1 for pre-releases).
+#
+# Produces, on each release:
+#   * dorknet-setup-<version>.exe       Inno Setup installer
+#   * dorknet.exe                       Portable single-file Windows build
+#   * dorknet-server-win-x64.zip        Cross-platform server CLI, per RID
+#   * dorknet-server-linux-x64.tar.gz
+#   * dorknet-server-linux-arm64.tar.gz
+#   * dorknet-server-osx-x64.tar.gz
+#   * dorknet-server-osx-arm64.tar.gz
+#   * SHA256SUMS                        Checksums of all of the above
+#
+# All of these get attached to the GitHub release the tag creates.
+
+name: release-launcher
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+      - "v[0-9]+.[0-9]+.[0-9]+-*"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release (e.g. 0.2.0). Leave blank to use the workflow's git tag."
+        required: false
+
+permissions:
+  contents: write   # required to create / update GitHub releases
+
+env:
+  DOTNET_VERSION: "9.0.x"
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+
+jobs:
+  # ── Resolve the version once and pass it to all downstream jobs ─────
+  resolve-version:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - id: v
+        shell: bash
+        run: |
+          if [[ -n "${{ inputs.version }}" ]]; then
+            v="${{ inputs.version }}"
+          else
+            v="${GITHUB_REF_NAME#v}"
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          echo "Releasing version: $v"
+
+  # ── Windows: GUI launcher (installer + portable) ─────────────────────
+  build-launcher-windows:
+    needs: resolve-version
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Install Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer + portable exe
+        shell: pwsh
+        run: |
+          ./installer/build-installer.ps1 -Version "${{ needs.resolve-version.outputs.version }}"
+
+      - name: Stage Windows artifacts
+        shell: pwsh
+        run: |
+          $stage = "artifacts"
+          New-Item -ItemType Directory -Force -Path $stage | Out-Null
+          # Installer
+          Copy-Item "installer/out/dorknet-setup-${{ needs.resolve-version.outputs.version }}.exe" $stage
+          # Portable single-file build (same publish output the installer wraps)
+          Copy-Item "launcher/bin/Release/net9.0-windows/win-x64/publish/dorknet.exe" $stage
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: launcher-windows
+          path: artifacts/*
+
+  # ── Cross-platform server CLI, one RID per matrix entry ─────────────
+  build-server-cli:
+    needs: resolve-version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            os: windows-2022
+            ext: zip
+          - rid: linux-x64
+            os: ubuntu-latest
+            ext: tar.gz
+          - rid: linux-arm64
+            os: ubuntu-latest
+            ext: tar.gz
+          - rid: osx-x64
+            os: macos-latest
+            ext: tar.gz
+          - rid: osx-arm64
+            os: macos-latest
+            ext: tar.gz
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Publish dorknet-server for ${{ matrix.rid }}
+        shell: bash
+        run: |
+          v="${{ needs.resolve-version.outputs.version }}"
+          dotnet publish cli/DorkNet.ServerCli \
+            -c Release \
+            -r "${{ matrix.rid }}" \
+            --self-contained true \
+            /p:Version="$v" \
+            /p:AssemblyVersion="${v}.0" \
+            /p:FileVersion="${v}.0" \
+            /p:InformationalVersion="$v"
+
+      - name: Package
+        shell: bash
+        run: |
+          src="cli/DorkNet.ServerCli/bin/Release/net9.0/${{ matrix.rid }}/publish"
+          out="artifacts"
+          mkdir -p "$out"
+          case "${{ matrix.ext }}" in
+            zip)
+              # Use PowerShell on Windows so the archive is consumable
+              # by Windows Explorer + curl without weird zip flags.
+              pwsh -Command "Compress-Archive -Path '$src/*' -DestinationPath '$out/dorknet-server-${{ matrix.rid }}.zip' -Force"
+              ;;
+            tar.gz)
+              # chmod +x first — single-file publish drops a binary
+              # without the executable bit on macOS in some scenarios.
+              chmod +x "$src"/dorknet-server || true
+              tar -czf "$out/dorknet-server-${{ matrix.rid }}.tar.gz" -C "$src" .
+              ;;
+          esac
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-cli-${{ matrix.rid }}
+          path: artifacts/*
+
+  # ── Aggregate, checksum, attach to the release ──────────────────────
+  release:
+    needs: [resolve-version, build-launcher-windows, build-server-cli]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List artifacts + compute SHA256SUMS
+        run: |
+          cd dist
+          ls -la
+          sha256sum * > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Build release notes
+        id: notes
+        run: |
+          v="${{ needs.resolve-version.outputs.version }}"
+          {
+            echo "## DorkNet launcher \`v$v\`"
+            echo ""
+            echo "Host-side release. For the matching server + client patcher per Rec Room build, see the per-version branch tags."
+            echo ""
+            echo "### Downloads"
+            echo ""
+            echo "| Platform | Use                                            | Asset |"
+            echo "| --- | --- | --- |"
+            echo "| Windows | One-click installer (Start menu + auto-updates) | \`dorknet-setup-$v.exe\` |"
+            echo "| Windows | Portable single-file launcher                   | \`dorknet.exe\` |"
+            echo "| Linux x64 | Headless host CLI                             | \`dorknet-server-linux-x64.tar.gz\` |"
+            echo "| Linux arm64 | Headless host CLI                           | \`dorknet-server-linux-arm64.tar.gz\` |"
+            echo "| macOS Intel | Headless host CLI                           | \`dorknet-server-osx-x64.tar.gz\` |"
+            echo "| macOS Apple Silicon | Headless host CLI                   | \`dorknet-server-osx-arm64.tar.gz\` |"
+            echo "| Windows | Headless host CLI (same as GUI)                 | \`dorknet-server-win-x64.zip\` |"
+            echo ""
+            echo "Checksums in \`SHA256SUMS\`."
+            echo ""
+            echo "### Setup"
+            echo ""
+            echo "- Windows GUI: [easy-setup.md](https://github.com/DorkSquadRR/DorkNet/blob/main/docs/easy-setup.md)"
+            echo "- Linux / macOS: [server-cli.md](https://github.com/DorkSquadRR/DorkNet/blob/main/docs/server-cli.md)"
+            echo "- Photon setup: [photon-setup.md](https://github.com/DorkSquadRR/DorkNet/blob/main/docs/photon-setup.md)"
+          } > notes.md
+
+      - name: Create / update GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          # Prerelease if the tag has a -suffix (e.g. v0.2.0-rc1).
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          body_path: notes.md
+          generate_release_notes: false
+          files: |
+            dist/*
+          # The installer registers HKCU\Software\DorkNet\Version on
+          # install — that means the auto-updater sees this version
+          # only after the tag actually exists on GitHub, so we let
+          # the action create the release on first push of the tag.
+          fail_on_unmatched_files: true

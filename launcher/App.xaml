@@ -5,84 +5,103 @@
              StartupUri="MainWindow.xaml">
 
     <Application.Resources>
-        <!-- ── Palette ─────────────────────────────────────────────────
-             Rec Room-adjacent — warm coral + teal on a deep purple-navy.
-             Avoids the cold-grey "developer tool" look in favour of the
-             friendly game-launcher aesthetic. -->
-        <SolidColorBrush x:Key="Bg" Color="#16102A" />
-        <SolidColorBrush x:Key="BgDeeper" Color="#0E0A1F" />
-        <SolidColorBrush x:Key="BgElev" Color="#221833" />
-        <SolidColorBrush x:Key="BgElev2" Color="#2E2245" />
-        <SolidColorBrush x:Key="Border" Color="#3A2C56" />
-        <SolidColorBrush x:Key="BorderSoft" Color="#2A2042" />
-        <SolidColorBrush x:Key="Ink" Color="#F7F3FF" />
-        <SolidColorBrush x:Key="InkSoft" Color="#B8AED4" />
-        <SolidColorBrush x:Key="InkFaint" Color="#6E608E" />
+        <!-- Slate base, one decisive accent. The previous palette stacked
+             coral + teal + sunshine + pink which read as designer-mockup;
+             a single warm accent on a near-neutral background reads as a
+             real tool. -->
+        <SolidColorBrush x:Key="Bg" Color="#0D0F14" />
+        <SolidColorBrush x:Key="BgDeeper" Color="#07090C" />
+        <SolidColorBrush x:Key="BgElev" Color="#14171F" />
+        <SolidColorBrush x:Key="BgElev2" Color="#1C2029" />
+        <SolidColorBrush x:Key="BgInset" Color="#0A0C11" />
+        <SolidColorBrush x:Key="Border" Color="#262B38" />
+        <SolidColorBrush x:Key="BorderSoft" Color="#1A1E27" />
+        <SolidColorBrush x:Key="BorderStrong" Color="#343A4B" />
+        <SolidColorBrush x:Key="Ink" Color="#ECEEF3" />
+        <SolidColorBrush x:Key="InkSoft" Color="#8B95AB" />
+        <SolidColorBrush x:Key="InkFaint" Color="#4F596F" />
 
-        <!-- Brand: warm coral, with teal as the secondary accent. -->
-        <SolidColorBrush x:Key="Brand" Color="#FF7B5C" />
-        <SolidColorBrush x:Key="BrandHover" Color="#FF9277" />
-        <SolidColorBrush x:Key="BrandDeep" Color="#E55F40" />
-        <SolidColorBrush x:Key="Teal" Color="#44D6C4" />
-        <SolidColorBrush x:Key="TealDeep" Color="#2DB8A6" />
-        <SolidColorBrush x:Key="Sunshine" Color="#FFD555" />
-        <SolidColorBrush x:Key="Ok" Color="#5BE0A6" />
-        <SolidColorBrush x:Key="Danger" Color="#FF6B8A" />
+        <!-- Single brand accent — vermilion, used decisively on the
+             primary action only. Secondary/info uses cool steel; success
+             a single mint. Nothing else gets a colour. -->
+        <SolidColorBrush x:Key="Brand" Color="#FF5C3D" />
+        <SolidColorBrush x:Key="BrandHover" Color="#FF7659" />
+        <SolidColorBrush x:Key="BrandDeep" Color="#D9482B" />
+        <SolidColorBrush x:Key="BrandSoft" Color="#3A1F1A" />
+        <SolidColorBrush x:Key="Teal" Color="#5C9BE0" />
+        <SolidColorBrush x:Key="TealDeep" Color="#3C7CC0" />
+        <SolidColorBrush x:Key="Sunshine" Color="#E5B340" />
+        <SolidColorBrush x:Key="Ok" Color="#34D399" />
+        <SolidColorBrush x:Key="Danger" Color="#F87171" />
 
-        <!-- Wordmark gradient: coral → pink → teal across the "DorkNet" letters. -->
-        <LinearGradientBrush x:Key="WordmarkBrush" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#FF7B5C" Offset="0" />
-            <GradientStop Color="#FF5C95" Offset="0.55" />
-            <GradientStop Color="#44D6C4" Offset="1" />
-        </LinearGradientBrush>
+        <!-- Wordmark: flat, decisive, one tone. The "·" between Dork and
+             Net is brand-coloured — a single small accent instead of a
+             rainbow gradient across the letters. -->
+        <SolidColorBrush x:Key="WordmarkBrush" Color="#ECEEF3" />
 
-        <!-- Subtle card-back gradient — radial illusion via linear top-left
-             tint into the base elev colour. -->
-        <LinearGradientBrush x:Key="CardBg" StartPoint="0,0" EndPoint="0,1">
-            <GradientStop Color="#2A1F40" Offset="0" />
-            <GradientStop Color="#221833" Offset="1" />
-        </LinearGradientBrush>
+        <!-- Panel/card backgrounds — flat colours with subtle structure
+             instead of gradients that scream "designer mockup". The Host
+             and Join variants gain a faint accent tint so the eye lands
+             on the right area without the page turning into a rainbow. -->
+        <SolidColorBrush x:Key="CardBg" Color="#14171F" />
+        <SolidColorBrush x:Key="CardBgHost" Color="#181820" />
+        <SolidColorBrush x:Key="CardBgJoin" Color="#161A22" />
 
-        <LinearGradientBrush x:Key="CardBgHost" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#3A1F35" Offset="0" />
-            <GradientStop Color="#221833" Offset="1" />
-        </LinearGradientBrush>
+        <!-- Subtle shadow on cards. The previous coral-tinted shadow on
+             every button was another designer-mockup tell — kept this
+             one neutral. -->
+        <DropShadowEffect x:Key="CardShadow" BlurRadius="20" ShadowDepth="0"
+                          Color="#000000" Opacity="0.55" />
+        <DropShadowEffect x:Key="BtnShadow" BlurRadius="14" ShadowDepth="0"
+                          Color="#FF5C3D" Opacity="0.32" />
 
-        <LinearGradientBrush x:Key="CardBgJoin" StartPoint="0,0" EndPoint="1,1">
-            <GradientStop Color="#1F3540" Offset="0" />
-            <GradientStop Color="#221833" Offset="1" />
-        </LinearGradientBrush>
-
-        <!-- Soft drop-shadow effect used on cards / primary buttons. -->
-        <DropShadowEffect x:Key="CardShadow" BlurRadius="24" ShadowDepth="0"
-                          Color="#000000" Opacity="0.45" />
-        <DropShadowEffect x:Key="BtnShadow" BlurRadius="16" ShadowDepth="2"
-                          Color="#FF5C40" Opacity="0.35" />
+        <!-- Shared vector glyphs. Path geometry instead of emoji
+             everywhere — emoji is one of the strongest "AI-generated UI"
+             tells, and these path strings ship at any zoom level. -->
+        <Geometry x:Key="IconServer">M2,4 L18,4 L18,8 L2,8 Z M2,10 L18,10 L18,14 L2,14 Z M5,6 L6,6 M5,12 L6,12 M15,6 L16,6 M15,12 L16,12</Geometry>
+        <Geometry x:Key="IconLink">M8,12 L12,8 M5,10 A4,4 0 0 1 9,6 L11,6 M11,14 L9,14 A4,4 0 0 1 5,10 M15,10 A4,4 0 0 1 11,14 M11,6 A4,4 0 0 1 15,10</Geometry>
+        <Geometry x:Key="IconGear">M10,1 L11,3.5 L13.5,2.5 L14,5 L16.5,5 L15.5,7.5 L18,9 L16,11 L17,13.5 L14.5,13.5 L14,16 L11.5,15 L10,17 L8.5,15 L6,16 L5.5,13.5 L3,13.5 L4,11 L2,9 L4.5,7.5 L3.5,5 L6,5 L6.5,2.5 L9,3.5 Z M10,7 A2,2 0 1 0 10,11 A2,2 0 1 0 10,7</Geometry>
+        <Geometry x:Key="IconFolder">M2,5 L7,5 L9,7 L18,7 L18,15 L2,15 Z</Geometry>
+        <Geometry x:Key="IconPlay">M5,3 L16,9 L5,15 Z</Geometry>
+        <Geometry x:Key="IconCheck">M3,9 L7,13 L15,5</Geometry>
+        <Geometry x:Key="IconX">M4,4 L14,14 M14,4 L4,14</Geometry>
+        <Geometry x:Key="IconArrowRight">M3,9 L15,9 M11,5 L15,9 L11,13</Geometry>
+        <Geometry x:Key="IconArrowLeft">M15,9 L3,9 M7,5 L3,9 L7,13</Geometry>
+        <Geometry x:Key="IconCopy">M5,4 L13,4 L13,12 L5,12 Z M3,6 L3,14 L11,14</Geometry>
+        <Geometry x:Key="IconMail">M2,5 L18,5 L18,15 L2,15 Z M2,5 L10,11 L18,5</Geometry>
+        <Geometry x:Key="IconExternal">M11,3 L17,3 L17,9 M17,3 L9,11 M15,11 L15,17 L3,17 L3,5 L9,5</Geometry>
+        <Geometry x:Key="IconDot">M10,8 A2,2 0 1 0 10,12 A2,2 0 1 0 10,8</Geometry>
+        <Geometry x:Key="IconQuestion">M7,7 A3,3 0 1 1 10,10 L10,12 M10,15 L10,15.5</Geometry>
 
         <!-- ── TextBox ─────────────────────────────────────────────────── -->
         <Style TargetType="TextBox">
-            <Setter Property="Background" Value="{StaticResource BgElev}" />
+            <Setter Property="Background" Value="{StaticResource BgInset}" />
             <Setter Property="Foreground" Value="{StaticResource Ink}" />
-            <Setter Property="CaretBrush" Value="{StaticResource Ink}" />
+            <Setter Property="CaretBrush" Value="{StaticResource Brand}" />
+            <Setter Property="SelectionBrush" Value="{StaticResource Brand}" />
             <Setter Property="BorderBrush" Value="{StaticResource Border}" />
-            <Setter Property="BorderThickness" Value="1.5" />
+            <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="12,10" />
             <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI" />
-            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontSize" Value="13" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TextBox">
-                        <Border Background="{TemplateBinding Background}"
+                        <Border x:Name="root"
+                                Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="10">
+                                CornerRadius="6">
                             <ScrollViewer x:Name="PART_ContentHost"
                                           Margin="{TemplateBinding Padding}"
                                           VerticalScrollBarVisibility="Auto" />
                         </Border>
                         <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="root" Property="BorderBrush" Value="{StaticResource BorderStrong}" />
+                            </Trigger>
                             <Trigger Property="IsFocused" Value="True">
-                                <Setter Property="BorderBrush" Value="{StaticResource Brand}" />
+                                <Setter TargetName="root" Property="BorderBrush" Value="{StaticResource Brand}" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -92,28 +111,227 @@
 
         <!-- ── ComboBox ────────────────────────────────────────────────── -->
         <Style TargetType="ComboBox">
-            <Setter Property="Background" Value="{StaticResource BgElev}" />
+            <Setter Property="Background" Value="{StaticResource BgInset}" />
             <Setter Property="Foreground" Value="{StaticResource Ink}" />
             <Setter Property="BorderBrush" Value="{StaticResource Border}" />
-            <Setter Property="BorderThickness" Value="1.5" />
+            <Setter Property="BorderThickness" Value="1" />
             <Setter Property="Padding" Value="12,10" />
-            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontSize" Value="13" />
             <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI" />
+            <Setter Property="MinHeight" Value="40" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBox">
+                        <Grid>
+                            <ToggleButton x:Name="Toggle"
+                                          Background="{Binding Background, RelativeSource={RelativeSource TemplatedParent}}"
+                                          Foreground="{Binding Foreground, RelativeSource={RelativeSource TemplatedParent}}"
+                                          BorderBrush="{Binding BorderBrush, RelativeSource={RelativeSource TemplatedParent}}"
+                                          BorderThickness="{Binding BorderThickness, RelativeSource={RelativeSource TemplatedParent}}"
+                                          Padding="{Binding Padding, RelativeSource={RelativeSource TemplatedParent}}"
+                                          Focusable="False"
+                                          ClickMode="Press"
+                                          IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                                <ToggleButton.Template>
+                                    <ControlTemplate TargetType="ToggleButton">
+                                        <Border x:Name="Chrome"
+                                                Background="{TemplateBinding Background}"
+                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                BorderThickness="{TemplateBinding BorderThickness}"
+                                                CornerRadius="6">
+                                            <Grid>
+                                                <ContentPresenter x:Name="ContentSite"
+                                                                  Margin="{TemplateBinding Padding}"
+                                                                  HorizontalAlignment="Left"
+                                                                  VerticalAlignment="Center"
+                                                                  Content="{Binding SelectionBoxItem, RelativeSource={RelativeSource AncestorType=ComboBox}}"
+                                                                  ContentTemplate="{Binding SelectionBoxItemTemplate, RelativeSource={RelativeSource AncestorType=ComboBox}}"
+                                                                  ContentStringFormat="{Binding SelectionBoxItemStringFormat, RelativeSource={RelativeSource AncestorType=ComboBox}}"
+                                                                  RecognizesAccessKey="True" />
+                                                <Path Width="8" Height="5"
+                                                      Margin="0,0,14,0"
+                                                      HorizontalAlignment="Right"
+                                                      VerticalAlignment="Center"
+                                                      Stroke="{StaticResource InkSoft}"
+                                                      StrokeThickness="1.5"
+                                                      StrokeLineJoin="Round"
+                                                      Data="M 0 0 L 4 5 L 8 0" />
+                                            </Grid>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource BorderStrong}" />
+                                            </Trigger>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{StaticResource Brand}" />
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </ToggleButton.Template>
+                            </ToggleButton>
+
+                            <Popup x:Name="PART_Popup"
+                                   IsOpen="{TemplateBinding IsDropDownOpen}"
+                                   Placement="Bottom"
+                                   AllowsTransparency="True"
+                                   Focusable="False"
+                                   PopupAnimation="Fade">
+                                <Grid MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                                      MaxHeight="{TemplateBinding MaxDropDownHeight}">
+                                    <Border Background="{StaticResource BgElev}"
+                                            BorderBrush="{StaticResource Border}"
+                                            BorderThickness="1"
+                                            CornerRadius="6"
+                                            Margin="0,4,0,0"
+                                            Effect="{StaticResource CardShadow}">
+                                        <ScrollViewer Margin="4"
+                                                      CanContentScroll="True">
+                                            <ItemsPresenter />
+                                        </ScrollViewer>
+                                    </Border>
+                                </Grid>
+                            </Popup>
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{StaticResource InkFaint}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <Style TargetType="ComboBoxItem">
-            <Setter Property="Background" Value="{StaticResource BgElev}" />
+            <Setter Property="Background" Value="Transparent" />
             <Setter Property="Foreground" Value="{StaticResource Ink}" />
             <Setter Property="Padding" Value="10,8" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="ItemChrome"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="4"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted" Value="True">
+                                <Setter TargetName="ItemChrome" Property="Background" Value="{StaticResource BgElev2}" />
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemChrome" Property="Background" Value="{StaticResource BrandSoft}" />
+                                <Setter Property="Foreground" Value="{StaticResource Ink}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{StaticResource InkFaint}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ── RadioButton ─────────────────────────────────────────────── -->
+        <Style TargetType="RadioButton">
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Padding" Value="10,8" />
+            <Setter Property="Margin" Value="0,0,0,2" />
+            <Setter Property="HorizontalContentAlignment" Value="Left" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="row"
+                                Background="Transparent"
+                                BorderBrush="Transparent"
+                                BorderThickness="1"
+                                CornerRadius="6"
+                                Padding="{TemplateBinding Padding}">
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <Grid Width="16" Height="16" Margin="0,0,10,0">
+                                    <Ellipse x:Name="ring"
+                                             Stroke="{StaticResource BorderStrong}"
+                                             StrokeThickness="1.5" />
+                                    <Ellipse x:Name="dot"
+                                             Width="6" Height="6"
+                                             Fill="{StaticResource Brand}"
+                                             Opacity="0" />
+                                </Grid>
+                                <ContentPresenter VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="row" Property="Background" Value="{StaticResource BgElev}" />
+                                <Setter TargetName="ring" Property="Stroke" Value="{StaticResource Brand}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="row" Property="Background" Value="{StaticResource BgElev}" />
+                                <Setter TargetName="row" Property="BorderBrush" Value="{StaticResource BorderStrong}" />
+                                <Setter TargetName="ring" Property="Stroke" Value="{StaticResource Brand}" />
+                                <Setter TargetName="dot" Property="Opacity" Value="1" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ── CheckBox ───────────────────────────────────────────────── -->
+        <Style TargetType="CheckBox">
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="VerticalContentAlignment" Value="Center" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="CheckBox">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Border x:Name="box"
+                                    Width="16" Height="16" Margin="0,0,10,0"
+                                    Background="{StaticResource BgInset}"
+                                    BorderBrush="{StaticResource BorderStrong}"
+                                    BorderThickness="1.5"
+                                    CornerRadius="3">
+                                <Path x:Name="tick"
+                                      Data="M 3 8 L 6.5 11 L 13 4"
+                                      Stroke="White"
+                                      StrokeThickness="1.8"
+                                      StrokeLineJoin="Round"
+                                      StrokeStartLineCap="Round"
+                                      StrokeEndLineCap="Round"
+                                      Opacity="0" />
+                            </Border>
+                            <ContentPresenter VerticalAlignment="Center" />
+                        </StackPanel>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="box" Property="BorderBrush" Value="{StaticResource Brand}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="box" Property="Background" Value="{StaticResource Brand}" />
+                                <Setter TargetName="box" Property="BorderBrush" Value="{StaticResource Brand}" />
+                                <Setter TargetName="tick" Property="Opacity" Value="1" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <!-- ── Buttons ─────────────────────────────────────────────────── -->
         <Style x:Key="Btn" TargetType="Button">
-            <Setter Property="Background" Value="{StaticResource BgElev2}" />
+            <Setter Property="Background" Value="{StaticResource BgElev}" />
             <Setter Property="Foreground" Value="{StaticResource Ink}" />
             <Setter Property="BorderBrush" Value="{StaticResource Border}" />
-            <Setter Property="BorderThickness" Value="1.5" />
-            <Setter Property="Padding" Value="16,10" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="16,9" />
             <Setter Property="FontSize" Value="13" />
             <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI" />
@@ -121,92 +339,141 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border Background="{TemplateBinding Background}"
+                        <Border x:Name="root"
+                                Background="{TemplateBinding Background}"
                                 BorderBrush="{TemplateBinding BorderBrush}"
                                 BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="10">
+                                CornerRadius="6">
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center"
                                               Margin="{TemplateBinding Padding}" />
                         </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="root" Property="Background" Value="{StaticResource BgElev2}" />
+                                <Setter TargetName="root" Property="BorderBrush" Value="{StaticResource BorderStrong}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="root" Property="Background" Value="{StaticResource BgInset}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{StaticResource InkFaint}" />
+                                <Setter TargetName="root" Property="Background" Value="{StaticResource BgElev}" />
+                                <Setter TargetName="root" Property="BorderBrush" Value="{StaticResource BorderSoft}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource Border}" />
-                    <Setter Property="BorderBrush" Value="{StaticResource BorderSoft}" />
-                </Trigger>
-                <Trigger Property="IsEnabled" Value="False">
-                    <Setter Property="Foreground" Value="{StaticResource InkFaint}" />
-                    <Setter Property="Background" Value="{StaticResource BgElev}" />
-                </Trigger>
-            </Style.Triggers>
         </Style>
 
-        <Style x:Key="PrimaryBtn" TargetType="Button" BasedOn="{StaticResource Btn}">
+        <Style x:Key="PrimaryBtn" TargetType="Button">
             <Setter Property="Background" Value="{StaticResource Brand}" />
-            <Setter Property="BorderBrush" Value="{StaticResource BrandDeep}" />
             <Setter Property="Foreground" Value="White" />
-            <Setter Property="Padding" Value="22,12" />
-            <Setter Property="FontSize" Value="14" />
+            <Setter Property="BorderBrush" Value="{StaticResource Brand}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="22,11" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI" />
+            <Setter Property="Cursor" Value="Hand" />
             <Setter Property="Effect" Value="{StaticResource BtnShadow}" />
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="{StaticResource BrandHover}" />
-                    <Setter Property="BorderBrush" Value="{StaticResource Brand}" />
-                </Trigger>
-                <Trigger Property="IsEnabled" Value="False">
-                    <Setter Property="Background" Value="{StaticResource BgElev2}" />
-                    <Setter Property="BorderBrush" Value="{StaticResource Border}" />
-                    <Setter Property="Foreground" Value="{StaticResource InkFaint}" />
-                    <Setter Property="Effect" Value="{x:Null}" />
-                </Trigger>
-            </Style.Triggers>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="root"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="6">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"
+                                              TextElement.FontWeight="{TemplateBinding FontWeight}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="root" Property="Background" Value="{StaticResource BrandHover}" />
+                                <Setter TargetName="root" Property="BorderBrush" Value="{StaticResource BrandHover}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="root" Property="Background" Value="{StaticResource BrandDeep}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="root" Property="Background" Value="{StaticResource BgElev}" />
+                                <Setter TargetName="root" Property="BorderBrush" Value="{StaticResource Border}" />
+                                <Setter Property="Foreground" Value="{StaticResource InkFaint}" />
+                                <Setter Property="Effect" Value="{x:Null}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
+        <!-- Big Play button — reserved for "Launch Rec Room". Bigger than
+             PrimaryBtn, with stronger presence — the visual anchor of the
+             ready-to-play view. -->
+        <Style x:Key="PlayBtn" TargetType="Button" BasedOn="{StaticResource PrimaryBtn}">
+            <Setter Property="Padding" Value="32,14" />
+            <Setter Property="FontSize" Value="15" />
+            <Setter Property="FontWeight" Value="Bold" />
+        </Style>
+
+        <!-- "TealBtn" key kept for PhotonWizard compatibility, but now a
+             secondary action style (steel blue, not teal). -->
         <Style x:Key="TealBtn" TargetType="Button" BasedOn="{StaticResource Btn}">
             <Setter Property="Background" Value="{StaticResource Teal}" />
             <Setter Property="BorderBrush" Value="{StaticResource TealDeep}" />
-            <Setter Property="Foreground" Value="#0E0A1F" />
-            <Setter Property="Padding" Value="22,12" />
-            <Setter Property="FontSize" Value="14" />
-            <Style.Triggers>
-                <Trigger Property="IsMouseOver" Value="True">
-                    <Setter Property="Background" Value="#5DE8D6" />
-                </Trigger>
-            </Style.Triggers>
+            <Setter Property="Foreground" Value="White" />
+            <Setter Property="Padding" Value="22,11" />
+            <Setter Property="FontSize" Value="13" />
         </Style>
 
         <Style x:Key="GhostBtn" TargetType="Button" BasedOn="{StaticResource Btn}">
             <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderBrush" Value="Transparent" />
+            <Setter Property="Foreground" Value="{StaticResource InkSoft}" />
+            <Setter Property="Padding" Value="14,8" />
         </Style>
 
-        <!-- ── Card buttons for first-run wizard ───────────────────────── -->
+        <!-- ── Choice cards (Host vs Join wizard step) ─────────────────── -->
         <Style x:Key="ChoiceCardBtn" TargetType="Button">
-            <Setter Property="Background" Value="{StaticResource CardBg}" />
+            <Setter Property="Background" Value="{StaticResource BgElev}" />
             <Setter Property="Foreground" Value="{StaticResource Ink}" />
             <Setter Property="BorderBrush" Value="{StaticResource Border}" />
-            <Setter Property="BorderThickness" Value="1.5" />
-            <Setter Property="Padding" Value="28" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Padding" Value="28,26" />
             <Setter Property="Cursor" Value="Hand" />
             <Setter Property="HorizontalContentAlignment" Value="Stretch" />
             <Setter Property="VerticalContentAlignment" Value="Stretch" />
-            <Setter Property="Effect" Value="{StaticResource CardShadow}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="cardBorder"
-                                Background="{TemplateBinding Background}"
-                                BorderBrush="{TemplateBinding BorderBrush}"
-                                BorderThickness="{TemplateBinding BorderThickness}"
-                                CornerRadius="18">
-                            <ContentPresenter Margin="{TemplateBinding Padding}" />
-                        </Border>
+                        <Grid>
+                            <Border x:Name="cardBorder"
+                                    Background="{TemplateBinding Background}"
+                                    BorderBrush="{TemplateBinding BorderBrush}"
+                                    BorderThickness="{TemplateBinding BorderThickness}"
+                                    CornerRadius="10">
+                                <ContentPresenter Margin="{TemplateBinding Padding}" />
+                            </Border>
+                            <!-- Accent stripe on hover — appears at the
+                                 top-left, decisive single mark instead of
+                                 a glow shadow surrounding the card. -->
+                            <Border x:Name="stripe"
+                                    Width="3" HorizontalAlignment="Left"
+                                    Margin="0,16" Background="{StaticResource Brand}"
+                                    Opacity="0" />
+                        </Grid>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
                                 <Setter TargetName="cardBorder" Property="BorderBrush"
-                                        Value="{StaticResource Brand}" />
+                                        Value="{StaticResource BorderStrong}" />
+                                <Setter TargetName="cardBorder" Property="Background"
+                                        Value="{StaticResource BgElev2}" />
+                                <Setter TargetName="stripe" Property="Opacity" Value="1" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -219,41 +486,86 @@
             <Setter Property="Background" Value="{StaticResource BgElev}" />
             <Setter Property="BorderBrush" Value="{StaticResource BorderSoft}" />
             <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="CornerRadius" Value="14" />
-            <Setter Property="Padding" Value="20" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="22" />
         </Style>
 
-        <!-- ── Field label text ────────────────────────────────────────── -->
+        <!-- Section header used inside panels — small uppercase tag plus
+             title text. The eyebrow tag adds the "real product"
+             information density we want. -->
         <Style x:Key="FieldLabel" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource InkSoft}" />
-            <Setter Property="FontSize" Value="11" />
-            <Setter Property="FontWeight" Value="Bold" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="FontWeight" Value="SemiBold" />
             <Setter Property="Margin" Value="0,0,0,8" />
             <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI" />
         </Style>
 
         <Style x:Key="SectionTitle" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource Ink}" />
-            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontSize" Value="14" />
             <Setter Property="FontWeight" Value="SemiBold" />
-            <Setter Property="Margin" Value="0,0,0,12" />
+            <Setter Property="Margin" Value="0,0,0,14" />
             <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI" />
         </Style>
 
-        <!-- Numbered-step bullet used in walkthrough text. -->
         <Style x:Key="StepBullet" TargetType="TextBlock">
             <Setter Property="Foreground" Value="{StaticResource Ink}" />
             <Setter Property="FontSize" Value="13" />
-            <Setter Property="LineHeight" Value="22" />
+            <Setter Property="LineHeight" Value="20" />
             <Setter Property="Margin" Value="0,0,0,6" />
             <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
 
-        <!-- Pill-style "status chip" used in section headers. -->
+        <!-- Status chip — small uppercase pill with letter-spacing. -->
         <Style x:Key="StatusChip" TargetType="Border">
-            <Setter Property="Background" Value="{StaticResource BgElev2}" />
-            <Setter Property="CornerRadius" Value="999" />
-            <Setter Property="Padding" Value="10,4" />
+            <Setter Property="Background" Value="{StaticResource BgElev}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Border}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="Padding" Value="8,3" />
+        </Style>
+
+        <!-- Sidebar nav button — a flat row with an icon + label. Active
+             state is a single brand-coloured edge stripe on the left, not
+             a filled pill. -->
+        <Style x:Key="NavBtn" TargetType="RadioButton">
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Foreground" Value="{StaticResource InkSoft}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI" />
+            <Setter Property="Margin" Value="0,0,0,2" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Grid>
+                            <Border x:Name="row"
+                                    Background="Transparent"
+                                    CornerRadius="6"
+                                    Padding="14,9">
+                                <ContentPresenter VerticalAlignment="Center" />
+                            </Border>
+                            <Border x:Name="stripe"
+                                    Width="2" HorizontalAlignment="Left"
+                                    Margin="0,8" Background="{StaticResource Brand}"
+                                    Opacity="0" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="row" Property="Background" Value="{StaticResource BgElev}" />
+                                <Setter Property="Foreground" Value="{StaticResource Ink}" />
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="row" Property="Background" Value="{StaticResource BgElev}" />
+                                <Setter TargetName="stripe" Property="Opacity" Value="1" />
+                                <Setter Property="Foreground" Value="{StaticResource Ink}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
 
         <!-- ── Mini progress bar — restyled WPF ProgressBar to match the
@@ -261,21 +573,21 @@
         <Style x:Key="StepProgressBar" TargetType="ProgressBar">
             <Setter Property="Minimum" Value="0" />
             <Setter Property="Maximum" Value="100" />
-            <Setter Property="Height" Value="6" />
+            <Setter Property="Height" Value="4" />
             <Setter Property="Foreground" Value="{StaticResource Brand}" />
-            <Setter Property="Background" Value="{StaticResource BgDeeper}" />
+            <Setter Property="Background" Value="{StaticResource BgInset}" />
             <Setter Property="BorderThickness" Value="0" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ProgressBar">
                         <Border Background="{TemplateBinding Background}"
-                                CornerRadius="3" ClipToBounds="True">
+                                CornerRadius="2" ClipToBounds="True">
                             <Grid HorizontalAlignment="Stretch">
                                 <Rectangle x:Name="PART_Track" />
                                 <Border x:Name="PART_Indicator"
                                         Background="{TemplateBinding Foreground}"
                                         HorizontalAlignment="Left"
-                                        CornerRadius="3" />
+                                        CornerRadius="2" />
                             </Grid>
                         </Border>
                     </ControlTemplate>
@@ -283,74 +595,211 @@
             </Setter>
         </Style>
 
-        <!-- ── Bool→Visibility converter for HasDetail/HasProgress flags ─ -->
         <BooleanToVisibilityConverter x:Key="BoolToVis" />
+
+        <!-- ── ScrollBar ───────────────────────────────────────────────
+             Native WPF scrollbars look like Windows 95 against a dark
+             slate theme. Replace with a thin, flat track + capsule
+             thumb that fades in on hover. Same styling for the V and H
+             orientations. -->
+        <Style x:Key="ScrollThumb" TargetType="Thumb">
+            <Setter Property="OverridesDefaultStyle" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border x:Name="thumb"
+                                Background="#4A5165"
+                                CornerRadius="4"
+                                Margin="2,2" />
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="thumb" Property="Background" Value="{StaticResource InkSoft}" />
+                            </Trigger>
+                            <Trigger Property="IsDragging" Value="True">
+                                <Setter TargetName="thumb" Property="Background" Value="{StaticResource Brand}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Invisible repeat buttons. Default ones come with arrow
+             glyphs and chunky chrome that we don't want. -->
+        <Style x:Key="ScrollRepeatHidden" TargetType="RepeatButton">
+            <Setter Property="OverridesDefaultStyle" Value="True" />
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="IsTabStop" Value="False" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RepeatButton">
+                        <Rectangle Fill="Transparent" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="ScrollBar">
+            <Setter Property="OverridesDefaultStyle" Value="True" />
+            <Setter Property="Background" Value="#0A0C11" />
+            <Setter Property="Width" Value="12" />
+            <Setter Property="MinWidth" Value="12" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollBar">
+                        <Border Background="{TemplateBinding Background}"
+                                BorderBrush="{StaticResource BorderSoft}"
+                                BorderThickness="1,0,0,0">
+                            <Track Name="PART_Track"
+                                   IsDirectionReversed="True"
+                                   ViewportSize="{TemplateBinding ViewportSize}">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Style="{StaticResource ScrollRepeatHidden}"
+                                                  Command="ScrollBar.PageUpCommand" />
+                                </Track.DecreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Style="{StaticResource ScrollThumb}" MinHeight="32" />
+                                </Track.Thumb>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Style="{StaticResource ScrollRepeatHidden}"
+                                                  Command="ScrollBar.PageDownCommand" />
+                                </Track.IncreaseRepeatButton>
+                            </Track>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="Orientation" Value="Horizontal">
+                    <Setter Property="Height" Value="12" />
+                    <Setter Property="MinHeight" Value="12" />
+                    <Setter Property="Width" Value="Auto" />
+                    <Setter Property="MinWidth" Value="0" />
+                    <Setter Property="Template">
+                        <Setter.Value>
+                            <ControlTemplate TargetType="ScrollBar">
+                                <Border Background="{TemplateBinding Background}"
+                                        BorderBrush="{StaticResource BorderSoft}"
+                                        BorderThickness="0,1,0,0">
+                                    <Track Name="PART_Track"
+                                           IsDirectionReversed="False"
+                                           ViewportSize="{TemplateBinding ViewportSize}">
+                                        <Track.DecreaseRepeatButton>
+                                            <RepeatButton Style="{StaticResource ScrollRepeatHidden}"
+                                                          Command="ScrollBar.PageLeftCommand" />
+                                        </Track.DecreaseRepeatButton>
+                                        <Track.Thumb>
+                                            <Thumb Style="{StaticResource ScrollThumb}" MinWidth="32" />
+                                        </Track.Thumb>
+                                        <Track.IncreaseRepeatButton>
+                                            <RepeatButton Style="{StaticResource ScrollRepeatHidden}"
+                                                          Command="ScrollBar.PageRightCommand" />
+                                        </Track.IncreaseRepeatButton>
+                                    </Track>
+                                </Border>
+                            </ControlTemplate>
+                        </Setter.Value>
+                    </Setter>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
+        <!-- ScrollViewer wrapper picked up by every default ScrollViewer
+             (Window scrollers, the ScrollViewer in ComboBox popup,
+             ListBox/ItemsControl scrolling etc.). Same overlay-style
+             slim track on both axes. -->
+        <Style TargetType="ScrollViewer">
+            <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+        </Style>
 
         <!-- ── StartupStep row template ─────────────────────────────────
              A single row in the host/join step list. State drives the
-             status icon's colour + glyph; detail/progress are shown only
-             when populated (so pending steps render as a clean single
-             line). -->
+             status mark; detail/progress are shown only when populated. -->
         <DataTemplate x:Key="StepRowTemplate" DataType="{x:Type backend:StartupStep}">
-            <Grid Margin="0,0,0,14">
+            <Grid Margin="0,0,0,16">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="28" />
+                    <ColumnDefinition Width="24" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
-                <!-- Status bullet — circle that recolours and re-glyphs
-                     based on the bound State. Pending = empty ring,
-                     Active = filled brand, Done = green checkmark,
-                     Failed = red X. -->
-                <Border Grid.Column="0" Width="22" Height="22" CornerRadius="11"
-                        VerticalAlignment="Top" Margin="0,1,0,0"
-                        BorderThickness="2">
-                    <Border.Style>
-                        <Style TargetType="Border">
-                            <Setter Property="Background" Value="Transparent" />
-                            <Setter Property="BorderBrush" Value="{StaticResource InkFaint}" />
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding State}" Value="Active">
-                                    <Setter Property="Background" Value="{StaticResource Brand}" />
-                                    <Setter Property="BorderBrush" Value="{StaticResource Brand}" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding State}" Value="Done">
-                                    <Setter Property="Background" Value="{StaticResource Ok}" />
-                                    <Setter Property="BorderBrush" Value="{StaticResource Ok}" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding State}" Value="Failed">
-                                    <Setter Property="Background" Value="{StaticResource Danger}" />
-                                    <Setter Property="BorderBrush" Value="{StaticResource Danger}" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Border.Style>
-                    <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
-                               FontSize="13" FontWeight="Bold" Foreground="White">
-                        <TextBlock.Style>
-                            <Style TargetType="TextBlock">
-                                <Setter Property="Text" Value="" />
+                <!-- Status indicator — empty ring for pending, filled
+                     accent for active, mint check for done, red X for
+                     failed. Drawn as Path geometry, not emoji. -->
+                <Grid Grid.Column="0" Width="18" Height="18"
+                      VerticalAlignment="Top" Margin="0,2,0,0">
+                    <Ellipse x:Name="ring">
+                        <Ellipse.Style>
+                            <Style TargetType="Ellipse">
+                                <Setter Property="Stroke" Value="{StaticResource BorderStrong}" />
+                                <Setter Property="StrokeThickness" Value="1.5" />
+                                <Setter Property="Fill" Value="Transparent" />
                                 <Style.Triggers>
                                     <DataTrigger Binding="{Binding State}" Value="Active">
-                                        <Setter Property="Text" Value="●" />
-                                        <Setter Property="FontSize" Value="9" />
+                                        <Setter Property="Stroke" Value="{StaticResource Brand}" />
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding State}" Value="Done">
-                                        <Setter Property="Text" Value="✓" />
-                                        <Setter Property="Foreground" Value="#0E0A1F" />
+                                        <Setter Property="Stroke" Value="{StaticResource Ok}" />
+                                        <Setter Property="Fill" Value="{StaticResource Ok}" />
                                     </DataTrigger>
                                     <DataTrigger Binding="{Binding State}" Value="Failed">
-                                        <Setter Property="Text" Value="✕" />
+                                        <Setter Property="Stroke" Value="{StaticResource Danger}" />
+                                        <Setter Property="Fill" Value="{StaticResource Danger}" />
                                     </DataTrigger>
                                 </Style.Triggers>
                             </Style>
-                        </TextBlock.Style>
-                    </TextBlock>
-                </Border>
+                        </Ellipse.Style>
+                    </Ellipse>
+                    <Ellipse Width="6" Height="6" Fill="{StaticResource Brand}"
+                             Visibility="Collapsed">
+                        <Ellipse.Style>
+                            <Style TargetType="Ellipse">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding State}" Value="Active">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Ellipse.Style>
+                    </Ellipse>
+                    <Path Stroke="#0D0F14" StrokeThickness="2"
+                          StrokeLineJoin="Round"
+                          StrokeStartLineCap="Round"
+                          StrokeEndLineCap="Round"
+                          Data="M 4 9 L 7.5 12 L 14 5"
+                          Width="18" Height="18">
+                        <Path.Style>
+                            <Style TargetType="Path">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding State}" Value="Done">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Path.Style>
+                    </Path>
+                    <Path Stroke="White" StrokeThickness="2"
+                          StrokeStartLineCap="Round"
+                          StrokeEndLineCap="Round"
+                          Data="M 5 5 L 13 13 M 13 5 L 5 13"
+                          Width="18" Height="18">
+                        <Path.Style>
+                            <Style TargetType="Path">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding State}" Value="Failed">
+                                        <Setter Property="Visibility" Value="Visible" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Path.Style>
+                    </Path>
+                </Grid>
 
                 <!-- Title + (optional) detail + (optional) progress bar -->
-                <StackPanel Grid.Column="1" Margin="12,0,0,0">
-                    <TextBlock Text="{Binding Title}" FontSize="14">
+                <StackPanel Grid.Column="1" Margin="14,0,0,0">
+                    <TextBlock Text="{Binding Title}" FontSize="13">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">
                                 <Setter Property="Foreground" Value="{StaticResource InkSoft}" />
@@ -374,6 +823,7 @@
 
                     <TextBlock Text="{Binding Detail}" TextWrapping="Wrap"
                                FontSize="12" Margin="0,4,0,0"
+                               FontFamily="Cascadia Mono, Consolas"
                                Visibility="{Binding HasDetail, Converter={StaticResource BoolToVis}}">
                         <TextBlock.Style>
                             <Style TargetType="TextBlock">

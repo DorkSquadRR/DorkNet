@@ -1,0 +1,66 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <!-- Plain net9.0 (no -windows) so this publishes for Linux + macOS
+         alongside Windows. The shared Backend classes are written to
+         OperatingSystem.IsWindows()-gate any Windows-only paths. -->
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>DorkNet.ServerCli</RootNamespace>
+    <AssemblyName>dorknet-server</AssemblyName>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <EnableCompressionInSingleFile>true</EnableCompressionInSingleFile>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.4" />
+  </ItemGroup>
+
+  <!-- Link the relevant Backend files from the launcher project. They
+       live in the launcher's namespace (DorkNet.Launcher.Backend) and
+       avoid Windows-specific APIs, so they compile cleanly under the
+       cross-platform target framework. -->
+  <ItemGroup>
+    <Compile Include="..\..\launcher\Backend\AppPaths.cs">
+      <Link>Backend\AppPaths.cs</Link>
+    </Compile>
+    <Compile Include="..\..\launcher\Backend\AppState.cs">
+      <Link>Backend\AppState.cs</Link>
+    </Compile>
+    <Compile Include="..\..\launcher\Backend\JoinCode.cs">
+      <Link>Backend\JoinCode.cs</Link>
+    </Compile>
+    <Compile Include="..\..\launcher\Backend\LocalNetwork.cs">
+      <Link>Backend\LocalNetwork.cs</Link>
+    </Compile>
+    <Compile Include="..\..\launcher\Backend\LocalOverrides.cs">
+      <Link>Backend\LocalOverrides.cs</Link>
+    </Compile>
+    <Compile Include="..\..\launcher\Backend\ReleaseDownloader.cs">
+      <Link>Backend\ReleaseDownloader.cs</Link>
+    </Compile>
+    <Compile Include="..\..\launcher\Backend\ServerProcess.cs">
+      <Link>Backend\ServerProcess.cs</Link>
+    </Compile>
+    <Compile Include="..\..\launcher\Backend\TunneltoTunnel.cs">
+      <Link>Backend\TunneltoTunnel.cs</Link>
+    </Compile>
+    <Compile Include="..\..\launcher\Backend\VersionsManifest.cs">
+      <Link>Backend\VersionsManifest.cs</Link>
+    </Compile>
+  </ItemGroup>
+
+  <!-- Pull versions.json next to the binary so dev checkouts work
+       without env-var overrides. Same trick the launcher uses. -->
+  <ItemGroup>
+    <None Include="..\..\versions.json" Condition="Exists('..\..\versions.json')">
+      <Link>versions.json</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

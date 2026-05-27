@@ -1,0 +1,82 @@
+# Push / PR CI on `main` — fast feedback that the launcher + CLI
+# both still build, and that the CLI publishes for the cross-platform
+# RIDs the release workflow will package. Does not produce release
+# artifacts — only proves things compile.
+#
+# Runs on:
+#   - every push to main
+#   - every pull request targeting main
+#   - manual workflow_dispatch (so you can re-run after a flake without
+#     pushing an empty commit)
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  DOTNET_VERSION: "9.0.x"
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+
+jobs:
+  # ── Launcher needs Windows for the WPF target framework ────────────
+  build-launcher:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore launcher/DorkNet.Launcher.csproj
+
+      - name: Build
+        run: dotnet build launcher/DorkNet.Launcher.csproj -c Release --no-restore
+
+      # A self-contained publish is the closest thing to "what we ship"
+      # without invoking Inno Setup, which would require an extra
+      # toolchain install for every CI run.
+      - name: Publish (smoke)
+        run: dotnet publish launcher/DorkNet.Launcher.csproj -c Release -r win-x64 --self-contained true --no-restore
+
+  # ── CLI builds on Ubuntu — proves the shared Backend/*.cs files
+  #    truly don't have Windows-only dependencies. The release pipeline
+  #    later publishes the matrix; here we just confirm restore + build
+  #    on the canonical Linux runner.
+  build-cli:
+    strategy:
+      fail-fast: false
+      matrix:
+        rid: [win-x64, linux-x64, linux-arm64, osx-x64, osx-arm64]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        run: dotnet restore cli/DorkNet.ServerCli/DorkNet.ServerCli.csproj
+
+      - name: Publish ${{ matrix.rid }}
+        run: |
+          dotnet publish cli/DorkNet.ServerCli/DorkNet.ServerCli.csproj \
+            -c Release \
+            -r ${{ matrix.rid }} \
+            --self-contained true \
+            --no-restore
+
+      - name: Smoke-test --help (host RID only)
+        if: matrix.rid == 'linux-x64'
+        run: |
+          out=cli/DorkNet.ServerCli/bin/Release/net9.0/${{ matrix.rid }}/publish/dorknet-server
+          chmod +x "$out"
+          "$out" --help

@@ -17,6 +17,7 @@ public partial class MainWindow : Window
     private readonly ReleaseDownloader _releases = new();
     private readonly ClientPatcher _patcher = new();
     private readonly ServerProcess _server = new();
+    private readonly Updater _updater = new();
     private IAsyncDisposable? _tunnel;
     private VersionsManifest? _manifest;
     private string? _hostApex;
@@ -53,6 +54,59 @@ public partial class MainWindow : Window
         ReflectStateInUi();
         await RefreshManifestAsync();
         AutoSelectVersionFromInstall();
+
+        // Update check runs last, async fire-and-forget. Failures are
+        // swallowed inside Updater.CheckAsync — the launcher must never
+        // block on a slow GitHub roundtrip.
+        SidebarVersionText.Text = $"DORKNET LAUNCHER · v{Updater.CurrentVersion}";
+        _ = CheckForUpdatesAsync();
+    }
+
+    private UpdateInfo? _pendingUpdate;
+
+    private async Task CheckForUpdatesAsync()
+    {
+        var info = await _updater.CheckAsync();
+        if (info is null) return;
+        _pendingUpdate = info;
+        UpdateBannerVersionText.Text = $"v{Updater.CurrentVersion} → v{info.Version}";
+        UpdateBanner.Visibility = Visibility.Visible;
+    }
+
+    private async void OnInstallUpdate(object sender, RoutedEventArgs e)
+    {
+        if (_pendingUpdate is null) return;
+        UpdateInstallBtn.IsEnabled = false;
+        UpdateBannerTitle.Text = "Downloading…";
+        try
+        {
+            var progress = new Progress<DownloadProgress>(p =>
+            {
+                var mb = p.BytesRead / (1024.0 * 1024.0);
+                UpdateBannerVersionText.Text = p.TotalBytes > 0
+                    ? $"{mb:F1} / {p.TotalBytes / (1024.0 * 1024.0):F1} MB"
+                    : $"{mb:F1} MB";
+            });
+            var script = await _updater.StageUpdateAsync(_pendingUpdate, progress);
+            UpdateBannerTitle.Text = "Restarting…";
+
+            // Launch the swap script detached, then bail out so it can
+            // overwrite the running exe.
+            await ShutdownServerAsync();
+            Process.Start(new ProcessStartInfo("cmd", $"/c \"{script}\"")
+            {
+                CreateNoWindow = true,
+                UseShellExecute = false,
+            });
+            Application.Current.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            UpdateBannerTitle.Text = "Update failed";
+            UpdateBannerVersionText.Text = ex.Message.Length > 80
+                ? ex.Message.Substring(0, 80) + "…" : ex.Message;
+            UpdateInstallBtn.IsEnabled = true;
+        }
     }
 
     /// <summary>If the user's install path resolves to a known build,
@@ -87,6 +141,17 @@ public partial class MainWindow : Window
         HostView.Visibility = name == "host" ? Visibility.Visible : Visibility.Collapsed;
         JoinView.Visibility = name == "join" ? Visibility.Visible : Visibility.Collapsed;
         SettingsView.Visibility = name == "settings" ? Visibility.Visible : Visibility.Collapsed;
+
+        // Sidebar is part of the in-product chrome — hide it for the
+        // hero-style Welcome and the dedicated Setup wizard.
+        if (MainNav is not null)
+            MainNav.Visibility = (name == "host" || name == "join" || name == "settings")
+                ? Visibility.Visible : Visibility.Collapsed;
+
+        if (NavHostBtn is not null) NavHostBtn.IsChecked = name == "host";
+        if (NavJoinBtn is not null) NavJoinBtn.IsChecked = name == "join";
+        if (NavSettingsBtn is not null) NavSettingsBtn.IsChecked = name == "settings";
+
         if (name == "setup") RenderSetupStep();
     }
 
@@ -164,6 +229,7 @@ public partial class MainWindow : Window
         }
 
         UpdateSetupPhotonStatus();
+        UpdateRemoteWildcardVisibility();
 
         CachePathsText.Text =
             $"State:   {AppPaths.StateFile}\n" +
@@ -321,10 +387,14 @@ public partial class MainWindow : Window
         var displayed = (_state.Mode == AppMode.Join && _setupStep == 5) ? 3 : _setupStep;
         SetupStepIndicator.Text = $"STEP {displayed} OF {total}";
 
+        // Drive the horizontal stepper bars + numbered labels under each.
+        // A bar is "filled" when its step is the current step or behind it.
+        UpdateSetupStepperVisuals();
+
         // Step 1 (mode pick) has no Back / Next — the cards self-advance.
         SetupBackBtn.Visibility = _setupStep > 1 ? Visibility.Visible : Visibility.Collapsed;
         SetupNextBtn.Visibility = _setupStep == 1 ? Visibility.Collapsed : Visibility.Visible;
-        SetupNextBtn.Content = _setupStep == 5 ? "Finish  →" : "Next →";
+        SetupNextLabel.Text = _setupStep == 5 ? "Finish" : "Next";
 
         // Refresh the install banner + Photon status each render — the
         // user may have hit "Pick…" mid-wizard and we want the new path
@@ -335,6 +405,33 @@ public partial class MainWindow : Window
             ? Visibility.Collapsed : Visibility.Visible;
         if (!string.IsNullOrEmpty(_state.RecRoomPath)) SetupDetectedPath.Text = _state.RecRoomPath;
         UpdateSetupPhotonStatus();
+
+        // Re-sync the hosting-mode radios + base-host visibility every
+        // time we render. The Checked event during ReflectStateInUi
+        // doesn't always fire (XAML default IsChecked="True" on the
+        // first radio can race the initial sync), so re-asserting here
+        // guarantees step 3 shows the right state when the user lands
+        // on it via Next or Re-run setup.
+        if (SetupHostInternet is not null && SetupHostRemote is not null && SetupHostLocal is not null)
+        {
+            SetupHostInternet.IsChecked = _state.HostingMode == HostingMode.Internet;
+            SetupHostRemote.IsChecked = _state.HostingMode == HostingMode.RemoteWildcard;
+            SetupHostLocal.IsChecked = _state.HostingMode == HostingMode.LocalNetwork;
+        }
+        UpdateRemoteWildcardVisibility();
+    }
+
+    /// <summary>Repaint the 5-segment stepper rail to reflect the current
+    /// step. Filled bars trail behind the active step; the active bar
+    /// itself is brand-coloured. This is the visual replacement for the
+    /// old single chip.</summary>
+    private void UpdateSetupStepperVisuals()
+    {
+        var brand = (System.Windows.Media.Brush)FindResource("Brand");
+        var dim = (System.Windows.Media.Brush)FindResource("Border");
+        var bars = new[] { StepBar1, StepBar2, StepBar3, StepBar4, StepBar5 };
+        for (int i = 0; i < bars.Length; i++)
+            bars[i].Background = (i + 1) <= _setupStep ? brand : dim;
     }
 
     private void UpdateSetupPhotonStatus()
@@ -377,6 +474,20 @@ public partial class MainWindow : Window
             HostModeLocal.IsChecked = _state.HostingMode == HostingMode.LocalNetwork;
             HostModeRemote.IsChecked = _state.HostingMode == HostingMode.RemoteWildcard;
         }
+        UpdateRemoteWildcardVisibility();
+    }
+
+    /// <summary>The Tunnelto base host field only matters when the user
+    /// picks the wildcard-base option. Plain Tunnelto auto-generates it;
+    /// LAN doesn't use it at all. Hide it everywhere else.</summary>
+    private void UpdateRemoteWildcardVisibility()
+    {
+        var show = _state.HostingMode == HostingMode.RemoteWildcard
+            ? Visibility.Visible : Visibility.Collapsed;
+        if (SetupRemoteWildcardSection is not null)
+            SetupRemoteWildcardSection.Visibility = show;
+        if (HostRemoteWildcardSection is not null)
+            HostRemoteWildcardSection.Visibility = show;
     }
 
     private void OnSetupPhotonChanged(object sender, RoutedEventArgs e)
@@ -494,9 +605,21 @@ public partial class MainWindow : Window
                 ? HostingMode.LocalNetwork
                 : HostingMode.Internet;
         _state.Save();
+        UpdateRemoteWildcardVisibility();
     }
 
     // ── Host flow ───────────────────────────────────────────────────────
+    /// <summary>Reflect the running state on the sidebar status pill.
+    /// "Idle"/grey when nothing's running, "Starting"/amber while the
+    /// host steps are in flight, "Live"/mint once the server is up,
+    /// "Failed"/red on error.</summary>
+    private void SetSidebarStatus(string label, string colorKey)
+    {
+        if (SidebarStatusText is null || SidebarStatusDot is null) return;
+        SidebarStatusText.Text = label;
+        SidebarStatusDot.Fill = (System.Windows.Media.Brush)FindResource(colorKey);
+    }
+
     private async void OnHostStart(object sender, RoutedEventArgs e)
     {
         if (string.IsNullOrEmpty(_state.RecRoomPath))
@@ -525,6 +648,7 @@ public partial class MainWindow : Window
         HostStartBtn.IsEnabled = false;
         HostStopBtn.Visibility = Visibility.Visible;
         JoinCodePanel.Visibility = Visibility.Collapsed;
+        SetSidebarStatus("Starting…", "Sunshine");
 
         // Build a fresh step list so progress is visible the moment the
         // user clicks. Steps advance via StartStep/CompleteStep helpers
@@ -631,6 +755,8 @@ public partial class MainWindow : Window
                 ? $"Hosting on your local network at {_hostApex}. Share the join code with friends on the same WiFi."
                 : $"Hosting at https://{_hostApex}. Share the join code below or launch Rec Room to test.";
             HostLaunchBtn.Visibility = Visibility.Visible;
+            HostAdminBtn.Visibility = Visibility.Visible;
+            SetSidebarStatus("Live", "Ok");
         }
         catch (Exception ex)
         {
@@ -640,6 +766,7 @@ public partial class MainWindow : Window
             ShowHostRetry();
             HostStartBtn.IsEnabled = true;
             HostStopBtn.Visibility = Visibility.Collapsed;
+            SetSidebarStatus("Failed", "Danger");
         }
     }
 
@@ -697,12 +824,38 @@ public partial class MainWindow : Window
         HostStartBtn.IsEnabled = true;
         HostStopBtn.Visibility = Visibility.Collapsed;
         HostLaunchBtn.Visibility = Visibility.Collapsed;
+        HostAdminBtn.Visibility = Visibility.Collapsed;
         JoinCodePanel.Visibility = Visibility.Collapsed;
         HostStepsPanel.Visibility = Visibility.Collapsed;
         HostStepsList.ItemsSource = null;
         _hostSteps = null;
         HostStatusText.Text = "";
         HostRetryPanel.Visibility = Visibility.Collapsed;
+        SetSidebarStatus("Idle", "InkFaint");
+    }
+
+    /// <summary>Open the server's admin web panel in the user's default
+    /// browser. The admin SPA is published at <c>admin.&lt;apex&gt;</c>
+    /// over the same scheme the server uses (https for tunnel modes,
+    /// http for LAN). First account created on a fresh server is
+    /// auto-promoted; subsequent admins are added from inside the panel.</summary>
+    private void OnOpenAdminPanel(object sender, RoutedEventArgs e)
+    {
+        if (string.IsNullOrEmpty(_hostApex))
+        {
+            ShowError("Server isn't running. Start hosting first, then the admin panel becomes reachable.");
+            return;
+        }
+        var scheme = _state.HostingMode == HostingMode.LocalNetwork ? "http" : "https";
+        var url = $"{scheme}://admin.{_hostApex}";
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            ShowError($"Couldn't open {url}: {ex.Message}");
+        }
     }
 
     private async Task ShutdownServerAsync()

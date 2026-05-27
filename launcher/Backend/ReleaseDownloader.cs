@@ -57,7 +57,7 @@ public sealed class ReleaseDownloader
 
         var asset = await FindAssetAsync(
             tagPrefix: version.ReleaseTagPrefix,
-            assetName: $"dorknet-server-{version.VersionKey}-win-x64.zip",
+            assetName: $"dorknet-server-{version.VersionKey}-{CurrentRid}.zip",
             ct);
 
         var zipPath = Path.Combine(AppPaths.LocalRoot, $"download-{Guid.NewGuid():N}.zip");
@@ -70,6 +70,22 @@ public sealed class ReleaseDownloader
         File.WriteAllText(marker, asset.NodeId);
         return dir;
     }
+
+    /// <summary>RID for asset naming — `win-x64`, `linux-x64`,
+    /// `linux-arm64`, `osx-x64`, `osx-arm64`. Matches the `-r` flag
+    /// the per-version release workflow passes to `dotnet publish`.</summary>
+    private static string CurrentRid =>
+        (OperatingSystem.IsWindows(), OperatingSystem.IsLinux(), OperatingSystem.IsMacOS(),
+         System.Runtime.InteropServices.RuntimeInformation.OSArchitecture) switch
+        {
+            (true,  _, _, System.Runtime.InteropServices.Architecture.X64)   => "win-x64",
+            (true,  _, _, System.Runtime.InteropServices.Architecture.Arm64) => "win-arm64",
+            (_, true,  _, System.Runtime.InteropServices.Architecture.X64)   => "linux-x64",
+            (_, true,  _, System.Runtime.InteropServices.Architecture.Arm64) => "linux-arm64",
+            (_, _, true,  System.Runtime.InteropServices.Architecture.X64)   => "osx-x64",
+            (_, _, true,  System.Runtime.InteropServices.Architecture.Arm64) => "osx-arm64",
+            _ => "win-x64",
+        };
 
     /// <summary>Returns the path to the unpacked client-patcher dir
     /// for <paramref name="version"/>, downloading + caching if needed.</summary>
