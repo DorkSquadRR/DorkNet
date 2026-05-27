@@ -85,8 +85,16 @@ public class AvatarItemsController(DorkNetDbContext db, IConfiguration config) :
         if (!config.GetValue("Avatar:EnableUnlockedItems", true))
             return Ok(new List<UnlockedAvatarItemDto>());
 
-        var maxItems = Math.Clamp(config.GetValue("Avatar:MaxUnlockedItems", 30), 1, 120);
-        var maxPerSlot = Math.Clamp(config.GetValue("Avatar:MaxUnlockedItemsPerSlot", 4), 1, 20);
+        // Defaults raised (30 → 100, 4 → 20) — the old 4-per-slot silently
+        // dropped any newly-purchased item once a slot held 4+ entries (the
+        // "I bought it but it's gone after relog" symptom). The clamp
+        // ranges stay at [1,120] / [1,20] — those reflect empirical watch
+        // testing on render-budget headroom (per the prior maintainer note
+        // about BrowsableAvatarItem / DynamicAvatarItemImposter thrash
+        // above this count); raising the clamp ceiling without retesting
+        // could crash the watch's wardrobe drawer.
+        var maxItems = Math.Clamp(config.GetValue("Avatar:MaxUnlockedItems", 100), 1, 120);
+        var maxPerSlot = Math.Clamp(config.GetValue("Avatar:MaxUnlockedItemsPerSlot", 20), 1, 20);
 
         var pid = this.CurrentPlayerId();
         if (pid is not long me) return Ok(new List<UnlockedAvatarItemDto>());
@@ -109,10 +117,17 @@ public class AvatarItemsController(DorkNetDbContext db, IConfiguration config) :
 
         var catalog = _catalog.Value;
         var equipped = ParseEquippedItemGuids(avatar?.OutfitSelections);
+        // Recency tiebreaker: GrantWardrobeAsync / gift-consume APPEND new
+        // GUIDs to the end of InventoryJson, so the original index is also
+        // the purchase order. When per-slot truncation has to drop entries,
+        // we want it to drop the OLDEST (starter seed) items rather than the
+        // one the user just bought.
         var ordered = owned
-            .OrderByDescending(guid => equipped.Contains(guid))
-            .ThenBy(guid => catalog.SlotByGuid.TryGetValue(guid, out var slot) ? slot : int.MaxValue)
-            .ThenBy(guid => guid, StringComparer.OrdinalIgnoreCase);
+            .Select((guid, idx) => (Guid: guid, OriginalIndex: idx))
+            .OrderByDescending(x => equipped.Contains(x.Guid))
+            .ThenBy(x => catalog.SlotByGuid.TryGetValue(x.Guid, out var slot) ? slot : int.MaxValue)
+            .ThenByDescending(x => x.OriginalIndex)
+            .Select(x => x.Guid);
 
         var maxOutfitItems = Math.Max(0, maxItems - ownedHairDyes.Count);
         var perSlot = new Dictionary<int, int>();
