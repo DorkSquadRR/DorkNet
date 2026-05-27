@@ -95,7 +95,22 @@ try {
     }
     Copy-Item $template "$stage\dorknet-clientmod.json.template"
 
-    # ── 4. Write manifest.json ──────────────────────────────────────────
+    # ── 4. Copy the Steam stub (Goldberg) + appid ────────────────────────
+    # Replaces the Valve steam_api64.dll so the unwrapped exe can run
+    # without Steam loaded. App ID 471710 is Rec Room — same across all
+    # versions we ship for.
+    $stubDll = "$repoRoot\DorkNet.ClientMod\steam-stub\steam_api64.dll"
+    $stubAppid = "$repoRoot\DorkNet.ClientMod\steam-stub\steam_appid.txt"
+    if (-not (Test-Path $stubDll)) {
+        throw "Steam stub DLL missing: $stubDll"
+    }
+    if (-not (Test-Path $stubAppid)) {
+        throw "Steam appid file missing: $stubAppid"
+    }
+    Copy-Item $stubDll "$stage\steam_api64.dll"
+    Copy-Item $stubAppid "$stage\steam_appid.txt"
+
+    # ── 5. Write manifest.json ──────────────────────────────────────────
     $manifest = @{
         '$schema_version' = 1
         'loader_archive' = 'MelonLoader.zip'
@@ -106,10 +121,17 @@ try {
         'old_plugin_paths' = @(
             'BepInEx/plugins/DorkNet.ClientPatch.dll'
         )
+        'steam_stub' = @{
+            'api_dll' = 'steam_api64.dll'
+            'api_dest' = 'Recroom_Release_Data/Plugins/steam_api64.dll'
+            'api_backup_suffix' = '.steam-original'
+            'appid_file' = 'steam_appid.txt'
+            'appid_dest' = 'steam_appid.txt'
+        }
     } | ConvertTo-Json -Depth 4
     Set-Content -LiteralPath "$stage\manifest.json" -Value $manifest
 
-    # ── 5. Bundle into the final zip ────────────────────────────────────
+    # ── 6. Bundle into the final zip ────────────────────────────────────
     # Strip the extracted MelonLoader scratch dir before zipping so it
     # doesn't bloat the artifact. The MelonLoader.zip itself stays.
     Remove-Item -Recurse -Force $mlExtract
