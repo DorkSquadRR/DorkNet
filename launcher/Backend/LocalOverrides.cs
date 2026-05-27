@@ -66,15 +66,25 @@ public static class LocalOverrides
         return Directory.Exists(dir) ? dir : null;
     }
 
-    /// <summary>Single-line description of what overrides are active,
-    /// for surfacing in the Settings view. Empty string if none.</summary>
+    /// <summary>Multi-line description of override state, for the
+    /// Settings view. Shows env var values even when the path doesn't
+    /// resolve, so the user can debug "I set DORKNET_LOCAL_RELEASES
+    /// but it didn't work" without digging into File.Exists.</summary>
     public static string DescribeActive()
     {
         var parts = new List<string>();
-        var m = GetLocalManifestPath();
-        if (m is not null) parts.Add($"manifest -> {m}");
-        var r = GetLocalReleasesRoot();
-        if (r is not null) parts.Add($"releases -> {r}");
+        Describe(ManifestEnvVar, isDir: false, parts);
+        Describe(ReleasesEnvVar, isDir: true, parts);
         return string.Join("\n", parts);
+    }
+
+    private static void Describe(string envVar, bool isDir, List<string> parts)
+    {
+        var raw = Environment.GetEnvironmentVariable(envVar);
+        if (string.IsNullOrEmpty(raw)) return;
+        var exists = isDir ? Directory.Exists(raw) : File.Exists(raw);
+        parts.Add(exists
+            ? $"{envVar} -> {raw}  [active]"
+            : $"{envVar} -> {raw}  [SET BUT NOT FOUND on disk]");
     }
 }
