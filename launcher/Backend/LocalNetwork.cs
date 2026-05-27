@@ -5,15 +5,15 @@ using System.Net.Sockets;
 namespace DorkNet.Launcher.Backend;
 
 /// <summary>Finds the machine's preferred LAN IPv4 address for
-/// "local network" hosting mode. Skip Cloudflare entirely, hand
+/// "local network" hosting mode. Skip public tunnels entirely, hand
 /// out an sslip.io hostname derived from the LAN IP in the join code,
 /// and players on the same network connect direct.
 ///
 /// <para>Selection priority: an "Up" non-loopback network interface
 /// with a private (RFC1918) IPv4 address. Falls back to 127.0.0.1
 /// if nothing usable is found — works for solo testing on one
-/// machine but joiners need either a real LAN address or
-/// Cloudflare mode.</para></summary>
+/// machine but joiners need either a real LAN address or one of the
+/// tunnel modes (Localtunnel / Tunnelto).</para></summary>
 public static class LocalNetwork
 {
     private const string SslipDomain = "sslip.io";

@@ -4,6 +4,7 @@ using System.IO.Compression;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 using System.Text.Json.Serialization;
 
 namespace DorkNet.Launcher.Backend;
@@ -72,8 +73,16 @@ public sealed class TunneltoInstaller
                 "`cargo install tunnelto` (or grab a build from github.com/agrinman/tunnelto/releases).");
         }
 
-        var release = await Http.GetFromJsonAsync<GitHubRelease>(ReleasesApi, ct)
-            ?? throw new InvalidOperationException("Couldn't reach github.com/agrinman/tunnelto/releases.");
+        GitHubRelease release;
+        try
+        {
+            release = await Http.GetFromJsonAsync<GitHubRelease>(ReleasesApi, ct)
+                ?? throw new InvalidOperationException("Couldn't reach github.com/agrinman/tunnelto/releases.");
+        }
+        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new TimeoutException("Timed out while checking GitHub for the latest Tunnelto release.");
+        }
 
         var (assetName, kind) = AssetForCurrentPlatform();
         var asset = release.Assets?.FirstOrDefault(a =>
@@ -91,7 +100,14 @@ public sealed class TunneltoInstaller
         var stagingPath = Path.Combine(AppPaths.LocalRoot, $"tunnelto-staging-{Guid.NewGuid():N}");
         try
         {
-            await DownloadAsync(asset.BrowserDownloadUrl, stagingPath, progress, ct);
+            try
+            {
+                await DownloadAsync(asset.BrowserDownloadUrl, stagingPath, progress, ct);
+            }
+            catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+            {
+                throw new TimeoutException("Timed out while downloading Tunnelto from GitHub.");
+            }
             switch (kind)
             {
                 case AssetKind.RawExe:
@@ -184,6 +200,7 @@ public sealed class TunneltoInstaller
     /// <summary>Mark a file as executable on Unix systems. Uses
     /// <see cref="File.SetUnixFileMode"/> (available since .NET 7).
     /// No-op on Windows since the NTFS execute bit doesn't apply.</summary>
+    [UnsupportedOSPlatform("windows")]
     private static void TryChmodExec(string path)
     {
         try

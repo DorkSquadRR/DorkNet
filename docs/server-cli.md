@@ -6,15 +6,17 @@
 
 `dorknet-server` is a small command-line tool that does the host side
 of what the Windows launcher does: downloads the server build, opens a
-[Tunnelto](https://tunnelto.dev) tunnel, runs the server, and prints
-a join code. It runs on Linux, macOS, and Windows.
+[Localtunnel](https://localtunnel.github.io/www/) HTTPS URL (or binds
+on the LAN), runs the server, and prints a join code. It runs on Linux,
+macOS, and Windows.
 
 ## What you'll need
 
 - A machine running Linux (x64 or arm64), macOS (Intel or Apple
   Silicon), or Windows
-- [Tunnelto](https://github.com/agrinman/tunnelto) on PATH (for the
-  default mode that exposes your server publicly)
+- For the default friends-anywhere mode: Node.js on `PATH` (the CLI
+  invokes `npx localtunnel` to fetch a free `*.loca.lt` URL — no account
+  needed). LAN mode doesn't need this.
 - A Photon Realtime AppId — see [photon-setup.md](photon-setup.md)
 - ~500 MB free disk (server binary + SQLite database)
 
@@ -51,22 +53,21 @@ Expand-Archive dorknet-server.zip
 .\dorknet-server\dorknet-server.exe --help
 ```
 
-### Tunnelto
+### Localtunnel
 
-The CLI shells out to `tunnelto` for the public tunnel. Quickest install:
+Default mode shells out to the [Localtunnel](https://localtunnel.github.io/www/)
+client to get a free, anonymous `https://<random>.loca.lt` URL. The CLI
+calls `npx localtunnel --port <local>` if `npx` is on `PATH`; if not,
+install Node.js (16 or newer) or the standalone `lt` CLI from the
+Localtunnel repo and put it on `PATH`.
 
-```sh
-# macOS (Homebrew)
-brew install tunnelto
+The URL is regenerated every host session — copy a fresh join code
+after each restart and re-share it. Joiners might see a one-time
+"Click to Continue" interstitial on first contact with a given URL;
+opening it once in a browser clears it.
 
-# Linux (cargo)
-cargo install tunnelto
-
-# Or grab a binary from github.com/agrinman/tunnelto/releases
-```
-
-Skip Tunnelto if you're running in `--mode lan` (LAN-only, no public
-URL).
+Skip Localtunnel only if you're running in `--mode lan` (same WiFi
+only).
 
 ## Usage
 
@@ -81,24 +82,25 @@ The CLI prints progress, then a join code:
 ```
 DorkNet server CLI · v0.1.0
   mode:        Internet
+  network:     Localtunnel
   server:      DorkNet Server
   photon:      ********90ab (us)
 
 [server] downloading…
             54.2%  (27.1 / 50.0 MB)
 [server] cached at /home/alex/.local/share/DorkNet/servers/march_2020_03_10
-[tunnel] starting tunnelto…
-[tunnel] live at https://dorknet-abc123.tunnelto.me (apex=dorknet-abc123.tunnelto.me)
+[tunnel] starting localtunnel…
+[tunnel] live at https://lucky-pelican-42.loca.lt
 [server] starting…
 [server] listening (logs: /home/alex/.local/share/DorkNet/logs/server-…log)
 
 ══════════════════════════════════════════════════════
   Server live: DorkNet Server
-  Address:     https://dorknet-abc123.tunnelto.me
+  Address:     https://lucky-pelican-42.loca.lt
 
   Join code (paste this into your friend's launcher):
 
-    eyJob3N0IjoiZG9ya25ldC1hYmMxMjMudHVubmVsdG8ubWUiLCJ2I...
+    eyJob3N0IjoibHVja3ktcGVsaWNhbi00Mi5sb2NhLmx0IiwidiI...
 
   Ctrl-C to stop.
 ══════════════════════════════════════════════════════
@@ -120,9 +122,11 @@ down cleanly.
                        in, au. Default: us. All joiners use the same.
 --name "<text>"        Server display name in the join code.
                        Default: "DorkNet Server".
---mode <kind>          tunnelto (default)  — public, friends anywhere
-                       wildcard            — your own Tunnelto apex
-                       lan                 — same WiFi only, no tunnel
+--mode <kind>          localtunnel (default) — public *.loca.lt URL,
+                                               friends anywhere
+                       wildcard              — legacy Tunnelto wildcard
+                                               apex
+                       lan                   — same WiFi only, no tunnel
 --apex <hostname>      Wildcard apex. Required for --mode wildcard.
                        Example: dorknet.example.tunnelto.me
 --version <key>        Rec Room version key. Default: march_2020_03_10
@@ -145,7 +149,7 @@ dorknet-server \
 # LAN party — no tunnel, joiners must be on the same WiFi
 dorknet-server --photon-id ... --mode lan
 
-# Custom Tunnelto wildcard base
+# Legacy custom Tunnelto wildcard base
 dorknet-server \
   --photon-id ... \
   --mode wildcard \
@@ -190,10 +194,11 @@ sudo systemctl enable --now dorknet
 journalctl -fu dorknet           # follow the logs
 ```
 
-> Heads-up: each new tunnel session gets a fresh `*.tunnelto.me`
-> hostname, so the join code rotates on restart. Either re-share
-> the new code with your friends, or use `--mode wildcard` with a
-> stable apex.
+> Heads-up: Localtunnel hands out a fresh `*.loca.lt` URL on every
+> restart, so each time systemd restarts the service the join code
+> rotates. Either commit to a stable apex via `--mode wildcard`, or
+> arrange to re-share the join code (e.g. a tiny post-start hook that
+> emails / Discord-webhooks the new code).
 
 ## Run as a launchd agent (macOS)
 
@@ -251,10 +256,18 @@ it's stateless across runs (all config comes from CLI args).
 
 ## Troubleshooting
 
-### `tunnelto was not found`
+### `localtunnel client wasn't found`
 
-The CLI couldn't find a `tunnelto` binary. Install it (see above) or
-drop the binary next to `dorknet-server`.
+The CLI couldn't find an `lt` binary or an `npx` in `PATH`. Install
+Node.js 16+ (which brings `npx`) or install the standalone Localtunnel
+client (`npm install -g localtunnel` then `lt --version` to confirm).
+For same-WiFi hosting without any tunnel, pass `--mode lan`.
+
+### Joiner hits "Click to Continue" on a Localtunnel landing page
+
+First-touch interstitial that Localtunnel shows once per (IP, URL)
+pair. Tell the joiner to open the URL in any browser once; the gate
+clears and the patched client connects normally on the next attempt.
 
 ### `couldn't fetch versions.json`
 

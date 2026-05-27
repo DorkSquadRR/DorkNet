@@ -80,11 +80,16 @@ the server config; the client mod handles the rest.
 ### My friend can't connect
 
 Most common causes, in order:
-1. **Tunnel URL stale.** Cloudflare Quick Tunnels rotate the URL on each
-   restart. Re-share the join code.
+1. **Stale join code.** Localtunnel hands out a fresh `*.loca.lt` URL
+   on every host restart. Hit Start hosting, copy the new join code
+   from the launcher, send the new code to your friend.
 2. **Photon region mismatch.** Both clients must use the same Photon
    region — set in Settings.
-3. **Friend didn't patch.** They need to run the Patch tab pointed at
-   their own Rec Room install, with your join code.
+3. **Friend didn't patch.** They need to open the Join view in their
+   launcher, paste your join code, and click APPLY PATCH before
+   launching Rec Room.
+4. **Localtunnel interstitial.** First time a joiner's machine hits a
+   given `*.loca.lt` URL, Localtunnel may show a one-time "Click to
+   Continue" page. Open the URL once in any browser and retry.
 4. **Junior account / accessibility settings.** Server settings → relax
    moderation gates if friends are on accounts with parental controls.

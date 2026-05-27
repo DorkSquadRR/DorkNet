@@ -33,6 +33,8 @@ public static class Program
         Console.WriteLine($"  mode:        {parsed.Mode}");
         Console.WriteLine($"  server:      {parsed.ServerName}");
         Console.WriteLine($"  photon:      {Redact(parsed.PhotonAppId)} ({parsed.Region})");
+        if (parsed.Mode is HostingMode.Internet or HostingMode.SingleOriginTunnel)
+            Console.WriteLine("  network:     Localtunnel");
         if (parsed.Mode == HostingMode.RemoteWildcard)
             Console.WriteLine($"  apex:        {state.RemoteWildcardApex}");
         Console.WriteLine();
@@ -57,7 +59,7 @@ public static class Program
 
         var releases = new ReleaseDownloader();
         var server = new ServerProcess();
-        TunneltoTunnel? tunnel = null;
+        IAsyncDisposable? tunnel = null;
         var cts = new CancellationTokenSource();
         Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
@@ -95,15 +97,36 @@ public static class Program
                 apex = lan.Host;
                 Console.WriteLine($"[lan]    bound on {lan.Ip} (apex={apex})");
             }
-            else
+            else if (parsed.Mode == HostingMode.RemoteWildcard)
             {
+                Console.WriteLine("[tunnel] checking tunnelto…");
+                await new TunneltoInstaller().EnsureInstalledAsync(
+                    new Progress<DownloadProgress>(p =>
+                    {
+                        if (p.TotalBytes > 0)
+                            Console.Write($"\r          {p.Fraction * 100,5:F1}%  ({p.BytesRead / (1024.0 * 1024):F1} / {p.TotalBytes / (1024.0 * 1024):F1} MB)   ");
+                    }),
+                    cts.Token);
+                Console.WriteLine();
                 Console.WriteLine("[tunnel] starting tunnelto…");
-                tunnel = new TunneltoTunnel();
-                var publicUrl = await tunnel.StartAsync(
+                var tt = new TunneltoTunnel();
+                tunnel = tt;
+                var publicUrl = await tt.StartAsync(
                     state.RemoteWildcardApex,
                     ServerProcess.DefaultLocalPort,
                     cts.Token);
                 apex = TunneltoTunnel.NormalizeHost(state.RemoteWildcardApex);
+                Console.WriteLine($"[tunnel] live at {publicUrl} (apex={apex})");
+            }
+            else
+            {
+                // Default Localtunnel path. Anonymous public *.loca.lt URL,
+                // no account, regenerated each run.
+                Console.WriteLine("[tunnel] starting localtunnel…");
+                var lt = new LocaltunnelTunnel();
+                tunnel = lt;
+                var publicUrl = await lt.StartAsync(ServerProcess.DefaultLocalPort, cts.Token);
+                apex = new Uri(publicUrl).Host;
                 Console.WriteLine($"[tunnel] live at {publicUrl} (apex={apex})");
             }
 
@@ -200,7 +223,7 @@ public static class Program
         }
 
         string photon = "", voice = "", region = "us";
-        string mode = "tunnelto", apex = "", name = "DorkNet Server";
+        string mode = "localtunnel", apex = "", name = "DorkNet Server";
         string versionKey = "march_2020_03_10";
         string? serverDir = null;
 
@@ -230,10 +253,10 @@ public static class Program
 
         HostingMode parsedMode = mode.ToLowerInvariant() switch
         {
-            "tunnelto" or "tunnel" or "internet" => HostingMode.Internet,
-            "wildcard" or "remote"               => HostingMode.RemoteWildcard,
-            "lan" or "local" or "wifi"           => HostingMode.LocalNetwork,
-            _ => throw new ArgumentException($"unknown --mode '{mode}' (try tunnelto, wildcard, lan)"),
+            "localtunnel" or "lt" or "internet" or "tunnel" => HostingMode.SingleOriginTunnel,
+            "wildcard" or "remote" or "tunnelto"            => HostingMode.RemoteWildcard,
+            "lan" or "local" or "wifi"                      => HostingMode.LocalNetwork,
+            _ => throw new ArgumentException($"unknown --mode '{mode}' (try localtunnel, wildcard, lan)"),
         };
 
         return new ParsedArgs(photon, voice, region, parsedMode, apex, name, versionKey, serverDir);
@@ -255,11 +278,12 @@ public static class Program
               --voice-id <guid>       Photon Voice AppId. Empty = no voice.
               --region <code>         Photon cloud region (us | eu | asia | jp |
                                       sa | kr | in | au). Default: us.
-              --mode <kind>           tunnelto (default) — friends anywhere
-                                      wildcard          — Tunnelto wildcard
-                                                          base (needs --apex)
-                                      lan               — same WiFi only,
-                                                          binds on 0.0.0.0:80
+              --mode <kind>           localtunnel (default) — public *.loca.lt
+                                                              URL, friends anywhere
+                                      wildcard              — Tunnelto wildcard
+                                                              base (needs --apex)
+                                      lan                   — same WiFi only,
+                                                              binds on 0.0.0.0:80
               --apex <hostname>       Wildcard apex (e.g. dorknet.tunnelto.me).
                                       Required for --mode wildcard.
               --name "<text>"         Server name shown in the join code.
@@ -270,7 +294,7 @@ public static class Program
                                       build. Useful for dev iteration.
 
             EXAMPLES
-              # Linux host, default Tunnelto mode
+              # Linux host, default Localtunnel mode
               dorknet-server --photon-id 00000000-1111-... --name "Sunday games"
 
               # Wildcard base, custom region

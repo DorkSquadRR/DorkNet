@@ -49,6 +49,15 @@
     <Compile Include="..\..\launcher\Backend\TunneltoTunnel.cs">
       <Link>Backend\TunneltoTunnel.cs</Link>
     </Compile>
+    <Compile Include="..\..\launcher\Backend\TunneltoInstaller.cs">
+      <Link>Backend\TunneltoInstaller.cs</Link>
+    </Compile>
+    <Compile Include="..\..\launcher\Backend\LocaltunnelTunnel.cs">
+      <Link>Backend\LocaltunnelTunnel.cs</Link>
+    </Compile>
+    <Compile Include="..\..\launcher\Backend\LocaltunnelInstaller.cs">
+      <Link>Backend\LocaltunnelInstaller.cs</Link>
+    </Compile>
     <Compile Include="..\..\launcher\Backend\VersionsManifest.cs">
       <Link>Backend\VersionsManifest.cs</Link>
     </Compile>

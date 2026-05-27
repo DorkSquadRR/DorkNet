@@ -6,6 +6,7 @@
 **/.vite/
 **/build/
 local-releases/
+**/installer/out/
 
 # IDE
 .vs/
@@ -66,3 +67,4 @@ Thumbs.db
 # Test outputs
 TestResults/
 *.coverage
+

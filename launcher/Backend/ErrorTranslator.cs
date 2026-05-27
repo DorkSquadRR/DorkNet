@@ -61,7 +61,17 @@ public static class ErrorTranslator
 
     private static FriendlyError? TryMatch(Exception ex)
     {
-        // Network — GitHub releases, Tunnelto tunnel API, etc.
+        if (ex.Message.Contains("localtunnel", StringComparison.OrdinalIgnoreCase) ||
+            ex.Message.Contains("loca.lt", StringComparison.OrdinalIgnoreCase))
+        {
+            return new FriendlyError(
+                "Localtunnel couldn't get a URL.",
+                TrimToSentence(ex.Message) +
+                " Localtunnel sometimes rate-limits or blips. Retry in a minute, or switch hosting mode to LAN if your friends are local.",
+                "Retry");
+        }
+
+        // Network — GitHub releases, legacy tunnel APIs, etc.
         if (ex is HttpRequestException http)
         {
             return new FriendlyError(
@@ -77,6 +87,17 @@ public static class ErrorTranslator
             return new FriendlyError(
                 "Download timed out.",
                 "Your connection is slow or unstable. Try again — the launcher resumes from scratch but can use cached files.",
+                "Retry");
+        }
+
+        if (ex is TimeoutException timeout)
+        {
+            var title = timeout.Message.Contains("Tunnelto", StringComparison.OrdinalIgnoreCase)
+                ? "Tunnelto tunnel timed out."
+                : "Download timed out.";
+            return new FriendlyError(
+                title,
+                TrimToSentence(timeout.Message) + " Try again in a minute; if it repeats, Tunnelto or GitHub may be blocked on this network.",
                 "Retry");
         }
 

@@ -77,9 +77,13 @@ public static class StartupFlow
         new StartupStep("Download server binary"),
         new StartupStep(mode switch
         {
+            HostingMode.SingleOriginTunnel => "Start localtunnel",
             HostingMode.LocalNetwork => "Set up local sslip.io address",
-            HostingMode.RemoteWildcard => "Set up Tunnelto tunnel",
-            _ => "Set up Tunnelto tunnel",
+            HostingMode.RemoteWildcard => "Install / start Tunnelto tunnel",
+            // Internet maps onto SingleOriginTunnel via AppState.Load
+            // migration; keep the arm in case a stale value sneaks in.
+            HostingMode.Internet => "Start localtunnel",
+            _ => "Start localtunnel",
         }),
         new StartupStep("Start the server"),
         new StartupStep("Download client patcher"),

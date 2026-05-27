@@ -96,8 +96,8 @@
                                        TextWrapping="Wrap" LineHeight="22" Margin="0,0,0,14"
                                        Text="On the Photon dashboard:" />
                             <StackPanel Margin="6,0,0,12">
-                                <TextBlock Style="{StaticResource StepBullet}" Text="1. Click the orange &quot;Create a new app&quot; button (top right)." />
-                                <TextBlock Style="{StaticResource StepBullet}" Text="2. Under &quot;Photon Type&quot; choose Photon Realtime." />
+                                <TextBlock Style="{StaticResource StepBullet}" Text="1. Click &quot;Create a new app&quot; on the dashboard." />
+                                <TextBlock Style="{StaticResource StepBullet}" Text="2. Under &quot;Photon Type&quot; choose Photon SDK." />
                                 <TextBlock Style="{StaticResource StepBullet}" Text="3. Name it anything (e.g. &quot;DorkNet Realtime&quot;)." />
                                 <TextBlock Style="{StaticResource StepBullet}" Text="4. Click Create." />
                                 <TextBlock Style="{StaticResource StepBullet}" Text="5. Back on the dashboard, click the new app's tile — the AppId is the long string near the top, looking like 12ab34cd-56ef-..." />

@@ -12,8 +12,9 @@ This README is for **developers** of the launcher. End-users see
 
 - **Host mode:** fetches the matching server binary from GitHub
   Releases for the user's picked Rec Room version, runs it as a
-  subprocess, opens a Cloudflare quick-tunnel, patches the user's
-  Rec Room install, hands the user a shareable join code.
+  subprocess and exposes it through a Localtunnel HTTPS URL (or
+  binds on the LAN if the user picked that mode), patches the
+  user's Rec Room install, hands the user a shareable join code.
 - **Join mode:** parses the join code, fetches the matching client
   patcher from GitHub Releases, patches the user's Rec Room install
   to point at the host.
@@ -34,7 +35,8 @@ launcher/
     ├── ReleaseDownloader.cs   GitHub Releases API + artifact unpack
     ├── ServerProcess.cs       Spawns the downloaded server binary
     ├── ClientPatcher.cs       Invokes install-plugin.ps1 from the unpacked patcher
-    ├── Tunnel.cs              Wraps `cloudflared tunnel --url …`
+    ├── LocaltunnelInstaller.cs Downloads the Localtunnel .NET client
+    ├── LocaltunnelTunnel.cs    Spawns the tunnel + parses the *.loca.lt URL
     ├── RecRoomPicker.cs       Microsoft.Win32.OpenFolderDialog
     └── JoinCode.cs            base64url-encoded {host, version, photonAppId, …}
 ```
