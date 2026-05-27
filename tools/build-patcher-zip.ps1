@@ -16,6 +16,11 @@
     user's Rec Room install root, copies the DLL into Mods/, then
     renders the config template into UserData/.
 
+    Self-contained: downloads MelonLoader before the dotnet build and
+    feeds its DLLs into the build as references, so no local Rec Room
+    install is required to compile DorkNet.ClientMod. (The mod resolves
+    every game-side type at runtime via AccessTools.TypeByName.)
+
 .PARAMETER VersionKey
     The version key matching versions.json on the public main branch
     (e.g. december_2020_12_18 or march_2020_03_10).
@@ -45,10 +50,35 @@ New-Item -ItemType Directory -Force $OutputDir | Out-Null
 $stage = Join-Path $env:TEMP "dorknet-patcher-$VersionKey-$([guid]::NewGuid().Guid.Substring(0,8))"
 New-Item -ItemType Directory -Force $stage | Out-Null
 try {
-    # ── 1. Build DorkNet.ClientMod ───────────────────────────────────────
+    # ── 1. Fetch MelonLoader from upstream releases ──────────────────────
+    # We download it first so the DLLs inside can serve as compile-time
+    # references for DorkNet.ClientMod — keeps the build self-contained
+    # (no local Rec Room install required to compile the mod).
+    # x64 .NET 6 build targets 2020-era Rec Room. The asset name pattern
+    # is stable across 0.6.x: MelonLoader.x64.zip.
+    $mlAsset = "MelonLoader.x64.zip"
+    $mlUrl = "https://github.com/LavaGang/MelonLoader/releases/download/$MelonLoaderVersion/$mlAsset"
+    $mlZip = "$stage\MelonLoader.zip"
+    $mlExtract = "$stage\melonloader-extracted"
+    Write-Host "[fetch] downloading $mlUrl"
+    Invoke-WebRequest -Uri $mlUrl -OutFile $mlZip
+    if (-not (Test-Path $mlZip) -or (Get-Item $mlZip).Length -lt 1MB) {
+        throw "MelonLoader download failed or produced an unexpectedly small file"
+    }
+    Expand-Archive -Path $mlZip -DestinationPath $mlExtract -Force
+    # The 0.6.x release zip layout has a top-level `MelonLoader` folder
+    # containing net6, net35, Dependencies, Documentation. Point the
+    # csproj at that inner folder.
+    $mlRefRoot = Join-Path $mlExtract 'MelonLoader'
+    if (-not (Test-Path "$mlRefRoot\net6\MelonLoader.dll")) {
+        throw "Extracted MelonLoader is missing net6\MelonLoader.dll — release layout may have changed"
+    }
+
+    # ── 2. Build DorkNet.ClientMod (no Rec Room install needed) ─────────
     Write-Host "[build] dotnet build DorkNet.ClientMod (Release)"
     dotnet build "$repoRoot\DorkNet.ClientMod\DorkNet.ClientMod.csproj" `
-        -c Release --nologo | Out-Null
+        -c Release --nologo `
+        "-p:MelonLoaderDir=$mlRefRoot" | Out-Null
     if ($LASTEXITCODE -ne 0) { throw "ClientMod build failed" }
     $dll = Get-ChildItem "$repoRoot\DorkNet.ClientMod\bin\Release" -Recurse `
         -Filter "DorkNet.ClientMod.dll" |
@@ -57,18 +87,6 @@ try {
     if (-not $dll) { throw "DorkNet.ClientMod.dll not found post-build" }
     Copy-Item $dll.FullName "$stage\DorkNet.ClientMod.dll"
     Write-Host "[build] copied $($dll.FullName)"
-
-    # ── 2. Fetch MelonLoader from upstream releases ──────────────────────
-    # The x64 .NET 6 build is what targets 2020-era Rec Room. The asset
-    # name pattern is stable across 0.6.x: MelonLoader.x64.zip.
-    $mlAsset = "MelonLoader.x64.zip"
-    $mlUrl = "https://github.com/LavaGang/MelonLoader/releases/download/$MelonLoaderVersion/$mlAsset"
-    $mlOut = "$stage\MelonLoader.zip"
-    Write-Host "[build] downloading $mlUrl"
-    Invoke-WebRequest -Uri $mlUrl -OutFile $mlOut
-    if (-not (Test-Path $mlOut) -or (Get-Item $mlOut).Length -lt 1MB) {
-        throw "MelonLoader download failed or produced an unexpectedly small file"
-    }
 
     # ── 3. Copy the config template ──────────────────────────────────────
     $template = "$repoRoot\DorkNet.ClientMod\dorknet-clientmod.json.template"
@@ -92,12 +110,15 @@ try {
     Set-Content -LiteralPath "$stage\manifest.json" -Value $manifest
 
     # ── 5. Bundle into the final zip ────────────────────────────────────
+    # Strip the extracted MelonLoader scratch dir before zipping so it
+    # doesn't bloat the artifact. The MelonLoader.zip itself stays.
+    Remove-Item -Recurse -Force $mlExtract
     $outZip = Join-Path $OutputDir "dorknet-clientpatch-$VersionKey.zip"
     if (Test-Path $outZip) { Remove-Item $outZip -Force }
     Compress-Archive -Path "$stage\*" -DestinationPath $outZip
     $sizeMb = [math]::Round((Get-Item $outZip).Length / 1MB, 1)
     Write-Host ""
-    Write-Host "✓ Built $outZip ($sizeMb MB)" -ForegroundColor Green
+    Write-Host "Built $outZip ($sizeMb MB)" -ForegroundColor Green
     Write-Host "  Upload this to the v1-* GitHub Release on this branch."
 }
 finally {
