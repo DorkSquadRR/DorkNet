@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Diagnostics;
+using System.Net.Http;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Navigation;
@@ -18,6 +19,7 @@ public partial class MainWindow : Window
     private readonly ClientPatcher _patcher = new();
     private readonly ServerProcess _server = new();
     private readonly Updater _updater = new();
+    private readonly LauncherNameServer _nameServer = new();
     private IAsyncDisposable? _tunnel;
     private VersionsManifest? _manifest;
     private string? _hostApex;
@@ -205,13 +207,13 @@ public partial class MainWindow : Window
         // main HostView and the setup wizard's matching step.
         if (HostModeLocal is not null && HostModeInternet is not null && HostModeRemote is not null)
         {
-            HostModeInternet.IsChecked = _state.HostingMode == HostingMode.Internet;
+            HostModeInternet.IsChecked = _state.HostingMode == HostingMode.SingleOriginTunnel;
             HostModeLocal.IsChecked = _state.HostingMode == HostingMode.LocalNetwork;
             HostModeRemote.IsChecked = _state.HostingMode == HostingMode.RemoteWildcard;
         }
         if (SetupHostLocal is not null && SetupHostInternet is not null && SetupHostRemote is not null)
         {
-            SetupHostInternet.IsChecked = _state.HostingMode == HostingMode.Internet;
+            SetupHostInternet.IsChecked = _state.HostingMode == HostingMode.SingleOriginTunnel;
             SetupHostLocal.IsChecked = _state.HostingMode == HostingMode.LocalNetwork;
             SetupHostRemote.IsChecked = _state.HostingMode == HostingMode.RemoteWildcard;
         }
@@ -414,7 +416,7 @@ public partial class MainWindow : Window
         // on it via Next or Re-run setup.
         if (SetupHostInternet is not null && SetupHostRemote is not null && SetupHostLocal is not null)
         {
-            SetupHostInternet.IsChecked = _state.HostingMode == HostingMode.Internet;
+            SetupHostInternet.IsChecked = _state.HostingMode == HostingMode.SingleOriginTunnel;
             SetupHostRemote.IsChecked = _state.HostingMode == HostingMode.RemoteWildcard;
             SetupHostLocal.IsChecked = _state.HostingMode == HostingMode.LocalNetwork;
         }
@@ -465,21 +467,21 @@ public partial class MainWindow : Window
             ? HostingMode.RemoteWildcard
             : SetupHostLocal.IsChecked == true
                 ? HostingMode.LocalNetwork
-                : HostingMode.Internet;
+                : HostingMode.SingleOriginTunnel;
         _state.Save();
         // Mirror to main HostView radios.
         if (HostModeLocal is not null && HostModeInternet is not null && HostModeRemote is not null)
         {
-            HostModeInternet.IsChecked = _state.HostingMode == HostingMode.Internet;
+            HostModeInternet.IsChecked = _state.HostingMode == HostingMode.SingleOriginTunnel;
             HostModeLocal.IsChecked = _state.HostingMode == HostingMode.LocalNetwork;
             HostModeRemote.IsChecked = _state.HostingMode == HostingMode.RemoteWildcard;
         }
         UpdateRemoteWildcardVisibility();
     }
 
-    /// <summary>The Tunnelto base host field only matters when the user
-    /// picks the wildcard-base option. Plain Tunnelto auto-generates it;
-    /// LAN doesn't use it at all. Hide it everywhere else.</summary>
+    /// <summary>The custom tunnel base field is legacy-only. The guided
+    /// path uses localtunnel or LAN direct hosting, so hide it unless an
+    /// older saved state still selects the custom provider mode.</summary>
     private void UpdateRemoteWildcardVisibility()
     {
         var show = _state.HostingMode == HostingMode.RemoteWildcard
@@ -603,7 +605,7 @@ public partial class MainWindow : Window
             ? HostingMode.RemoteWildcard
             : HostModeLocal.IsChecked == true
                 ? HostingMode.LocalNetwork
-                : HostingMode.Internet;
+                : HostingMode.SingleOriginTunnel;
         _state.Save();
         UpdateRemoteWildcardVisibility();
     }
@@ -626,7 +628,7 @@ public partial class MainWindow : Window
         { ShowError("Pick your Rec Room install first."); return; }
         if (string.IsNullOrEmpty(_state.PhotonAppId))
         { ShowError("Photon AppId required (free at dashboard.photonengine.com)."); return; }
-        if (_state.HostingMode != HostingMode.LocalNetwork)
+        if (_state.HostingMode == HostingMode.RemoteWildcard)
         {
             var typed = TunneltoTunnel.NormalizeHost(RemoteWildcardInput.Text);
             _state.RemoteWildcardApex = string.IsNullOrWhiteSpace(typed)
@@ -674,30 +676,19 @@ public partial class MainWindow : Window
                 _hostApex = lan.Host;
                 activeStep.Detail = $"LAN address {lan.Ip} via {_hostApex}";
             }
-            else if (_state.HostingMode == HostingMode.RemoteWildcard)
+            else if (_state.HostingMode == HostingMode.SingleOriginTunnel
+                     || _state.HostingMode == HostingMode.Internet)
             {
-                var tunnel = new TunneltoTunnel();
-                _tunnel = tunnel;
-                activeStep.Detail = $"Connecting Tunnelto for {_state.RemoteWildcardApex}";
-                var publicUrl = await tunnel.StartAsync(
-                    _state.RemoteWildcardApex,
-                    ServerProcess.DefaultLocalPort);
-                var publicHost = new Uri(publicUrl).Host;
-                _hostApex = TunneltoTunnel.NormalizeHost(_state.RemoteWildcardApex);
-                activeStep.Detail = $"Tunnel ready: {publicHost}; services under {_hostApex}";
+                var publicUrl = await StartLocaltunnelAsync(activeStep);
+                _hostApex = new Uri(publicUrl).Host;
+                _nameServer.Start(publicUrl);
+                activeStep.Detail = $"localtunnel ready: {publicUrl}; launcher name-server on 127.0.0.1:80";
             }
             else
             {
-                var tunnel = new TunneltoTunnel();
-                _tunnel = tunnel;
-                activeStep.Detail = $"Connecting Tunnelto for {_state.RemoteWildcardApex}";
-                var publicUrl = await tunnel.StartAsync(
-                    _state.RemoteWildcardApex,
-                    ServerProcess.DefaultLocalPort);
-                var publicHost = new Uri(publicUrl).Host;
+                var publicHost = await StartTunneltoAsync(activeStep);
                 _hostApex = TunneltoTunnel.NormalizeHost(_state.RemoteWildcardApex);
                 activeStep.Detail = $"Tunnel ready: {publicHost}; services under {_hostApex}";
-                activeStep.Progress = null;
             }
             CompleteStep(activeStep);
 
@@ -729,7 +720,8 @@ public partial class MainWindow : Window
             activeStep = StartStep(_hostSteps, 5);
             var patch = await _patcher.ApplyAsync(
                 patcherDir, _state.RecRoomPath!,
-                _state.PhotonAppId, _state.PhotonVoiceAppId, _state.PhotonRegion, _hostApex);
+                _state.PhotonAppId, _state.PhotonVoiceAppId, _state.PhotonRegion, _hostApex,
+                singleOrigin: _state.HostingMode == HostingMode.SingleOriginTunnel);
             if (!patch.Ok)
             {
                 FailStepWithFriendly(activeStep, ErrorTranslator.TranslateMessage(patch.Log));
@@ -747,13 +739,20 @@ public partial class MainWindow : Window
                 PhotonVoiceAppId = _state.PhotonVoiceAppId,
                 PhotonRegion = _state.PhotonRegion,
                 Name = _state.ServerName,
+                SingleOrigin = _state.HostingMode == HostingMode.SingleOriginTunnel,
             });
             JoinCodeText.Text = code;
             JoinCodeQrImage.Source = QrCodeRenderer.Render(code);
             JoinCodePanel.Visibility = Visibility.Visible;
-            HostStatusText.Text = _state.HostingMode == HostingMode.LocalNetwork
-                ? $"Hosting on your local network at {_hostApex}. Share the join code with friends on the same WiFi."
-                : $"Hosting at https://{_hostApex}. Share the join code below or launch Rec Room to test.";
+            HostStatusText.Text = _state.HostingMode switch
+            {
+                HostingMode.LocalNetwork =>
+                    $"Hosting on your local network at {_hostApex}. Share the join code with friends on the same WiFi.",
+                HostingMode.SingleOriginTunnel or HostingMode.Internet =>
+                    $"Hosting through Localtunnel at https://{_hostApex}. Keep this launcher open while playing.",
+                _ =>
+                    $"Hosting at https://{_hostApex}. Share the join code below or launch Rec Room to test.",
+            };
             HostLaunchBtn.Visibility = Visibility.Visible;
             HostAdminBtn.Visibility = Visibility.Visible;
             SetSidebarStatus("Live", "Ok");
@@ -773,6 +772,32 @@ public partial class MainWindow : Window
     private void ShowHostRetry()
     {
         HostRetryPanel.Visibility = Visibility.Visible;
+    }
+
+    private async Task<string> StartTunneltoAsync(StartupStep step)
+    {
+        step.Detail = "Checking Tunnelto";
+        var installer = new TunneltoInstaller();
+        var progress = new Progress<DownloadProgress>(p => UpdateStepProgress(step, p));
+        await installer.EnsureInstalledAsync(progress);
+        step.Progress = null;
+
+        var tunnel = new TunneltoTunnel();
+        _tunnel = tunnel;
+        step.Detail = $"Connecting Tunnelto for {_state.RemoteWildcardApex}";
+        var publicUrl = await tunnel.StartAsync(
+            _state.RemoteWildcardApex,
+            ServerProcess.DefaultLocalPort);
+        return new Uri(publicUrl).Host;
+    }
+
+    private async Task<string> StartLocaltunnelAsync(StartupStep step)
+    {
+        step.Detail = "Starting localtunnel through npx";
+        step.Progress = null;
+        var tunnel = new LocaltunnelTunnel();
+        _tunnel = tunnel;
+        return await tunnel.StartAsync(ServerProcess.DefaultLocalPort);
     }
 
     private void OnHostRetry(object sender, RoutedEventArgs e)
@@ -836,8 +861,8 @@ public partial class MainWindow : Window
 
     /// <summary>Open the server's admin web panel in the user's default
     /// browser. The admin SPA is published at <c>admin.&lt;apex&gt;</c>
-    /// over the same scheme the server uses (https for tunnel modes,
-    /// http for LAN). First account created on a fresh server is
+    /// over the same scheme the server uses (http for direct modes,
+    /// https for legacy tunnel modes). First account created on a fresh server is
     /// auto-promoted; subsequent admins are added from inside the panel.</summary>
     private void OnOpenAdminPanel(object sender, RoutedEventArgs e)
     {
@@ -846,8 +871,12 @@ public partial class MainWindow : Window
             ShowError("Server isn't running. Start hosting first, then the admin panel becomes reachable.");
             return;
         }
-        var scheme = _state.HostingMode == HostingMode.LocalNetwork ? "http" : "https";
-        var url = $"{scheme}://admin.{_hostApex}";
+        var url = _state.HostingMode == HostingMode.SingleOriginTunnel
+            ? $"https://{_hostApex}/__dn/admin/"
+            : null;
+        var scheme = _state.HostingMode is HostingMode.LocalNetwork or HostingMode.Internet
+            ? "http" : "https";
+        url ??= $"{scheme}://admin.{_hostApex}";
         try
         {
             Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
@@ -862,6 +891,7 @@ public partial class MainWindow : Window
     {
         try { await _server.StopAsync(); } catch { }
         if (_tunnel is not null) { try { await _tunnel.DisposeAsync(); } catch { } _tunnel = null; }
+        try { await _nameServer.DisposeAsync(); } catch { }
     }
 
     private void OnCopyJoinCode(object sender, RoutedEventArgs e)
@@ -877,7 +907,8 @@ public partial class MainWindow : Window
             : _state.ServerName;
         var msg =
             $"Join {name} on DorkNet! Grab the launcher at " +
-            "https://github.com/DorkSquadRR/DorkNet and paste this code:\n\n" +
+            "https://github.com/DorkSquadRR/DorkNet\n\n" +
+            "Paste this code:\n\n" +
             JoinCodeText.Text;
         try { Clipboard.SetText(msg); }
         catch (Exception ex) { ShowError("Copy failed: " + ex.Message); }
@@ -894,7 +925,7 @@ public partial class MainWindow : Window
         var body = Uri.EscapeDataString(
             $"Hey! Want to play on {name}?\n\n" +
             "1. Download the DorkNet launcher: https://github.com/DorkSquadRR/DorkNet\n" +
-            "2. Open it and pick \"Join a friend\"\n" +
+            "2. Open DorkNet and pick \"Join a friend\"\n" +
             "3. Paste this code:\n\n" +
             JoinCodeText.Text);
         try { Process.Start(new ProcessStartInfo($"mailto:?subject={subject}&body={body}")
@@ -925,10 +956,14 @@ public partial class MainWindow : Window
             return;
         }
         JoinPreviewBorder.Visibility = Visibility.Visible;
+        var singleOriginHint = payload.SingleOrigin
+            ? "\nNetwork: Localtunnel — keep this launcher open while Rec Room is running."
+            : "";
         JoinPreviewText.Text =
             $"Connecting to {(string.IsNullOrEmpty(payload.Name) ? "(unnamed server)" : payload.Name)}\n" +
             $"Host: {payload.Host}\n" +
-            $"Version: {payload.VersionKey}";
+            $"Version: {payload.VersionKey}" +
+            singleOriginHint;
     }
 
     private async void OnJoinApply(object sender, RoutedEventArgs e)
@@ -953,12 +988,16 @@ public partial class MainWindow : Window
         StartupStep? activeStep = null;
         try
         {
-            activeStep = StartStep(_joinSteps, 0);
+            var stepIndex = 0;
+            if (payload.SingleOrigin)
+                _nameServer.Start($"https://{payload.Host}");
+
+            activeStep = StartStep(_joinSteps, stepIndex++);
             var progress = new Progress<DownloadProgress>(p => UpdateStepProgress(activeStep, p));
             var patcherDir = await _releases.EnsurePatcherAsync(version, progress);
             CompleteStep(activeStep);
 
-            activeStep = StartStep(_joinSteps, 1);
+            activeStep = StartStep(_joinSteps, stepIndex++);
             var stripProgress = new Progress<DownloadProgress>(p => UpdateStepProgress(activeStep, p));
             var stripResult = await SteamDrmStripper.StripIfNeededAsync(
                 _state.RecRoomPath!, stripProgress);
@@ -970,10 +1009,11 @@ public partial class MainWindow : Window
             };
             CompleteStep(activeStep);
 
-            activeStep = StartStep(_joinSteps, 2);
+            activeStep = StartStep(_joinSteps, stepIndex++);
             var patch = await _patcher.ApplyAsync(
                 patcherDir, _state.RecRoomPath!,
-                payload.PhotonAppId, payload.PhotonVoiceAppId, payload.PhotonRegion, payload.Host);
+                payload.PhotonAppId, payload.PhotonVoiceAppId, payload.PhotonRegion, payload.Host,
+                singleOrigin: payload.SingleOrigin);
             if (!patch.Ok)
             {
                 FailStepWithFriendly(activeStep, ErrorTranslator.TranslateMessage(patch.Log));
@@ -1002,6 +1042,7 @@ public partial class MainWindow : Window
         JoinRetryPanel.Visibility = Visibility.Collapsed;
         OnJoinApply(sender, e);
     }
+
 
     private void OnOpenTroubleshooting(object sender, RoutedEventArgs e)
     {

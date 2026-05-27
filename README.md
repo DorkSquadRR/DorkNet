@@ -39,9 +39,9 @@ One download, two flavours: an **installer** (Start menu shortcut +
 rolling auto-updates) or a **portable `dorknet.exe`** (drop anywhere).
 Pick a Rec Room build on first launch, host or join.
 
-- **Host a server** — runs a local server + Tunnelto tunnel for the
-  client version you pick, patches your Rec Room install, and gives
-  you a shareable join code.
+- **Host a server** — runs a local server, opens a free Localtunnel
+  HTTPS URL for it (no account), patches your Rec Room install for the
+  client version you pick, and gives you a shareable join code.
 - **Join a server** — paste the code, point at your Rec Room install,
   hit play. The launcher fetches the matching patcher.
 

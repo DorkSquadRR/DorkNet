@@ -54,6 +54,7 @@ Name: "autorunupdates"; Description: "Check for updates on launch"; GroupDescrip
 
 [Files]
 Source: "{#PublishDir}\{#AppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\versions.json"; DestDir: "{app}"; Flags: ignoreversion
 ; Bundle the tunnelto helper if it's been built next to the launcher.
 ; The launcher auto-falls-back to PATH lookup when not bundled, so this
 ; is purely a convenience for users who don't already have it installed.

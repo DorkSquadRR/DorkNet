@@ -50,10 +50,52 @@ public static class LocalOverrides
         var path = Environment.GetEnvironmentVariable(ReleasesEnvVar);
         if (!string.IsNullOrEmpty(path)) return Directory.Exists(path) ? path : null;
 
-        var sideBySide = Path.Combine(AppContext.BaseDirectory, "local-releases");
-        if (Directory.Exists(sideBySide)) return sideBySide;
+        var sideBySide = FindSideBySideLocalReleases();
+        if (sideBySide is not null) return sideBySide;
 
         return null;
+    }
+
+    private static string? FindSideBySideLocalReleases()
+    {
+        var baseDir = AppContext.BaseDirectory;
+        var direct = Path.Combine(baseDir, "local-releases");
+        if (LooksLikeLocalReleasesRoot(direct)) return direct;
+
+        // Be forgiving when users extract the zip into the wrong level:
+        // DorkNet\local-releases\local-releases\...
+        var doubled = Path.Combine(direct, "local-releases");
+        if (LooksLikeLocalReleasesRoot(doubled)) return doubled;
+
+        // Windows Explorer's "Extract All" often creates a folder named
+        // after the zip, then places local-releases inside it.
+        try
+        {
+            foreach (var dir in Directory.GetDirectories(baseDir))
+            {
+                var nested = Path.Combine(dir, "local-releases");
+                if (LooksLikeLocalReleasesRoot(nested)) return nested;
+            }
+        }
+        catch { }
+
+        return null;
+    }
+
+    private static bool LooksLikeLocalReleasesRoot(string path)
+    {
+        if (!Directory.Exists(path)) return false;
+        try
+        {
+            return Directory.GetDirectories(path)
+                .Any(versionDir =>
+                    Directory.Exists(Path.Combine(versionDir, "server")) ||
+                    Directory.Exists(Path.Combine(versionDir, "patcher")));
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>Returns the local server-dir for <paramref name="versionKey"/>
@@ -86,8 +128,8 @@ public static class LocalOverrides
         var parts = new List<string>();
         Describe(ManifestEnvVar, isDir: false, parts);
         Describe(ReleasesEnvVar, isDir: true, parts);
-        var sideBySide = Path.Combine(AppContext.BaseDirectory, "local-releases");
-        if (Directory.Exists(sideBySide))
+        var sideBySide = FindSideBySideLocalReleases();
+        if (sideBySide is not null)
             parts.Add($"{ReleasesEnvVar} -> {sideBySide}  [side-by-side fallback]");
         return string.Join("\n", parts);
     }

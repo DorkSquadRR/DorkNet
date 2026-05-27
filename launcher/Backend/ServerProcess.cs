@@ -32,7 +32,11 @@ public sealed class ServerProcess : IAsyncDisposable
             throw new InvalidOperationException("A server is already running; stop it first.");
 
         var exe = FindServerExecutable(serverDir);
-        ApplySqliteCompatibilityPatches(serverDir);
+        // db lives under %APPDATA%\DorkNet so it survives reinstalls of
+        // the server cache dir (which sits under %LOCALAPPDATA%).
+        var dbPath = Path.Combine(AppPaths.RoamingRoot, "dorknet.db");
+        MigrateLegacyDbIfPresent(serverDir, dbPath);
+        ApplySqliteCompatibilityPatches(dbPath);
         StdoutLogPath = Path.Combine(AppPaths.LogsRoot, $"server-{DateTime.UtcNow:yyyyMMdd-HHmmss}.log");
 
         var psi = new ProcessStartInfo
@@ -45,23 +49,30 @@ public sealed class ServerProcess : IAsyncDisposable
             RedirectStandardError = true,
         };
         psi.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
-        psi.Environment["ASPNETCORE_URLS"] = hostingMode == HostingMode.LocalNetwork
+        var singleOriginMode = hostingMode == HostingMode.SingleOriginTunnel;
+        var directMode = hostingMode is HostingMode.LocalNetwork or HostingMode.Internet;
+        psi.Environment["ASPNETCORE_URLS"] = directMode
             ? $"http://0.0.0.0:{LanPort}"
             : $"http://127.0.0.1:{DefaultLocalPort}";
         psi.Environment["Database__Provider"] = "sqlite";
+        psi.Environment["Database__SqlitePath"] = dbPath;
         psi.Environment["Jwt__Secret"] = EnsureJwtSecret();
         psi.Environment["Photon__AppId"] = state.PhotonAppId;
         psi.Environment["Photon__VoiceAppId"] =
             string.IsNullOrEmpty(state.PhotonVoiceAppId) ? state.PhotonAppId : state.PhotonVoiceAppId;
         psi.Environment["Photon__CloudRegion"] = state.PhotonRegion;
         psi.Environment["Domain__Apex"] = apex;
-        psi.Environment["Domain__Scheme"] = hostingMode == HostingMode.LocalNetwork ? "http" : "https";
+        psi.Environment["Domain__Scheme"] = directMode ? "http" : "https";
         psi.Environment["Domain__Port"] = "";
+        if (singleOriginMode)
+            psi.Environment["Domain__SingleOriginBaseUrl"] = $"https://{apex}";
 
         AppendLog($"[launcher] serverDir={serverDir}");
         AppendLog($"[launcher] exe={exe}");
         AppendLog($"[launcher] urls={psi.Environment["ASPNETCORE_URLS"]}");
         AppendLog($"[launcher] domain apex={apex}, scheme={psi.Environment["Domain__Scheme"]}, port={psi.Environment["Domain__Port"]}");
+        if (singleOriginMode)
+            AppendLog($"[launcher] single origin={psi.Environment["Domain__SingleOriginBaseUrl"]}");
 
         _process = new Process { StartInfo = psi, EnableRaisingEvents = true };
         _process.OutputDataReceived += (_, e) => AppendLog(e.Data);
@@ -128,15 +139,42 @@ public sealed class ServerProcess : IAsyncDisposable
             $"No server binary found in {serverDir}. The release artifact may be corrupt.");
     }
 
-    private static void ApplySqliteCompatibilityPatches(string serverDir)
+    private static void ApplySqliteCompatibilityPatches(string dbPath)
     {
-        var dbPath = Path.Combine(serverDir, "data", "dorknet.db");
         if (!File.Exists(dbPath)) return;
 
         using var conn = new SqliteConnection($"Data Source={dbPath}");
         conn.Open();
         AddSqliteColumnIfMissing(conn, "Rooms", "HiddenFromBrowse",
             @"""HiddenFromBrowse"" INTEGER NOT NULL DEFAULT 0");
+    }
+
+    /// <summary>If an older launcher build left the SQLite db under
+    /// <c>&lt;serverDir&gt;\data\dorknet.db</c> (where the server defaulted
+    /// before <see cref="Database__SqlitePath"/> took over), copy it to
+    /// the new <see cref="AppPaths.RoamingRoot"/> location so existing
+    /// players, rooms, and dorms survive the move. Best-effort — never
+    /// throws, never overwrites a db that's already at the new path.</summary>
+    private static void MigrateLegacyDbIfPresent(string serverDir, string newDbPath)
+    {
+        try
+        {
+            if (File.Exists(newDbPath)) return;
+            var legacy = Path.Combine(serverDir, "data", "dorknet.db");
+            if (!File.Exists(legacy)) return;
+
+            var destDir = Path.GetDirectoryName(newDbPath);
+            if (!string.IsNullOrEmpty(destDir)) Directory.CreateDirectory(destDir);
+            File.Copy(legacy, newDbPath);
+            // SQLite WAL/SHM sidecars live next to the .db — copy them
+            // too so the move doesn't drop in-flight wal frames.
+            foreach (var suffix in new[] { "-wal", "-shm" })
+            {
+                var src = legacy + suffix;
+                if (File.Exists(src)) File.Copy(src, newDbPath + suffix, overwrite: true);
+            }
+        }
+        catch { /* best-effort — fresh db will be created on first server boot */ }
     }
 
     private static void AddSqliteColumnIfMissing(

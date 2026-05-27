@@ -16,10 +16,14 @@ this re-fetches the server's current pubkey before patching.
 
 The watch can't reach the server URL. Verify:
 1. The host string in `dorknet-clientmod.json` matches the server's
-   public URL (tunnel URL for Easy mode).
-2. The server responds to `https://<host>/healthz` with `200 OK` from
-   the same machine the client runs on.
-3. No corporate proxy / DNS filter is intercepting `*.trycloudflare.com`.
+   current join-code URL. (Localtunnel hands out a fresh
+   `<random>.loca.lt` URL on every host restart — the joiner needs the
+   most recent code.)
+2. Open `https://<host>/healthz` in a browser from the joiner's machine
+   and confirm a `200 OK`. If you instead see Localtunnel's "Click to
+   Continue" page, click through once and retry the connect.
+3. No corporate proxy / DNS filter is intercepting `loca.lt` /
+   `sslip.io`.
 
 ### Black screen after the loading bar fills
 
@@ -73,12 +77,20 @@ fixes:
 
 ## Easy app
 
-### "Cloudflared exited unexpectedly"
+### "Localtunnel couldn't get a URL"
 
-The bundled `cloudflared.exe` couldn't start. Most likely a Windows
-Defender false-positive — check Defender's quarantine. If you find a
-cleaner alternative tunnel provider, open an issue; we've been looking
-for one.
+DorkNet shells out to the Localtunnel client and waits for it to
+report back with a `*.loca.lt` URL. If that fails, the most common
+causes are:
+- Localtunnel's service is rate-limiting / down — wait a couple
+  minutes and retry, or switch to LAN mode if friends are local.
+- No Node.js / `npx` available for the fallback path (the launcher
+  bundles a .NET Localtunnel client, but if both that and `npx`
+  fail you'll see this). Install Node.js 16+ from
+  [nodejs.org](https://nodejs.org/) and click Retry.
+- Outbound HTTPS to `loca.lt` is blocked (corporate firewall, DNS
+  filter). Switch to LAN mode or use the wildcard option with your
+  own apex.
 
 ### Patch button is greyed out
 

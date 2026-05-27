@@ -58,10 +58,11 @@ public sealed class ClientPatcher
         string photonVoiceAppId,
         string photonRegion,
         string apexHost,
+        bool singleOrigin = false,
         CancellationToken ct = default)
     {
         return Task.Run(() => ApplyCore(patcherDir, recRoomDataPath,
-            photonAppId, photonVoiceAppId, photonRegion, apexHost), ct);
+            photonAppId, photonVoiceAppId, photonRegion, apexHost, singleOrigin), ct);
     }
 
     private PatchResult ApplyCore(
@@ -70,7 +71,8 @@ public sealed class ClientPatcher
         string photonAppId,
         string photonVoiceAppId,
         string photonRegion,
-        string apexHost)
+        string apexHost,
+        bool singleOrigin)
     {
         var log = new System.Text.StringBuilder();
         try
@@ -217,7 +219,8 @@ public sealed class ClientPatcher
                     .Replace("{PHOTON_APPID}", photonAppId ?? "")
                     .Replace("{PHOTON_VOICE_APPID}",
                         string.IsNullOrEmpty(photonVoiceAppId) ? photonAppId ?? "" : photonVoiceAppId)
-                    .Replace("{PHOTON_REGION}", string.IsNullOrEmpty(photonRegion) ? "us" : photonRegion);
+                    .Replace("{PHOTON_REGION}", string.IsNullOrEmpty(photonRegion) ? "us" : photonRegion)
+                    .Replace("{SINGLE_ORIGIN_BASE_URL}", singleOrigin ? $"https://{apexHost}" : "");
                 File.WriteAllText(configDest, rendered);
                 log.AppendLine($"[patch] wrote config: {Path.GetFileName(configDest)}");
             }

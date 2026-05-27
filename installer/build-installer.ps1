@@ -44,9 +44,13 @@ if (-not (Test-Path $exe)) { throw "Expected $exe not found after publish" }
 $exeSize = "{0:N1} MB" -f ((Get-Item $exe).Length / 1MB)
 Write-Host "==> Published: $exe ($exeSize)" -ForegroundColor Green
 
-# Resolve ISCC.exe — try PATH first, then the default install dir.
+# Resolve ISCC.exe — try PATH first, then common machine/user install dirs.
 $iscc = (Get-Command "ISCC.exe" -ErrorAction SilentlyContinue).Source
 if (-not $iscc) { $iscc = "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" }
+if (-not (Test-Path $iscc)) {
+    $iscc = Join-Path $env:LOCALAPPDATA "Programs\Inno Setup 6\ISCC.exe"
+}
+if (-not (Test-Path $iscc)) { $iscc = "C:\Program Files\Inno Setup 6\ISCC.exe" }
 if (-not (Test-Path $iscc)) {
     throw "ISCC.exe not found. Install Inno Setup 6 from https://jrsoftware.org/isinfo.php"
 }

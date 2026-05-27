@@ -39,13 +39,14 @@ public sealed class AppState
     [JsonPropertyName("photonRegion")]
     public string PhotonRegion { get; set; } = "us";
 
-    /// <summary>How the host exposes the server: <c>Internet</c> uses
-    /// Tunnelto (works for friends anywhere with the join code);
-    /// <c>LocalNetwork</c> binds on the LAN and uses an sslip.io
-    /// hostname in the join code (joiners must be on the same
-    /// network).</summary>
+    /// <summary>How the host exposes the server: <c>SingleOriginTunnel</c>
+    /// (default) opens one public Localtunnel HTTPS URL plus a
+    /// launcher-hosted local name server; <c>LocalNetwork</c> binds on
+    /// the LAN and uses an sslip.io hostname in the join code (joiners
+    /// must be on the same network); <c>RemoteWildcard</c> is the
+    /// legacy provider-owned-apex mode kept for back-compat.</summary>
     [JsonPropertyName("hostingMode")]
-    public HostingMode HostingMode { get; set; } = HostingMode.Internet;
+    public HostingMode HostingMode { get; set; } = HostingMode.SingleOriginTunnel;
 
     /// <summary>Provider-owned wildcard tunnel base for remote hosting
     /// without Cloudflare, e.g. <c>dorknet.tunnelto.me</c>. The server
@@ -109,6 +110,11 @@ public sealed class AppState
             // the authoritative source instead of needing to re-derive
             // them every load.
             if (migrated) { try { state.Save(); } catch { } }
+            if (state.HostingMode is HostingMode.RemoteWildcard or HostingMode.Internet)
+            {
+                state.HostingMode = HostingMode.SingleOriginTunnel;
+                try { state.Save(); } catch { }
+            }
 
             return state;
         }
@@ -138,8 +144,14 @@ public enum AppMode
 
 public enum HostingMode
 {
-    /// <summary>Default — Tunnelto tunnel, public over the internet,
-    /// works for joiners anywhere.</summary>
+    /// <summary>Easy Launcher remote mode — one public HTTPS tunnel URL.
+    /// The launcher answers the client's localhost name-server bootstrap
+    /// and points every RecNet service at path prefixes under that URL.</summary>
+    SingleOriginTunnel,
+    /// <summary>Legacy "Friends anywhere" mode kept for migration
+    /// purposes only. New installs are normalised to
+    /// <see cref="SingleOriginTunnel"/> at <see cref="Load"/> time
+    /// (see the migration block there).</summary>
     Internet,
     /// <summary>LAN only — bind on all local interfaces, skip the
     /// tunnel, and publish an sslip.io hostname for the machine's LAN

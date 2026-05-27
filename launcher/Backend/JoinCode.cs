@@ -6,8 +6,9 @@ using System.Text.Json.Serialization;
 namespace DorkNet.Launcher.Backend;
 
 /// <summary>Compact URL-safe encoding of the bits a joining player
-/// needs: the host's public address (typically a Cloudflare-Tunnel
-/// hostname), the Photon AppIds + region they used, the host's
+/// needs: the host address (a Localtunnel <c>*.loca.lt</c> URL for the
+/// default mode, or an <c>sslip.io</c> name for LAN), the Photon
+/// AppIds + region they used, the host's
 /// server name, and the version key so the joiner's launcher fetches
 /// the matching client patcher.
 ///
@@ -44,9 +45,10 @@ public static class JoinCode
 
 public sealed class JoinPayload
 {
-    /// <summary>Public hostname the joining patcher rewrites
-    /// <c>*.rec.net</c> URIs to. Cloudflare Tunnel typically gives
-    /// <c>random-words.trycloudflare.com</c>.</summary>
+    /// <summary>Hostname the joining patcher rewrites <c>*.rec.net</c>
+    /// URIs to. Default Localtunnel mode hands out
+    /// <c>&lt;random&gt;.loca.lt</c>; LAN mode uses an <c>sslip.io</c>
+    /// name that resolves to the host's private IP.</summary>
     [JsonPropertyName("host")] public string Host { get; set; } = "";
 
     /// <summary>Version key from versions.json. Tells the joiner which
@@ -65,4 +67,8 @@ public sealed class JoinPayload
     /// <summary>Server name shown in the joiner's "you're about to
     /// connect to ..." preview.</summary>
     [JsonPropertyName("n")] public string Name { get; set; } = "";
+
+    /// <summary>True when all RecNet services are exposed under one
+    /// public origin using /__dn/{service}/ path prefixes.</summary>
+    [JsonPropertyName("so")] public bool SingleOrigin { get; set; }
 }

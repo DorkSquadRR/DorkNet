@@ -14,6 +14,8 @@ public sealed class TunneltoTunnel : IAsyncDisposable
 {
     private Process? _process;
     private TaskCompletionSource<string>? _urlReady;
+    private readonly object _outputLock = new();
+    private readonly Queue<string> _recentOutput = new();
     public string? PublicUrl { get; private set; }
 
     public async Task<string> StartAsync(
@@ -36,20 +38,41 @@ public sealed class TunneltoTunnel : IAsyncDisposable
             RedirectStandardOutput = true,
             RedirectStandardError = true,
         };
-        psi.ArgumentList.Add("add");
-        psi.ArgumentList.Add(tunnelHost);
+        psi.ArgumentList.Add("--host");
+        psi.ArgumentList.Add("127.0.0.1");
+        psi.ArgumentList.Add("--port");
         psi.ArgumentList.Add(localPort.ToString());
+        if (TryGetTunneltoSubdomain(tunnelHost, out var subdomain))
+        {
+            psi.ArgumentList.Add("--subdomain");
+            psi.ArgumentList.Add(subdomain);
+        }
 
         _process = Process.Start(psi) ??
             throw new InvalidOperationException("Failed to spawn tunnelto.exe");
+        _process.EnableRaisingEvents = true;
+        _process.Exited += (_, _) =>
+        {
+            if (_urlReady is null || _urlReady.Task.IsCompleted) return;
+            _urlReady.TrySetException(new InvalidOperationException(
+                "Tunnelto exited before reporting a public URL." + FormatRecentOutput()));
+        };
         _process.OutputDataReceived += (_, e) => ParseLine(e.Data);
         _process.ErrorDataReceived += (_, e) => ParseLine(e.Data);
         _process.BeginOutputReadLine();
         _process.BeginErrorReadLine();
 
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-        timeoutCts.CancelAfter(TimeSpan.FromSeconds(45));
-        PublicUrl = await _urlReady.Task.WaitAsync(timeoutCts.Token);
+        var readyTask = _urlReady.Task;
+        var timeoutTask = Task.Delay(TimeSpan.FromSeconds(45), ct);
+        var completed = await Task.WhenAny(readyTask, timeoutTask);
+        if (completed == timeoutTask)
+        {
+            ct.ThrowIfCancellationRequested();
+            throw new TimeoutException(
+                "Tunnelto didn't report a public URL within 45 seconds." + FormatRecentOutput());
+        }
+
+        PublicUrl = await readyTask;
         return PublicUrl;
     }
 
@@ -72,6 +95,16 @@ public sealed class TunneltoTunnel : IAsyncDisposable
         var bytes = RandomNumberGenerator.GetBytes(8);
         var token = Convert.ToHexString(bytes).ToLowerInvariant();
         return $"dorknet-{token}.tunnelto.me";
+    }
+
+    private static bool TryGetTunneltoSubdomain(string host, out string subdomain)
+    {
+        const string suffix = ".tunnelto.me";
+        subdomain = "";
+        if (!host.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) return false;
+
+        subdomain = host[..^suffix.Length];
+        return !string.IsNullOrWhiteSpace(subdomain);
     }
 
     private static string ResolveExecutable()
@@ -112,9 +145,25 @@ public sealed class TunneltoTunnel : IAsyncDisposable
 
     private void ParseLine(string? line)
     {
-        if (line is null || _urlReady is null || _urlReady.Task.IsCompleted) return;
+        if (line is null) return;
+        lock (_outputLock)
+        {
+            _recentOutput.Enqueue(line);
+            while (_recentOutput.Count > 8) _recentOutput.Dequeue();
+        }
+
+        if (_urlReady is null || _urlReady.Task.IsCompleted) return;
         var match = UrlRegex.Match(line);
         if (match.Success) _urlReady.TrySetResult(match.Value);
+    }
+
+    private string FormatRecentOutput()
+    {
+        lock (_outputLock)
+        {
+            if (_recentOutput.Count == 0) return "";
+            return " Last Tunnelto output: " + string.Join(" | ", _recentOutput);
+        }
     }
 
     public async ValueTask DisposeAsync()

@@ -41,15 +41,15 @@ card.
 After login, click **CREATE A NEW APP** on the dashboard. The form asks
 for:
 
-- **Photon Type** — pick **Photon Realtime**. Not Fusion, not Quantum,
-  not Bolt.
+- **Photon Type** — pick **Photon SDK**. Not Fusion, not Quantum, not
+  Bolt.
 - **Name** — anything you'll recognise later ("DorkNet Realtime",
   "Sunday Server", etc.). Joiners don't see this.
 - **Description** — optional.
 
 Click **CREATE**.
 
-![photon "Create a new app" form, Realtime selected](images/photon-2-create-realtime.png)
+![photon "Create a new app" form, Photon SDK selected](images/photon-2-create-realtime.png)
 
 ## Step 3 — Copy the Realtime AppId
 

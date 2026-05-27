@@ -331,7 +331,7 @@
                             <TextBlock Text="ZERO COST" FontSize="10" FontWeight="Bold"
                                        Foreground="{StaticResource Ink}"
                                        Margin="0,0,0,6" />
-                            <TextBlock Text="No subscription, no card. Tunnelto handles the public address."
+                            <TextBlock Text="No port forwards. localtunnel gives one temporary HTTPS link."
                                        FontSize="12" Foreground="{StaticResource InkSoft}"
                                        TextWrapping="Wrap" LineHeight="18" />
                         </StackPanel>
@@ -662,11 +662,12 @@
                             <TextBlock Style="{StaticResource FieldLabel}" Text="WHO CAN JOIN?" />
                             <StackPanel Margin="0,0,0,16">
                                 <RadioButton x:Name="SetupHostInternet" GroupName="SetupHostingMode"
-                                             Content="Friends anywhere · Tunnelto"
+                                             Content="Friends anywhere · localtunnel"
                                              IsChecked="True"
                                              Checked="OnSetupHostingModeChanged" />
                                 <RadioButton x:Name="SetupHostRemote" GroupName="SetupHostingMode"
                                              Content="Friends anywhere · Tunnelto wildcard base"
+                                             Visibility="Collapsed"
                                              Checked="OnSetupHostingModeChanged" />
                                 <RadioButton x:Name="SetupHostLocal" GroupName="SetupHostingMode"
                                              Content="Same WiFi only · sslip.io"
@@ -880,10 +881,11 @@
                                 <TextBlock Style="{StaticResource FieldLabel}" Text="WHO CAN JOIN?" />
                                 <StackPanel>
                                     <RadioButton x:Name="HostModeInternet" GroupName="HostingMode"
-                                                 Content="Friends anywhere · Tunnelto"
+                                                 Content="Friends anywhere · localtunnel"
                                                  IsChecked="True" Checked="OnHostingModeChanged" />
                                     <RadioButton x:Name="HostModeRemote" GroupName="HostingMode"
                                                  Content="Tunnelto wildcard base"
+                                                 Visibility="Collapsed"
                                                  Checked="OnHostingModeChanged" />
                                     <RadioButton x:Name="HostModeLocal" GroupName="HostingMode"
                                                  Content="Same WiFi only · sslip.io"

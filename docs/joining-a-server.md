@@ -16,6 +16,11 @@ locally — nothing is sent anywhere until you actually launch the game.
   [Getting the 2020 client](easy-setup.md#getting-the-2020-client)
 - The join code your friend gave you (a base64-looking blob a few hundred
   characters long)
+- No accounts / installs needed for the default **Friends anywhere ·
+  Localtunnel** join: the host's `*.loca.lt` URL is baked into the join
+  code, you just paste it and play. The first time your machine hits a
+  given `*.loca.lt` URL, your browser may show a one-time "Click to
+  Continue" interstitial — open the URL once in any browser to clear it.
 - About 2 minutes
 
 You **don't** need a Photon account of your own. The join code carries
@@ -71,8 +76,8 @@ HOST SHARED** textbox. Hit **Preview** — the launcher decodes the code
 and pops a "Server preview" panel showing:
 
 - the server's display name,
-- the public host (Tunnelto hostname, sslip.io address, or wildcard
-  apex),
+- the host address (Localtunnel `*.loca.lt`, LAN `sslip.io`, or a custom
+  host),
 - the version key (must match your install — the patcher will warn if
   not).
 
@@ -169,9 +174,15 @@ Almost always one of:
 
 ## "Check your internet connection" / black screen
 
-Most often: your host's tunnel URL changed (Tunnelto sometimes rotates
-hostnames between sessions). Get a fresh join code from them and
-re-apply the patch.
+Almost always: the host restarted hosting since they sent you the join
+code, so the Localtunnel URL it points at no longer exists. Ask the
+host to copy the current join code from their launcher and re-share it.
+Re-apply the patch with the new code.
+
+If that doesn't fix it, open the host's `*.loca.lt` URL in your browser
+once — Localtunnel sometimes shows a one-time "Click to Continue"
+interstitial that needs to be cleared by hand before the patched client
+can reach the server.
 
 ## More troubleshooting
 

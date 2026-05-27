@@ -12,7 +12,8 @@ your own machine and hand a join code to your friends. The launcher is a
 single Windows app that:
 
 - runs the server,
-- opens a public tunnel so friends anywhere can connect,
+- opens a Localtunnel HTTPS URL (or, in LAN mode, publishes your local
+  address) so friends can connect,
 - patches your local copy of Rec Room to point at the server,
 - packages a join code your friends paste into their launcher.
 
@@ -24,6 +25,10 @@ single Windows app that:
   [Getting the 2020 client](#getting-the-2020-client) below.
 - A free Photon Cloud account — the launcher walks you through this on
   first run.
+- No account needed for the default "friends anywhere" hosting mode —
+  the launcher uses [Localtunnel](https://localtunnel.github.io/www/)
+  to get a free, anonymous `*.loca.lt` URL for your server. Auto-fetched
+  by the launcher on first run; no sign-in.
 - ~5 GB free disk space
 - About 10 minutes for first-run setup, ~30 seconds per subsequent launch
 
@@ -102,12 +107,11 @@ when you continue.
 - **Server name** — what shows up in your join code. Use whatever your
   friends will recognise ("Adam's Sunday games", "DorkSquad Test", etc.).
 - **Who can join?** — three options, only one shows extra inputs:
-  - **Friends anywhere · Tunnelto** *(default, recommended)* — the
-    launcher runs a Tunnelto tunnel that gives your server a public
-    `*.tunnelto.me` URL. Works for anyone, anywhere. No router config.
-  - **Tunnelto wildcard base** — advanced. If you've got a wildcard
-    Tunnelto subscription, paste the apex domain. Subdomains like
-    `api.<base>`, `auth.<base>`, etc. get auto-generated.
+  - **Friends anywhere · Localtunnel** *(default, recommended)* — the
+    launcher fetches the Localtunnel client (no account, no sign-in)
+    and gets you a public `https://<random-name>.loca.lt` URL. Friends
+    can join from anywhere with just the join code; nothing extra to
+    install on their side.
   - **Same WiFi only · sslip.io** — bind on your LAN only. Friends must
     be on the same network. No tunnel, lowest latency.
 
@@ -161,10 +165,10 @@ session, the new values get used the next time you hit Start hosting.
 - **REC ROOM VERSION TO HOST FOR** — dropdown. Pre-selects the version
   matching your install. Picking a different version means the launcher
   will fetch that server build the next time you Start hosting.
-- **WHO CAN JOIN?** — the same three options as step 3 of the wizard.
-- **TUNNELTO BASE HOST** — only visible when you pick the wildcard
-  option. Auto-generated otherwise; not needed for the default or LAN
-  modes.
+- **WHO CAN JOIN?** — same options as step 3 of the wizard. The
+  Localtunnel option auto-fetches the tunnel client on first use; no
+  account or sign-in required, and the URL is regenerated every host
+  session.
 
 ### Photon Cloud panel
 
@@ -191,8 +195,9 @@ The launcher runs through six steps in order:
 1. **Download server** — fetches the matching server build into
    `%LOCALAPPDATA%\DorkNet\servers\<version>\`. ~50 MB the first time;
    reused on subsequent launches.
-2. **Open tunnel** — starts Tunnelto and assigns a public hostname.
-   Skipped in LAN mode.
+2. **Open tunnel** — fetches the Localtunnel client on first run, then
+   opens a tunnel and waits for the `https://<random>.loca.lt` URL.
+   LAN mode skips this step and just resolves your local WiFi IP.
 3. **Start server** — boots the server process. SQLite database lives
    in `%APPDATA%\DorkNet\dorknet.db`.
 4. **Download patcher** — fetches the client-patcher payload that
@@ -275,13 +280,11 @@ See [joining-a-server.md](joining-a-server.md) for the join-side flow.
 
 | Mode | Tunnel | Public URL | Best for |
 | --- | --- | --- | --- |
-| Friends anywhere · Tunnelto | yes | `dorknet-<random>.tunnelto.me` | Default — works for everyone, no setup |
-| Tunnelto wildcard base | yes | `<your-apex>` + `api.<apex>`, `auth.<apex>`, … | Power users with a wildcard Tunnelto plan |
+| Friends anywhere · Localtunnel | public HTTPS, anonymous | `https://<random>.loca.lt` | Default — friends connect from anywhere with just the join code |
 | Same WiFi only · sslip.io | no | `<lan-ip>.sslip.io` | LAN games, lowest latency, no internet exposure |
 
-Default mode is the right pick for >95% of cases. The wildcard mode is
-only useful if you've already got a stable apex domain set up. LAN mode
-is for when everyone's in the same room.
+Default mode is the right pick for >95% of cases. LAN mode is for when
+everyone's in the same room and you do not want a public URL.
 
 ---
 
@@ -308,9 +311,12 @@ See [troubleshooting.md](troubleshooting.md) for the full list.
 
 The most common problems:
 
-- **Server starts but friend can't connect** — Cloudflare Quick Tunnels
-  rotate the URL on every restart. Re-share the join code if you've
-  restarted hosting.
+- **Server starts but friend can't connect** — Localtunnel hands you a
+  fresh `*.loca.lt` URL every host session, so the join code from your
+  previous run is stale. Hit Start hosting again, copy the new join
+  code, re-share. (Localtunnel sometimes also shows a one-time "Click
+  to Continue" interstitial in the browser the first time a joiner's
+  machine touches the URL; friends might need to open the URL once.)
 - **"Photon CustomAuth 401" in the server log** — your Realtime AppId
   on the server doesn't match what the launcher patched into the
   client. Make sure both sides use the same AppIds.
