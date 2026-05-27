@@ -19,16 +19,31 @@
     they would be derivative works of the game anyway, so we never
     reference them. Only MelonLoader's own DLLs are needed.
 
-    tools/build-patcher-zip.ps1 downloads the MelonLoader release zip
-    and points MelonLoaderDir at its extracted contents, so a fresh
-    contributor checkout builds without a local Rec Room install.
-
-    To build outside the script (manual dev loop):
-      dotnet build -p:MelonLoaderDir=<path-to-extracted-MelonLoader>
+    By default the project downloads the pinned MelonLoader release
+    into DorkNet.ClientMod/build/ and references those DLLs. Pass
+    -p:MelonLoaderDir=<path-to-extracted-MelonLoader> only when you
+    deliberately want to use a local override.
   -->
   <PropertyGroup>
-    <MelonLoaderDir Condition="'$(MelonLoaderDir)' == ''">$(MSBuildThisFileDirectory)..\build\melonloader</MelonLoaderDir>
+    <MelonLoaderVersion Condition="'$(MelonLoaderVersion)' == ''">v0.6.6</MelonLoaderVersion>
+    <MelonLoaderCacheRoot>$(MSBuildThisFileDirectory)build\melonloader</MelonLoaderCacheRoot>
+    <MelonLoaderZip>$(MelonLoaderCacheRoot)\MelonLoader.x64.$(MelonLoaderVersion).zip</MelonLoaderZip>
+    <MelonLoaderDir Condition="'$(MelonLoaderDir)' == ''">$(MelonLoaderCacheRoot)\MelonLoader</MelonLoaderDir>
   </PropertyGroup>
+
+  <Target Name="EnsureMelonLoaderReferences"
+          BeforeTargets="ResolveAssemblyReferences"
+          Condition="!Exists('$(MelonLoaderDir)\net6\MelonLoader.dll')">
+    <MakeDir Directories="$(MelonLoaderCacheRoot)" />
+    <DownloadFile
+      SourceUrl="https://github.com/LavaGang/MelonLoader/releases/download/$(MelonLoaderVersion)/MelonLoader.x64.zip"
+      DestinationFolder="$(MelonLoaderCacheRoot)"
+      DestinationFileName="MelonLoader.x64.$(MelonLoaderVersion).zip"
+      SkipUnchangedFiles="true" />
+    <Unzip SourceFiles="$(MelonLoaderZip)"
+           DestinationFolder="$(MelonLoaderCacheRoot)"
+           OverwriteReadOnlyFiles="true" />
+  </Target>
 
   <ItemGroup>
     <Reference Include="MelonLoader">

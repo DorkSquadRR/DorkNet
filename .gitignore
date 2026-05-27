@@ -1,6 +1,7 @@
 ## .NET
 bin/
 obj/
+build/
 *.user
 *.suo
 .vs/

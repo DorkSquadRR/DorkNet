@@ -42,6 +42,7 @@ public class Mod : MelonMod
     internal static string? DiagnosticsLogPath;
     private static readonly Dictionary<string, Type> ResolvedTypeCache = new();
     private readonly HashSet<string> _diagnosticPatchLabels = new();
+    private bool _networkPatchesRegistered;
     private bool _diagnosticCoreRegistered;
     private bool _diagnosticGameComplete;
     private int _diagnosticRetryFrame;
@@ -75,6 +76,7 @@ public class Mod : MelonMod
         Instance = this;
         Log.Msg("=== DorkNet ClientMod loading ===");
         LoadConfig();
+        RegisterNetworkPatches();
         DiagnosticPatches.Write("[lifecycle] OnInitializeMelon");
     }
 
@@ -82,12 +84,7 @@ public class Mod : MelonMod
     {
         DiagnosticPatches.Write("[lifecycle] OnLateInitializeMelon");
         Log.Msg("=== Registering client patches ===");
-        TryPatch("Uri ctor (string)",         typeof(Uri),                            "ctor",
-                 new[] { typeof(string) },
-                 prefix: nameof(UriPatches.UriStringCtor_Prefix));
-        TryPatch("Uri ctor (string, UriKind)", typeof(Uri),                            "ctor",
-                 new[] { typeof(string), typeof(UriKind) },
-                 prefix: nameof(UriPatches.UriStringCtor_Prefix));
+        RegisterNetworkPatches();
         TryPatchByName("PhotonNetwork",       "ConnectUsingSettings",
                        prefix: nameof(PhotonPatches.PhotonAppIdOverride_Prefix));
         // Hook the watch's own AppSettings + AuthValues builders directly.
@@ -221,6 +218,57 @@ public class Mod : MelonMod
 
         RegisterDiagnostics();
         Log.Msg("=== Client patches registered ===");
+    }
+
+    private void RegisterNetworkPatches()
+    {
+        if (_networkPatchesRegistered) return;
+
+        var complete = true;
+        complete &= TryPatch("Uri ctor (string)", typeof(Uri), "ctor",
+                 new[] { typeof(string) },
+                 prefix: nameof(UriPatches.UriStringCtor_Prefix));
+        complete &= TryPatch("Uri ctor (string, UriKind)", typeof(Uri), "ctor",
+                 new[] { typeof(string), typeof(UriKind) },
+                 prefix: nameof(UriPatches.UriStringCtor_Prefix));
+        complete &= TryPatchByName("BestHTTP.HTTPRequest", "Send",
+                 prefix: nameof(UriPatches.HttpRequestSend_Prefix));
+        complete &= TryPatchHttpManagerStringSendRequestOverloads();
+        complete &= TryPatchByName("BestHTTP.HTTPManager", "SendRequest",
+                 args: new[] { ResolveType("BestHTTP.HTTPRequest") ?? typeof(object) },
+                 prefix: nameof(UriPatches.HttpManagerSendRequestObject_Prefix));
+
+        _networkPatchesRegistered = complete;
+    }
+
+    private bool TryPatchHttpManagerStringSendRequestOverloads()
+    {
+        var type = ResolveType("BestHTTP.HTTPManager");
+        if (type is null)
+        {
+            Log.Warning("[patch-miss] BestHTTP.HTTPManager.SendRequest(string): type not found");
+            return false;
+        }
+
+        var prefix = GetPatchMethod(nameof(UriPatches.HttpManagerSendRequestString_Prefix));
+        var patched = 0;
+        foreach (var method in AccessTools.GetDeclaredMethods(type))
+        {
+            if (method.Name != "SendRequest") continue;
+            var parameters = method.GetParameters();
+            if (parameters.Length == 0 || parameters[0].ParameterType != typeof(string)) continue;
+            HarmonyInstance.Patch(method, prefix: new HarmonyMethod(prefix));
+            patched++;
+        }
+
+        if (patched == 0)
+        {
+            Log.Warning("[patch-miss] BestHTTP.HTTPManager.SendRequest(string)");
+            return false;
+        }
+
+        Log.Msg($"[patch-ok] BestHTTP.HTTPManager.SendRequest(string) overloads x{patched}");
+        return true;
     }
 
     public override void OnUpdate()
@@ -504,18 +552,70 @@ public class Mod : MelonMod
 
 internal static class UriPatches
 {
+    public static void HttpManagerSendRequestString_Prefix(ref string url)
+    {
+        RewriteString(ref url, "httpmanager-rewrite");
+    }
+
+    public static void HttpManagerSendRequestObject_Prefix(object request)
+    {
+        RewriteRequestUri(request, "httpmanager-request-rewrite");
+    }
+
     public static void UriStringCtor_Prefix(ref string uriString)
+    {
+        RewriteString(ref uriString, "uri-rewrite");
+    }
+
+    public static void HttpRequestSend_Prefix(object __instance)
+    {
+        RewriteRequestUri(__instance, "http-rewrite");
+    }
+
+    private static void RewriteRequestUri(object request, string label)
+    {
+        try
+        {
+            var uriProp = request.GetType().GetProperty("Uri", BindingFlags.Public | BindingFlags.Instance);
+            if (uriProp?.GetValue(request) is not Uri uri) return;
+
+            var rewritten = RewriteUri(uri);
+            if (rewritten is null) return;
+
+            uriProp.SetValue(request, rewritten);
+            Mod.Log.Msg($"[{label}] {uri} → {rewritten}");
+        }
+        catch (Exception ex)
+        {
+            Mod.Log.Warning($"[{label}] failed: {ex.Message}");
+        }
+    }
+
+    private static void RewriteString(ref string uriString, string label)
     {
         if (string.IsNullOrEmpty(uriString)) return;
         var host = Mod.Cfg.ServerHost;
         if (string.IsNullOrEmpty(host)) return;
         if (uriString.IndexOf(".rec.net", StringComparison.OrdinalIgnoreCase) < 0) return;
         var rewritten = uriString.Replace(".rec.net", "." + host);
-        if (rewritten != uriString)
+        if (rewritten == uriString) return;
+        Mod.Log.Msg($"[{label}] {uriString} → {rewritten}");
+        uriString = rewritten;
+    }
+
+    private static Uri? RewriteUri(Uri uri)
+    {
+        var host = Mod.Cfg.ServerHost;
+        if (string.IsNullOrEmpty(host)) return null;
+        if (!uri.Host.EndsWith(".rec.net", StringComparison.OrdinalIgnoreCase)) return null;
+
+        var service = uri.Host[..^".rec.net".Length];
+        if (string.IsNullOrWhiteSpace(service)) return null;
+
+        return new UriBuilder(uri)
         {
-            Mod.Log.Msg($"[uri-rewrite] {uriString} → {rewritten}");
-            uriString = rewritten;
-        }
+            Host = service + "." + host,
+        }.Uri;
     }
 }
 
