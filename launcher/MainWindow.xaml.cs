@@ -546,6 +546,18 @@ public partial class MainWindow : Window
             CompleteStep(activeStep);
 
             activeStep = StartStep(_hostSteps, 4);
+            var stripProgress = new Progress<DownloadProgress>(p => UpdateStepProgress(activeStep, p));
+            var stripResult = await SteamDrmStripper.StripIfNeededAsync(
+                _state.RecRoomPath!, stripProgress);
+            activeStep.Detail = stripResult switch
+            {
+                StripResult.Stripped => "Steam DRM removed; backup saved next to the exe.",
+                StripResult.AlreadyUnpacked => "Already unwrapped — skipped.",
+                _ => "Not a Steam build — skipped.",
+            };
+            CompleteStep(activeStep);
+
+            activeStep = StartStep(_hostSteps, 5);
             var patch = await _patcher.ApplyAsync(
                 patcherDir, _state.RecRoomPath!,
                 _state.PhotonAppId, _state.PhotonVoiceAppId, _state.PhotonRegion, _hostApex);
@@ -749,6 +761,18 @@ public partial class MainWindow : Window
             CompleteStep(activeStep);
 
             activeStep = StartStep(_joinSteps, 1);
+            var stripProgress = new Progress<DownloadProgress>(p => UpdateStepProgress(activeStep, p));
+            var stripResult = await SteamDrmStripper.StripIfNeededAsync(
+                _state.RecRoomPath!, stripProgress);
+            activeStep.Detail = stripResult switch
+            {
+                StripResult.Stripped => "Steam DRM removed; backup saved next to the exe.",
+                StripResult.AlreadyUnpacked => "Already unwrapped — skipped.",
+                _ => "Not a Steam build — skipped.",
+            };
+            CompleteStep(activeStep);
+
+            activeStep = StartStep(_joinSteps, 2);
             var patch = await _patcher.ApplyAsync(
                 patcherDir, _state.RecRoomPath!,
                 payload.PhotonAppId, payload.PhotonVoiceAppId, payload.PhotonRegion, payload.Host);

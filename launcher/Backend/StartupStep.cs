@@ -78,12 +78,14 @@ public static class StartupFlow
         new StartupStep(isLocalNetwork ? "Find your local network address" : "Set up Cloudflare tunnel"),
         new StartupStep("Start the server"),
         new StartupStep("Download client patcher"),
+        new StartupStep("Unlock Rec Room from Steam (if needed)"),
         new StartupStep("Patch your Rec Room install"),
     };
 
     public static ObservableCollection<StartupStep> NewJoinFlow() => new()
     {
         new StartupStep("Download client patcher"),
+        new StartupStep("Unlock Rec Room from Steam (if needed)"),
         new StartupStep("Patch your Rec Room install"),
     };
 }
