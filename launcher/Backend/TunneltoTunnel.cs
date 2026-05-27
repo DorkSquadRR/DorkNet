@@ -76,26 +76,34 @@ public sealed class TunneltoTunnel : IAsyncDisposable
 
     private static string ResolveExecutable()
     {
-        var sideBySide = Path.Combine(AppContext.BaseDirectory, "tunnelto.exe");
+        var isWindows = OperatingSystem.IsWindows();
+        var name = isWindows ? "tunnelto.exe" : "tunnelto";
+
+        var sideBySide = Path.Combine(AppContext.BaseDirectory, name);
         if (File.Exists(sideBySide)) return sideBySide;
 
-        var local = Path.Combine(AppPaths.LocalRoot, "tunnelto.exe");
+        var local = Path.Combine(AppPaths.LocalRoot, name);
         if (File.Exists(local)) return local;
 
-        var scoopShim = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-            "scoop", "shims", "tunnelto.exe");
-        if (File.Exists(scoopShim)) return scoopShim;
+        if (isWindows)
+        {
+            var scoopShim = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+                "scoop", "shims", name);
+            if (File.Exists(scoopShim)) return scoopShim;
+        }
 
         var onPath = Environment.GetEnvironmentVariable("PATH")?
-            .Split(';')
-            .Select(p => Path.Combine(p.Trim(), "tunnelto.exe"))
+            .Split(Path.PathSeparator)
+            .Select(p => Path.Combine(p.Trim(), name))
             .FirstOrDefault(File.Exists);
         if (onPath is not null) return onPath;
 
+        var hint = isWindows
+            ? "scoop bucket add tunnelto https://github.com/asabi/scoop-tunnelto && scoop install tunnelto"
+            : "cargo install tunnelto  # or grab a binary from github.com/agrinman/tunnelto/releases";
         throw new FileNotFoundException(
-            "tunnelto.exe was not found. Install Tunnelto first: " +
-            "scoop bucket add tunnelto https://github.com/asabi/scoop-tunnelto && scoop install tunnelto");
+            $"{name} was not found. Install Tunnelto first: {hint}");
     }
 
     private static readonly Regex UrlRegex = new(

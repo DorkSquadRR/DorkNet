@@ -1,67 +1,178 @@
-# Joining someone's DorkNet server
+# Joining a friend's DorkNet server
 
 > Built for players whose friend already runs a server and gave them a
 > code. If you want to *host* instead, see [easy-setup.md](easy-setup.md).
 
+A "join code" is a one-line string your host's launcher generated when
+they hit Start hosting. It contains everything DorkNet needs to point
+your Rec Room at their server: the public hostname, the Photon AppIds,
+the version, and the server's display name. The launcher decodes it
+locally — nothing is sent anywhere until you actually launch the game.
+
 ## What you'll need
 
-- A Windows PC
-- A copy of **Rec Room 2020.03.10** (your own — see
-  [Getting the 2020 client](easy-setup.md#getting-the-2020-client))
-- The join code your friend gave you (looks like `dorknet://join?...`)
+- Windows 10 or 11
+- A copy of **Rec Room 2020.03.10** — your own, see
+  [Getting the 2020 client](easy-setup.md#getting-the-2020-client)
+- The join code your friend gave you (a base64-looking blob a few hundred
+  characters long)
 - About 2 minutes
 
-## Step 1 — Download DorkNet
+You **don't** need a Photon account of your own. The join code carries
+your friend's AppIds; the launcher rewrites them into your client.
 
-Grab `dorknet.exe` from the [latest release](https://github.com/YOUR_GH_USERNAME/dorknet/releases/latest).
+## Download
 
-## Step 2 — First launch
+Grab `dorknet.exe` from the
+[latest release](https://github.com/DorkSquadRR/DorkNet/releases/latest).
+Same single-file binary as the host's. Drop it anywhere; state lives in
+`%APPDATA%\DorkNet`.
 
-On the welcome screen, click **🎮 Join a server**.
+## First launch
 
-![first-run welcome screen — Join selected](images/first-run-welcome-join.png)
+Welcome screen → **GET STARTED** → setup wizard.
 
-## Step 3 — Paste the join code
+![welcome screen](images/first-run-welcome.png)
 
-Your friend's code goes in the big text box. DorkNet decodes it and shows
-you what you're about to connect to so you can sanity-check:
+### Wizard step 1 — Pick "Use a code"
 
-![join code preview](images/join-preview.png)
+The right-hand card.
 
-Make sure the server name matches what your friend told you. Codes from
-strangers can point anywhere — only paste codes from people you trust.
+![mode pick — Host vs Join](images/first-run-welcome-join.png)
 
-## Step 4 — Patch your Rec Room install
+Join mode skips the host-only wizard steps (server name + Photon), so
+your wizard runs 3 steps total instead of 5.
 
-1. Click **Browse for Rec Room install...** — point at the folder with
-   `Recroom_Release.exe`.
-2. Click **Patch & launch**.
+### Wizard step 2 — Find your Rec Room install
 
-DorkNet patches the game (one-time), then launches it pointed at your
-friend's server. You'll see the normal Rec Room login screen, log in with
-the account you made on your friend's server, and you're in.
+The launcher auto-detects common manual-install locations. If detection
+worked you'll see a green "Detected install" banner; otherwise click
+**Browse…** and point at your `Recroom_Release_Data` folder (the *_Data
+sibling of `Recroom_Release.exe`).
+
+### Wizard step 3 — Done
+
+That's it for the wizard. Click **Finish** to land in the main view.
+
+## The main view — Join
+
+![join view](images/join-preview.png)
+
+- **Sidebar** (left): same nav as the host's launcher — **Host a
+  server**, **Join a friend**, **Settings**, **Re-run setup**. You're
+  on **Join a friend**.
+- **Header** (top): JOIN eyebrow, "Join a friend" title, and the
+  **Screen mode** checkbox top-right.
+
+### Paste the join code
+
+Paste the code your friend sent you into the **PASTE THE CODE YOUR
+HOST SHARED** textbox. Hit **Preview** — the launcher decodes the code
+and pops a "Server preview" panel showing:
+
+- the server's display name,
+- the public host (Tunnelto hostname, sslip.io address, or wildcard
+  apex),
+- the version key (must match your install — the patcher will warn if
+  not).
+
+Sanity-check it. **Codes from strangers can point anywhere — only paste
+codes from people you trust.** A malicious code wouldn't compromise
+your machine, but it could send your Rec Room login traffic to someone
+else's server.
+
+### Confirm your Rec Room install
+
+Same picker as on the wizard. The path shows in monospace below the
+Rec Room install header. Click **Browse…** to change it if needed.
+
+## Applying the patch
+
+Click **APPLY PATCH** (the orange button below the install picker; it
+stays disabled until you've pasted a valid code).
+
+The launcher runs three steps:
+
+1. **Download patcher** — fetches the version-specific patcher payload.
+   ~10 MB, cached for next time.
+2. **Strip Steam DRM** — only runs if your install is a Steam build.
+3. **Apply patch** — rewrites network URLs and Photon AppIds in place.
+
+Progress steps show inline. If anything fails, the row turns red and
+you get **Retry** + **Get help** buttons.
+
+The original `Recroom_Release.exe` and its DRM-stripped copy are
+preserved as backups next to the modified files; the patcher is
+reversible.
+
+## Launching Rec Room
+
+When the patch completes, the **LAUNCH REC ROOM** button (teal)
+appears. Click it. The launcher starts your patched Rec Room with the
+right command-line.
+
+Tick **Screen mode** in the top-right of the header first if you want
+to play in 2D desktop mode instead of VR.
+
+You'll see the regular Rec Room login screen — log in with the account
+your host gave you (each DorkNet server has its own player database),
+and you're in their world.
 
 ---
 
-## I already patched for a different server. Can I switch?
+## Switching to a different friend's server
 
-Yes — DorkNet's patcher is reversible. Click **Repair / unpatch** in the
-Patch tab to undo, then re-patch with a new join code. Or just re-run
-**Patch & launch** with the new code; the patcher detects an existing
-patch and updates the destination.
+You can re-patch any time. Paste the new code, hit **Preview** to
+verify, click **APPLY PATCH** again. The patcher detects the existing
+patch and updates the destination — no need to repair first.
 
-## My account doesn't exist on the new server
+If you want to go back to the official Rec Room servers, the patcher's
+backups are still there: rename `Recroom_Release.exe.bak` (or
+`.steamless.bak`) back to `Recroom_Release.exe`. Or just reinstall.
 
-Each DorkNet server runs its own account database. You'll need to create
-a new account the first time you join a server. Your friend can sign you
-up via their admin panel, or you can use the in-game "Create account"
-flow if the server has signups enabled.
+## Switching to host mode
+
+Sidebar → **Host a server**. You'll need to fill in server name +
+Photon AppIds before you can host. See
+[easy-setup.md](easy-setup.md) for that workflow. The launcher
+preserves your install path and screen-mode preference when you switch.
+
+---
+
+## My account doesn't exist on the server
+
+Each DorkNet server runs its own player database. The first time you
+join, you need an account on that server. Your friend can sign you up
+through their admin panel, or you can use the in-game "Create account"
+flow if signups are enabled.
+
+If you've joined the same server before and switched away, your old
+account is still on their database — log in with the same credentials
+you used before.
 
 ## Voice chat doesn't work
 
-Voice routes through Photon Voice, which requires a separate Photon Voice
-AppId. If your friend hasn't set one up, voice chat is text-only for now.
+Voice routes through Photon Voice, which is a separate AppId. If your
+host hasn't set one up, voice chat won't work in-game. You can still
+use Discord or any other voice tool alongside.
+
+## "Photon CustomAuth 401" or game stuck on the loading screen
+
+Almost always one of:
+
+- Your host set up a new Photon AppId since your last join. Paste the
+  new code, re-apply the patch.
+- Your Photon **region** in the code doesn't match the server's. This
+  is set by the host; ask them to confirm the region.
+- The patch didn't actually apply — check the launcher's progress
+  panel; a red row means the patcher errored.
+
+## "Check your internet connection" / black screen
+
+Most often: your host's tunnel URL changed (Tunnelto sometimes rotates
+hostnames between sessions). Get a fresh join code from them and
+re-apply the patch.
 
 ## More troubleshooting
 
-See [troubleshooting.md](troubleshooting.md).
+[troubleshooting.md](troubleshooting.md) lists the rest.

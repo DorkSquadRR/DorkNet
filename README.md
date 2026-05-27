@@ -31,25 +31,38 @@ branches above.
 
 ---
 
-## Two ways to run it
+## Ways to run it
 
-### 🎮 Easy mode — desktop app
+### Windows GUI — `dorknet` launcher
 
-One download. Pick a client version on first launch. Hosts can switch
-between supported builds without re-installing the launcher.
+One download, two flavours: an **installer** (Start menu shortcut +
+rolling auto-updates) or a **portable `dorknet.exe`** (drop anywhere).
+Pick a Rec Room build on first launch, host or join.
 
-- **Host a server** — runs a local server + Cloudflare tunnel for the
-  client version you choose, patches your Rec Room install, and gives
+- **Host a server** — runs a local server + Tunnelto tunnel for the
+  client version you pick, patches your Rec Room install, and gives
   you a shareable join code.
 - **Join a server** — paste the code, point at your Rec Room install,
-  hit play. The launcher fetches the matching client patcher for the
-  host's server version.
+  hit play. The launcher fetches the matching patcher.
 
 → **[Easy setup guide](docs/easy-setup.md)** — screenshots, ~5 minutes.
 
-[Download the latest Easy app →](https://github.com/DorkSquadRR/DorkNet/releases/latest)
+[Download the latest launcher →](https://github.com/DorkSquadRR/DorkNet/releases/latest)
 
-### 🛠️ Advanced mode — Docker / source
+### Linux / macOS host — `dorknet-server` CLI
+
+Headless host-side CLI for Linux (x64/arm64), macOS (Intel/Apple
+Silicon), and Windows. Same server + tunnel pipeline as the GUI,
+suitable for a VPS or a permanent home server. Joiners still use the
+Windows launcher to apply the patch to their own Rec Room install.
+
+```sh
+dorknet-server --photon-id YOUR-APPID --name "Sunday games"
+```
+
+→ **[Server CLI guide](docs/server-cli.md)** — install, systemd, launchd.
+
+### Advanced — Docker / source
 
 For community-server hosts, modders, and contributors. Pick the branch
 matching your client build, clone, run.
@@ -105,9 +118,11 @@ branch's `BRANCHES.md` row for the exact deltas.
 ## Docs
 
 - [Branch chart](BRANCHES.md) — which branch matches your client
-- [Easy setup](docs/easy-setup.md) — desktop-launcher path
+- [Easy setup](docs/easy-setup.md) — Windows GUI launcher
+- [Server CLI](docs/server-cli.md) — Linux / macOS / Windows headless
 - [Advanced setup](docs/advanced-setup.md) — Docker / VPS path
 - [Joining a server](docs/joining-a-server.md) — for players
+- [Photon setup](docs/photon-setup.md) — getting your AppIds
 - [Architecture](docs/architecture.md) — how the code is laid out
 - [FAQ](docs/faq.md)
 - [Troubleshooting](docs/troubleshooting.md)

@@ -102,17 +102,30 @@ public sealed class ServerProcess : IAsyncDisposable
 
     private static string FindServerExecutable(string serverDir)
     {
-        // Self-contained .NET publish produces a single .exe per
-        // RuntimeIdentifier. The server's csproj sets AssemblyName so
-        // we know the name; fall back to scanning if the rename
-        // changes.
-        var canonical = Path.Combine(serverDir, "DorkNet.Server.exe");
+        // Self-contained .NET publish drops a per-RID binary; on Windows
+        // it's DorkNet.Server.exe, on Linux/Mac it's DorkNet.Server
+        // (no extension). Try both, then scan as a last resort.
+        var ext = OperatingSystem.IsWindows() ? ".exe" : "";
+        var canonical = Path.Combine(serverDir, $"DorkNet.Server{ext}");
         if (File.Exists(canonical)) return canonical;
-        var any = Directory.GetFiles(serverDir, "*.exe").FirstOrDefault();
-        if (any is null)
-            throw new FileNotFoundException(
-                $"No .exe found in {serverDir}. The release artifact may be corrupt.");
-        return any;
+
+        // Windows scan picks any .exe; on Unix, scan for files that are
+        // executable + match the expected name pattern.
+        if (OperatingSystem.IsWindows())
+        {
+            var any = Directory.GetFiles(serverDir, "*.exe").FirstOrDefault();
+            if (any is not null) return any;
+        }
+        else
+        {
+            var any = Directory.GetFiles(serverDir, "DorkNet.Server*")
+                .Where(p => !p.EndsWith(".dll") && !p.EndsWith(".pdb") && !p.EndsWith(".json"))
+                .FirstOrDefault();
+            if (any is not null) return any;
+        }
+
+        throw new FileNotFoundException(
+            $"No server binary found in {serverDir}. The release artifact may be corrupt.");
     }
 
     private static void ApplySqliteCompatibilityPatches(string serverDir)
