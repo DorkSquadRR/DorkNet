@@ -1,0 +1,190 @@
+<Window x:Class="DorkNet.Launcher.PhotonWizard"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Photon setup"
+        Width="640" Height="560"
+        MinWidth="540" MinHeight="460"
+        WindowStartupLocation="CenterOwner"
+        Background="{StaticResource Bg}"
+        TextElement.Foreground="{StaticResource Ink}"
+        FontFamily="Segoe UI Variable, Segoe UI"
+        TextOptions.TextFormattingMode="Ideal"
+        TextOptions.TextRenderingMode="ClearType"
+        ResizeMode="CanResize"
+        ShowInTaskbar="False">
+
+    <Grid>
+        <Grid.Background>
+            <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                <GradientStop Color="#2A1E48" Offset="0" />
+                <GradientStop Color="#16102A" Offset="0.6" />
+                <GradientStop Color="#16102A" Offset="1" />
+            </LinearGradientBrush>
+        </Grid.Background>
+
+        <Grid Margin="28,22">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <!-- Header -->
+            <Grid Grid.Row="0" Margin="0,0,0,16">
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Photon setup" FontSize="20" FontWeight="Bold"
+                               Foreground="{StaticResource WordmarkBrush}" />
+                    <Border Style="{StaticResource StatusChip}" Margin="14,0,0,0"
+                            VerticalAlignment="Center">
+                        <TextBlock x:Name="StepIndicator" FontSize="10" FontWeight="Bold"
+                                   Foreground="{StaticResource Brand}"
+                                   Text="STEP 1 OF 5" />
+                    </Border>
+                </StackPanel>
+                <Button HorizontalAlignment="Right" Style="{StaticResource GhostBtn}"
+                        Content="✕" Click="OnClose" FontSize="14" Padding="10,4" />
+            </Grid>
+
+            <!-- Step card — only one Visible at a time -->
+            <Border Grid.Row="1" Style="{StaticResource Panel}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <Grid>
+                        <!-- Step 1: What is Photon? -->
+                        <StackPanel x:Name="Step1" Visibility="Visible">
+                            <TextBlock Text="What's Photon?" FontSize="22" FontWeight="Bold"
+                                       Margin="0,0,0,16" />
+                            <TextBlock Foreground="{StaticResource Ink}" FontSize="14"
+                                       TextWrapping="Wrap" LineHeight="22" Margin="0,0,0,12"
+                                       Text="Rec Room rooms run on Photon — a real-time service that keeps players in sync. DorkNet doesn't include one because Photon's free tier is plenty for friend groups and each host should use their own account." />
+                            <TextBlock Foreground="{StaticResource Ink}" FontSize="14"
+                                       TextWrapping="Wrap" LineHeight="22" Margin="0,0,0,12"
+                                       Text="This wizard walks you through making a free Photon account, creating one (or two) apps, and pasting the keys back here. Takes about two minutes." />
+                            <Border CornerRadius="10" Padding="14,12"
+                                    Background="{StaticResource BgDeeper}"
+                                    BorderBrush="{StaticResource Border}" BorderThickness="1"
+                                    Margin="0,8,0,0">
+                                <TextBlock Foreground="{StaticResource InkSoft}" FontSize="12"
+                                           TextWrapping="Wrap"
+                                           Text="What you'll end up with: a 32-character &quot;AppId&quot; for realtime, and optionally a second one for voice chat. You'll paste both into the form at the end." />
+                            </Border>
+                        </StackPanel>
+
+                        <!-- Step 2: Make an account -->
+                        <StackPanel x:Name="Step2" Visibility="Collapsed">
+                            <TextBlock Text="Make a Photon account" FontSize="22" FontWeight="Bold"
+                                       Margin="0,0,0,16" />
+                            <TextBlock Foreground="{StaticResource Ink}" FontSize="14"
+                                       TextWrapping="Wrap" LineHeight="22" Margin="0,0,0,16"
+                                       Text="Click the button below to open the Photon dashboard. If you already have an account, sign in; otherwise hit &quot;Sign up&quot; and use any email + password." />
+                            <Button Style="{StaticResource PrimaryBtn}"
+                                    Content="Open dashboard.photonengine.com"
+                                    Click="OnOpenPhotonDashboard"
+                                    HorizontalAlignment="Left" />
+                            <TextBlock Foreground="{StaticResource InkSoft}" FontSize="13"
+                                       TextWrapping="Wrap" LineHeight="20" Margin="0,20,0,0"
+                                       Text="Photon won't ask for a credit card. The free plan covers 20 simultaneous players in a room, which is more than enough for most servers." />
+                            <TextBlock Foreground="{StaticResource InkFaint}" FontSize="12"
+                                       TextWrapping="Wrap" LineHeight="18" Margin="0,12,0,0"
+                                       Text="Already signed in? Just click Next." />
+                        </StackPanel>
+
+                        <!-- Step 3: Create Realtime app -->
+                        <StackPanel x:Name="Step3" Visibility="Collapsed">
+                            <TextBlock Text="Create a Realtime app" FontSize="22" FontWeight="Bold"
+                                       Margin="0,0,0,16" />
+                            <TextBlock Foreground="{StaticResource Ink}" FontSize="14"
+                                       TextWrapping="Wrap" LineHeight="22" Margin="0,0,0,14"
+                                       Text="On the Photon dashboard:" />
+                            <StackPanel Margin="6,0,0,12">
+                                <TextBlock Style="{StaticResource StepBullet}" Text="1. Click the orange &quot;Create a new app&quot; button (top right)." />
+                                <TextBlock Style="{StaticResource StepBullet}" Text="2. Under &quot;Photon Type&quot; choose Photon Realtime." />
+                                <TextBlock Style="{StaticResource StepBullet}" Text="3. Name it anything (e.g. &quot;DorkNet Realtime&quot;)." />
+                                <TextBlock Style="{StaticResource StepBullet}" Text="4. Click Create." />
+                                <TextBlock Style="{StaticResource StepBullet}" Text="5. Back on the dashboard, click the new app's tile — the AppId is the long string near the top, looking like 12ab34cd-56ef-..." />
+                                <TextBlock Style="{StaticResource StepBullet}" Text="6. Copy that AppId. You'll paste it on the last step." />
+                            </StackPanel>
+                            <Border CornerRadius="10" Padding="14,12"
+                                    Background="{StaticResource CardBgHost}"
+                                    BorderBrush="{StaticResource Brand}" BorderThickness="1">
+                                <TextBlock Foreground="{StaticResource Ink}" FontSize="13"
+                                           TextWrapping="Wrap"
+                                           Text="💡 You only need to do this once. The same AppId works every time you host." />
+                            </Border>
+                        </StackPanel>
+
+                        <!-- Step 4: Voice app -->
+                        <StackPanel x:Name="Step4" Visibility="Collapsed">
+                            <TextBlock Text="Create a Voice app (optional)" FontSize="22" FontWeight="Bold"
+                                       Margin="0,0,0,16" />
+                            <TextBlock Foreground="{StaticResource Ink}" FontSize="14"
+                                       TextWrapping="Wrap" LineHeight="22" Margin="0,0,0,14"
+                                       Text="Voice chat needs a separate Photon app. Skip this step if you don't care about voice." />
+                            <StackPanel Margin="6,0,0,12">
+                                <TextBlock Style="{StaticResource StepBullet}" Text="1. Back on the Photon dashboard, click &quot;Create a new app&quot; again." />
+                                <TextBlock Style="{StaticResource StepBullet}" Text="2. This time pick Photon Voice." />
+                                <TextBlock Style="{StaticResource StepBullet}" Text="3. Name it (e.g. &quot;DorkNet Voice&quot;) and Create." />
+                                <TextBlock Style="{StaticResource StepBullet}" Text="4. Copy the Voice app's AppId — also a long 32-character string." />
+                            </StackPanel>
+                            <TextBlock Foreground="{StaticResource InkSoft}" FontSize="13"
+                                       TextWrapping="Wrap" LineHeight="20" Margin="0,8,0,0"
+                                       Text="Without voice, players can still chat via Discord or any other voice call. The room sync (movement, ink, gizmos) all runs through the Realtime app." />
+                        </StackPanel>
+
+                        <!-- Step 5: Paste -->
+                        <StackPanel x:Name="Step5" Visibility="Collapsed">
+                            <TextBlock Text="Paste your AppIds" FontSize="22" FontWeight="Bold"
+                                       Margin="0,0,0,16" />
+
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="REALTIME APPID" />
+                            <TextBox x:Name="WizRealtime" Margin="0,0,0,4"
+                                     FontFamily="Cascadia Mono, Consolas" FontSize="12"
+                                     TextChanged="OnAppIdChanged" />
+                            <TextBlock x:Name="WizRealtimeStatus" FontSize="11"
+                                       Foreground="{StaticResource InkFaint}"
+                                       Margin="0,0,0,12"
+                                       Text="32-character ID with hyphens, like 12ab34cd-56ef-78ab-90cd-12ef34ab56cd" />
+
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="VOICE APPID (LEAVE BLANK TO SKIP)" />
+                            <TextBox x:Name="WizVoice" Margin="0,0,0,4"
+                                     FontFamily="Cascadia Mono, Consolas" FontSize="12"
+                                     TextChanged="OnAppIdChanged" />
+                            <TextBlock x:Name="WizVoiceStatus" FontSize="11"
+                                       Foreground="{StaticResource InkFaint}"
+                                       Margin="0,0,0,12"
+                                       Text="Optional — leave empty if you skipped step 4." />
+
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="CLOUD REGION" />
+                            <ComboBox x:Name="WizRegion">
+                                <ComboBoxItem Content="US" Tag="us" />
+                                <ComboBoxItem Content="EU" Tag="eu" />
+                                <ComboBoxItem Content="Asia" Tag="asia" />
+                                <ComboBoxItem Content="Japan" Tag="jp" />
+                                <ComboBoxItem Content="South America" Tag="sa" />
+                                <ComboBoxItem Content="Korea" Tag="kr" />
+                                <ComboBoxItem Content="India" Tag="in" />
+                                <ComboBoxItem Content="Australia" Tag="au" />
+                            </ComboBox>
+                            <TextBlock Foreground="{StaticResource InkFaint}" FontSize="11"
+                                       Margin="0,4,0,0" TextWrapping="Wrap"
+                                       Text="Pick the closest region to where most of your players live." />
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+            </Border>
+
+            <!-- Footer with nav buttons -->
+            <Grid Grid.Row="2" Margin="0,16,0,0">
+                <Button x:Name="PrevBtn" HorizontalAlignment="Left"
+                        Style="{StaticResource GhostBtn}"
+                        Content="← Back" Click="OnPrev" Visibility="Collapsed" />
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button x:Name="SkipBtn" Style="{StaticResource GhostBtn}"
+                            Content="Skip" Click="OnNext" Visibility="Collapsed"
+                            Margin="0,0,10,0" />
+                    <Button x:Name="NextBtn" Style="{StaticResource PrimaryBtn}"
+                            Content="Next →" Click="OnNext" />
+                </StackPanel>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

@@ -231,6 +231,22 @@ public partial class MainWindow : Window
         _state.Save();
     }
 
+    private void OnOpenPhotonWizard(object sender, RoutedEventArgs e)
+    {
+        var wiz = new PhotonWizard(_state.PhotonAppId, _state.PhotonVoiceAppId, _state.PhotonRegion)
+        {
+            Owner = this,
+        };
+        if (wiz.ShowDialog() == true && wiz.Result is not null)
+        {
+            _state.PhotonAppId = wiz.Result.RealtimeAppId;
+            _state.PhotonVoiceAppId = wiz.Result.VoiceAppId;
+            _state.PhotonRegion = wiz.Result.Region;
+            _state.Save();
+            ReflectStateInUi();
+        }
+    }
+
     private void OnHostingModeChanged(object sender, RoutedEventArgs e)
     {
         // RadioButton.Checked fires twice on selection-change (once for

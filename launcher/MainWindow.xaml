@@ -174,14 +174,20 @@
                         <!-- Photon panel -->
                         <Border Style="{StaticResource Panel}" Margin="0,0,0,16">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource SectionTitle}" Text="Photon AppIds" />
+                                <Grid Margin="0,0,0,12">
+                                    <TextBlock Style="{StaticResource SectionTitle}"
+                                               Text="Photon AppIds" Margin="0" />
+                                    <Button HorizontalAlignment="Right" Style="{StaticResource Btn}"
+                                            Content="Setup walkthrough" Click="OnOpenPhotonWizard"
+                                            Padding="14,6" FontSize="12" />
+                                </Grid>
                                 <TextBlock Foreground="{StaticResource InkSoft}" FontSize="12"
-                                           Margin="0,-8,0,12" TextWrapping="Wrap">
+                                           Margin="0,0,0,12" TextWrapping="Wrap">
                                     Photon Cloud powers in-room realtime sync. Free to register at
                                     <Hyperlink NavigateUri="https://dashboard.photonengine.com"
                                                Foreground="{StaticResource Brand}"
                                                RequestNavigate="OnNavigate">dashboard.photonengine.com</Hyperlink>;
-                                    DorkNet never bundles one.
+                                    DorkNet never bundles one. First time? Click "Setup walkthrough" above.
                                 </TextBlock>
 
                                 <TextBlock Style="{StaticResource FieldLabel}" Text="REALTIME APPID" />

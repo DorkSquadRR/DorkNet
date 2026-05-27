@@ -240,6 +240,15 @@
             <Setter Property="FontFamily" Value="Segoe UI Variable, Segoe UI" />
         </Style>
 
+        <!-- Numbered-step bullet used in walkthrough text. -->
+        <Style x:Key="StepBullet" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{StaticResource Ink}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="LineHeight" Value="22" />
+            <Setter Property="Margin" Value="0,0,0,6" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+        </Style>
+
         <!-- Pill-style "status chip" used in section headers. -->
         <Style x:Key="StatusChip" TargetType="Border">
             <Setter Property="Background" Value="{StaticResource BgElev2}" />
