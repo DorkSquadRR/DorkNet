@@ -24,7 +24,14 @@ namespace DorkNet.Launcher.Backend;
 ///   "plugin_dest": "MelonLoader/Mods",                         // optional — defaults to "MelonLoader/Mods"
 ///   "config_template": "dorknet-clientmod.json.template",      // optional — rendered with {HOST}/{PHOTON_APPID}/{PHOTON_VOICE_APPID}
 ///   "config_dest": "MelonLoader/UserData/dorknet-clientmod.json",  // optional — defaults shown
-///   "old_plugin_paths": ["BepInEx/plugins/DorkNet.ClientPatch.dll"]  // optional — deleted before install
+///   "old_plugin_paths": ["BepInEx/plugins/DorkNet.ClientPatch.dll"], // optional — deleted before install
+///   "steam_stub": {                                            // optional — replaces Valve steam_api64.dll
+///     "api_dll": "steam_api64.dll",                            //   file in zip
+///     "api_dest": "Recroom_Release_Data/Plugins/steam_api64.dll",
+///     "api_backup_suffix": ".steam-original",                  //   original is renamed to dll + suffix
+///     "appid_file": "steam_appid.txt",                         //   file in zip (or omit if appid_value set)
+///     "appid_dest": "steam_appid.txt"                          //   relative to Rec Room root
+///   }
 /// }
 /// </code>
 /// Config template placeholders: <c>{HOST}</c>, <c>{PHOTON_APPID}</c>,
@@ -119,7 +126,68 @@ public sealed class ClientPatcher
             File.Copy(dllSrc, dllDest, overwrite: true);
             log.AppendLine($"[patch] installed plugin: {Path.GetFileName(manifest.PluginDll)} → {pluginDestDir}");
 
-            // 4. Render the config template.
+            // 4. Replace Valve's steam_api64.dll with the bundled stub
+            //    (Goldberg emulator) so the unwrapped exe runs without
+            //    Steam loaded. Backs up the original next to the dest
+            //    DLL with the configured suffix so users can revert.
+            if (manifest.SteamStub is { } stub && !string.IsNullOrEmpty(stub.ApiDll))
+            {
+                var stubSrc = Path.Combine(patcherDir, stub.ApiDll);
+                if (!File.Exists(stubSrc))
+                    return PatchResult.Failure($"steam_stub.api_dll listed but missing on disk: {stubSrc}");
+                if (string.IsNullOrEmpty(stub.ApiDest))
+                    return PatchResult.Failure("steam_stub.api_dest is required when steam_stub is set.");
+
+                var dllTarget = Path.Combine(recRoomRoot, stub.ApiDest.Replace('/', Path.DirectorySeparatorChar));
+                var dllTargetDir = Path.GetDirectoryName(dllTarget);
+                if (!string.IsNullOrEmpty(dllTargetDir)) Directory.CreateDirectory(dllTargetDir);
+
+                // Back up the original once. If a .steam-original already
+                // exists we assume a previous patch ran — leave it alone
+                // rather than clobber the actual Valve DLL with our stub.
+                var backupSuffix = string.IsNullOrEmpty(stub.ApiBackupSuffix)
+                    ? ".steam-original" : stub.ApiBackupSuffix;
+                var backupPath = dllTarget + backupSuffix;
+                if (File.Exists(dllTarget) && !File.Exists(backupPath))
+                {
+                    File.Move(dllTarget, backupPath);
+                    log.AppendLine($"[patch] backed up Valve steam_api64.dll → {Path.GetFileName(backupPath)}");
+                }
+                File.Copy(stubSrc, dllTarget, overwrite: true);
+                log.AppendLine($"[patch] installed Steam stub: {Path.GetFileName(dllTarget)}");
+
+                // appid_dest is required; appid source can be a literal
+                // value or a file in the zip — file wins if both set.
+                if (!string.IsNullOrEmpty(stub.AppidDest))
+                {
+                    var appidTarget = Path.Combine(recRoomRoot,
+                        stub.AppidDest.Replace('/', Path.DirectorySeparatorChar));
+                    var appidTargetDir = Path.GetDirectoryName(appidTarget);
+                    if (!string.IsNullOrEmpty(appidTargetDir)) Directory.CreateDirectory(appidTargetDir);
+
+                    string appidContent;
+                    if (!string.IsNullOrEmpty(stub.AppidFile))
+                    {
+                        var appidSrc = Path.Combine(patcherDir, stub.AppidFile);
+                        if (!File.Exists(appidSrc))
+                            return PatchResult.Failure($"steam_stub.appid_file listed but missing on disk: {appidSrc}");
+                        appidContent = File.ReadAllText(appidSrc).Trim();
+                    }
+                    else if (!string.IsNullOrEmpty(stub.AppidValue))
+                    {
+                        appidContent = stub.AppidValue.Trim();
+                    }
+                    else
+                    {
+                        return PatchResult.Failure(
+                            "steam_stub.appid_dest set without appid_file or appid_value to source the value from.");
+                    }
+                    File.WriteAllText(appidTarget, appidContent);
+                    log.AppendLine($"[patch] wrote {Path.GetFileName(appidTarget)} ({appidContent})");
+                }
+            }
+
+            // 5. Render the config template.
             if (!string.IsNullOrEmpty(manifest.ConfigTemplate))
             {
                 var templatePath = Path.Combine(patcherDir, manifest.ConfigTemplate);
@@ -191,6 +259,17 @@ public sealed class ClientPatcher
         [JsonPropertyName("config_template")] public string? ConfigTemplate { get; set; }
         [JsonPropertyName("config_dest")] public string? ConfigDest { get; set; }
         [JsonPropertyName("old_plugin_paths")] public string[]? OldPluginPaths { get; set; }
+        [JsonPropertyName("steam_stub")] public SteamStubBlock? SteamStub { get; set; }
+    }
+
+    private sealed class SteamStubBlock
+    {
+        [JsonPropertyName("api_dll")] public string? ApiDll { get; set; }
+        [JsonPropertyName("api_dest")] public string? ApiDest { get; set; }
+        [JsonPropertyName("api_backup_suffix")] public string? ApiBackupSuffix { get; set; }
+        [JsonPropertyName("appid_file")] public string? AppidFile { get; set; }
+        [JsonPropertyName("appid_value")] public string? AppidValue { get; set; }
+        [JsonPropertyName("appid_dest")] public string? AppidDest { get; set; }
     }
 }
 
