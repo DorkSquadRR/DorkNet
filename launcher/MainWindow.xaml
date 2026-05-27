@@ -661,6 +661,24 @@
                         </StackPanel>
                     </Border>
 
+                    <!-- Dev-mode overrides — visible only when at least one
+                         env var is set so end users never see it. -->
+                    <Border x:Name="LocalOverridesPanel" Visibility="Collapsed"
+                            Style="{StaticResource Panel}" Margin="0,0,0,16"
+                            Background="{StaticResource CardBgHost}">
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource SectionTitle}"
+                                       Text="🛠 Dev overrides active" />
+                            <TextBlock Foreground="{StaticResource InkSoft}" FontSize="12"
+                                       Margin="0,-6,0,8" TextWrapping="Wrap"
+                                       Text="The launcher is reading from local paths instead of GitHub. Unset DORKNET_LOCAL_MANIFEST / DORKNET_LOCAL_RELEASES to return to normal mode." />
+                            <TextBlock x:Name="LocalOverridesText"
+                                       Foreground="{StaticResource Ink}"
+                                       FontSize="12" TextWrapping="Wrap"
+                                       FontFamily="Cascadia Mono, Consolas" />
+                        </StackPanel>
+                    </Border>
+
                     <Border Style="{StaticResource Panel}">
                         <StackPanel>
                             <TextBlock Style="{StaticResource SectionTitle}" Text="About" />

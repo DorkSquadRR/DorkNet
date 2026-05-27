@@ -30,6 +30,23 @@ public sealed class VersionsManifest
 
     public async Task<VersionsManifest?> FetchAsync(CancellationToken ct = default)
     {
+        // Dev-time override: read manifest from a local file instead of
+        // GitHub. Used for testing branch changes before they're public.
+        var localPath = LocalOverrides.GetLocalManifestPath();
+        if (localPath is not null)
+        {
+            try
+            {
+                var json = await File.ReadAllTextAsync(localPath, ct);
+                return JsonSerializer.Deserialize<VersionsManifest>(json);
+            }
+            catch
+            {
+                // Bad local file — fall through to the network so the
+                // user gets a real error instead of silent emptiness.
+            }
+        }
+
         try
         {
             var m = await Http.GetFromJsonAsync<VersionsManifest>(ManifestUrl, ct);

@@ -44,6 +44,11 @@ public sealed class ReleaseDownloader
         IProgress<DownloadProgress>? progress,
         CancellationToken ct = default)
     {
+        // Dev-time override — use a local server build in-place rather
+        // than downloading from GitHub. Skips cache entirely.
+        var local = LocalOverrides.GetLocalServerDir(version.VersionKey);
+        if (local is not null) return local;
+
         var dir = Path.Combine(AppPaths.ServersRoot, version.VersionKey);
         var marker = Path.Combine(dir, ".dorknet-version");
         // If the marker file exists, the server is already unpacked
@@ -73,6 +78,11 @@ public sealed class ReleaseDownloader
         IProgress<DownloadProgress>? progress,
         CancellationToken ct = default)
     {
+        // Dev-time override — same as EnsureServerAsync but for the
+        // client-patcher dir.
+        var local = LocalOverrides.GetLocalPatcherDir(version.VersionKey);
+        if (local is not null) return local;
+
         var dir = Path.Combine(AppPaths.PatchersRoot, version.VersionKey);
         var marker = Path.Combine(dir, ".dorknet-version");
         if (File.Exists(marker)) return dir;

@@ -166,6 +166,17 @@ public partial class MainWindow : Window
             $"Patchers: {AppPaths.PatchersRoot}\n" +
             $"Logs:    {AppPaths.LogsRoot}";
 
+        var overrides = LocalOverrides.DescribeActive();
+        if (!string.IsNullOrEmpty(overrides))
+        {
+            LocalOverridesPanel.Visibility = Visibility.Visible;
+            LocalOverridesText.Text = overrides;
+        }
+        else
+        {
+            LocalOverridesPanel.Visibility = Visibility.Collapsed;
+        }
+
         RefreshJoinReadiness();
         ShowView(PickRoutingTarget());
     }
