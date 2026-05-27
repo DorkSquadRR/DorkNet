@@ -1731,16 +1731,25 @@ public class RoomsController(
     /// <c>roomId</c> key per the <c>MKAMHOIHOJK</c> factory at
     /// <c>MKAMHOIHOJK.txt:621</c> — see <see cref="BuildRoomUnionEntry"/>
     /// + <see cref="BuildPlaylistUnionEntry"/>.
+    ///
+    /// <para><b>Why rooms-only despite the "and playlists" name:</b> the
+    /// Hot tab of the watch's Play page mounts this endpoint and used to
+    /// interleave playlist tiles next to room tiles, but design intent is
+    /// that playlists appear only under the Moods/Playlists section (their
+    /// own endpoints — <c>/api/curatedroomplaylists</c> +
+    /// <c>/roomserver/playlists/{id}</c>). The watch's union deserializer
+    /// happily accepts a Results list that's 100% rooms, so we keep the
+    /// wrapper shape but drop the playlist half.</para>
     /// </summary>
     [HttpGet("roomserver/roomsandplaylists/hot")]
     [HttpGet("roomsandplaylists/hot")]
     public async Task<IActionResult> RoomsAndPlaylistsHot([FromQuery] string? tag)
     {
-        var (merged, total) = await BuildHotUnionAsync(tag);
+        var (entries, total) = await BuildHotRoomsAsync(tag);
         return Ok(new Dictionary<string, object>(StringComparer.Ordinal)
         {
             ["TotalResults"] = (long)total,
-            ["Results"] = merged,
+            ["Results"] = entries,
         });
     }
 
@@ -1760,12 +1769,16 @@ public class RoomsController(
         // Watch joins multiple tags with "," — use the first one as a
         // substring filter since RoomService.HotAsync takes a single
         // tag arg. Empty / null = unfiltered.
+        //
+        // Returns rooms-only for the same reason as the wrapped
+        // RoomsAndPlaylistsHot endpoint above: playlists belong in
+        // Moods, not in the Hot tab. See that endpoint's doc-comment.
         var firstTag = string.IsNullOrWhiteSpace(tagsJoined)
             ? null
             : tagsJoined.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .FirstOrDefault();
-        var (merged, _) = await BuildHotUnionAsync(firstTag);
-        return Ok(merged);
+        var (entries, _) = await BuildHotRoomsAsync(firstTag);
+        return Ok(entries);
     }
 
     /// <summary>GET <c>hot_rooms/{tagsJoined?}</c> — rooms-only variant
@@ -1795,34 +1808,37 @@ public class RoomsController(
     }
 
     /// <summary>
-    /// Shared body for the two hot variants — pulls hot rooms +
-    /// playlists, fans out sub-room rows in one query to avoid N+1,
-    /// and interleaves into the union shape the watch's factory
-    /// expects. Returns (entries, totalCount) so the wrapped variant
-    /// can fill in TotalResults.
+    /// Shared body for the two hot variants — pulls hot rooms only,
+    /// fans out sub-room rows in one query to avoid N+1, and returns
+    /// the union-shape entries the watch's factory expects (each entry
+    /// happens to be a room dict; the factory accepts that). Returns
+    /// (entries, totalCount) so the wrapped variant can fill in
+    /// TotalResults.
+    ///
+    /// <para>Take limit raised to 100 (was 12) — the Hot tab used to
+    /// surface only the top dozen rooms which is far less than the
+    /// catalog the watch's browse UI can actually render. The watch
+    /// paginates client-side if it needs to chunk further.</para>
     /// </summary>
-    private async Task<(List<IDictionary<string, object>> Entries, int Total)> BuildHotUnionAsync(string? tag)
+    private async Task<(List<IDictionary<string, object>> Entries, int Total)> BuildHotRoomsAsync(string? tag)
     {
-        // Sequential — both services share the scoped DbContext, which
-        // is not thread-safe (Task.WhenAll here throws "A second
-        // operation was started on this context instance before a
-        // previous operation completed").
-        var roomList = await rooms.HotAsync(tag, take: 12);
-        var playlistList = await playlists.HotAsync(tag, take: 12);
+        var roomList = await rooms.HotAsync(tag, take: 100);
 
         var roomIds = roomList.Select(r => r.Id).ToList();
-        var sceneRows = await db.RoomScenes
-            .Where(s => roomIds.Contains(s.RoomId))
-            .OrderBy(s => s.OrderIndex)
-            .ToListAsync();
+        var sceneRows = roomIds.Count == 0
+            ? new List<RoomSceneEntity>()
+            : await db.RoomScenes
+                .Where(s => roomIds.Contains(s.RoomId))
+                .OrderBy(s => s.OrderIndex)
+                .ToListAsync();
         var scenesByRoom = sceneRows
             .GroupBy(s => s.RoomId)
             .ToDictionary(g => g.Key, g => (IReadOnlyList<RoomSceneEntity>)g.ToList());
 
-        var merged = InterleaveUnion(
-            roomList.Select(r => BuildRoomUnionEntry(r, scenesByRoom.GetValueOrDefault(r.Id))),
-            playlistList.Select(BuildPlaylistUnionEntry));
-        return (merged, roomList.Count + playlistList.Count);
+        var entries = roomList
+            .Select(r => BuildRoomUnionEntry(r, scenesByRoom.GetValueOrDefault(r.Id)))
+            .ToList();
+        return (entries, entries.Count);
     }
 
     /// <summary>
