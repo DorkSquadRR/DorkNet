@@ -82,10 +82,12 @@ public partial class MainWindow : Window
     // ── View routing ────────────────────────────────────────────────────
     private void ShowView(string name)
     {
-        FirstRunView.Visibility = name == "first-run" ? Visibility.Visible : Visibility.Collapsed;
+        WelcomeView.Visibility = name == "welcome" ? Visibility.Visible : Visibility.Collapsed;
+        SetupView.Visibility = name == "setup" ? Visibility.Visible : Visibility.Collapsed;
         HostView.Visibility = name == "host" ? Visibility.Visible : Visibility.Collapsed;
         JoinView.Visibility = name == "join" ? Visibility.Visible : Visibility.Collapsed;
         SettingsView.Visibility = name == "settings" ? Visibility.Visible : Visibility.Collapsed;
+        if (name == "setup") RenderSetupStep();
     }
 
     private string CurrentViewName()
@@ -93,25 +95,42 @@ public partial class MainWindow : Window
         if (SettingsView.Visibility == Visibility.Visible) return "settings";
         if (HostView.Visibility == Visibility.Visible) return "host";
         if (JoinView.Visibility == Visibility.Visible) return "join";
-        return "first-run";
+        if (SetupView.Visibility == Visibility.Visible) return "setup";
+        return "welcome";
     }
 
     private string? _previousView;
 
+    /// <summary>Pick the right initial view based on persisted state.
+    /// True first launch: welcome -> setup -> host/join. Subsequent
+    /// launches skip the wizard since SetupComplete is true.</summary>
+    private string PickRoutingTarget()
+    {
+        if (!_state.WelcomeSeen) return "welcome";
+        if (_state.Mode == AppMode.Unset || !_state.SetupComplete) return "setup";
+        return _state.Mode == AppMode.Join ? "join" : "host";
+    }
+
     private void ReflectStateInUi()
     {
-        // Mirror persisted values into the host/join input fields so the
-        // user doesn't re-type them every launch.
+        // Mirror persisted values into the host/join + setup input fields
+        // so the user doesn't re-type them every launch (or every step
+        // back/forward in the wizard).
         var path = _state.RecRoomPath ?? "(not picked)";
         HostRecRoomPath.Text = path;
         JoinRecRoomPath.Text = path;
+        SetupRecRoomPath.Text = path;
 
         PhotonAppIdInput.Text = _state.PhotonAppId;
         PhotonVoiceAppIdInput.Text = _state.PhotonVoiceAppId;
+        SetupPhotonAppId.Text = _state.PhotonAppId;
+        SetupPhotonVoiceAppId.Text = _state.PhotonVoiceAppId;
         SelectComboBoxByTag(PhotonRegionSelect, _state.PhotonRegion);
         ServerNameInput.Text = _state.ServerName;
-        // Hosting mode radio — reflect persisted choice; defaults to Internet
-        // since that's the install-and-play case most users want.
+        SetupServerName.Text = _state.ServerName;
+
+        // Hosting mode radios — reflect persisted choice on both the
+        // main HostView and the setup wizard's matching step.
         if (HostModeLocal is not null && HostModeInternet is not null)
         {
             if (_state.HostingMode == HostingMode.LocalNetwork)
@@ -119,6 +138,27 @@ public partial class MainWindow : Window
             else
                 HostModeInternet.IsChecked = true;
         }
+        if (SetupHostLocal is not null && SetupHostInternet is not null)
+        {
+            if (_state.HostingMode == HostingMode.LocalNetwork)
+                SetupHostLocal.IsChecked = true;
+            else
+                SetupHostInternet.IsChecked = true;
+        }
+
+        // Setup step 2 banner — surface the auto-detected install so the
+        // user knows the launcher already did the work.
+        if (!string.IsNullOrEmpty(_state.RecRoomPath))
+        {
+            SetupDetectedBanner.Visibility = Visibility.Visible;
+            SetupDetectedPath.Text = _state.RecRoomPath;
+        }
+        else
+        {
+            SetupDetectedBanner.Visibility = Visibility.Collapsed;
+        }
+
+        UpdateSetupPhotonStatus();
 
         CachePathsText.Text =
             $"State:   {AppPaths.StateFile}\n" +
@@ -127,13 +167,7 @@ public partial class MainWindow : Window
             $"Logs:    {AppPaths.LogsRoot}";
 
         RefreshJoinReadiness();
-
-        ShowView(_state.Mode switch
-        {
-            AppMode.Host => "host",
-            AppMode.Join => "join",
-            _ => "first-run",
-        });
+        ShowView(PickRoutingTarget());
     }
 
     private async Task RefreshManifestAsync()
@@ -172,7 +206,169 @@ public partial class MainWindow : Window
         }
     }
 
-    // ── First-run wizard / mode picks ───────────────────────────────────
+    // ── Welcome + setup wizard ──────────────────────────────────────────
+    private int _setupStep = 1; // 1=mode, 2=install, 3=server, 4=photon, 5=done
+
+    private void OnWelcomeContinue(object sender, RoutedEventArgs e)
+    {
+        _state.WelcomeSeen = true;
+        _state.Save();
+        _setupStep = 1;
+        ShowView("setup");
+    }
+
+    private void OnSetupPickHost(object sender, RoutedEventArgs e)
+    {
+        _state.Mode = AppMode.Host;
+        _state.Save();
+        _setupStep = 2;
+        RenderSetupStep();
+    }
+
+    private void OnSetupPickJoin(object sender, RoutedEventArgs e)
+    {
+        _state.Mode = AppMode.Join;
+        _state.Save();
+        // Join mode only needs the install path — Photon/server config
+        // come from the host's join code, not the joiner.
+        _setupStep = 2;
+        RenderSetupStep();
+    }
+
+    private void OnSetupBack(object sender, RoutedEventArgs e)
+    {
+        if (_setupStep <= 1) return;
+        _setupStep--;
+        // For Join mode, skip the host-only steps (3 + 4) when walking back
+        // — there's nothing to show there.
+        if (_state.Mode == AppMode.Join && _setupStep is 3 or 4)
+            _setupStep = 2;
+        RenderSetupStep();
+    }
+
+    private void OnSetupNext(object sender, RoutedEventArgs e)
+    {
+        // Validate before advancing — surface a friendly nudge if the
+        // step's prereq isn't met.
+        switch (_setupStep)
+        {
+            case 2 when string.IsNullOrEmpty(_state.RecRoomPath):
+                ShowError("Pick your Rec Room install folder first.");
+                return;
+            case 3 when string.IsNullOrWhiteSpace(_state.ServerName):
+                ShowError("Give your server a name first.");
+                return;
+            case 4 when string.IsNullOrWhiteSpace(_state.PhotonAppId):
+                ShowError("A Realtime Photon AppId is required. Use the walkthrough button if you don't have one yet.");
+                return;
+        }
+
+        _setupStep++;
+        // Join mode skips host-only steps (3 = server name, 4 = Photon).
+        if (_state.Mode == AppMode.Join && _setupStep is 3 or 4)
+            _setupStep = 5;
+
+        if (_setupStep > 5)
+        {
+            _state.SetupComplete = true;
+            _state.Save();
+            ShowView(_state.Mode == AppMode.Join ? "join" : "host");
+            return;
+        }
+        RenderSetupStep();
+    }
+
+    private void RenderSetupStep()
+    {
+        SetupStep1.Visibility = _setupStep == 1 ? Visibility.Visible : Visibility.Collapsed;
+        SetupStep2.Visibility = _setupStep == 2 ? Visibility.Visible : Visibility.Collapsed;
+        SetupStep3.Visibility = _setupStep == 3 ? Visibility.Visible : Visibility.Collapsed;
+        SetupStep4.Visibility = _setupStep == 4 ? Visibility.Visible : Visibility.Collapsed;
+        SetupStepDone.Visibility = _setupStep == 5 ? Visibility.Visible : Visibility.Collapsed;
+
+        // Step indicator chip and totals — Join skips host-only steps so
+        // the "of N" denominator changes between modes. Join's step 5
+        // (done) is the third visible step, since 3 + 4 are skipped.
+        var total = _state.Mode == AppMode.Join ? 3 : 5;
+        var displayed = (_state.Mode == AppMode.Join && _setupStep == 5) ? 3 : _setupStep;
+        SetupStepIndicator.Text = $"STEP {displayed} OF {total}";
+
+        // Step 1 (mode pick) has no Back / Next — the cards self-advance.
+        SetupBackBtn.Visibility = _setupStep > 1 ? Visibility.Visible : Visibility.Collapsed;
+        SetupNextBtn.Visibility = _setupStep == 1 ? Visibility.Collapsed : Visibility.Visible;
+        SetupNextBtn.Content = _setupStep == 5 ? "Finish  →" : "Next →";
+
+        // Refresh the install banner + Photon status each render — the
+        // user may have hit "Pick…" mid-wizard and we want the new path
+        // reflected immediately.
+        var path = _state.RecRoomPath ?? "(not picked)";
+        SetupRecRoomPath.Text = path;
+        SetupDetectedBanner.Visibility = string.IsNullOrEmpty(_state.RecRoomPath)
+            ? Visibility.Collapsed : Visibility.Visible;
+        if (!string.IsNullOrEmpty(_state.RecRoomPath)) SetupDetectedPath.Text = _state.RecRoomPath;
+        UpdateSetupPhotonStatus();
+    }
+
+    private void UpdateSetupPhotonStatus()
+    {
+        if (SetupPhotonStatus is null) return;
+        if (string.IsNullOrWhiteSpace(_state.PhotonAppId))
+        {
+            SetupPhotonStatus.Text = "Realtime AppId required before you can host.";
+            SetupPhotonStatus.Foreground = (System.Windows.Media.Brush)FindResource("InkFaint");
+        }
+        else
+        {
+            SetupPhotonStatus.Text = string.IsNullOrWhiteSpace(_state.PhotonVoiceAppId)
+                ? "✓ Realtime AppId set. (No voice — players can use Discord.)"
+                : "✓ Realtime + Voice AppIds set.";
+            SetupPhotonStatus.Foreground = (System.Windows.Media.Brush)FindResource("Ok");
+        }
+    }
+
+    private void OnSetupServerNameChanged(object sender, RoutedEventArgs e)
+    {
+        _state.ServerName = SetupServerName.Text.Trim();
+        ServerNameInput.Text = _state.ServerName;
+        _state.Save();
+    }
+
+    private void OnSetupHostingModeChanged(object sender, RoutedEventArgs e)
+    {
+        if (SetupHostLocal is null || SetupHostInternet is null) return;
+        _state.HostingMode = SetupHostLocal.IsChecked == true
+            ? HostingMode.LocalNetwork
+            : HostingMode.Internet;
+        _state.Save();
+        // Mirror to main HostView radios.
+        if (HostModeLocal is not null && HostModeInternet is not null)
+        {
+            if (_state.HostingMode == HostingMode.LocalNetwork) HostModeLocal.IsChecked = true;
+            else HostModeInternet.IsChecked = true;
+        }
+    }
+
+    private void OnSetupPhotonChanged(object sender, RoutedEventArgs e)
+    {
+        _state.PhotonAppId = SetupPhotonAppId.Text.Trim();
+        _state.PhotonVoiceAppId = SetupPhotonVoiceAppId.Text.Trim();
+        _state.Save();
+        // Mirror into the canonical Photon section so re-opening HostView
+        // doesn't show stale values.
+        PhotonAppIdInput.Text = _state.PhotonAppId;
+        PhotonVoiceAppIdInput.Text = _state.PhotonVoiceAppId;
+        UpdateSetupPhotonStatus();
+    }
+
+    private void OnRerunSetup(object sender, RoutedEventArgs e)
+    {
+        _state.SetupComplete = false;
+        _state.Save();
+        _setupStep = 1;
+        ShowView("setup");
+    }
+
+    // ── Legacy mode-pick handlers used by Settings -> Switch mode ──────
     private void OnPickHost(object sender, RoutedEventArgs e)
     {
         _state.Mode = AppMode.Host;

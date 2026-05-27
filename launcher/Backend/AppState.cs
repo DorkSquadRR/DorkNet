@@ -52,6 +52,19 @@ public sealed class AppState
     [JsonPropertyName("serverName")]
     public string ServerName { get; set; } = string.Empty;
 
+    /// <summary>True once the user has dismissed the branded welcome
+    /// screen. Subsequent launches skip straight to the setup wizard
+    /// (or the main host/join view if setup is also done).</summary>
+    [JsonPropertyName("welcomeSeen")]
+    public bool WelcomeSeen { get; set; }
+
+    /// <summary>True once the user has finished the multi-step setup
+    /// wizard. Future launches skip the wizard and open the
+    /// host/join view directly. Settings -> "Re-run setup" can clear
+    /// this if the user wants to walk through again.</summary>
+    [JsonPropertyName("setupComplete")]
+    public bool SetupComplete { get; set; }
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
@@ -65,7 +78,26 @@ public sealed class AppState
         try
         {
             var json = File.ReadAllText(AppPaths.StateFile);
-            return JsonSerializer.Deserialize<AppState>(json, JsonOptions) ?? new AppState();
+            var state = JsonSerializer.Deserialize<AppState>(json, JsonOptions) ?? new AppState();
+
+            // Backfill the welcome/setup flags for users upgrading from a
+            // pre-wizard build. If they already had a working host setup
+            // they've effectively passed those screens — don't drag them
+            // back through the wizard on first launch of the new build.
+            var migrated = false;
+            if (!state.WelcomeSeen && state.Mode != AppMode.Unset)
+            { state.WelcomeSeen = true; migrated = true; }
+            if (!state.SetupComplete && state.Mode != AppMode.Unset &&
+                !string.IsNullOrEmpty(state.RecRoomPath) &&
+                (state.Mode == AppMode.Join || !string.IsNullOrEmpty(state.PhotonAppId)))
+            { state.SetupComplete = true; migrated = true; }
+            // Flush the migration so subsequent launches read the
+            // backfilled values directly from disk — keeps the file as
+            // the authoritative source instead of needing to re-derive
+            // them every load.
+            if (migrated) { try { state.Save(); } catch { } }
+
+            return state;
         }
         catch
         {

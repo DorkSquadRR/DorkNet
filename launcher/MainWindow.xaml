@@ -27,84 +27,278 @@
         <Grid Margin="36,28">
             <!-- View slots — only one Visible at a time; code-behind toggles. -->
 
-            <!-- ── First-run wizard ───────────────────────────────────── -->
-            <StackPanel x:Name="FirstRunView" Visibility="Visible"
-                        VerticalAlignment="Center">
-                <StackPanel HorizontalAlignment="Center" Margin="0,0,0,40">
-                    <TextBlock Text="DorkNet"
-                               FontSize="56" FontWeight="Bold"
-                               Foreground="{StaticResource WordmarkBrush}"
-                               HorizontalAlignment="Center"
-                               FontFamily="Segoe UI Variable, Segoe UI" />
-                    <TextBlock Text="Play together on your own Rec Room server"
-                               Foreground="{StaticResource InkSoft}"
-                               FontSize="16"
-                               HorizontalAlignment="Center" Margin="0,6,0,0" />
-                </StackPanel>
+            <!-- ── Welcome screen ─────────────────────────────────────
+                 Only shown on truly first launch. After "Get started"
+                 the user enters the setup wizard; subsequent launches
+                 skip straight to Setup or HostView/JoinView. -->
+            <StackPanel x:Name="WelcomeView" Visibility="Collapsed"
+                        VerticalAlignment="Center" HorizontalAlignment="Center"
+                        MaxWidth="520">
+                <TextBlock Text="DorkNet"
+                           FontSize="72" FontWeight="Bold"
+                           Foreground="{StaticResource WordmarkBrush}"
+                           HorizontalAlignment="Center"
+                           FontFamily="Segoe UI Variable, Segoe UI" />
+                <TextBlock Text="Play together on your own Rec Room server."
+                           Foreground="{StaticResource Ink}"
+                           FontSize="18"
+                           HorizontalAlignment="Center" Margin="0,8,0,32"
+                           TextAlignment="Center" />
 
-                <Grid Margin="40,0" MaxWidth="780" HorizontalAlignment="Center">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="20" />
-                        <ColumnDefinition Width="*" />
-                    </Grid.ColumnDefinitions>
-
-                    <Button Grid.Column="0" Style="{StaticResource ChoiceCardBtn}"
-                            Background="{StaticResource CardBgHost}"
-                            Click="OnPickHost">
-                        <StackPanel>
-                            <Border CornerRadius="14" Width="56" Height="56"
-                                    Background="#3D2B57" Margin="0,0,0,18"
-                                    HorizontalAlignment="Left">
-                                <TextBlock Text="🛠" FontSize="32"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center" />
-                            </Border>
-                            <TextBlock Text="Host a server" FontSize="22"
-                                       FontWeight="Bold" Margin="0,0,0,10" />
-                            <TextBlock Foreground="{StaticResource InkSoft}"
-                                       FontSize="13" TextWrapping="Wrap" LineHeight="20"
-                                       Text="Run a server for you and your friends. Pick a Rec Room version, the launcher downloads the matching server, opens a tunnel, and hands you a shareable join code." />
-                            <Border Margin="0,18,0,0" CornerRadius="8"
-                                    Background="{StaticResource Brand}" Padding="14,8"
-                                    HorizontalAlignment="Left">
-                                <TextBlock Text="Get started →" Foreground="White"
-                                           FontWeight="SemiBold" FontSize="13" />
-                            </Border>
+                <Border Style="{StaticResource Panel}"
+                        Background="{StaticResource CardBg}" Padding="28,24"
+                        Margin="0,0,0,28">
+                    <StackPanel>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                            <TextBlock Text="✨" FontSize="20" Margin="0,0,12,0" />
+                            <TextBlock Foreground="{StaticResource Ink}" FontSize="14"
+                                       VerticalAlignment="Center" TextWrapping="Wrap"
+                                       Text="Set up in about two minutes" />
                         </StackPanel>
-                    </Button>
-
-                    <Button Grid.Column="2" Style="{StaticResource ChoiceCardBtn}"
-                            Background="{StaticResource CardBgJoin}"
-                            Click="OnPickJoin">
-                        <StackPanel>
-                            <Border CornerRadius="14" Width="56" Height="56"
-                                    Background="#1C3C4A" Margin="0,0,0,18"
-                                    HorizontalAlignment="Left">
-                                <TextBlock Text="🎮" FontSize="32"
-                                           HorizontalAlignment="Center"
-                                           VerticalAlignment="Center" />
-                            </Border>
-                            <TextBlock Text="Join a friend" FontSize="22"
-                                       FontWeight="Bold" Margin="0,0,0,10" />
-                            <TextBlock Foreground="{StaticResource InkSoft}"
-                                       FontSize="13" TextWrapping="Wrap" LineHeight="20"
-                                       Text="Paste a join code from your host, point at your Rec Room install. The launcher fetches the matching patcher and gets you connected." />
-                            <Border Margin="0,18,0,0" CornerRadius="8"
-                                    Background="{StaticResource Teal}" Padding="14,8"
-                                    HorizontalAlignment="Left">
-                                <TextBlock Text="Get started →" Foreground="#0E0A1F"
-                                           FontWeight="SemiBold" FontSize="13" />
-                            </Border>
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,14">
+                            <TextBlock Text="💸" FontSize="20" Margin="0,0,12,0" />
+                            <TextBlock Foreground="{StaticResource Ink}" FontSize="14"
+                                       VerticalAlignment="Center" TextWrapping="Wrap"
+                                       Text="Host for free — no credit card, no subscription" />
                         </StackPanel>
-                    </Button>
-                </Grid>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="🎮" FontSize="20" Margin="0,0,12,0" />
+                            <TextBlock Foreground="{StaticResource Ink}" FontSize="14"
+                                       VerticalAlignment="Center" TextWrapping="Wrap"
+                                       Text="Works with the regular Rec Room game — no rebuild needed" />
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
 
-                <TextBlock Text="You can switch modes anytime under Settings."
+                <Button Style="{StaticResource PrimaryBtn}"
+                        Content="Get started  →"
+                        Click="OnWelcomeContinue"
+                        HorizontalAlignment="Center"
+                        Padding="34,14" FontSize="15" />
+
+                <TextBlock Text="Not affiliated with Rec Room Inc. or Against Gravity."
                            HorizontalAlignment="Center"
                            Foreground="{StaticResource InkFaint}"
-                           FontSize="12" Margin="0,32,0,0" />
+                           FontSize="11" Margin="0,28,0,0" />
             </StackPanel>
+
+            <!-- ── Setup wizard ────────────────────────────────────────
+                 Shown on first launch after Welcome. Walks through mode
+                 pick, install location, server config + Photon. Once
+                 the user finishes the last step, AppState.SetupComplete
+                 flips and future launches go straight to HostView /
+                 JoinView (which still hold the same fields for tweaks). -->
+            <Grid x:Name="SetupView" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0" Margin="0,0,0,24">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="DorkNet" FontSize="22" FontWeight="Bold"
+                                   Foreground="{StaticResource WordmarkBrush}" />
+                        <Border Style="{StaticResource StatusChip}" Margin="14,0,0,0"
+                                VerticalAlignment="Center">
+                            <TextBlock x:Name="SetupStepIndicator"
+                                       Text="STEP 1" FontSize="10"
+                                       FontWeight="Bold" Foreground="{StaticResource Brand}" />
+                        </Border>
+                    </StackPanel>
+                </Grid>
+
+                <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                              Padding="0,0,8,0">
+                    <Grid>
+                        <!-- Setup step 1: Host or Join? -->
+                        <StackPanel x:Name="SetupStep1" Visibility="Visible">
+                            <TextBlock Text="What do you want to do?" FontSize="26"
+                                       FontWeight="Bold" Margin="0,0,0,8" />
+                            <TextBlock Text="Pick a mode. You can change this later under Settings."
+                                       Foreground="{StaticResource InkSoft}" FontSize="14"
+                                       Margin="0,0,0,28" />
+
+                            <Grid MaxWidth="780" HorizontalAlignment="Left">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="20" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <Button Grid.Column="0" Style="{StaticResource ChoiceCardBtn}"
+                                        Background="{StaticResource CardBgHost}"
+                                        Click="OnSetupPickHost">
+                                    <StackPanel>
+                                        <Border CornerRadius="14" Width="56" Height="56"
+                                                Background="#3D2B57" Margin="0,0,0,18"
+                                                HorizontalAlignment="Left">
+                                            <TextBlock Text="🛠" FontSize="32"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center" />
+                                        </Border>
+                                        <TextBlock Text="Host a server" FontSize="22"
+                                                   FontWeight="Bold" Margin="0,0,0,10" />
+                                        <TextBlock Foreground="{StaticResource InkSoft}"
+                                                   FontSize="13" TextWrapping="Wrap" LineHeight="20"
+                                                   Text="Run a server for you and your friends. The launcher handles the tunnel, gives you a shareable join code." />
+                                    </StackPanel>
+                                </Button>
+
+                                <Button Grid.Column="2" Style="{StaticResource ChoiceCardBtn}"
+                                        Background="{StaticResource CardBgJoin}"
+                                        Click="OnSetupPickJoin">
+                                    <StackPanel>
+                                        <Border CornerRadius="14" Width="56" Height="56"
+                                                Background="#1C3C4A" Margin="0,0,0,18"
+                                                HorizontalAlignment="Left">
+                                            <TextBlock Text="🎮" FontSize="32"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center" />
+                                        </Border>
+                                        <TextBlock Text="Join a friend" FontSize="22"
+                                                   FontWeight="Bold" Margin="0,0,0,10" />
+                                        <TextBlock Foreground="{StaticResource InkSoft}"
+                                                   FontSize="13" TextWrapping="Wrap" LineHeight="20"
+                                                   Text="You have a join code from someone. Paste it and the launcher fetches the matching patcher." />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+                        </StackPanel>
+
+                        <!-- Setup step 2: Rec Room install -->
+                        <StackPanel x:Name="SetupStep2" Visibility="Collapsed">
+                            <TextBlock Text="Where's Rec Room installed?" FontSize="26"
+                                       FontWeight="Bold" Margin="0,0,0,8" />
+                            <TextBlock Text="The launcher needs to find your Rec Room install folder. Pick the *_Data folder inside the install (e.g. Recroom_Release_Data)."
+                                       Foreground="{StaticResource InkSoft}" FontSize="14"
+                                       TextWrapping="Wrap" Margin="0,0,0,24" />
+
+                            <Border x:Name="SetupDetectedBanner" Visibility="Collapsed"
+                                    Style="{StaticResource Panel}"
+                                    Background="{StaticResource CardBgJoin}"
+                                    Margin="0,0,0,16">
+                                <StackPanel>
+                                    <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                        <TextBlock Text="✓" FontSize="18"
+                                                   Foreground="{StaticResource Ok}"
+                                                   Margin="0,0,10,0" />
+                                        <TextBlock Text="We found a Rec Room install"
+                                                   FontSize="15" FontWeight="SemiBold"
+                                                   VerticalAlignment="Center" />
+                                    </StackPanel>
+                                    <TextBlock x:Name="SetupDetectedPath"
+                                               Foreground="{StaticResource InkSoft}"
+                                               FontSize="12"
+                                               FontFamily="Cascadia Mono, Consolas"
+                                               TextWrapping="Wrap" Margin="28,0,0,0" />
+                                </StackPanel>
+                            </Border>
+
+                            <DockPanel Margin="0,0,0,12">
+                                <Button DockPanel.Dock="Right" Style="{StaticResource Btn}"
+                                        Content="Pick…" Click="OnPickRecRoom" Margin="8,0,0,0" />
+                                <Border Background="{StaticResource BgDeeper}"
+                                        BorderBrush="{StaticResource BorderSoft}" BorderThickness="1"
+                                        CornerRadius="10" Padding="12,10">
+                                    <TextBlock x:Name="SetupRecRoomPath"
+                                               Text="(not picked)"
+                                               Foreground="{StaticResource InkSoft}"
+                                               TextTrimming="CharacterEllipsis" FontSize="13" />
+                                </Border>
+                            </DockPanel>
+                            <TextBlock Foreground="{StaticResource InkFaint}" FontSize="11"
+                                       TextWrapping="Wrap"
+                                       Text="Don't have Rec Room installed yet? Grab it from the Rec Room website (or wherever you usually get it). DorkNet works with any official install." />
+                        </StackPanel>
+
+                        <!-- Setup step 3 (HOST only): Server name + WHO CAN JOIN -->
+                        <StackPanel x:Name="SetupStep3" Visibility="Collapsed">
+                            <TextBlock Text="Set up your server" FontSize="26"
+                                       FontWeight="Bold" Margin="0,0,0,8" />
+                            <TextBlock Text="Name your server so friends know what they're joining."
+                                       Foreground="{StaticResource InkSoft}" FontSize="14"
+                                       Margin="0,0,0,24" />
+
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="SERVER NAME" />
+                            <TextBox x:Name="SetupServerName" Margin="0,0,0,20"
+                                     LostFocus="OnSetupServerNameChanged" />
+
+                            <TextBlock Style="{StaticResource FieldLabel}" Text="WHO CAN JOIN?" />
+                            <StackPanel Margin="0,0,0,16">
+                                <RadioButton x:Name="SetupHostInternet" GroupName="SetupHostingMode"
+                                             Content="Friends anywhere (internet via Cloudflare)"
+                                             IsChecked="True" Margin="0,0,0,6"
+                                             Checked="OnSetupHostingModeChanged"
+                                             Foreground="{StaticResource Ink}" />
+                                <RadioButton x:Name="SetupHostLocal" GroupName="SetupHostingMode"
+                                             Content="Same WiFi only (no internet needed)"
+                                             Checked="OnSetupHostingModeChanged"
+                                             Foreground="{StaticResource Ink}" />
+                            </StackPanel>
+                            <TextBlock Foreground="{StaticResource InkFaint}" FontSize="11"
+                                       TextWrapping="Wrap"
+                                       Text="Cloudflare mode works for friends anywhere. Same-WiFi mode is fastest but only works for people on your local network." />
+                        </StackPanel>
+
+                        <!-- Setup step 4 (HOST only): Photon AppIds -->
+                        <StackPanel x:Name="SetupStep4" Visibility="Collapsed">
+                            <TextBlock Text="Connect your Photon account" FontSize="26"
+                                       FontWeight="Bold" Margin="0,0,0,8" />
+                            <TextBlock TextWrapping="Wrap"
+                                       Foreground="{StaticResource InkSoft}" FontSize="14"
+                                       Margin="0,0,0,24"
+                                       Text="DorkNet needs your own Photon account (free, takes ~2 min) to handle in-room sync. Click the walkthrough below — it'll open the Photon website, tell you what to click, and bring you back here." />
+
+                            <Button Style="{StaticResource PrimaryBtn}"
+                                    Content="Open setup walkthrough"
+                                    Click="OnOpenPhotonWizard"
+                                    HorizontalAlignment="Left" Margin="0,0,0,20" />
+
+                            <Border Style="{StaticResource Panel}"
+                                    Background="{StaticResource BgDeeper}"
+                                    Margin="0,0,0,12">
+                                <StackPanel>
+                                    <TextBlock Foreground="{StaticResource InkSoft}" FontSize="12"
+                                               Margin="0,0,0,8"
+                                               Text="Already have AppIds? Paste them here." />
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="REALTIME APPID" />
+                                    <TextBox x:Name="SetupPhotonAppId" Margin="0,0,0,12"
+                                             FontFamily="Cascadia Mono, Consolas" FontSize="12"
+                                             LostFocus="OnSetupPhotonChanged" />
+                                    <TextBlock Style="{StaticResource FieldLabel}" Text="VOICE APPID (OPTIONAL)" />
+                                    <TextBox x:Name="SetupPhotonVoiceAppId" Margin="0,0,0,0"
+                                             FontFamily="Cascadia Mono, Consolas" FontSize="12"
+                                             LostFocus="OnSetupPhotonChanged" />
+                                </StackPanel>
+                            </Border>
+                            <TextBlock x:Name="SetupPhotonStatus"
+                                       Foreground="{StaticResource InkFaint}" FontSize="11"
+                                       Text="Realtime AppId required before you can host." />
+                        </StackPanel>
+
+                        <!-- Setup done: short confirmation card -->
+                        <StackPanel x:Name="SetupStepDone" Visibility="Collapsed">
+                            <TextBlock Text="You're all set! 🎉" FontSize="26"
+                                       FontWeight="Bold" Margin="0,0,0,12" />
+                            <TextBlock TextWrapping="Wrap"
+                                       Foreground="{StaticResource Ink}" FontSize="14"
+                                       LineHeight="22"
+                                       Text="Setup's done. Hit Finish to open the main view — everything you just configured is saved, so you can hit Start hosting straight away." />
+                        </StackPanel>
+                    </Grid>
+                </ScrollViewer>
+
+                <!-- Footer nav -->
+                <Grid Grid.Row="2" Margin="0,20,0,0">
+                    <Button x:Name="SetupBackBtn" HorizontalAlignment="Left"
+                            Style="{StaticResource GhostBtn}"
+                            Content="← Back" Click="OnSetupBack" Visibility="Collapsed" />
+                    <Button x:Name="SetupNextBtn" HorizontalAlignment="Right"
+                            Style="{StaticResource PrimaryBtn}"
+                            Content="Next →" Click="OnSetupNext" Visibility="Collapsed" />
+                </Grid>
+            </Grid>
 
             <!-- ── Host view ──────────────────────────────────────────── -->
             <Grid x:Name="HostView" Visibility="Collapsed">
@@ -449,6 +643,9 @@
                                         Content="Host" Click="OnPickHost" />
                                 <Button Style="{StaticResource Btn}"
                                         Content="Join" Click="OnPickJoin"
+                                        Margin="10,0,0,0" />
+                                <Button Style="{StaticResource GhostBtn}"
+                                        Content="Re-run setup" Click="OnRerunSetup"
                                         Margin="10,0,0,0" />
                             </StackPanel>
                         </StackPanel>
