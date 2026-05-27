@@ -219,13 +219,19 @@
                                     Margin="10,0,0,0" Visibility="Collapsed" />
                         </StackPanel>
 
-                        <!-- Status -->
-                        <Border Style="{StaticResource Panel}" Margin="0,0,0,16">
+                        <!-- Progress steps — populated when the user hits
+                             "Start hosting". Hidden until then so the
+                             idle Host view stays clean. -->
+                        <Border x:Name="HostStepsPanel" Style="{StaticResource Panel}"
+                                Margin="0,0,0,16" Visibility="Collapsed">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource SectionTitle}" Text="Status" />
+                                <TextBlock Style="{StaticResource SectionTitle}" Text="Progress" />
+                                <ItemsControl x:Name="HostStepsList"
+                                              ItemTemplate="{StaticResource StepRowTemplate}" />
                                 <TextBlock x:Name="HostStatusText"
                                            Foreground="{StaticResource InkSoft}"
-                                           TextWrapping="Wrap" Text="Idle." FontSize="14" />
+                                           TextWrapping="Wrap" FontSize="13"
+                                           Margin="0,4,0,0" />
                             </StackPanel>
                         </Border>
 
@@ -338,12 +344,16 @@
                                     Margin="10,0,0,0" Visibility="Collapsed" />
                         </StackPanel>
 
-                        <Border Style="{StaticResource Panel}">
+                        <Border x:Name="JoinStepsPanel" Style="{StaticResource Panel}"
+                                Visibility="Collapsed">
                             <StackPanel>
-                                <TextBlock Style="{StaticResource SectionTitle}" Text="Status" />
+                                <TextBlock Style="{StaticResource SectionTitle}" Text="Progress" />
+                                <ItemsControl x:Name="JoinStepsList"
+                                              ItemTemplate="{StaticResource StepRowTemplate}" />
                                 <TextBlock x:Name="JoinStatusText"
                                            Foreground="{StaticResource InkSoft}"
-                                           TextWrapping="Wrap" Text="Idle." FontSize="14" />
+                                           TextWrapping="Wrap" FontSize="13"
+                                           Margin="0,4,0,0" />
                             </StackPanel>
                         </Border>
                     </StackPanel>

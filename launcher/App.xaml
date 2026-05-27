@@ -1,6 +1,7 @@
 <Application x:Class="DorkNet.Launcher.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:backend="clr-namespace:DorkNet.Launcher.Backend"
              StartupUri="MainWindow.xaml">
 
     <Application.Resources>
@@ -245,5 +246,144 @@
             <Setter Property="CornerRadius" Value="999" />
             <Setter Property="Padding" Value="10,4" />
         </Style>
+
+        <!-- ── Mini progress bar — restyled WPF ProgressBar to match the
+             launcher palette. Used inside the step-row template. ─────── -->
+        <Style x:Key="StepProgressBar" TargetType="ProgressBar">
+            <Setter Property="Minimum" Value="0" />
+            <Setter Property="Maximum" Value="100" />
+            <Setter Property="Height" Value="6" />
+            <Setter Property="Foreground" Value="{StaticResource Brand}" />
+            <Setter Property="Background" Value="{StaticResource BgDeeper}" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ProgressBar">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="3" ClipToBounds="True">
+                            <Grid HorizontalAlignment="Stretch">
+                                <Rectangle x:Name="PART_Track" />
+                                <Border x:Name="PART_Indicator"
+                                        Background="{TemplateBinding Foreground}"
+                                        HorizontalAlignment="Left"
+                                        CornerRadius="3" />
+                            </Grid>
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- ── Bool→Visibility converter for HasDetail/HasProgress flags ─ -->
+        <BooleanToVisibilityConverter x:Key="BoolToVis" />
+
+        <!-- ── StartupStep row template ─────────────────────────────────
+             A single row in the host/join step list. State drives the
+             status icon's colour + glyph; detail/progress are shown only
+             when populated (so pending steps render as a clean single
+             line). -->
+        <DataTemplate x:Key="StepRowTemplate" DataType="{x:Type backend:StartupStep}">
+            <Grid Margin="0,0,0,14">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="28" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <!-- Status bullet — circle that recolours and re-glyphs
+                     based on the bound State. Pending = empty ring,
+                     Active = filled brand, Done = green checkmark,
+                     Failed = red X. -->
+                <Border Grid.Column="0" Width="22" Height="22" CornerRadius="11"
+                        VerticalAlignment="Top" Margin="0,1,0,0"
+                        BorderThickness="2">
+                    <Border.Style>
+                        <Style TargetType="Border">
+                            <Setter Property="Background" Value="Transparent" />
+                            <Setter Property="BorderBrush" Value="{StaticResource InkFaint}" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding State}" Value="Active">
+                                    <Setter Property="Background" Value="{StaticResource Brand}" />
+                                    <Setter Property="BorderBrush" Value="{StaticResource Brand}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding State}" Value="Done">
+                                    <Setter Property="Background" Value="{StaticResource Ok}" />
+                                    <Setter Property="BorderBrush" Value="{StaticResource Ok}" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding State}" Value="Failed">
+                                    <Setter Property="Background" Value="{StaticResource Danger}" />
+                                    <Setter Property="BorderBrush" Value="{StaticResource Danger}" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Border.Style>
+                    <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center"
+                               FontSize="13" FontWeight="Bold" Foreground="White">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Text" Value="" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding State}" Value="Active">
+                                        <Setter Property="Text" Value="●" />
+                                        <Setter Property="FontSize" Value="9" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding State}" Value="Done">
+                                        <Setter Property="Text" Value="✓" />
+                                        <Setter Property="Foreground" Value="#0E0A1F" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding State}" Value="Failed">
+                                        <Setter Property="Text" Value="✕" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+                </Border>
+
+                <!-- Title + (optional) detail + (optional) progress bar -->
+                <StackPanel Grid.Column="1" Margin="12,0,0,0">
+                    <TextBlock Text="{Binding Title}" FontSize="14">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource InkSoft}" />
+                                <Setter Property="FontWeight" Value="Normal" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding State}" Value="Active">
+                                        <Setter Property="Foreground" Value="{StaticResource Ink}" />
+                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding State}" Value="Done">
+                                        <Setter Property="Foreground" Value="{StaticResource Ink}" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding State}" Value="Failed">
+                                        <Setter Property="Foreground" Value="{StaticResource Danger}" />
+                                        <Setter Property="FontWeight" Value="SemiBold" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <TextBlock Text="{Binding Detail}" TextWrapping="Wrap"
+                               FontSize="12" Margin="0,4,0,0"
+                               Visibility="{Binding HasDetail, Converter={StaticResource BoolToVis}}">
+                        <TextBlock.Style>
+                            <Style TargetType="TextBlock">
+                                <Setter Property="Foreground" Value="{StaticResource InkSoft}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding State}" Value="Failed">
+                                        <Setter Property="Foreground" Value="{StaticResource Danger}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </TextBlock.Style>
+                    </TextBlock>
+
+                    <ProgressBar Style="{StaticResource StepProgressBar}"
+                                 Value="{Binding ProgressPercent, Mode=OneWay}"
+                                 Margin="0,8,0,0"
+                                 Visibility="{Binding HasProgress, Converter={StaticResource BoolToVis}}" />
+                </StackPanel>
+            </Grid>
+        </DataTemplate>
     </Application.Resources>
 </Application>

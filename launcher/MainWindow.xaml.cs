@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
@@ -19,6 +20,8 @@ public partial class MainWindow : Window
     private Tunnel? _tunnel;
     private VersionsManifest? _manifest;
     private string? _hostApex;
+    private ObservableCollection<StartupStep>? _hostSteps;
+    private ObservableCollection<StartupStep>? _joinSteps;
 
     public MainWindow()
     {
@@ -260,46 +263,63 @@ public partial class MainWindow : Window
         HostStopBtn.Visibility = Visibility.Visible;
         JoinCodePanel.Visibility = Visibility.Collapsed;
 
+        // Build a fresh step list so progress is visible the moment the
+        // user clicks. Steps advance via StartStep/CompleteStep helpers
+        // below so flow stays readable.
+        _hostSteps = StartupFlow.NewHostFlow(_state.HostingMode == HostingMode.LocalNetwork);
+        HostStepsList.ItemsSource = _hostSteps;
+        HostStepsPanel.Visibility = Visibility.Visible;
+        HostStatusText.Text = "";
+
+        StartupStep? activeStep = null;
         try
         {
-            var progress = new Progress<DownloadProgress>(p =>
-                HostStatusText.Text = FormatProgress("Downloading server", p));
+            activeStep = StartStep(_hostSteps, 0);
+            var serverProgress = new Progress<DownloadProgress>(p => UpdateStepProgress(activeStep, p));
+            var serverDir = await _releases.EnsureServerAsync(version, serverProgress);
+            CompleteStep(activeStep);
 
-            HostStatusText.Text = "Downloading server binary…";
-            var serverDir = await _releases.EnsureServerAsync(version, progress);
-
-            // Hosting mode branch — Internet (Cloudflare tunnel, joiners
-            // anywhere) vs LocalNetwork (LAN IP, joiners on same network,
-            // zero internet dependency).
+            activeStep = StartStep(_hostSteps, 1);
             if (_state.HostingMode == HostingMode.LocalNetwork)
             {
                 _hostApex = LocalNetwork.GetLanIp();
-                HostStatusText.Text = $"Local-network mode: hosting on {_hostApex}";
+                activeStep.Detail = $"Hosting on {_hostApex}";
             }
             else
             {
-                HostStatusText.Text = "Setting up Cloudflare tunnel (first run downloads ~17 MB)…";
                 _tunnel = new Tunnel();
+                activeStep.Detail = "Connecting to Cloudflare (first run downloads cloudflared, ~17 MB)";
                 var publicUrl = await _tunnel.StartAsync(
                     localPort: 5005,
-                    downloadProgress: new Progress<DownloadProgress>(p =>
-                        HostStatusText.Text = FormatProgress("Downloading Cloudflare tunnel", p)));
+                    downloadProgress: new Progress<DownloadProgress>(p => UpdateStepProgress(activeStep!, p)));
                 _hostApex = new Uri(publicUrl).Host;
+                activeStep.Detail = $"Tunnel ready: {_hostApex}";
+                activeStep.Progress = null;
             }
+            CompleteStep(activeStep);
 
-            HostStatusText.Text = "Starting the server…";
+            activeStep = StartStep(_hostSteps, 2);
             await _server.StartAsync(serverDir, _state, _hostApex);
             _state.SelectedVersion = version.VersionKey;
             _state.Save();
+            CompleteStep(activeStep);
 
-            HostStatusText.Text = "Downloading client patcher…";
-            var patcherDir = await _releases.EnsurePatcherAsync(version, progress);
+            activeStep = StartStep(_hostSteps, 3);
+            var patcherProgress = new Progress<DownloadProgress>(p => UpdateStepProgress(activeStep, p));
+            var patcherDir = await _releases.EnsurePatcherAsync(version, patcherProgress);
+            CompleteStep(activeStep);
 
-            HostStatusText.Text = "Patching your Rec Room client…";
+            activeStep = StartStep(_hostSteps, 4);
             var patch = await _patcher.ApplyAsync(
                 patcherDir, _state.RecRoomPath!,
                 _state.PhotonAppId, _state.PhotonVoiceAppId, _state.PhotonRegion, _hostApex);
-            if (!patch.Ok) { ShowError("Patcher failed: " + Truncate(patch.Log, 500)); return; }
+            if (!patch.Ok)
+            {
+                FailStep(activeStep, "Patcher failed: " + Truncate(patch.Log, 300));
+                return;
+            }
+            CompleteStep(activeStep);
+            activeStep = null;
 
             var code = JoinCode.Encode(new JoinPayload
             {
@@ -319,9 +339,47 @@ public partial class MainWindow : Window
         }
         catch (Exception ex)
         {
-            ShowError(ex.Message);
+            if (activeStep is not null) FailStep(activeStep, ex.Message);
+            else HostStatusText.Text = ex.Message;
             HostStartBtn.IsEnabled = true;
             HostStopBtn.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    // ── Step helpers ────────────────────────────────────────────────────
+    private static StartupStep StartStep(ObservableCollection<StartupStep> steps, int index)
+    {
+        var s = steps[index];
+        s.State = StepState.Active;
+        return s;
+    }
+
+    private static void CompleteStep(StartupStep step)
+    {
+        step.State = StepState.Done;
+        step.Progress = null;
+    }
+
+    private static void FailStep(StartupStep step, string detail)
+    {
+        step.State = StepState.Failed;
+        step.Progress = null;
+        step.Detail = detail;
+    }
+
+    private static void UpdateStepProgress(StartupStep step, DownloadProgress p)
+    {
+        if (p.TotalBytes > 0)
+        {
+            var mb = p.BytesRead / (1024.0 * 1024.0);
+            var totalMb = p.TotalBytes / (1024.0 * 1024.0);
+            step.Detail = $"{mb:F1} / {totalMb:F1} MB ({(int)(p.Fraction * 100)}%)";
+            step.Progress = p.Fraction;
+        }
+        else
+        {
+            var mb = p.BytesRead / (1024.0 * 1024.0);
+            step.Detail = $"{mb:F1} MB downloaded";
         }
     }
 
@@ -332,7 +390,10 @@ public partial class MainWindow : Window
         HostStopBtn.Visibility = Visibility.Collapsed;
         HostLaunchBtn.Visibility = Visibility.Collapsed;
         JoinCodePanel.Visibility = Visibility.Collapsed;
-        HostStatusText.Text = "Stopped.";
+        HostStepsPanel.Visibility = Visibility.Collapsed;
+        HostStepsList.ItemsSource = null;
+        _hostSteps = null;
+        HostStatusText.Text = "";
     }
 
     private async Task ShutdownServerAsync()
@@ -389,25 +450,40 @@ public partial class MainWindow : Window
         { ShowError($"Host is on a version this launcher doesn't know about: {payload.VersionKey}"); return; }
 
         JoinApplyBtn.IsEnabled = false;
+        _joinSteps = StartupFlow.NewJoinFlow();
+        JoinStepsList.ItemsSource = _joinSteps;
+        JoinStepsPanel.Visibility = Visibility.Visible;
+        JoinStatusText.Text = "";
+
+        StartupStep? activeStep = null;
         try
         {
-            var progress = new Progress<DownloadProgress>(p =>
-                JoinStatusText.Text = FormatProgress("Downloading patcher", p));
-
-            JoinStatusText.Text = "Downloading client patcher…";
+            activeStep = StartStep(_joinSteps, 0);
+            var progress = new Progress<DownloadProgress>(p => UpdateStepProgress(activeStep, p));
             var patcherDir = await _releases.EnsurePatcherAsync(version, progress);
+            CompleteStep(activeStep);
 
-            JoinStatusText.Text = "Patching your Rec Room client…";
+            activeStep = StartStep(_joinSteps, 1);
             var patch = await _patcher.ApplyAsync(
                 patcherDir, _state.RecRoomPath!,
                 payload.PhotonAppId, payload.PhotonVoiceAppId, payload.PhotonRegion, payload.Host);
-            if (!patch.Ok) { ShowError("Patcher failed: " + Truncate(patch.Log, 500)); return; }
+            if (!patch.Ok)
+            {
+                FailStep(activeStep, "Patcher failed: " + Truncate(patch.Log, 300));
+                return;
+            }
+            CompleteStep(activeStep);
+            activeStep = null;
 
             JoinStatusText.Text = $"Patched and ready. Connecting to {payload.Host}. " +
                 "Click Launch Rec Room when you're ready to play.";
             JoinLaunchBtn.Visibility = Visibility.Visible;
         }
-        catch (Exception ex) { ShowError(ex.Message); }
+        catch (Exception ex)
+        {
+            if (activeStep is not null) FailStep(activeStep, ex.Message);
+            else JoinStatusText.Text = ex.Message;
+        }
         finally { RefreshJoinReadiness(); }
     }
 
@@ -420,14 +496,6 @@ public partial class MainWindow : Window
     }
 
     // ── Helpers ─────────────────────────────────────────────────────────
-    private static string FormatProgress(string label, DownloadProgress p)
-    {
-        if (p.TotalBytes <= 0) return $"{label}…";
-        var mb = p.BytesRead / (1024.0 * 1024.0);
-        var totalMb = p.TotalBytes / (1024.0 * 1024.0);
-        return $"{label}: {mb:F1} / {totalMb:F1} MB ({(int)(p.Fraction * 100)}%)";
-    }
-
     private static string Truncate(string s, int max)
         => s.Length <= max ? s : s[..max] + "...";
 
