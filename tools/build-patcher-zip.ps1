@@ -115,7 +115,7 @@ try {
         '$schema_version' = 1
         'loader_archive' = 'MelonLoader.zip'
         'plugin_dll' = 'DorkNet.ClientMod.dll'
-        'plugin_dest' = 'MelonLoader/Mods'
+        'plugin_dest' = 'Mods'
         'config_template' = 'dorknet-clientmod.json.template'
         'config_dest' = 'MelonLoader/UserData/dorknet-clientmod.json'
         'old_plugin_paths' = @(
