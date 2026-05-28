@@ -78,7 +78,15 @@ public static class ServiceCollectionExtensions
             }
             else
             {
-                var dbPath = Path.Combine(AppContext.BaseDirectory, "data", "dorknet.db");
+                // Honor an explicit path the host can set via env var
+                // (Database__SqlitePath) or appsettings (Database:SqlitePath).
+                // The Windows launcher sets this to %APPDATA%\DorkNet\dorknet.db
+                // so server installs don't accumulate state under <bin>\data\.
+                // Existing Docker / standalone deploys that mounted <bin>\data\
+                // keep working because that's still the fallback.
+                var dbPath = builder.Configuration["Database:SqlitePath"];
+                if (string.IsNullOrWhiteSpace(dbPath))
+                    dbPath = Path.Combine(AppContext.BaseDirectory, "data", "dorknet.db");
                 Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
                 opt.UseSqlite($"Data Source={dbPath}", lite => lite.MigrationsAssembly("DorkNet.Server"));
             }
