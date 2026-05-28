@@ -46,6 +46,7 @@ public class Mod : MelonMod
     private bool _diagnosticCoreRegistered;
     private bool _diagnosticGameComplete;
     private int _diagnosticRetryFrame;
+    private int _photonOverridePollFrame;
 
     // Loader-agnostic config — same .Value-shaped accessor the patches
     // would see in the BepInEx port, just backed by a plain JSON file
@@ -241,6 +242,18 @@ public class Mod : MelonMod
 
     public override void OnUpdate()
     {
+        // Photon AppId override poller. The harmony hook on
+        // PhotonNetwork.ConnectUsingSettings registers in IL2CPP but
+        // doesn't actually fire in this build (verified in the
+        // MelonLoader log — [patch-ok] appears but [photon-appid]
+        // never does), so we poll until PhotonServerSettings is loaded
+        // and write the AppId then. Stops calling once the override
+        // succeeds. Throttled to every 6th frame (~10 Hz at 60 fps) so
+        // the failure log doesn't drown the file when PhotonServerSettings
+        // isn't loaded yet.
+        if (!PhotonPatches.OverrideApplied && (_photonOverridePollFrame++ % 6) == 0)
+            PhotonPatches.TryApplyOverride(reason: "update-poll");
+
         if (_diagnosticGameComplete) return;
         if (_diagnosticRetryFrame++ > 3600) return;
         if ((_diagnosticRetryFrame % 60) != 0) return;
@@ -347,7 +360,7 @@ public class Mod : MelonMod
         return TryPatch(label, type, methodName, args, prefix, postfix);
     }
 
-    private static Type? ResolveType(string name)
+    internal static Type? ResolveType(string name)
     {
         if (ResolvedTypeCache.TryGetValue(name, out var cached))
             return cached;
@@ -620,21 +633,57 @@ internal static class UriPatches
 
 internal static class PhotonPatches
 {
+    /// <summary>True once <see cref="TryApplyOverride"/> has successfully
+    /// written the user's AppId into <c>PhotonServerSettings</c>. The
+    /// per-frame poller in <see cref="Mod.OnUpdate"/> stops calling once
+    /// this flips true.</summary>
+    public static bool OverrideApplied;
+
     public static void PhotonAppIdOverride_Prefix()
     {
-        if (string.IsNullOrEmpty(Mod.Cfg.PhotonAppId)) return;
+        // Kept as a belt-and-braces hook in case the watch's actual
+        // connect path does happen to flow through ConnectUsingSettings
+        // (it doesn't, in March's IL2CPP build — verified via log). The
+        // poller in OnUpdate is what actually gets the override in
+        // before the wire connect.
+        TryApplyOverride(reason: "prefix");
+    }
+
+    /// <summary>Tracks how many polling attempts we've logged so the
+    /// "type not found yet" line doesn't drown the log file. Cleared
+    /// once the override succeeds.</summary>
+    private static int _missLogCount;
+
+    /// <summary>Mutates <see cref="PhotonServerSettings.AppID"/> +
+    /// <c>VoiceAppID</c> + region with the values from
+    /// <see cref="Mod.Cfg"/>. Returns true once the override has been
+    /// written successfully; subsequent calls become no-ops. Returns
+    /// false (and logs nothing on most retries) when PhotonServerSettings
+    /// hasn't been loaded by the watch yet — the poller retries every
+    /// frame until the ScriptableObject shows up.</summary>
+    public static bool TryApplyOverride(string reason)
+    {
+        if (OverrideApplied) return true;
+        if (string.IsNullOrEmpty(Mod.Cfg.PhotonAppId)) return false;
         try
         {
-            // PhotonNetwork.PhotonServerSettings — accessed via reflection
-            // so the type-name resolution stays in one place. Mutating the
-            // ScriptableObject in-place is what the BepInEx plugin does
-            // too; the Photon Connect path reads AppID / VoiceAppID off
-            // this object immediately after.
-            var photonNetwork = Mod.Instance is null ? null : FindGameType("PhotonNetwork");
-            if (photonNetwork is null) return;
+            // Use Mod.ResolveType (the same resolver TryPatchByName uses)
+            // — it falls back to a full assembly scan after the prefix
+            // attempts, which is how it finds the IL2CPP-mangled types
+            // that the local FindGameType helper misses.
+            var photonNetwork = Mod.ResolveType("PhotonNetwork");
+            if (photonNetwork is null)
+            {
+                // Log the miss only on the first call + once every ~10s
+                // after that, to avoid the log spam previous build hit.
+                if (_missLogCount == 0 || _missLogCount % 300 == 0)
+                    Mod.Log.Msg($"[photon-appid] PhotonNetwork type not found yet (#{_missLogCount}, {reason})");
+                _missLogCount++;
+                return false;
+            }
             var settingsProp = photonNetwork.GetProperty("PhotonServerSettings", BindingFlags.Public | BindingFlags.Static);
             var settings = settingsProp?.GetValue(null);
-            if (settings is null) return;
+            if (settings is null) return false; // ScriptableObject not loaded yet; quietly retry next frame.
 
             var settingsType = settings.GetType();
             var appIdProp = settingsType.GetProperty("AppID") ?? settingsType.GetProperty("AppId");
@@ -645,7 +694,7 @@ internal static class PhotonPatches
 
             appIdProp?.SetValue(settings, newId);
             voiceProp?.SetValue(settings, newVoice);
-            Mod.Log.Msg($"[photon-appid] override AppID/VoiceAppID → {newId} / {newVoice}");
+            Mod.Log.Msg($"[photon-appid] override AppID/VoiceAppID → {newId} / {newVoice} ({reason})");
 
             // Force a deterministic Photon region so two watches running
             // this mod end up on the same Photon master and "JoinByName"
@@ -667,8 +716,14 @@ internal static class PhotonPatches
             // any) over the config default — that way a server-side
             // region change propagates without redeploying the mod.
             ApplyForcedRegion(settings, settingsType);
+            OverrideApplied = true;
+            return true;
         }
-        catch (Exception ex) { Mod.Log.Warning($"[photon-appid] override failed: {ex.Message}"); }
+        catch (Exception ex)
+        {
+            Mod.Log.Warning($"[photon-appid] override failed ({reason}): {ex.Message}");
+            return false;
+        }
     }
 
     /// <summary>Forces <c>PhotonServerSettings.HostType = PhotonCloud</c>
@@ -753,29 +808,7 @@ internal static class PhotonPatches
     // watch no longer needs to attach userid+LoginLock to Photon
     // Authenticate ops.
 
-    private static Type? FindGameType(string name)
-    {
-        // Mirrors Mod.ResolveType but inlined here so the holder doesn't
-        // depend on Mod's internal helpers.
-        foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-        {
-            try
-            {
-                var t = asm.GetType(name, throwOnError: false);
-                if (t is not null) return t;
-                var prefixed = asm.GetType("Il2Cpp" + name, throwOnError: false);
-                if (prefixed is not null) return prefixed;
-                var dot = name.IndexOf('.');
-                if (dot > 0)
-                {
-                    var nsPrefixed = asm.GetType("Il2Cpp" + name.Substring(0, dot) + name.Substring(dot), throwOnError: false);
-                    if (nsPrefixed is not null) return nsPrefixed;
-                }
-            }
-            catch { }
-        }
-        return null;
-    }
+    private static Type? FindGameType(string name) => Mod.ResolveType(name);
 }
 
 internal static class SavePatches
@@ -1023,30 +1056,7 @@ internal static class SavePatches
         }
     }
 
-    // Local copy of the FindGameType helper used by PhotonPatches — IL2CPP
-    // type-name resolution stays per-holder so SavePatches doesn't reach
-    // across into another internal class.
-    private static Type? FindGameType(string name)
-    {
-        foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-        {
-            try
-            {
-                var t = asm.GetType(name, throwOnError: false);
-                if (t is not null) return t;
-                var prefixed = asm.GetType("Il2Cpp" + name, throwOnError: false);
-                if (prefixed is not null) return prefixed;
-                var dot = name.IndexOf('.');
-                if (dot > 0)
-                {
-                    var nsPrefixed = asm.GetType("Il2Cpp" + name.Substring(0, dot) + name.Substring(dot), throwOnError: false);
-                    if (nsPrefixed is not null) return nsPrefixed;
-                }
-            }
-            catch { }
-        }
-        return null;
-    }
+    private static Type? FindGameType(string name) => Mod.ResolveType(name);
 }
 
 internal static class TlsPatches
