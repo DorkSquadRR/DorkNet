@@ -8,7 +8,10 @@ import path from 'node:path';
 // any extra publish wiring.
 export default defineConfig({
   plugins: [react()],
-  base: '/',
+  // Relative-base — see admin-ui/vite.config.ts. Same single-origin
+  // path-prefix scenario applies if the site ever gets opened through
+  // `https://<apex>/__dn/www/`.
+  base: './',
   resolve: {
     alias: { '@': path.resolve(__dirname, 'src') },
   },

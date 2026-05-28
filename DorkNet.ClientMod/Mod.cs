@@ -67,7 +67,8 @@ public class Mod : MelonMod
         // any /goto has returned. Default matches the server's
         // appsettings.json Photon:CloudRegion ("eu").
         public static string PhotonCloudRegion   = "eu";
-        public static bool   InjectAuthValues    = true;
+        // Photon Custom Auth injector parked 2026-05-28; see
+        // attic/AuthValuesInjector.cs.attic for the code + restore notes.
         public static bool   EnableTlsTrustBypass = true;
     }
 
@@ -318,10 +319,11 @@ public class Mod : MelonMod
             if (r.TryGetProperty("PhotonAppId", out v))              Cfg.PhotonAppId = v.GetString() ?? Cfg.PhotonAppId;
             if (r.TryGetProperty("PhotonVoiceAppId", out v))         Cfg.PhotonVoiceAppId = v.GetString() ?? Cfg.PhotonVoiceAppId;
             if (r.TryGetProperty("PhotonCloudRegion", out v))        Cfg.PhotonCloudRegion = v.GetString() ?? Cfg.PhotonCloudRegion;
-            if (r.TryGetProperty("InjectAuthValues", out v))         Cfg.InjectAuthValues = v.GetBoolean();
             if (r.TryGetProperty("EnableTlsTrustBypass", out v))     Cfg.EnableTlsTrustBypass = v.GetBoolean();
+            // "InjectAuthValues" key in the template is now ignored —
+            // see attic/AuthValuesInjector.cs.attic.
             Log.Msg($"[config] loaded: ServerHost={Cfg.ServerHost}, PhotonAppId={(string.IsNullOrEmpty(Cfg.PhotonAppId) ? "<unset>" : "<set>")}, " +
-                    $"InjectAuthValues={Cfg.InjectAuthValues}, EnableTlsTrustBypass={Cfg.EnableTlsTrustBypass}");
+                    $"EnableTlsTrustBypass={Cfg.EnableTlsTrustBypass}");
         }
         catch (Exception ex)
         {
@@ -383,7 +385,7 @@ public class Mod : MelonMod
         return TryPatch(label, type, methodName, args, prefix, postfix, logMiss);
     }
 
-    private static Type? ResolveType(string name)
+    internal static Type? ResolveType(string name)
     {
         if (ResolvedTypeCache.TryGetValue(name, out var cached))
             return cached;
@@ -758,65 +760,9 @@ internal static class PhotonPatches
         catch { return null; }
     }
 
-    public static void AuthValuesInjector_Prefix(object __instance)
-    {
-        if (!Mod.Cfg.InjectAuthValues) return;
-        try
-        {
-            // Photon's AuthValues live on PhotonNetwork.AuthValues. The 2020
-            // watch never sets them itself, so we set them right before
-            // NetworkingPeer.CallAuthenticate forwards to the wire op. The
-            // userid is RecNet.Core.LocalAccountId, the LoginLock comes
-            // from PlayerPrefs key LoginLockTokenV2.
-            // RecNet.Core.LocalAccountId is declared `int` in the game
-            // build (dump.cs:573622 → 0x30 backing field). Convert via
-            // Convert.ToInt64 so boxing as int still gives us the long we
-            // need below; a direct (long) cast on boxed int would throw.
-            var coreType = FindGameType("RecNet.Core");
-            var accountIdObj = coreType?.GetProperty("LocalAccountId", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
-            var accountId = accountIdObj is null ? 0L : Convert.ToInt64(accountIdObj);
-            if (accountId <= 0)
-            {
-                Mod.Log.Msg("[auth-injector] skip — no LocalAccountId yet (pre-login Photon ping)");
-                return;
-            }
-
-            var photonNetwork = FindGameType("PhotonNetwork");
-            var avProp = photonNetwork?.GetProperty("AuthValues", BindingFlags.Public | BindingFlags.Static);
-            var existing = avProp?.GetValue(null);
-            if (existing is not null)
-            {
-                var userIdProp = existing.GetType().GetProperty("UserId");
-                var existingUserId = userIdProp?.GetValue(existing) as string;
-                if (!string.IsNullOrEmpty(existingUserId)) return;
-            }
-
-            var token = GetCurrentLockToken();
-
-            // Build a new AuthenticationValues. The type lives in the
-            // ExitGames.Client.Photon.LoadBalancing namespace (game-side).
-            // CustomAuthenticationType.Custom = 0 in this build.
-            var authValuesType = FindGameType("ExitGames.Client.Photon.LoadBalancing.AuthenticationValues");
-            if (authValuesType is null) { Mod.Log.Warning("[auth-injector] AuthenticationValues type not found"); return; }
-            var av = Activator.CreateInstance(authValuesType);
-            var authTypeProp = authValuesType.GetProperty("AuthType");
-            if (authTypeProp is not null)
-            {
-                var customAuthValue = authTypeProp.PropertyType.IsEnum
-                    ? Enum.ToObject(authTypeProp.PropertyType, 0)
-                    : Convert.ChangeType(0, authTypeProp.PropertyType);
-                authTypeProp.SetValue(av, customAuthValue);
-            }
-            authValuesType.GetProperty("UserId")?.SetValue(av, accountId.ToString());
-            var addParam = authValuesType.GetMethod("AddAuthParameter", new[] { typeof(string), typeof(string) });
-            addParam?.Invoke(av, new object[] { "userid", accountId.ToString() });
-            addParam?.Invoke(av, new object[] { "LoginLock", token ?? string.Empty });
-
-            avProp?.SetValue(null, av);
-            Mod.Log.Msg($"[auth-injector] set AuthValues userid={accountId} LoginLock={(string.IsNullOrEmpty(token) ? "<missing>" : "<set>")}");
-        }
-        catch (Exception ex) { Mod.Log.Warning($"[auth-injector] failed: {ex.Message}"); }
-    }
+    // AuthValuesInjector_Prefix parked 2026-05-28 — never wired to a
+    // harmony hook in this branch anyway. See
+    // attic/AuthValuesInjector.cs.attic.
 
     /// <summary>Postfix on <c>PUNNetworkManager.FJOLIPKKIBE</c> — the
     /// 2020.12 watch's private AppSettings builder. <c>__result</c> is the
@@ -981,47 +927,10 @@ internal static class PhotonPatches
         catch (Exception ex) { Mod.Log.Warning($"[photon-diag] DumpSettings failed: {ex.Message}"); }
     }
 
-    private static string? GetCurrentLockToken()
-    {
-        try
-        {
-            var playerPrefs = FindGameType("UnityEngine.PlayerPrefs");
-            var getString = playerPrefs?.GetMethod("GetString", new[] { typeof(string), typeof(string) });
-            var raw = (string?)getString?.Invoke(null, new object[] { "LoginLockTokenV2", string.Empty });
-            if (string.IsNullOrEmpty(raw)) return null;
-            const string key = "\"LockToken\":\"";
-            var ix = raw.IndexOf(key, StringComparison.Ordinal);
-            if (ix < 0) return null;
-            ix += key.Length;
-            var end = raw.IndexOf('"', ix);
-            return end < 0 ? null : raw[ix..end];
-        }
-        catch { return null; }
-    }
+    // GetCurrentLockToken parked alongside the injector — see
+    // attic/AuthValuesInjector.cs.attic.
 
-    private static Type? FindGameType(string name)
-    {
-        // Mirrors Mod.ResolveType but inlined here so the holder doesn't
-        // depend on Mod's internal helpers.
-        foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-        {
-            try
-            {
-                var t = asm.GetType(name, throwOnError: false);
-                if (t is not null) return t;
-                var prefixed = asm.GetType("Il2Cpp" + name, throwOnError: false);
-                if (prefixed is not null) return prefixed;
-                var dot = name.IndexOf('.');
-                if (dot > 0)
-                {
-                    var nsPrefixed = asm.GetType("Il2Cpp" + name.Substring(0, dot) + name.Substring(dot), throwOnError: false);
-                    if (nsPrefixed is not null) return nsPrefixed;
-                }
-            }
-            catch { }
-        }
-        return null;
-    }
+    private static Type? FindGameType(string name) => Mod.ResolveType(name);
 }
 
 internal static class SavePatches
@@ -1269,30 +1178,7 @@ internal static class SavePatches
         }
     }
 
-    // Local copy of the FindGameType helper used by PhotonPatches — IL2CPP
-    // type-name resolution stays per-holder so SavePatches doesn't reach
-    // across into another internal class.
-    private static Type? FindGameType(string name)
-    {
-        foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
-        {
-            try
-            {
-                var t = asm.GetType(name, throwOnError: false);
-                if (t is not null) return t;
-                var prefixed = asm.GetType("Il2Cpp" + name, throwOnError: false);
-                if (prefixed is not null) return prefixed;
-                var dot = name.IndexOf('.');
-                if (dot > 0)
-                {
-                    var nsPrefixed = asm.GetType("Il2Cpp" + name.Substring(0, dot) + name.Substring(dot), throwOnError: false);
-                    if (nsPrefixed is not null) return nsPrefixed;
-                }
-            }
-            catch { }
-        }
-        return null;
-    }
+    private static Type? FindGameType(string name) => Mod.ResolveType(name);
 }
 
 internal static class TlsPatches
