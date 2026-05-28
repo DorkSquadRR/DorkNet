@@ -1,0 +1,164 @@
+// ─────────────────────────────────────────────────────────────────────
+// AuthValuesInjector — PARKED 2026-05-28
+// ─────────────────────────────────────────────────────────────────────
+//
+// Filename suffix is .cs.attic on purpose so the .NET SDK's globber
+// doesn't pick it up. Don't rename to .cs unless you're putting the
+// feature back.
+//
+// What this used to do
+// --------------------
+// Prefix-patched NetworkingPeer.CallAuthenticate so the 2020 watch
+// would attach a Photon Custom-Auth payload (`userid` +
+// `LoginLock`) to every Photon Authenticate op. The server's
+// /photon/customauth controller (PhotonCustomAuthController.cs) read
+// those parameters and validated them against the player's
+// /player/login lock.
+//
+// Why it's parked
+// ---------------
+// Photon Cloud's Custom Auth probe was getting 403'd at the WAF in
+// front of `auth.<apex>/photon/customauth` for hosts behind
+// Cloudflare or Tunnelto's proxy. The Photon NameServer then returned
+// `CustomAuthenticationFailed (ReturnCode 32755)` and the watch
+// bounced back to the dorm before a session could start.
+//
+// The cleaner fix turned out to be:
+//   1. Turn off Custom Authentication on the Photon AppId in the
+//      dashboard (or flip "Anonymous connect" to Allow), so Photon
+//      never calls our URL.
+//   2. Stop sending custom-auth params from the client — that's the
+//      InjectAuthValues=false flag we shipped first. With the
+//      dashboard side off too, the injector code below has nothing
+//      to gate on, so it's removed from the live patch.
+//
+// How to put it back
+// ------------------
+// 1. Rename this file to AuthValuesInjector.cs (drop the .attic
+//    suffix). It compiles as part of DorkNet.ClientMod.
+// 2. Reinstate the `InjectAuthValues` field on Mod.Cfg + the
+//    config-load line in LoadConfig.
+// 3. Re-add the harmony patch hook in OnLateInitializeMelon:
+//       TryPatchByName("NetworkingPeer", "CallAuthenticate",
+//           prefix: nameof(PhotonPatches.AuthValuesInjector_Prefix));
+// 4. Flip `"InjectAuthValues": true` in
+//    DorkNet.ClientMod/dorknet-clientmod.json.template (and the
+//    copy under local-releases/).
+// 5. If you also want the server to enforce the lock, set
+//    Photon:RequireCustomAuth=true on the server (env
+//    Photon__RequireCustomAuth=true).
+//
+// The body below is verbatim what lived in Mod.cs's PhotonPatches
+// class. `FindGameType` is the same helper still in Mod.cs.
+
+using System.Reflection;
+
+namespace DorkNet.ClientMod.Attic;
+
+internal static class AuthValuesInjector
+{
+    public static void AuthValuesInjector_Prefix(object __instance)
+    {
+        if (!Mod.Cfg.InjectAuthValues) return;
+        try
+        {
+            // Photon's AuthValues live on PhotonNetwork.AuthValues. The 2020
+            // watch never sets them itself, so we set them right before
+            // NetworkingPeer.CallAuthenticate forwards to the wire op. The
+            // userid is RecNet.Core.LocalAccountId, the LoginLock comes
+            // from PlayerPrefs key LoginLockTokenV2.
+            // RecNet.Core.LocalAccountId is declared `int` in the game
+            // build (dump.cs:573622 → 0x30 backing field). Convert via
+            // Convert.ToInt64 so boxing as int still gives us the long we
+            // need below; a direct (long) cast on boxed int would throw.
+            var coreType = FindGameType("RecNet.Core");
+            var accountIdObj = coreType?.GetProperty("LocalAccountId", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
+            var accountId = accountIdObj is null ? 0L : Convert.ToInt64(accountIdObj);
+            if (accountId <= 0)
+            {
+                Mod.Log.Msg("[auth-injector] skip — no LocalAccountId yet (pre-login Photon ping)");
+                return;
+            }
+
+            var photonNetwork = FindGameType("PhotonNetwork");
+            var avProp = photonNetwork?.GetProperty("AuthValues", BindingFlags.Public | BindingFlags.Static);
+            var existing = avProp?.GetValue(null);
+            if (existing is not null)
+            {
+                var userIdProp = existing.GetType().GetProperty("UserId");
+                var existingUserId = userIdProp?.GetValue(existing) as string;
+                if (!string.IsNullOrEmpty(existingUserId)) return;
+            }
+
+            var token = GetCurrentLockToken();
+
+            // Build a new AuthenticationValues. The type lives in the
+            // ExitGames.Client.Photon.LoadBalancing namespace (game-side).
+            // CustomAuthenticationType.Custom = 0 in this build.
+            var authValuesType = FindGameType("ExitGames.Client.Photon.LoadBalancing.AuthenticationValues");
+            if (authValuesType is null) { Mod.Log.Warning("[auth-injector] AuthenticationValues type not found"); return; }
+            var av = Activator.CreateInstance(authValuesType);
+            var authTypeProp = authValuesType.GetProperty("AuthType");
+            if (authTypeProp is not null)
+            {
+                var customAuthValue = authTypeProp.PropertyType.IsEnum
+                    ? Enum.ToObject(authTypeProp.PropertyType, 0)
+                    : Convert.ChangeType(0, authTypeProp.PropertyType);
+                authTypeProp.SetValue(av, customAuthValue);
+            }
+            authValuesType.GetProperty("UserId")?.SetValue(av, accountId.ToString());
+            var addParam = authValuesType.GetMethod("AddAuthParameter", new[] { typeof(string), typeof(string) });
+            addParam?.Invoke(av, new object[] { "userid", accountId.ToString() });
+            addParam?.Invoke(av, new object[] { "LoginLock", token ?? string.Empty });
+
+            avProp?.SetValue(null, av);
+            Mod.Log.Msg($"[auth-injector] set AuthValues userid={accountId} LoginLock={(string.IsNullOrEmpty(token) ? "<missing>" : "<set>")}");
+        }
+        catch (Exception ex) { Mod.Log.Warning($"[auth-injector] failed: {ex.Message}"); }
+    }
+
+    private static string? GetCurrentLockToken()
+    {
+        try
+        {
+            var playerPrefs = FindGameType("UnityEngine.PlayerPrefs");
+            var getString = playerPrefs?.GetMethod("GetString", new[] { typeof(string), typeof(string) });
+            var raw = (string?)getString?.Invoke(null, new object[] { "LoginLockTokenV2", string.Empty });
+            if (string.IsNullOrEmpty(raw)) return null;
+            const string key = "\"LockToken\":\"";
+            var ix = raw.IndexOf(key, StringComparison.Ordinal);
+            if (ix < 0) return null;
+            ix += key.Length;
+            var end = raw.IndexOf('"', ix);
+            return end < 0 ? null : raw[ix..end];
+        }
+        catch { return null; }
+    }
+
+    // FindGameType is already defined inside Mod.cs's PhotonPatches
+    // class (private static) — when re-instating, either drop this
+    // private copy and inline the lookup, or move the helper to a
+    // shared internal class. The current shape preserves the original
+    // behaviour for an isolated paste-back.
+    private static Type? FindGameType(string name)
+    {
+        foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            try
+            {
+                var t = asm.GetType(name, throwOnError: false);
+                if (t is not null) return t;
+                var prefixed = asm.GetType("Il2Cpp" + name, throwOnError: false);
+                if (prefixed is not null) return prefixed;
+                var dot = name.IndexOf('.');
+                if (dot > 0)
+                {
+                    var nsPrefixed = asm.GetType("Il2Cpp" + name.Substring(0, dot) + name.Substring(dot), throwOnError: false);
+                    if (nsPrefixed is not null) return nsPrefixed;
+                }
+            }
+            catch { }
+        }
+        return null;
+    }
+}

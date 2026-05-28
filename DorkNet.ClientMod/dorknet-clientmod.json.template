@@ -4,6 +4,5 @@
   "PhotonAppId": "{PHOTON_APPID}",
   "PhotonVoiceAppId": "{PHOTON_VOICE_APPID}",
   "PhotonCloudRegion": "{PHOTON_REGION}",
-  "InjectAuthValues": false,
   "EnableTlsTrustBypass": true
 }
