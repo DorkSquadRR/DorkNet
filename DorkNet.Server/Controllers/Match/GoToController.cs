@@ -1039,8 +1039,29 @@ public class RoomInstanceDto
     [JsonPropertyName("eventId")]
     public long EventId { get; set; } = 0;
 
-    [JsonPropertyName("name")]
+    // Raw room name (NO leading "^"). Kept clean because server-side code
+    // derives other values from it — most importantly
+    // PrivateInstanceService builds the photonRoomId as "^{baseName}_…"
+    // from this, and MessagesController uses it verbatim as the invite
+    // message's display name (the "just the event name" case, no "^").
+    [JsonIgnore]
     public string Name { get; set; } = string.Empty;
+
+    // Wire "name" field. The 2020.12 watch's PlayerPresence.FriendlyPresence
+    // (EFAJBHGDIDD.JDICJBJBMMI → BaseAccountModel.get_FriendlyPresence) shows
+    // roomInstance.name VERBATIM and its built-in default is the literal
+    // "^DormRoom" — i.e. a player's current room is expected to carry a
+    // leading "^". So we prefix on serialize and strip on deserialize
+    // (PlayerPresenceService round-trips this DTO through Redis), keeping the
+    // C# Name raw. Empty stays empty so the watch falls back to its own
+    // "^DormRoom" default. Invite MESSAGES keep the plain name — that's a
+    // separate field built from the raw Name in MessagesController.
+    [JsonPropertyName("name")]
+    public string NameWire
+    {
+        get => string.IsNullOrEmpty(Name) || Name.StartsWith('^') ? Name : "^" + Name;
+        set => Name = !string.IsNullOrEmpty(value) && value.StartsWith('^') ? value[1..] : value;
+    }
 
     // 2020.12 added these keys to RoomInstance.Deserialize. Verified via
     // Cpp2IL ISIL on CIIBGMBOFEI.PPGFHEDFBEA (the obfuscated RoomInstance
