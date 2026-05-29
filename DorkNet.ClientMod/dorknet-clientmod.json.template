@@ -3,5 +3,5 @@
   "PhotonAppId": "{PHOTON_APPID}",
   "PhotonVoiceAppId": "{PHOTON_VOICE_APPID}",
   "PhotonCloudRegion": "{PHOTON_REGION}",
-  "EnableTlsTrustBypass": true
+  "EnableTlsTrustBypass": {ENABLE_TLS_TRUST_BYPASS}
 }

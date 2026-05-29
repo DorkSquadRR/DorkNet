@@ -877,7 +877,10 @@ public class RoomsController(
                 .Select(d => d.CurrentDataBlobName)
                 .FirstOrDefaultAsync()
                 ?? string.Empty;
-            room = CloneWithCreator(room, room.CreatorPlayerId, dormBlobName);
+            // Stamp the wire Name with the requested name so the watch's
+            // name-keyed room cache (OJMCBOKJFOF.NHBPIIGDAJP) can find it.
+            room = CloneWithCreator(room, room.CreatorPlayerId, dormBlobName,
+                overrideName: DormNameOverride(roomName));
         }
 
         var scenes = await db.RoomScenes
@@ -924,7 +927,10 @@ public class RoomsController(
                     .Select(d => d.CurrentDataBlobName)
                     .FirstOrDefaultAsync()
                     ?? string.Empty;
-                room = CloneWithCreator(room, room.CreatorPlayerId, dormBlobName);
+                // Stamp the wire Name with the requested name so the watch's
+                // name-keyed room cache (OJMCBOKJFOF.NHBPIIGDAJP) finds it.
+                room = CloneWithCreator(room, room.CreatorPlayerId, dormBlobName,
+                    overrideName: DormNameOverride(name));
             }
 
             var scenes = await db.RoomScenes
@@ -946,11 +952,33 @@ public class RoomsController(
     /// caller and pointing at the caller's own most recent save.
     /// Doesn't touch the DB — purely a response-shaping utility.
     /// </summary>
+    /// <summary>When a dorm was resolved via the magic name "DormRoom",
+    /// returns that requested name (verbatim, so casing matches what the
+    /// watch will look the cache up by) to stamp onto the wire room.
+    /// Returns null for any other request name so the dorm keeps its real
+    /// "Dorm_{playerId}" name in by-id / direct-name responses.</summary>
+    private static string? DormNameOverride(string requestedName) =>
+        requestedName.Equals("DormRoom", StringComparison.OrdinalIgnoreCase)
+            ? requestedName
+            : null;
+
     public static RoomEntity CloneWithCreator(
-        RoomEntity src, long creatorId, string? overrideBlobName = null) => new()
+        RoomEntity src, long creatorId, string? overrideBlobName = null,
+        string? overrideName = null) => new()
     {
         Id = src.Id,
-        Name = src.Name,
+        // overrideName lets the by-name resolvers stamp the wire Name with
+        // the name the client actually requested. The personal-dorm entity
+        // is named "Dorm_{playerId}", but the watch resolves it via the
+        // magic name "DormRoom" (HomeScreenFlow.Button_DormRoom →
+        // RunJoinRoom("DormRoom") → OJMCBOKJFOF.NHBPIIGDAJP("DormRoom")).
+        // That call caches the response in a Dictionary<string,Room> and
+        // looks it back up by the REQUESTED string ("DormRoom"); if the
+        // wire Name is "Dorm_{id}" the lookup misses → the promise rejects
+        // with "No such room" → the "contact recroom.happyfox.com" toast.
+        // Stamping Name="DormRoom" here makes the lookup hit, the same way
+        // RecCenter (whose entity Name IS "RecCenter") already works.
+        Name = overrideName ?? src.Name,
         Description = src.Description,
         CreatorPlayerId = creatorId,
         ImageName = src.ImageName,

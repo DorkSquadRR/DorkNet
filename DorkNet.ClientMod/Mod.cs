@@ -43,9 +43,11 @@ public class Mod : MelonMod
     private static readonly Dictionary<string, Type> ResolvedTypeCache = new();
     private readonly HashSet<string> _diagnosticPatchLabels = new();
     private bool _networkPatchesRegistered;
+    private bool _joinTracePatchesRegistered;
     private bool _diagnosticCoreRegistered;
     private bool _diagnosticGameComplete;
     private int _diagnosticRetryFrame;
+    private bool _firstUpdateLogged;
 
     // Loader-agnostic config — same .Value-shaped accessor the patches
     // would see in the BepInEx port, just backed by a plain JSON file
@@ -217,8 +219,144 @@ public class Mod : MelonMod
                        args: new[] { typeof(string) },
                        prefix: nameof(ChatPatches.RpcChatEmote_Prefix));
 
+        RegisterJoinTracePatches();
+
         RegisterDiagnostics();
         Log.Msg("=== Client patches registered ===");
+    }
+
+    // ── Room-join + watch-button trace ────────────────────────────────
+    // Traces the full "press the Dorm Room button → join the room" chain
+    // so a stuck join (e.g. the watch's Dorm Room button doing nothing)
+    // is debuggable from the log alone. The chain, verified against the
+    // 2020.12.18 IL2CPP dump:
+    //
+    //   AGUI.StackedUI.HomeScreenFlow.Button_DormRoom()      (button)
+    //     → SessionManager.RunJoinRoom("DormRoom", …)        (join entry)
+    //        → OJMCBOKJFOF.NHBPIIGDAJP(name)  →  GET /goto/room/{name}
+    //           rejects with "No such room"  (OJMCBOKJFOF.txt:958-1019)
+    //        → .Then(SessionManager.RunJoinRoom(RoomInstance, …))
+    //        → on reject: SessionManager+<>c.<RunJoinRoom>b__165_1(error)
+    //           → NotificationManager.Play("An error occured", "…happyfox…")
+    //              (the "contact recroom.happyfox.com" toast)
+    //
+    // We can't express the obfuscated RunJoinRoom param types as a Type[]
+    // for AccessTools, so every RunJoinRoom overload + every /goto overload
+    // is patched by iterating declared methods by name, and the prefixes
+    // read arguments generically via Harmony's `object[] __args`.
+    private void RegisterJoinTracePatches()
+    {
+        if (_joinTracePatchesRegistered) return;
+        Log.Msg("=== Registering room-join trace ===");
+
+        // Watch "Dorm Room" button. Void, no params, unique name —
+        // HomeScreenFlow.txt:4791, calls RunJoinRoom("DormRoom",…) at :4848.
+        TryPatchByName("AGUI.StackedUI.HomeScreenFlow", "Button_DormRoom",
+                       args: Type.EmptyTypes,
+                       prefix: nameof(JoinPatches.ButtonDormRoom_Prefix));
+
+        // Every SessionManager.RunJoinRoom overload (string-name entry +
+        // the RoomInstance inner legs). Logs the method + its arguments.
+        PatchAllOverloads("SessionManager", "RunJoinRoom",
+                          nameof(JoinPatches.RunJoinRoom_Prefix));
+
+        // The /goto/room/{name|id} promise builders — both the string
+        // (room-name) and Int64 (room-id) overloads of NHBPIIGDAJP.
+        PatchAllOverloads("OJMCBOKJFOF", "NHBPIIGDAJP",
+                          nameof(JoinPatches.Goto_Prefix));
+
+        // The RunJoinRoom promise-chain callbacks compiled onto the
+        // SessionManager <>c display class — most importantly the reject
+        // handler b__165_1(string error) that raises the happyfox toast.
+        // Match by the (de-mangled) substring "RunJoinRoom" + the lambda
+        // marker "b__" so we hit the callbacks but not the RunJoinRoom
+        // state-machine MoveNext.
+        PatchNestedLambdas("SessionManager", "RunJoinRoom",
+                           nameof(JoinPatches.JoinCallback_Prefix));
+
+        // Additionally capture the REJECT REASON string on b__165_1 (the
+        // happyfox-toast handler). Matches only that one lambda; it ends
+        // up with two prefixes (flow + error string), which is harmless.
+        PatchNestedLambdas("SessionManager", "RunJoinRoom_b__165_1",
+                           nameof(JoinPatches.JoinError_Prefix));
+
+        _joinTracePatchesRegistered = true;
+        Log.Msg("=== Room-join trace registered ===");
+    }
+
+    // Patch every declared method on `typeName` named `methodName`,
+    // regardless of signature, with a single prefix. Used for obfuscated
+    // overload sets whose param types we can't name in a Type[].
+    private bool PatchAllOverloads(string typeName, string methodName, string prefix, bool logMiss = true)
+    {
+        var type = ResolveType(typeName);
+        if (type is null)
+        {
+            if (logMiss) Log.Warning($"[patch-miss] {typeName}.{methodName}(*): type not found");
+            return false;
+        }
+        var prefixMethod = GetPatchMethod(prefix);
+        var patched = 0;
+        foreach (var method in AccessTools.GetDeclaredMethods(type))
+        {
+            if (method.Name != methodName) continue;
+            if (method.IsAbstract || method.ContainsGenericParameters) continue;
+            try
+            {
+                HarmonyInstance.Patch(method, prefix: new HarmonyMethod(prefixMethod));
+                patched++;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[patch-fail] {typeName}.{methodName} overload: {ex.Message}");
+            }
+        }
+        if (patched == 0)
+        {
+            if (logMiss) Log.Warning($"[patch-miss] {typeName}.{methodName}(*): no overloads matched");
+            return false;
+        }
+        Log.Msg($"[patch-ok] {typeName}.{methodName}(*) x{patched}");
+        return true;
+    }
+
+    // Patch compiler-generated lambda methods (names containing "b__")
+    // on the nested display classes of `typeName` whose (de-mangled) name
+    // also contains `nameContains`. Il2CppInterop mangles the angle
+    // brackets of `<RunJoinRoom>b__165_1` to `_003C…_003E` but leaves the
+    // method name itself intact, so a plain substring match still works.
+    private bool PatchNestedLambdas(string typeName, string nameContains, string prefix, bool logMiss = true)
+    {
+        var type = ResolveType(typeName);
+        if (type is null)
+        {
+            if (logMiss) Log.Warning($"[patch-miss] {typeName}+<lambdas>({nameContains}): type not found");
+            return false;
+        }
+        var prefixMethod = GetPatchMethod(prefix);
+        var patched = 0;
+        foreach (var nested in type.GetNestedTypes(BindingFlags.Public | BindingFlags.NonPublic))
+        {
+            foreach (var method in AccessTools.GetDeclaredMethods(nested))
+            {
+                if (method.IsAbstract || method.ContainsGenericParameters) continue;
+                if (method.Name.IndexOf("b__", StringComparison.Ordinal) < 0) continue;
+                if (method.Name.IndexOf(nameContains, StringComparison.Ordinal) < 0) continue;
+                try
+                {
+                    HarmonyInstance.Patch(method, prefix: new HarmonyMethod(prefixMethod));
+                    patched++;
+                    Log.Msg($"[patch-ok] {typeName}+{nested.Name}.{method.Name}");
+                }
+                catch (Exception ex)
+                {
+                    Log.Warning($"[patch-fail] {typeName}+{nested.Name}.{method.Name}: {ex.Message}");
+                }
+            }
+        }
+        if (patched == 0 && logMiss)
+            Log.Warning($"[patch-miss] {typeName}+<lambdas>({nameContains}): none matched");
+        return patched > 0;
     }
 
     private void RegisterNetworkPatches()
@@ -274,6 +412,11 @@ public class Mod : MelonMod
 
     public override void OnUpdate()
     {
+        if (!_firstUpdateLogged)
+        {
+            _firstUpdateLogged = true;
+            Log.Msg("[lifecycle] first OnUpdate tick (Unity frame loop is live)");
+        }
         if (_diagnosticGameComplete) return;
         if (_diagnosticRetryFrame++ > 3600) return;
         if ((_diagnosticRetryFrame % 60) != 0) return;
@@ -470,7 +613,7 @@ public class Mod : MelonMod
     {
         // Look in all three patch holder classes — small enough that a
         // linear scan is cheaper than per-class lookups.
-        foreach (var holder in new[] { typeof(UriPatches), typeof(PhotonPatches), typeof(TlsPatches), typeof(DiagnosticPatches), typeof(SavePatches), typeof(ChatPatches) })
+        foreach (var holder in new[] { typeof(UriPatches), typeof(PhotonPatches), typeof(TlsPatches), typeof(DiagnosticPatches), typeof(SavePatches), typeof(ChatPatches), typeof(JoinPatches) })
         {
             var m = holder.GetMethod(name, BindingFlags.Public | BindingFlags.Static);
             if (m is not null) return m;
@@ -519,15 +662,14 @@ public class Mod : MelonMod
         complete &= TryPatchDiagnosticByName("SessionManager", "TryApplicationQuit",
                                              prefix: nameof(DiagnosticPatches.SessionManagerTryApplicationQuit_Prefix),
                                              logMiss: logMisses);
-        complete &= TryPatchDiagnosticByName("SteamManager", "Awake",
-                                             prefix: nameof(DiagnosticPatches.NamedMethod_Prefix),
-                                             logMiss: logMisses);
-        complete &= TryPatchDiagnosticByName("SteamPlatformManager", "PreLoginInitialize",
-                                             prefix: nameof(DiagnosticPatches.NamedMethod_Prefix),
-                                             logMiss: logMisses);
-        complete &= TryPatchDiagnosticByName("SteamPlatformManager", "PostLoginInitialize",
-                                             prefix: nameof(DiagnosticPatches.NamedMethod_Prefix),
-                                             logMiss: logMisses);
+        // SteamManager.Awake + SteamPlatformManager.*LoginInitialize were
+        // pure-logging diagnostics that fired during Unity's very first
+        // wake-up tick. On december (EAC build, IL2CPP wrapped Steam
+        // methods) MonoMod's lazy CompileMethodHook on the trampoline
+        // crashes the CLR with 0x80131506 the instant Awake JITs. The
+        // hooks gave us no behavioral leverage — only a `[call] …` log
+        // line — so they're disabled. If anyone needs Steam-side visibility
+        // later, route it through the game's own log lines instead.
         return complete;
     }
 
@@ -891,17 +1033,30 @@ internal static class PhotonPatches
     /// PUN 2.x, etc.).</summary>
     private static void DumpSettings(object obj, Type t, string indent)
     {
+        // DeclaredOnly so we don't walk Il2CppObjectBase's properties
+        // (ObjectClass, Pointer, WasCollected) — and, importantly, so
+        // we don't reflect over any property whose getter internally
+        // constructs a System.Uri. The Uri ctor is harmony-patched, so
+        // the FIRST call to a Uri-returning getter triggers MonoMod's
+        // lazy CompileMethodHook for the ctor, which fatal-CLRs
+        // (0x80131506) on this build. The override has already run by
+        // the time DumpSettings is called — the dump is diagnostic
+        // only, so it's safer to stay scoped to user-land properties.
+        const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly;
         try
         {
-            foreach (var p in t.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+            foreach (var p in t.GetProperties(flags))
             {
                 if (p.GetIndexParameters().Length > 0) continue;
                 if (!p.CanRead) continue;
+                // Defensively skip any property whose declared return
+                // type is Uri (would still trigger ctor on .ToString()
+                // path even if we tried to read it).
+                if (p.PropertyType == typeof(Uri)) continue;
                 object? v;
                 try { v = p.GetValue(obj); } catch { continue; }
+                if (v is Uri) continue;
                 var str = v is null ? "<null>" : v.ToString();
-                // Nested AppSettings — recurse one level so we capture
-                // PhotonServerSettings.AppSettings.{AppIdRealtime,Server,Port,NameServer,FixedRegion,AuthMode,Protocol,...}
                 if (v is not null && v.GetType().Name.IndexOf("AppSettings", StringComparison.Ordinal) >= 0 && indent.Length < 6)
                 {
                     Mod.Log.Msg($"{indent}{p.Name} (nested):");
@@ -910,10 +1065,12 @@ internal static class PhotonPatches
                 }
                 Mod.Log.Msg($"{indent}{p.Name} = {str}");
             }
-            foreach (var f in t.GetFields(BindingFlags.Public | BindingFlags.Instance))
+            foreach (var f in t.GetFields(flags))
             {
+                if (f.FieldType == typeof(Uri)) continue;
                 object? v;
                 try { v = f.GetValue(obj); } catch { continue; }
+                if (v is Uri) continue;
                 var str = v is null ? "<null>" : v.ToString();
                 if (v is not null && v.GetType().Name.IndexOf("AppSettings", StringComparison.Ordinal) >= 0 && indent.Length < 6)
                 {
@@ -1298,6 +1455,76 @@ internal static class ChatPatches
     public static void RpcChatEmote_Prefix(string message)
     {
         Mod.Log.Msg($"[chat-trace] RpcChatEmote (RPC RECEIVED) msg=\"{message}\"");
+    }
+}
+
+// Trace hooks for the watch's room-join flow. Registered by
+// Mod.RegisterJoinTracePatches — see that method for the verified call
+// chain. Everything here is log-only; no prefix returns false, so the
+// game's own join logic runs unchanged.
+internal static class JoinPatches
+{
+    // AGUI.StackedUI.HomeScreenFlow.Button_DormRoom() — the watch's
+    // "Dorm Room" button. If this never fires, the button's UnityEvent
+    // binding is the problem, not the join chain.
+    public static void ButtonDormRoom_Prefix()
+    {
+        DiagnosticPatches.Write("[join-trace] >>> watch DORM ROOM button pressed (HomeScreenFlow.Button_DormRoom)");
+    }
+
+    // Any SessionManager.RunJoinRoom overload. We DON'T read argument
+    // values here: Harmony's `object[] __args` forces a trampoline that
+    // boxes the obfuscated IL2CPP reference-type params (KMKPEOGJDFK,
+    // RoomInstance, …), and MonoMod fatal-CLRs (0x80131506) compiling it
+    // when the boot-time dorm auto-join first calls this method. Logging
+    // the overload's parameter *types* (pure reflection metadata, no value
+    // boxing) is enough to tell which overload fired — the entry overload
+    // (String,…) is the "DormRoom" press; the others are inner legs.
+    public static void RunJoinRoom_Prefix(MethodBase __originalMethod)
+    {
+        DiagnosticPatches.Write($"[join-trace] SessionManager.RunJoinRoom  [{Sig(__originalMethod)}]");
+    }
+
+    // OJMCBOKJFOF.NHBPIIGDAJP(name|id) — the get-room-by-name / by-id
+    // resolver that feeds the join. __0 is the single first param: a room
+    // NAME string (String overload) or room ID (Int64 overload). Reading
+    // it via `object __0` is safe — it's a string/long, not one of the
+    // obfuscated ref-types that crashed `object[] __args`. This is the
+    // value we need to compare boot (works) vs button (fails).
+    public static void Goto_Prefix(MethodBase __originalMethod, object __0)
+    {
+        var arg = __0?.ToString() ?? "<null>";
+        DiagnosticPatches.Write($"[join-trace] /goto resolve {__originalMethod.DeclaringType?.Name}.{__originalMethod.Name}(\"{arg}\")  [{Sig(__originalMethod)}]");
+    }
+
+    // RunJoinRoom promise-chain callbacks (SessionManager <>c lambdas).
+    // b__165_1 is the reject handler that raises the "An error occured /
+    // contact recroom.happyfox.com" toast — so if THIS name appears, the
+    // join failed; the success legs (other b__*) firing means it advanced.
+    // (Same __args/0x80131506 constraint as above — name only.)
+    public static void JoinCallback_Prefix(MethodBase __originalMethod)
+    {
+        DiagnosticPatches.Write($"[join-trace] RunJoinRoom callback {__originalMethod.DeclaringType?.Name}.{__originalMethod.Name}");
+    }
+
+    // Dedicated capture for the reject handler b__165_1(string error) —
+    // the answer to "why did the join fail". Single string param, so
+    // `object __0` is safe (same as OnCustomAuthenticationFailed). This
+    // is the string that becomes the happyfox toast.
+    public static void JoinError_Prefix(object __0)
+    {
+        var err = __0?.ToString() ?? "<null>";
+        DiagnosticPatches.Write($"[join-trace] !!! RunJoinRoom REJECTED — error=\"{err}\"  (raises the happyfox toast)");
+    }
+
+    // Parameter-type list from reflection metadata only — never reads
+    // instance values, so it can't trigger the MonoMod trampoline crash.
+    private static string Sig(MethodBase m)
+    {
+        var ps = m.GetParameters();
+        var names = new List<string>(ps.Length);
+        foreach (var p in ps) names.Add(p.ParameterType.Name);
+        return $"{ps.Length} args: {string.Join(",", names)}";
     }
 }
 

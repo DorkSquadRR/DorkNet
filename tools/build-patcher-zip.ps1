@@ -122,8 +122,17 @@ try {
             'BepInEx/plugins/DorkNet.ClientPatch.dll'
         )
         'steam_stub' = @{
+            # 2020.12+ is an EAC build: the real Unity binary is
+            # RecRoom.exe (loads RecRoom_Data/Plugins/x86_64/steam_api64.dll),
+            # NOT Recroom_Release.exe (which is the EAC launcher wrapper
+            # that loads Recroom_Release_Data/Plugins/steam_api64.dll).
+            # Patching the wrapper's DLL did nothing because the
+            # launcher's data dir is never opened by the real game
+            # process — symptom was "Failed to initialize Steam
+            # platform" because the unpatched real Steam DLL in
+            # RecRoom_Data tried to handshake.
             'api_dll' = 'steam_api64.dll'
-            'api_dest' = 'Recroom_Release_Data/Plugins/steam_api64.dll'
+            'api_dest' = 'RecRoom_Data/Plugins/x86_64/steam_api64.dll'
             'api_backup_suffix' = '.steam-original'
             'appid_file' = 'steam_appid.txt'
             'appid_dest' = 'steam_appid.txt'
