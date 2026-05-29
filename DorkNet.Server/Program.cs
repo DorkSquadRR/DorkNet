@@ -218,8 +218,7 @@ var jwtSecret = Environment.GetEnvironmentVariable("DORKNET_JWT_SECRET")
     ?? builder.Configuration["Jwt:Secret"]
     ?? throw new InvalidOperationException(
         "JWT secret not configured. Set the DORKNET_JWT_SECRET env var or " +
-        "add `Jwt:Secret` to appsettings.Local.json (the install-plugin.ps1 " +
-        "script generates one automatically on same-machine setup).");
+        "add `Jwt:Secret` to appsettings.Local.json.");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opt =>

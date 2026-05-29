@@ -85,19 +85,21 @@ For Docker / VPS, see [docs/deploy.md](docs/deploy.md).
 ## Patching your client
 
 ```pwsh
-.\tools\install-plugin.ps1 `
+.\tools\install-melon.ps1 `
   -RecRoomPath "C:\Path\To\Recroom_Release_Data" `
   -PhotonAppId "<your-photon-realtime-app-id>" `
   -PhotonVoiceAppId "<your-photon-voice-app-id>"
 ```
 
-This installs the BepInEx 6 plugin into the client's `BepInEx/plugins/`
-and writes its config under `BepInEx/config/`. The plugin rewrites all
+This installs the MelonLoader mod (`DorkNet.ClientMod`) into the
+client's `Mods/` folder and writes its config to
+`MelonLoader/UserData/dorknet-clientmod.json`. The mod rewrites all
 `*.rec.net` URIs to your configured DorkNet apex, swaps the Photon
 AppIds, and bypasses TLS verification on the client's HTTPS calls so
-self-signed certs work.
+self-signed certs work. (First run prints "launch the game once"; do
+that, then re-run with `-ResumeBuild`.)
 
-If BepInEx isn't installable on the user's machine, the legacy
+If MelonLoader isn't installable on the user's machine, the legacy
 `tools/install-legacy-client.ps1` does the same patches via direct
 byte-edits of `resources.assets` + `GameAssembly.dll`. Slower setup,
 no Harmony runtime needed.
@@ -111,8 +113,7 @@ no Harmony runtime needed.
 | `DorkNet.Server/` | ASP.NET Core backend (controllers, services, data, hubs, middleware) |
 | `DorkNet.Server/Migrations/` | EF Core schema migrations applied at boot |
 | `DorkNet.Models/` | DTOs shared between server and client mod |
-| `DorkNet.ClientPatch/` | BepInEx IL2CPP plugin (production patcher) |
-| `DorkNet.ClientMod/` | MelonLoader port (alternative patcher) |
+| `DorkNet.ClientMod/` | MelonLoader IL2CPP mod — the client patcher |
 | `tools/` | Installers + Cloudflare tunnel templates |
 
 Compared to `december-2020-12-18`, this branch's server is closer to

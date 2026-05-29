@@ -1,6 +1,6 @@
-// MelonLoader port of the DorkNet.ClientPatch BepInEx plugin. Applies
-// the minimum set of Harmony patches needed for the 2020 watch to
-// connect to a DorkNet server:
+// DorkNet client mod (MelonLoader IL2CPP). Applies the minimum set of
+// Harmony patches needed for the 2020 watch to connect to a DorkNet
+// server:
 //
 //   1. URI rewrite      — `.rec.net` → user-configured host
 //   2. Photon AppId     — override the baked-in Photon Cloud AppId
@@ -48,11 +48,9 @@ public class Mod : MelonMod
     private int _diagnosticRetryFrame;
     private int _photonOverridePollFrame;
 
-    // Loader-agnostic config — same .Value-shaped accessor the patches
-    // would see in the BepInEx port, just backed by a plain JSON file
-    // instead of BepInEx's TOML config system. Defaults match the BepInEx
-    // plugin's defaults so dropping this mod in without writing a config
-    // file gives the same behaviour as the recommended install.
+    // Config backed by a plain JSON file under MelonLoader/UserData.
+    // The defaults below match the recommended install, so dropping this
+    // mod in without writing a config file still gives working behaviour.
     public static class Cfg
     {
         public static string ServerHost          = "localhost";
