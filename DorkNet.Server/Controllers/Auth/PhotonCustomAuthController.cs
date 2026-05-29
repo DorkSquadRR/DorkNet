@@ -10,7 +10,7 @@ namespace DorkNet.Server.Controllers.Auth;
 ///
 /// Photon Cloud sends a GET (or POST) with the parameters the client
 /// attached via <c>AuthenticationValues.AddAuthParameter</c>. The
-/// DorkNet BepInEx plugin (DorkNet.ClientPatch) injects two:
+/// DorkNet client mod (DorkNet.ClientMod) injects two:
 /// <list type="bullet">
 ///   <item><c>userid</c> — the player's DorkNet account id (long).</item>
 ///   <item><c>LoginLock</c> — the per-session GUID stored in
@@ -118,7 +118,7 @@ public class PhotonCustomAuthController(
 
         // Anonymous connect: pre-login Photon region pings + the watch's
         // initial NameServer probe both fire CustomAuth WITHOUT
-        // AuthValues attached (the BepInEx plugin only injects AuthValues
+        // AuthValues attached (the client mod only injects AuthValues
         // once /player/login has run and Core.LocalAccountId is set).
         // Returning ResultCode 1 here lets those bootstrap connects
         // succeed; the actual gameplay session has populated AuthValues

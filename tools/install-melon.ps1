@@ -6,9 +6,8 @@
   One command that:
     1. Downloads MelonLoader (IL2CPP build, x64) from GitHub releases
        and extracts it into the Rec Room install dir.
-    2. Builds DorkNet.ClientMod (the MelonLoader port of the BepInEx
-       ClientPatch plugin) against MelonLoader's generated
-       Il2CppAssemblies.
+    2. Builds DorkNet.ClientMod (the MelonLoader IL2CPP client mod)
+       against MelonLoader's generated Il2CppAssemblies.
     3. Drops the built DLL into <RecRoomInstall>\Mods\ and writes
        <RecRoomInstall>\MelonLoader\UserData\dorknet-clientmod.json
        with the user-supplied Photon AppId / server host / etc.
@@ -155,7 +154,7 @@ $global:LASTEXITCODE = 0
 
 # Pinned MelonLoader release. "latest" would be more convenient but
 # pinning means a regression upstream doesn't silently land on tester
-# machines — same rationale as the BepInEx pin in install-plugin.ps1.
+# machines — a regression upstream doesn't silently land on testers.
 # Bump when there's a known-good newer build.
 $Script:MelonLoaderUrl = 'https://github.com/LavaGang/MelonLoader/releases/download/v0.6.6/MelonLoader.x64.zip'
 $Script:MelonLoaderCacheName = 'MelonLoader.x64-0.6.6.zip'
@@ -579,10 +578,9 @@ if (-not (Test-Path -LiteralPath $Il2CppAsmsDir -PathType Container) -and $AutoB
             Invoke-DrmStrip -ExePath $RecRoomExe
         } catch {
             Write-Err "DRM strip failed: $($_.Exception.Message)"
-            Write-Host '  Falling back to the manual two-step flow. Either run' -ForegroundColor DarkGray
-            Write-Host '  tools\install-plugin.ps1 -InstallBepInEx <zip> on this same .exe' -ForegroundColor DarkGray
-            Write-Host '  (it has the same Steamless logic) or launch the game from Steam' -ForegroundColor DarkGray
-            Write-Host '  once and re-run with -ResumeBuild.' -ForegroundColor DarkGray
+            Write-Host '  Falling back to the manual flow: launch the game once' -ForegroundColor DarkGray
+            Write-Host '  (e.g. from Steam) so it self-strips the DRM, then re-run' -ForegroundColor DarkGray
+            Write-Host '  this script with -ResumeBuild.' -ForegroundColor DarkGray
         }
     } else {
         Write-OK "Recroom_Release.exe is already DRM-stripped."

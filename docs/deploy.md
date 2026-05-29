@@ -227,40 +227,33 @@ With "Reject if Auth Failed" ON, every Photon connect would fail with
 NameServer 32736 — same symptom we tried to solve. With it OFF, the
 client connects fine, the endpoint exists for future client patching.
 
-### Patching the watch to send AuthValues — `DorkNet.ClientPatch/`
+### Patching the watch to send AuthValues — `DorkNet.ClientMod/`
 
 The vanilla 2020 watch never sets `PhotonNetwork.AuthValues` (verified
 by an exhaustive grep across both `Assembly-CSharp.dll` and the
 Photon `Assembly-CSharp-firstpass.dll` library). To make Photon
-forward `userid` + `LoginLock` to our `/photon/customauth` endpoint we
-ship a **BepInEx 6 IL2CPP plugin** that patches
-`NetworkingPeer.OpAuthenticate` and attaches the values in flight.
+forward `userid` + `LoginLock` to our `/photon/customauth` endpoint a
+Harmony patch on the watch's Photon auth path has to attach the values
+in flight. That hook lives in the **MelonLoader IL2CPP mod**
+(`DorkNet.ClientMod`); the AuthValues injector itself is currently
+parked (see `DorkNet.ClientMod/attic/AuthValuesInjector.cs.attic` and
+the notes in `Mod.cs`) since the `/photon/customauth` endpoint runs in
+permissive mode.
 
-Source + build instructions: [DorkNet.ClientPatch/README.md](../DorkNet.ClientPatch/README.md).
-
-End-to-end install on a tester's machine:
+Install the mod on a tester's machine with:
 
 ```pwsh
-.\tools\patch-client.ps1 `
+.\tools\install-melon.ps1 `
     -RecRoomPath "C:\…\RecRoom\Recroom_Release_Data" `
-    -PhotonAppId  cb0880d9-… `
-    -InstallBepInEx "C:\Downloads\BepInEx_unix_x86_64_6.0.0-be.696_…zip"
+    -PhotonAppId  cb0880d9-…
 ```
 
-The patcher will:
+The script unpacks MelonLoader, builds `DorkNet.ClientMod.dll`, and
+drops it into the client's `Mods/` folder. On the first run it prints
+"launch the game once" so MelonLoader can generate its IL2CPP
+assemblies; relaunch the script with `-ResumeBuild` to finish.
 
-1. Do its usual asset/hosts/cert work.
-2. Extract BepInEx into the client folder (skipped if already
-   present).
-3. If `BepInEx/interop/` exists, build
-   `DorkNet.ClientPatch.dll` against it and drop it into
-   `BepInEx/plugins/`.
-4. If `interop/` doesn't exist yet (BepInEx never launched), prompt
-   the operator to launch the game once so BepInEx generates interop
-   assemblies, then re-run the patcher with the same `-InstallBepInEx`
-   path to finish step 3.
-
-Once the plugin is in production:
+Once AuthValues injection is re-enabled in the mod and in production:
 
 1. Flip [`PhotonCustomAuthController`](../DorkNet.Server/Controllers/Auth/PhotonCustomAuthController.cs)
    from permissive-mode (`ResultCode 1` always) back to strict —

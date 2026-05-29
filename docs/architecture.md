@@ -16,23 +16,20 @@ files in this folder.
 DorkNet.sln
 ├── DorkNet.Server      ASP.NET Core 9 backend — the bulk of the code
 ├── DorkNet.Models      Shared DTO + serialization types
-├── DorkNet.ClientMod   MelonLoader plugin (portable / experimental)
-└── DorkNet.ClientPatch BepInEx 6 IL2CPP plugin (production)
+└── DorkNet.ClientMod   MelonLoader 6 IL2CPP mod — the client patcher
 ```
 
 | Project | Responsibility | Target |
 |---|---|---|
 | `DorkNet.Server` | REST API, SignalR hub, admin SPA host, static-site host, image CDN, matchmaking, persistence | .NET 9 |
 | `DorkNet.Models` | DTOs the wire protocol speaks. No project dependencies. | .NET 9 |
-| `DorkNet.ClientMod` | MelonLoader 0.6.x port — same patches as ClientPatch, JSON config | .NET 6 |
-| `DorkNet.ClientPatch` | BepInEx 6 IL2CPP plugin — the standard client patcher, TOML config | .NET 6 |
+| `DorkNet.ClientMod` | MelonLoader 0.6.x IL2CPP mod — the client patcher, JSON config | .NET 6 |
 
-`ClientMod` and `ClientPatch` are intentional twins: both apply the
-same patches (URI rewrite `.rec.net` → configured apex, Photon AppId
-override, TLS trust bypass, auth injection) against different mod
-loaders. ClientPatch is the supported deployment; ClientMod exists for
-contributors who already have MelonLoader installed and don't want to
-swap loaders.
+`ClientMod` applies the client-side patches needed to point the 2020
+watch at a DorkNet server: URI rewrite (`.rec.net` → configured apex),
+Photon AppId override, and TLS trust bypass. It loads under
+MelonLoader 0.6.x and reads its settings from a JSON config under
+`MelonLoader/UserData/`.
 
 ---
 

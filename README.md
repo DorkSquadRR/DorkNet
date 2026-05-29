@@ -87,17 +87,20 @@ For a full Docker / VPS deploy, see
 ## Patching your client
 
 ```pwsh
-.\tools\install-plugin.ps1 `
+.\tools\install-melon.ps1 `
   -RecRoomPath "C:\Path\To\Recroom_Release_Data" `
   -PhotonAppId "<your-photon-realtime-app-id>" `
   -PhotonVoiceAppId "<your-photon-voice-app-id>"
 ```
 
-This installs the BepInEx 6 plugin into the client's `BepInEx/plugins/`
-and writes its config under `BepInEx/config/`. The plugin rewrites all
+This installs the MelonLoader mod (`DorkNet.ClientMod`) into the
+client's `Mods/` folder and writes its config to
+`MelonLoader/UserData/dorknet-clientmod.json`. The mod rewrites all
 `*.rec.net` URIs to your configured DorkNet apex, swaps the Photon
 AppIds, and bypasses TLS verification on the client's HTTPS calls so
-self-signed certs work.
+self-signed certs work. (First run prints "launch the game once"; do
+that, then re-run with `-ResumeBuild` to finish — see the script's
+`-?` help.)
 
 ---
 
@@ -107,9 +110,8 @@ self-signed certs work.
 |---|---|
 | `DorkNet.Server/` | ASP.NET Core backend (controllers, services, data, hubs, middleware) |
 | `DorkNet.Models/` | DTOs shared between server and client mod |
-| `DorkNet.ClientPatch/` | BepInEx IL2CPP plugin (production patcher) |
-| `DorkNet.ClientMod/` | MelonLoader port (alternative patcher) |
-| `tools/` | Installers (`install-plugin.ps1`, `install-melon.ps1`, `install-legacy-client.ps1`, `remove-eac.ps1`), Cloudflare tunnel templates |
+| `DorkNet.ClientMod/` | MelonLoader IL2CPP mod — the client patcher |
+| `tools/` | Installers (`install-melon.ps1`, `install-legacy-client.ps1`, `remove-eac.ps1`), Cloudflare tunnel templates |
 
 See [docs/architecture.md](docs/architecture.md) for the full mental
 model (project layout, request lifecycle, watch-mirror controller
