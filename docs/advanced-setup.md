@@ -103,17 +103,20 @@ server is ready at `https://api.your-server.example.com/healthz`.
 
 ## Patching the client to point here
 
-Same patcher as Easy mode, but you'll run it from the command line:
+Same patcher as Easy mode, but you'll run it from the command line. The
+CLI installer ships on the version-specific branch (e.g.
+`december-2020-12-18`):
 
 ```powershell
-.\tools\install-plugin.ps1 `
+.\tools\install-melon.ps1 `
   -RecRoomPath "C:\path\to\Recroom_Release_Data" `
   -PhotonAppId "<your-photon-realtime-app-id>" `
   -PhotonVoiceAppId "<your-photon-voice-app-id>"
 ```
 
-The installer drops the DorkNet BepInEx plugin into the client's
-`BepInEx/plugins/` and writes its config under `BepInEx/config/`.
+The installer drops the DorkNet MelonLoader mod (`DorkNet.ClientMod`)
+into the client's `Mods/` folder and writes its config under
+`MelonLoader/UserData/`.
 
 ## Admin UI
 
