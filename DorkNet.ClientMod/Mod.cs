@@ -638,21 +638,24 @@ public class Mod : MelonMod
     private bool RegisterGameDiagnostics(bool logMisses)
     {
         var complete = true;
-        complete &= TryPatchDiagnosticByName("BootSequence", "RegisterError", new[] { typeof(string) },
-                                            prefix: nameof(DiagnosticPatches.BootSequenceRegisterError_Prefix),
-                                            logMiss: logMisses);
 
+        // CheatManager fires these when its anti-cheat heuristics trip —
+        // logging them surfaces "client thinks it's been tampered with",
+        // a common cause of silent dorm-drops / kicks on a modded client.
+        // Names verified in CheatManager.txt for 2020.12.18; the older
+        // build's "AnalyticsHelper.<X>Cheat" names don't exist here, and
+        // there's no DeveloperFlag/StreamingAsset callback nor a
+        // BootSequence.RegisterError sink in this build — those legacy
+        // hooks were removed (they only ever logged [patch-miss] forever).
         foreach (var method in new[]
         {
-            "UnityTimeCheat",
-            "ObscuredTypeCheat",
-            "DeveloperFlagCheat",
-            "HeightChangeCheat",
-            "AdvancedMotionCheat",
-            "StreamingAssetCheat"
+            "OnTimeCheatDetected",
+            "OnObscuredTypeCheatDetected",
+            "OnHeightCheatDetected",
+            "OnAdvancedMovementCheatDetected",
         })
         {
-            complete &= TryPatchDiagnosticByName("AnalyticsHelper", method,
+            complete &= TryPatchDiagnosticByName("CheatManager", method,
                                                  prefix: nameof(DiagnosticPatches.AnalyticsCheat_Prefix),
                                                  logMiss: logMisses);
         }
@@ -1372,12 +1375,6 @@ internal static class DiagnosticPatches
     public static void ApplicationQuitInt_Prefix(int exitCode)
     {
         Write($"[quit] UnityEngine.Application.Quit({exitCode})");
-        WriteStack();
-    }
-
-    public static void BootSequenceRegisterError_Prefix(string error)
-    {
-        Write($"[boot-error] BootSequence.RegisterError: {error}");
         WriteStack();
     }
 
