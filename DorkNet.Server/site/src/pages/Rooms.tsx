@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { get } from '../lib/api';
 import type { SiteRoom } from '../lib/types';
+import { imageApex } from '../lib/types';
 import { Empty } from '../components/Empty';
 import { num } from '../lib/format';
 
@@ -55,8 +56,7 @@ export function Rooms() {
 }
 
 function RoomCard({ room }: { room: SiteRoom }) {
-  const apex = typeof window !== 'undefined' && window.location.host.endsWith('localhost') ? 'localhost' : 'rec.net';
-  const img = room.imageName ? `https://img.${apex}/${encodeURIComponent(room.imageName)}?width=320&sig=p1` : null;
+  const img = room.imageName ? `https://img.${imageApex()}/${encodeURIComponent(room.imageName)}?width=320&sig=p1` : null;
   return (
     <div className="card overflow-hidden">
       <div className="aspect-[16/9] bg-ink-800 flex items-center justify-center">
