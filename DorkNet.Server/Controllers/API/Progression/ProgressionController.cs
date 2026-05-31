@@ -18,7 +18,11 @@ namespace DorkNet.Server.Controllers.API.ProgressionApi;
 /// <c>obj:{group}:{index}</c>.
 /// </summary>
 [ApiController]
-public class ProgressionController(DorkNetDbContext db, LevelService level) : ControllerBase
+public class ProgressionController(
+    DorkNetDbContext db,
+    LevelService level,
+    ServerSettingsService serverSettings,
+    StoreService store) : ControllerBase
 {
     private long Me => this.RequireCurrentPlayerId();
     private long? MeOrNull => this.CurrentPlayerId();
@@ -56,48 +60,85 @@ public class ProgressionController(DorkNetDbContext db, LevelService level) : Co
         var start = now.Date.AddDays(-(int)now.DayOfWeek);
         var mapId = CurrentChallengeMapId();
 
-        var keys = new[] { $"challenge:{mapId}:0", $"challenge:{mapId}:1", $"challenge:{mapId}:2" };
-        var rows = pid is long me
+        var weekly = await serverSettings.GetWeeklyChallengesAsync();
+        var defs = weekly.Challenges;
+
+        var keys = defs.Select(c => ChallengeProgressKey(mapId, c.Index)).ToArray();
+        var rows = pid is long me && keys.Length > 0
             ? await db.ObjectiveProgress
                 .Where(o => o.PlayerId == me && keys.Contains(o.Key))
                 .ToDictionaryAsync(o => o.Key, o => o.IsCompleted)
             : new Dictionary<string, bool>();
 
-        bool Done(int idx) => rows.TryGetValue(keys[idx], out var v) && v;
+        bool Done(int idx) => rows.TryGetValue(ChallengeProgressKey(mapId, idx), out var v) && v;
 
+        var reward = weekly.Reward;
         return Ok(new
         {
             ChallengeMapId = mapId,
-            CompletedRequired = false,
+            CompletedRequired = weekly.CompletedRequired,
             StartAt = start,
             EndAt = start.AddDays(7),
             ServerTime = now,
             ChallengeThemeString = "Weekly",
-            Challenges = new[]
+            Challenges = defs.Select(c => new
             {
-                new { ChallengeId = mapId * 10 + 0, Name = "Visit any room",
-                      Config = "{\"Goal\":1}", Description = "Step into any room this week.",
-                      Tooltip = "", Complete = Done(0) },
-                new { ChallengeId = mapId * 10 + 1, Name = "Cheer a player",
-                      Config = "{\"Goal\":1}", Description = "Send a cheer to anyone you meet this week.",
-                      Tooltip = "", Complete = Done(1) },
-                new { ChallengeId = mapId * 10 + 2, Name = "Finish an activity",
-                      Config = "{\"Goal\":1}", Description = "Complete any activity this week.",
-                      Tooltip = "", Complete = Done(2) },
-            },
-            Gift = new
-            {
-                GiftDropId = mapId,
-                AvatarItemDesc = "",
-                ConsumableItemDesc = "",
-                EquipmentPrefabName = "",
-                EquipmentModificationGuid = "",
-                Xp = 100,
-                Level = 1,
-                GiftContext = 0,
-                GiftRarity = 0,
-            },
+                ChallengeId = ChallengeId(mapId, c.Index),
+                c.Name,
+                c.Config,
+                c.Description,
+                c.Tooltip,
+                Complete = Done(c.Index),
+            }),
+            Gift = BuildGiftDto(mapId, reward),
         });
+    }
+
+    /// <summary>Project a <see cref="WeeklyChallengeReward"/> onto the
+    /// 2020.03 <c>ChallengeGift</c> wire shape (dump.cs ChallengeGift,
+    /// TypeDefIndex 11455). <c>AvatarItemType</c> is sent as
+    /// <c>Outfit</c> (0) whenever an <c>AvatarItemDesc</c> is present and
+    /// <c>null</c> otherwise — the client's gift-card render binds the
+    /// avatar preview through it, and an <c>AvatarItemDesc</c> with no
+    /// <c>AvatarItemType</c> leaves that binding half-populated (same
+    /// failure mode StoreService documents for the shop grid).</summary>
+    private static object BuildGiftDto(int mapId, WeeklyChallengeReward reward) => new
+    {
+        GiftDropId = reward.GiftDropId != 0 ? reward.GiftDropId : mapId,
+        reward.AvatarItemDesc,
+        AvatarItemType = string.IsNullOrEmpty(reward.AvatarItemDesc)
+            ? (int?)null
+            : StoreAvatarItemTypeOutfit,
+        reward.ConsumableItemDesc,
+        reward.EquipmentPrefabName,
+        reward.EquipmentModificationGuid,
+        Xp = reward.Xp,
+        reward.Level,
+        GiftContext = reward.GiftContext,
+        GiftRarity = reward.GiftRarity,
+    };
+
+    /// <summary>AvatarItemType.Outfit — kept in sync with
+    /// <c>StoreService</c>'s constant of the same value.</summary>
+    private const int StoreAvatarItemTypeOutfit = 0;
+
+    // ObjectiveProgress row key for a weekly challenge slot.
+    private static string ChallengeProgressKey(int mapId, int index) => $"challenge:{mapId}:{index}";
+
+    // Stable per-map ChallengeId the watch round-trips: mapId*10 + slot
+    // index. Caps the slate at 10 challenges (NormalizeWeeklyChallenges
+    // enforces the same Take(10)).
+    private static int ChallengeId(int mapId, int index) => mapId * 10 + index;
+
+    // Recover the slot index from whatever the watch echoes back. Prefer
+    // the mapId*10 + index encoding; fall back to the low digit for
+    // clients that send a bare id. Clamp into the configured range.
+    private static int ChallengeIndex(int mapId, int challengeId, int challengeCount)
+    {
+        if (challengeId >= mapId * 10 && challengeId < mapId * 10 + 10)
+            return Math.Clamp(challengeId - mapId * 10, 0, challengeCount - 1);
+
+        return Math.Clamp(Math.Abs(challengeId % 10), 0, challengeCount - 1);
     }
 
     public sealed class UpdateChallengeRequest
@@ -116,12 +157,12 @@ public class ProgressionController(DorkNetDbContext db, LevelService level) : Co
         var req = await ReadChallengeRequestAsync(formReq);
         var mapId = req.ChallengeMapId != 0 ? req.ChallengeMapId : CurrentChallengeMapId();
         var challengeId = req.ChallengeId != 0 ? req.ChallengeId : req.Id;
-        var index = challengeId >= mapId * 10 && challengeId < mapId * 10 + 10
-            ? challengeId - mapId * 10
-            : Math.Abs(challengeId % 10);
-        index = Math.Clamp(index, 0, 2);
 
-        var key = $"challenge:{mapId}:{index}";
+        var weekly = await serverSettings.GetWeeklyChallengesAsync();
+        var challengeCount = Math.Max(1, weekly.Challenges.Count);
+        var index = ChallengeIndex(mapId, challengeId, challengeCount);
+
+        var key = ChallengeProgressKey(mapId, index);
         var row = await db.ObjectiveProgress.FirstOrDefaultAsync(o => o.PlayerId == pid && o.Key == key);
         if (row is null)
         {
@@ -136,17 +177,29 @@ public class ProgressionController(DorkNetDbContext db, LevelService level) : Co
         await db.SaveChangesAsync();
 
         var weeklyRewarded = false;
-        var allKeys = new[] { $"challenge:{mapId}:0", $"challenge:{mapId}:1", $"challenge:{mapId}:2" };
+        var allKeys = weekly.Challenges
+            .Select(c => ChallengeProgressKey(mapId, c.Index))
+            .ToArray();
         var completeCount = await db.ObjectiveProgress
             .CountAsync(o => o.PlayerId == pid && allKeys.Contains(o.Key) && o.IsCompleted);
         if (completeCount >= allKeys.Length)
         {
+            var reward = weekly.Reward;
             weeklyRewarded = await GrantRewardOnceAsync(
                 pid,
                 $"weekly-challenge:{mapId}",
-                xp: 250,
-                tokens: 250,
+                xp: reward.Xp,
+                tokens: reward.Tokens,
                 reason: $"weekly_challenge:{mapId}");
+
+            // Land the actual skin/consumable, not just XP + tokens — the
+            // December build only granted currency, so configured item
+            // rewards showed on the watch but never reached the player's
+            // inventory. Gated behind the same once-only sentinel so a
+            // re-submit doesn't re-grant: only grant the item on the boot
+            // transition where currency was also granted.
+            if (weeklyRewarded && !string.IsNullOrWhiteSpace(reward.Slug))
+                await store.GrantItemFreeBySlugAsync(pid, reward.Slug);
         }
 
         return Ok(new

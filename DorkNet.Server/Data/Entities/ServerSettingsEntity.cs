@@ -22,5 +22,24 @@ public class ServerSettingsEntity
     /// brand-new account requests are blocked.</summary>
     public bool SignupsDisabled { get; set; }
 
+    /// <summary>When true, the watch's weekly-challenge map reports
+    /// <c>CompletedRequired</c> — the player must finish every listed
+    /// challenge before the gift unlocks. Mirrors
+    /// <c>ChallengeMap.CompletedRequired</c> on the 2020.03 client.</summary>
+    public bool WeeklyChallengesCompletedRequired { get; set; } = true;
+
+    /// <summary>JSON-serialised <c>List&lt;WeeklyChallengeTemplate&gt;</c>
+    /// (see <c>ServerSettingsService</c>). Empty string falls back to
+    /// <c>ServerSettingsService.DefaultWeeklyChallenges()</c>. Admin-
+    /// editable from the SPA Settings page so the weekly slate can change
+    /// without a redeploy.</summary>
+    public string WeeklyChallengesJson { get; set; } = string.Empty;
+
+    /// <summary>JSON-serialised <c>WeeklyChallengeReward</c> — the gift
+    /// granted when the week's challenges complete (XP + tokens, plus an
+    /// optional store skin identified by <c>Slug</c>). Empty string falls
+    /// back to <c>ServerSettingsService.DefaultWeeklyReward()</c>.</summary>
+    public string WeeklyChallengeRewardJson { get; set; } = string.Empty;
+
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

@@ -1167,6 +1167,7 @@ public class AdminController(
         return Ok(new
         {
             row.SignupsDisabled,
+            row.WeeklyChallengesCompletedRequired,
             row.UpdatedAt,
         });
     }
@@ -1188,8 +1189,94 @@ public class AdminController(
         return Ok(new
         {
             row.SignupsDisabled,
+            row.WeeklyChallengesCompletedRequired,
             row.UpdatedAt,
         });
+    }
+
+    // ── Weekly challenges ────────────────────────────────────────────────
+
+    /// <summary>GET <c>api/admin/v1/settings/weekly-challenges</c> — the
+    /// current weekly slate + reward the watch's challenge map is built
+    /// from (<see cref="ProgressionApi.ProgressionController"/>).</summary>
+    [HttpGet("settings/weekly-challenges")]
+    public async Task<ActionResult> GetWeeklyChallenges()
+    {
+        var weekly = await serverSettings.GetWeeklyChallengesAsync();
+        return Ok(weekly);
+    }
+
+    /// <summary>GET
+    /// <c>api/admin/v1/settings/weekly-challenges/reward-options</c> —
+    /// the store items that can be assigned as the weekly gift. Only
+    /// avatar outfits and consumables are offered: the 2020.03
+    /// <see cref="StoreService"/> exposes
+    /// <c>TryGetAvatarItemPayload</c> / <c>TryGetConsumableItemDesc</c>
+    /// but has no equipment payload helper, so equipment gifts aren't
+    /// assignable on this build. Each option carries the descriptors the
+    /// watch's <c>ChallengeGift</c> render needs plus the
+    /// <c>Slug</c> the server grants on completion.</summary>
+    [HttpGet("settings/weekly-challenges/reward-options")]
+    public async Task<ActionResult> GetWeeklyChallengeRewardOptions()
+    {
+        var rows = await db.StoreItems
+            .Where(i => i.IsActive)
+            .OrderBy(i => i.DisplayName)
+            .ToListAsync();
+
+        static object Option(
+            string kind,
+            StoreItemEntity item,
+            string avatarItemDesc = "",
+            string consumableItemDesc = "") => new
+        {
+            Kind = kind,
+            Label = $"{item.DisplayName} ({item.Slug})",
+            Slug = item.Slug,
+            GiftDropId = (int)(item.Id & 0x7fffffff),
+            AvatarItemDesc = avatarItemDesc,
+            ConsumableItemDesc = consumableItemDesc,
+        };
+
+        var avatarItems = rows
+            .Select(i => StoreService.TryGetAvatarItemPayload(i.Slug, out _, out var desc)
+                ? Option("avatar", i, avatarItemDesc: desc)
+                : null)
+            .Where(o => o is not null)
+            .ToArray();
+
+        var consumables = rows
+            .Select(i => StoreService.TryGetConsumableItemDesc(i.Slug, out var desc)
+                ? Option("consumable", i, consumableItemDesc: desc)
+                : null)
+            .Where(o => o is not null)
+            .ToArray();
+
+        return Ok(new
+        {
+            AvatarItems = avatarItems,
+            Consumables = consumables,
+        });
+    }
+
+    public sealed record WeeklyChallengeSettingsRequest(
+        bool? CompletedRequired,
+        List<WeeklyChallengeTemplate>? Challenges,
+        WeeklyChallengeReward? Reward);
+
+    /// <summary>POST <c>api/admin/v1/settings/weekly-challenges</c> —
+    /// replace the weekly slate + reward. Normalisation (indexing,
+    /// trimming, the Take(10) cap) happens in
+    /// <see cref="ServerSettingsService.SetWeeklyChallengesAsync"/>.</summary>
+    [HttpPost("settings/weekly-challenges")]
+    public async Task<ActionResult> SetWeeklyChallenges([FromBody] WeeklyChallengeSettingsRequest body)
+    {
+        var completedRequired = body.CompletedRequired ?? true;
+        var challenges = body.Challenges ?? ServerSettingsService.DefaultWeeklyChallenges();
+        var weekly = await serverSettings.SetWeeklyChallengesAsync(completedRequired, challenges, body.Reward);
+        await LogAsync("weekly_challenges_updated", "system", 0, "");
+        await db.SaveChangesAsync();
+        return Ok(weekly);
     }
 
     // ── Audit log ────────────────────────────────────────────────────────

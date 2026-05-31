@@ -28,10 +28,15 @@ Subsystems **NOT** present on this branch (these landed in December):
 - Clubs surface
 - Playlists (curated + user-created)
 - Group DMs / chat threads
-- Weekly challenges
 - Room keys (purchasable room access)
 - Per-room co-owner / moderator / host roles
 - Late-2020 store catalog additions
+
+Weekly challenges **are** present on this branch: the admin SPA's
+**Server settings** page edits the weekly slate, the `CompletedRequired`
+flag, and the gift (XP + tokens, plus an optional store skin/consumable
+that's granted straight to the player's inventory when the week's
+challenges complete).
 
 If you need any of those, you're on the wrong branch — see
 [`december-2020-12-18`](../../tree/december-2020-12-18).

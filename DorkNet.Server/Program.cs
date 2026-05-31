@@ -703,6 +703,20 @@ using (var scope = app.Services.CreateScope())
                 ""UpdatedAt"" timestamp with time zone NOT NULL DEFAULT now()
             );");
 
+        // 2026-05-31 — Weekly-challenge config columns on ServerSettings.
+        // Back the admin SPA's editable weekly slate + gift (XP/tokens +
+        // an optional store skin granted on completion). EnsureCreated-
+        // skipped on existing DBs, so add idempotently.
+        await RunPatchAsync("ServerSettings.WeeklyChallengesCompletedRequired column",
+            @"ALTER TABLE ""ServerSettings""
+                ADD COLUMN IF NOT EXISTS ""WeeklyChallengesCompletedRequired"" boolean NOT NULL DEFAULT true;");
+        await RunPatchAsync("ServerSettings.WeeklyChallengesJson column",
+            @"ALTER TABLE ""ServerSettings""
+                ADD COLUMN IF NOT EXISTS ""WeeklyChallengesJson"" text NOT NULL DEFAULT '';");
+        await RunPatchAsync("ServerSettings.WeeklyChallengeRewardJson column",
+            @"ALTER TABLE ""ServerSettings""
+                ADD COLUMN IF NOT EXISTS ""WeeklyChallengeRewardJson"" text NOT NULL DEFAULT '';");
+
         // 2026-05-19 — Players.IsCommunityTeam column. Backs the
         // overhead-badge admin toggle alongside IsDeveloper; the
         // RoleController ORs the two so either one unlocks the watch's
@@ -1238,6 +1252,13 @@ static void ApplySqliteCompatibilityPatches(DorkNetDbContext db)
     if (!db.Database.IsSqlite()) return;
     AddSqliteColumnIfMissing(db, "Rooms", "HiddenFromBrowse",
         @"""HiddenFromBrowse"" INTEGER NOT NULL DEFAULT 0");
+    // 2026-05-31 — weekly-challenge config columns (see ServerSettingsEntity).
+    AddSqliteColumnIfMissing(db, "ServerSettings", "WeeklyChallengesCompletedRequired",
+        @"""WeeklyChallengesCompletedRequired"" INTEGER NOT NULL DEFAULT 1");
+    AddSqliteColumnIfMissing(db, "ServerSettings", "WeeklyChallengesJson",
+        @"""WeeklyChallengesJson"" TEXT NOT NULL DEFAULT ''");
+    AddSqliteColumnIfMissing(db, "ServerSettings", "WeeklyChallengeRewardJson",
+        @"""WeeklyChallengeRewardJson"" TEXT NOT NULL DEFAULT ''");
 }
 
 static void AddSqliteColumnIfMissing(DorkNetDbContext db, string table, string column, string definition)

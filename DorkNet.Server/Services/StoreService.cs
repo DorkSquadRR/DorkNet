@@ -640,6 +640,62 @@ public class StoreService(DorkNetDbContext db, LevelService level, IConfiguratio
         return new(true, null, newBalance, item.Slug);
     }
 
+    /// <summary>Grant a store item to a player's inventory for free —
+    /// the same inventory-append path as <see cref="PurchaseAsync"/> but
+    /// with no balance check and no currency deduction. Backs
+    /// weekly-challenge skin rewards: the challenge reward stores the
+    /// item <paramref name="slug"/> and this lands the real item once the
+    /// week's challenges complete. Idempotent — re-granting an owned
+    /// avatar item is a no-op; a consumable bumps quantity. Returns true
+    /// when something new (or another consumable) was added.</summary>
+    public async Task<bool> GrantItemFreeBySlugAsync(long playerId, string slug)
+    {
+        if (string.IsNullOrWhiteSpace(slug)) return false;
+        var item = await GetBySlugAsync(slug);
+        if (item is null || !item.IsActive) return false;
+
+        var avatar = await db.Avatars.FirstOrDefaultAsync(a => a.PlayerId == playerId);
+        if (avatar is null)
+        {
+            avatar = new AvatarEntity { PlayerId = playerId };
+            db.Avatars.Add(avatar);
+        }
+
+        if (TryGetAvatarItemPayload(item.Slug, out _, out var avatarItemDesc))
+        {
+            var guid = InventoryAvatarItemDesc(avatarItemDesc);
+            var ownedGuids = ParseWardrobeInventory(avatar.InventoryJson);
+            if (ownedGuids.Contains(guid, StringComparer.OrdinalIgnoreCase))
+                return false;
+            ownedGuids.Add(guid);
+            avatar.InventoryJson = System.Text.Json.JsonSerializer.Serialize(ownedGuids);
+            avatar.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            return true;
+        }
+
+        var inventory = ParseInventory(avatar.InventoryJson);
+        var existing = inventory.FirstOrDefault(e => e.ItemId == item.Slug);
+        if (existing is not null)
+        {
+            if (string.Equals(item.Category, "consumable", StringComparison.OrdinalIgnoreCase))
+            {
+                existing.Quantity += 1;
+                avatar.InventoryJson = System.Text.Json.JsonSerializer.Serialize(inventory);
+                avatar.UpdatedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync();
+                return true;
+            }
+            return false;
+        }
+
+        inventory.Add(new InventoryEntry { ItemId = item.Slug, Quantity = 1 });
+        avatar.InventoryJson = System.Text.Json.JsonSerializer.Serialize(inventory);
+        avatar.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return true;
+    }
+
     private static List<string> ParseWardrobeInventory(string? json)
     {
         if (string.IsNullOrWhiteSpace(json) || json == "[]") return new();

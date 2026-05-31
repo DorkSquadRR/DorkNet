@@ -61,8 +61,8 @@ Note: counts are approximate because several client URLs (`api/avatar/v3/saved`,
 
 | Verb | URL | Status | Handler |
 |---|---|---|---|
-| GET  | `api/challenge/v2/getCurrent` | REAL | `ProgressionController.GetChallengeV2` — pulls active challenge for the player from the progression tables |
-| POST | `api/challenge/v2/updateProgress` | REAL | `ProgressionController.UpdateChallengeProgress` — writes back delta into progression rows |
+| GET  | `api/challenge/v2/getCurrent` | REAL | `ProgressionController.CurrentChallenge` — builds the weekly `ChallengeMap` from the admin-configured slate (`ServerSettingsService.GetWeeklyChallengesAsync`); per-player completion comes from progression rows |
+| POST | `api/challenge/v2/updateProgress` | REAL | `ProgressionController.UpdateChallengeProgress` — writes back the slot completion; on finishing the week's slate grants the configured reward (XP + tokens, plus the skin/consumable via `StoreService.GrantItemFreeBySlugAsync`) |
 
 ### `api/checklist/`
 
