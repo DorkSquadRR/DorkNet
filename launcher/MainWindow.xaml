@@ -967,6 +967,14 @@
                                     <ComboBoxItem Content="India" Tag="in" />
                                     <ComboBoxItem Content="Australia" Tag="au" />
                                 </ComboBox>
+
+                                <CheckBox x:Name="TlsTrustBypassChk"
+                                          Content="Trust self-signed TLS certs (advanced)"
+                                          Margin="0,16,0,0"
+                                          ToolTip="Skip the watch's TLS chain validation on your server's HTTPS connections. Needed only for self-signed certs (LAN-only / dev tunnels). Off for Localtunnel / Tunnelto / any real CDN cert. WARNING: leaving this on with the December 2020.12.18 build triggers a MonoMod CLR crash (0x80131506) at launch."
+                                          Checked="OnTlsTrustBypassChanged"
+                                          Unchecked="OnTlsTrustBypassChanged"
+                                          Foreground="{StaticResource Ink}" />
                             </StackPanel>
                         </Border>
 

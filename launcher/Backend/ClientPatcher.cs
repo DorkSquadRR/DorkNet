@@ -59,10 +59,11 @@ public sealed class ClientPatcher
         string photonRegion,
         string apexHost,
         bool singleOrigin = false,
+        bool enableTlsTrustBypass = false,
         CancellationToken ct = default)
     {
         return Task.Run(() => ApplyCore(patcherDir, recRoomDataPath,
-            photonAppId, photonVoiceAppId, photonRegion, apexHost, singleOrigin), ct);
+            photonAppId, photonVoiceAppId, photonRegion, apexHost, singleOrigin, enableTlsTrustBypass), ct);
     }
 
     private PatchResult ApplyCore(
@@ -72,7 +73,8 @@ public sealed class ClientPatcher
         string photonVoiceAppId,
         string photonRegion,
         string apexHost,
-        bool singleOrigin)
+        bool singleOrigin,
+        bool enableTlsTrustBypass)
     {
         var log = new System.Text.StringBuilder();
         try
@@ -220,7 +222,8 @@ public sealed class ClientPatcher
                     .Replace("{PHOTON_VOICE_APPID}",
                         string.IsNullOrEmpty(photonVoiceAppId) ? photonAppId ?? "" : photonVoiceAppId)
                     .Replace("{PHOTON_REGION}", string.IsNullOrEmpty(photonRegion) ? "us" : photonRegion)
-                    .Replace("{SINGLE_ORIGIN_BASE_URL}", singleOrigin ? $"https://{apexHost}" : "");
+                    .Replace("{SINGLE_ORIGIN_BASE_URL}", singleOrigin ? $"https://{apexHost}" : "")
+                    .Replace("{ENABLE_TLS_TRUST_BYPASS}", enableTlsTrustBypass ? "true" : "false");
                 File.WriteAllText(configDest, rendered);
                 log.AppendLine($"[patch] wrote config: {Path.GetFileName(configDest)}");
             }

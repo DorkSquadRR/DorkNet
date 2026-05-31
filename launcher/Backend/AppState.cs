@@ -79,6 +79,17 @@ public sealed class AppState
     [JsonPropertyName("launchInScreenMode")]
     public bool LaunchInScreenMode { get; set; }
 
+    /// <summary>When true, the patched ClientMod skips BouncyCastle's
+    /// TLS chain validation — needed only for self-signed certs on a
+    /// LAN-only / dev tunnel. Localtunnel + Tunnelto both terminate
+    /// TLS with valid certs, so the default is off. Leaving it on
+    /// triggers a CLR detour-compile crash (0x80131506) on the
+    /// december build — see project_build_layout_per_branch +
+    /// MonoMod's CompileMethodHook comment in
+    /// DorkNet.ClientMod/Mod.cs.</summary>
+    [JsonPropertyName("enableTlsTrustBypass")]
+    public bool EnableTlsTrustBypass { get; set; }
+
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         WriteIndented = true,
