@@ -140,7 +140,7 @@ Note: counts are approximate because several client URLs (`api/avatar/v3/saved`,
 | POST | `api/inventions/v1/batch` | REAL | `InventionsController.Batch` — bulk-fetch inventions by id list, returns multi-row payload |
 | GET  | `api/inventions/v1/details` | REAL | `InventionsController.Details` — extended invention payload with version/creator metadata |
 | GET  | `api/inventions/v1/versions` | REAL | `InventionsController.Versions` — list of `InventionVersionEntity` rows for an invention |
-| GET  | `api/inventions/v1/creatorIds` | REAL | `InventionsController.CreatorIds` — list of distinct creator player ids over the matching invention set |
+| GET  | `api/inventions/v1/creatorIds` | REAL | `InventionsController.CreatorIdsInRoom` — distinct creator account ids of the inventions placed in the room, resolved via `InventionEntity.CreationRoomId` (direct + imported-cluster). `List<int>` |
 | GET  | `api/inventions/v1/tagfilters` | REAL | `InventionsController.TagFilters` — returns the curated tag-filter set (currently empty list, but registered as a real handler) |
 | GET  | `api/inventions/v1/delete` | REAL | `InventionsController.Delete` — soft-deletes an invention the caller owns |
 | GET  | `api/inventions/v2/publish` | REAL | `InventionsController.PublishV2` — flips `IsPublished=true`, sets `FirstPublishedAt` |
