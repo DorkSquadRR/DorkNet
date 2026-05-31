@@ -202,6 +202,8 @@ public partial class MainWindow : Window
             HostScreenModeChk.IsChecked = _state.LaunchInScreenMode;
         if (JoinScreenModeChk is not null)
             JoinScreenModeChk.IsChecked = _state.LaunchInScreenMode;
+        if (TlsTrustBypassChk is not null)
+            TlsTrustBypassChk.IsChecked = _state.EnableTlsTrustBypass;
 
         // Hosting mode radios — reflect persisted choice on both the
         // main HostView and the setup wizard's matching step.
@@ -721,7 +723,8 @@ public partial class MainWindow : Window
             var patch = await _patcher.ApplyAsync(
                 patcherDir, _state.RecRoomPath!,
                 _state.PhotonAppId, _state.PhotonVoiceAppId, _state.PhotonRegion, _hostApex,
-                singleOrigin: _state.HostingMode == HostingMode.SingleOriginTunnel);
+                singleOrigin: _state.HostingMode == HostingMode.SingleOriginTunnel,
+                enableTlsTrustBypass: _state.EnableTlsTrustBypass);
             if (!patch.Ok)
             {
                 FailStepWithFriendly(activeStep, ErrorTranslator.TranslateMessage(patch.Log));
@@ -1013,7 +1016,8 @@ public partial class MainWindow : Window
             var patch = await _patcher.ApplyAsync(
                 patcherDir, _state.RecRoomPath!,
                 payload.PhotonAppId, payload.PhotonVoiceAppId, payload.PhotonRegion, payload.Host,
-                singleOrigin: payload.SingleOrigin);
+                singleOrigin: payload.SingleOrigin,
+                enableTlsTrustBypass: _state.EnableTlsTrustBypass);
             if (!patch.Ok)
             {
                 FailStepWithFriendly(activeStep, ErrorTranslator.TranslateMessage(patch.Log));
@@ -1063,6 +1067,13 @@ public partial class MainWindow : Window
             HostScreenModeChk.IsChecked = enabled;
         if (JoinScreenModeChk is not null && !ReferenceEquals(sender, JoinScreenModeChk))
             JoinScreenModeChk.IsChecked = enabled;
+        _state.Save();
+    }
+
+    private void OnTlsTrustBypassChanged(object sender, RoutedEventArgs e)
+    {
+        if (_state is null) return;
+        _state.EnableTlsTrustBypass = (sender as CheckBox)?.IsChecked == true;
         _state.Save();
     }
 
