@@ -72,6 +72,8 @@ public class DorkNetDbContext(DbContextOptions<DorkNetDbContext> options) : DbCo
     public DbSet<ClubCategoryTagEntity> ClubCategoryTags => Set<ClubCategoryTagEntity>();
     public DbSet<ClubCategoryAssignmentEntity> ClubCategoryAssignments => Set<ClubCategoryAssignmentEntity>();
     public DbSet<ClubSubscriptionEntity> ClubSubscriptions => Set<ClubSubscriptionEntity>();
+    public DbSet<SignupCodeEntity> SignupCodes => Set<SignupCodeEntity>();
+    public DbSet<PendingDeviceEntity> PendingDevices => Set<PendingDeviceEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -6,6 +6,7 @@ import { PhotoDetail } from './pages/PhotoDetail';
 import { Players } from './pages/Players';
 import { PlayerProfile } from './pages/PlayerProfile';
 import { Rooms } from './pages/Rooms';
+import { Join } from './pages/Join';
 import { NotFound } from './pages/NotFound';
 
 export function App() {
@@ -20,6 +21,7 @@ export function App() {
           <Route path="/players" element={<Players />} />
           <Route path="/players/:id" element={<PlayerProfile />} />
           <Route path="/rooms" element={<Rooms />} />
+          <Route path="/join" element={<Join />} />
           {/* Legacy paths from the vanilla-JS feed.localhost site */}
           <Route path="/p/:id" element={<RedirectPhoto />} />
           <Route path="/u/:id" element={<RedirectPlayer />} />

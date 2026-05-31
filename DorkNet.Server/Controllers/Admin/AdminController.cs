@@ -36,6 +36,7 @@ public class AdminController(
     PlayerPresenceService playerPresence,
     PlayerLogService playerLog,
     ServerSettingsService serverSettings,
+    SignupCodeService signupCodes,
     IObjectStorage storage,
     DomainConfig domain,
     ILogger<AdminController> adminLogger) : ControllerBase
@@ -1454,6 +1455,67 @@ public class AdminController(
         await LogAsync("weekly_challenges_updated", "system", 0, "");
         await db.SaveChangesAsync();
         return Ok(weekly);
+    }
+
+    // ── Signup codes ─────────────────────────────────────────────────────
+
+    /// <summary>GET <c>api/admin/v1/signup-codes</c> — every issued code
+    /// with its status (unused / redeemed-by-whom / revoked / expired)
+    /// for the admin invite tracker.</summary>
+    [HttpGet("signup-codes")]
+    public async Task<ActionResult> GetSignupCodes([FromQuery] int take = 200)
+    {
+        var codes = await signupCodes.ListAsync(take);
+        var redeemerIds = codes.Where(c => c.RedeemedByPlayerId is not null)
+            .Select(c => c.RedeemedByPlayerId!.Value).Distinct().ToList();
+        var redeemers = redeemerIds.Count == 0
+            ? new Dictionary<long, string>()
+            : await db.Players.Where(p => redeemerIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id, p => p.Username);
+
+        var now = DateTime.UtcNow;
+        return Ok(codes.Select(c => new
+        {
+            c.Id,
+            c.Code,
+            c.Descriptor,
+            c.CreatedAt,
+            c.ExpiresAt,
+            c.Revoked,
+            c.RedeemedAt,
+            c.RedeemedByPlayerId,
+            RedeemedByUsername = c.RedeemedByPlayerId is { } rid && redeemers.TryGetValue(rid, out var u) ? u : null,
+            Status = c.RedeemedByPlayerId is not null ? "redeemed"
+                : c.Revoked ? "revoked"
+                : c.ExpiresAt is { } e && e <= now ? "expired"
+                : "active",
+        }));
+    }
+
+    public sealed record GenerateSignupCodeRequest(string? Descriptor, DateTime? ExpiresAt);
+
+    /// <summary>POST <c>api/admin/v1/signup-codes</c> — mint a new
+    /// single-use code with an optional descriptor + expiry.</summary>
+    [HttpPost("signup-codes")]
+    public async Task<ActionResult> GenerateSignupCode([FromBody] GenerateSignupCodeRequest body)
+    {
+        var expires = body.ExpiresAt is { } e ? DateTime.SpecifyKind(e, DateTimeKind.Utc) : (DateTime?)null;
+        var code = await signupCodes.GenerateAsync(body.Descriptor ?? string.Empty, expires, CurrentAdminId);
+        await LogAsync("signup_code_created", "signup_code", code.Id, code.Descriptor);
+        await db.SaveChangesAsync();
+        return Ok(new { code.Id, code.Code, code.Descriptor, code.CreatedAt, code.ExpiresAt });
+    }
+
+    /// <summary>POST <c>api/admin/v1/signup-codes/{id}/revoke</c> — kill an
+    /// unused code. Already-redeemed codes can't be revoked.</summary>
+    [HttpPost("signup-codes/{id:long}/revoke")]
+    public async Task<ActionResult> RevokeSignupCode(long id)
+    {
+        var ok = await signupCodes.RevokeAsync(id);
+        if (!ok) return BadRequest(new { Error = "cannot_revoke" });
+        await LogAsync("signup_code_revoked", "signup_code", id, "");
+        await db.SaveChangesAsync();
+        return Ok(new { Revoked = true });
     }
 
     // ── Audit log ────────────────────────────────────────────────────────

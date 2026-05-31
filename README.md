@@ -132,6 +132,22 @@ go in [`DorkNet.Server/Data/LegacyUpgrades.cs`](DorkNet.Server/Data/LegacyUpgrad
 See [`DorkNet.Server/Data/MIGRATIONS.md`](DorkNet.Server/Data/MIGRATIONS.md)
 for the full discipline.
 
+Tables added after the consolidated `Initial` migration (e.g.
+`SignupCodes` / `PendingDevices`) are created by an idempotent
+`CREATE TABLE IF NOT EXISTS` step in
+[`Startup/DatabaseBootstrap.cs`](DorkNet.Server/Startup/DatabaseBootstrap.cs)
+so both providers pick them up on existing DBs without a new migration
+(the Postgres path is `EnsureCreated`-only and never replays migrations).
+
+### Signup codes
+
+When account creation is disabled (admin **Server settings**), the only
+way in is an admin-issued single-use **signup code**: generate one in the
+admin panel's **Signup codes** page (with a descriptor + optional expiry),
+hand it to the player, and they redeem it on the site's **`/join`** page —
+which creates their account bound to the device their game client
+reported, so the next launch logs straight in.
+
 ---
 
 ## Contributing

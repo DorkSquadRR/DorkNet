@@ -19,6 +19,7 @@ public class AccountApiController(
     DorkNetDbContext db,
     NotificationService notifications,
     ServerSettingsService settings,
+    SignupCodeService signupCodes,
     ILogger<AccountApiController> logger) : ControllerBase
 {
     [HttpPost("api/account/v1/create")]
@@ -37,6 +38,8 @@ public class AccountApiController(
             logger.LogInformation(
                 "[api-account] api/account/v1/create refused — signups disabled (device={Device} platform={Platform})",
                 deviceId, platform);
+            await signupCodes.RecordPendingDeviceAsync(
+                deviceId, platform, platformId, SignupCodeService.ClientIp(HttpContext));
             return Ok(new CreateAccountResponse
             {
                 Success = false,

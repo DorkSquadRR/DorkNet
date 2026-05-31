@@ -28,6 +28,7 @@ public class PlatformLoginController(
     PlayerService playerService,
     AuthService authService,
     ServerSettingsService settings,
+    SignupCodeService signupCodes,
     DorkNetDbContext db) : ControllerBase
 {
     // Login.LoginToAccount → POST api/platformlogin/v2 / v5
@@ -55,6 +56,10 @@ public class PlatformLoginController(
         if (await settings.AreSignupsDisabledAsync()
             && await playerService.GetByDeviceAsync(DeviceId) is null)
         {
+            // Stash the refused device so the player can claim it on the
+            // /join page (matched by IP) with a signup code.
+            await signupCodes.RecordPendingDeviceAsync(
+                DeviceId, Platform, PlatformId, SignupCodeService.ClientIp(HttpContext));
             return Unauthorized(new LoginResponse
             {
                 Error = "signups_disabled",
