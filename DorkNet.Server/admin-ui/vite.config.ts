@@ -7,7 +7,15 @@ import path from 'node:path';
 // up at admin.localhost without any extra publish wiring.
 export default defineConfig({
   plugins: [react()],
-  base: '/',
+  // Relative-base so the built index.html references its assets as
+  // `./assets/...` instead of `/assets/...`. Required when the SPA is
+  // served under a path prefix like the Easy Launcher's single-origin
+  // mode (`https://<apex>/__dn/admin/`) — a root-absolute asset path
+  // would skip the /__dn/admin/ prefix and 404 on the wrong server
+  // host. Still works fine for the subdomain case
+  // (`admin.<apex>/...`) since `./assets/...` resolves against the
+  // document URL in both shapes.
+  base: './',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
