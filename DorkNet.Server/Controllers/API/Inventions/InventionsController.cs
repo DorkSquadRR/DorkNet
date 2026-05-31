@@ -167,13 +167,58 @@ public class InventionsController(
         });
     }
 
+    /// <summary>GET <c>api/inventions/v1/creatorIds</c> — the distinct
+    /// creator account ids of every invention placed in a room
+    /// (<c>GetCreatorIdsOfInventionsInRoom</c>). The watch uses this to
+    /// resolve which creators it must request invention permissions for
+    /// before spawning a room's invention-based geometry. Returns
+    /// <c>List&lt;int&gt;</c> — empty when the room has no tracked
+    /// inventions.</summary>
     [HttpGet("api/inventions/v1/creatorIds")]
-    public IActionResult CreatorIdsInRoom([FromQuery] long roomId)
+    public async Task<IActionResult> CreatorIdsInRoom([FromQuery] long roomId)
     {
-        // We don't yet track per-room invention placements; return
-        // empty list (correct shape: List<int>).
-        _ = roomId;
-        return Ok(Array.Empty<int>());
+        var inventions = await ResolveRoomInventionsAsync(roomId);
+        var creatorIds = inventions
+            .Select(i => (int)i.CreatorPlayerId)
+            .Distinct()
+            .ToList();
+        return Ok(creatorIds);
+    }
+
+    /// <summary>Resolve the inventions that belong to a room. Direct
+    /// matches are inventions whose
+    /// <see cref="InventionEntity.CreationRoomId"/> equals the room's
+    /// local id (RR-Originals, dorms, anything created in-place).
+    /// Zip-imported rooms instead carry each invention's ORIGINAL Rec
+    /// Room CreationRoomId, which won't equal our local id and can't be
+    /// reverse-resolved without an OriginalRoomId column; we approximate
+    /// that cluster as the most-frequent non-local CreationRoomId among
+    /// the room creator's inventions. The two sets are unioned so a room
+    /// with both kinds resolves fully.</summary>
+    private async Task<List<InventionEntity>> ResolveRoomInventionsAsync(long roomId)
+    {
+        var creatorId = await db.Rooms
+            .Where(r => r.Id == roomId)
+            .Select(r => (long?)r.CreatorPlayerId)
+            .FirstOrDefaultAsync();
+
+        long? importedRoomId = null;
+        if (creatorId is long creator)
+        {
+            importedRoomId = await db.Inventions
+                .Where(i => !i.IsDeleted && i.CreatorPlayerId == creator
+                    && i.CreationRoomId != null && i.CreationRoomId != roomId)
+                .GroupBy(i => i.CreationRoomId)
+                .OrderByDescending(g => g.Count())
+                .Select(g => g.Key)
+                .FirstOrDefaultAsync();
+        }
+
+        return await db.Inventions
+            .Where(i => !i.IsDeleted
+                && (i.CreationRoomId == roomId
+                    || (importedRoomId != null && i.CreationRoomId == importedRoomId)))
+            .ToListAsync();
     }
 
     /// <summary>GET <c>api/inventions/v1/fulllineageowner</c> —
@@ -225,46 +270,7 @@ public class InventionsController(
     [HttpGet("api/inventions/v1/room")]
     public async Task<ActionResult> ByRoom([FromQuery] long id)
     {
-        // The watch sends our local room id, but zip-imported inventions
-        // carry the ORIGINAL Rec Room room id in CreationRoomId (the
-        // importer preserves it so cross-zip references survive). Match
-        // by name first to find any candidate original ids, then union
-        // the lookup. For dorm/RR-Original rooms (CreatorPlayerId=1,
-        // never imported), CreationRoomId equals the local id directly.
-        var roomName = await db.Rooms
-            .Where(r => r.Id == id)
-            .Select(r => r.Name)
-            .FirstOrDefaultAsync();
-        var inventions = await db.Inventions
-            .Where(i => !i.IsDeleted
-                && (i.CreationRoomId == id
-                    // Imported rooms: the invention has CreationRoomId =
-                    // the original Rec Room id. We can't reverse-resolve
-                    // without an OriginalRoomId column, so use
-                    // ReplicationId-based name match: every invention
-                    // imported alongside this room has CreatorPlayerId
-                    // matching the room creator AND CreationRoomId set
-                    // to a non-zero value that isn't an RR-Original.
-                    // Loose match — accept any invention whose creator
-                    // is the room creator and CreationRoomId is "the same
-                    // remote id" for that room. We approximate by
-                    // looking at the most-frequent CreationRoomId among
-                    // inventions whose creator matches the room creator
-                    // and joining on that.
-                    || (roomName != null && db.Inventions
-                        .Where(j => !j.IsDeleted
-                            && j.CreatorPlayerId == db.Rooms
-                                .Where(r => r.Id == id)
-                                .Select(r => r.CreatorPlayerId)
-                                .FirstOrDefault()
-                            && j.CreationRoomId != null
-                            && j.CreationRoomId != id)
-                        .GroupBy(j => j.CreationRoomId)
-                        .OrderByDescending(g => g.Count())
-                        .Select(g => g.Key)
-                        .FirstOrDefault() == i.CreationRoomId)
-                ))
-            .ToListAsync();
+        var inventions = await ResolveRoomInventionsAsync(id);
         return Ok(inventions.Select(ToWire).ToList());
     }
 
