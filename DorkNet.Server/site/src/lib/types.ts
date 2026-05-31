@@ -59,12 +59,23 @@ export interface SiteStats {
   inventionCount: number;
 }
 
-// CDN URL helper for profile images. Mirrors the admin SPA's helper
-// so the apex visit ends up calling img.localhost (signed via the
-// hardcoded p1 key id baked into the patched client). On rec.net
-// fallbacks to img.rec.net so the site works on either apex.
+// Resolve the image-CDN apex for the current host. The site is served
+// from the DorkNet apex (or www.apex) and the server exposes its
+// image-transform pipeline at img.{apex}, signed with the hardcoded p1
+// key id baked into the patched client. Derive the apex from the live
+// host so images load from THIS server's own CDN instead of leaking to
+// real Rec Room (img.rec.net) — which also drops the Azure affinity
+// cookies the browser was rejecting. Localhost dev → img.localhost.
+export function imageApex(): string {
+  if (typeof window === 'undefined') return 'localhost';
+  const host = window.location.host.split(':')[0];
+  if (host === 'localhost' || host.endsWith('.localhost')) return 'localhost';
+  return host.startsWith('www.') ? host.slice(4) : host;
+}
+
+// CDN URL helper for profile images, served from the server's own
+// img.{apex} (see imageApex).
 export function profileImageUrl(name: string | null | undefined, width = 96): string | null {
   if (!name) return null;
-  const apex = typeof window !== 'undefined' && window.location.host.endsWith('localhost') ? 'localhost' : 'rec.net';
-  return `https://img.${apex}/${encodeURIComponent(name)}?width=${width}&cropSquare=1&sig=p1`;
+  return `https://img.${imageApex()}/${encodeURIComponent(name)}?width=${width}&cropSquare=1&sig=p1`;
 }
