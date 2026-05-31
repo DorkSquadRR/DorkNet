@@ -457,6 +457,7 @@ function GrantsTab({ data, onChanged }: { data: PlayerDetail; onChanged: () => v
 function ProfileTab({ data, onChanged }: { data: PlayerDetail; onChanged: () => void }) {
   const toast = useToast();
   const [displayName, setDisplayName] = useState(data.displayName);
+  const [username, setUsername] = useState(data.username);
   const [flags, setFlags] = useState({
     isVerified: data.isVerified,
     isDeveloper: data.isDeveloper,
@@ -476,6 +477,19 @@ function ProfileTab({ data, onChanged }: { data: PlayerDetail; onChanged: () => 
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="card !p-4">
+        <h3 className="text-sm font-semibold text-ink-50 mb-1">Username</h3>
+        <p className="text-xs text-ink-400 mb-3">The unique @handle. 2–24 chars: letters, numbers, _ or -. Changing it doesn't touch the display name.</p>
+        <div className="flex gap-2">
+          <input value={username} onChange={e => setUsername(e.target.value)} className="input flex-1 font-mono text-xs" />
+          <button
+            onClick={() => save('Username', () => api(`/players/${data.id}/username`, { method: 'POST', body: { Username: username.trim() } }))}
+            disabled={!username.trim() || username.trim() === data.username}
+            className="btn-primary text-xs"
+          >Save</button>
+        </div>
+      </div>
+
       <div className="card !p-4">
         <h3 className="text-sm font-semibold text-ink-50 mb-1">Display name</h3>
         <p className="text-xs text-ink-400 mb-3">Force-override the player's display name.</p>

@@ -1,0 +1,7 @@
+Traceback (most recent call last):
+  File "<string>", line 1, in <module>
+    import json; d=json.load(open('color_variants.json')); [print(repr(v.get('baseName')),'outfitType=',v.get('outfitType'),'colors=',len(v.get('colors',[]))) for v in d['variants']]
+                                                                                                                                                                        ~^^^^^^^^^^^^
+KeyError: 'variants'
+total items 530
+Counter({None: 530})

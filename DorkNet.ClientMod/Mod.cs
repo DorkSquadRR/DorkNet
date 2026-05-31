@@ -70,6 +70,24 @@ public class Mod : MelonMod
         // Photon Custom Auth injector parked 2026-05-28; see
         // attic/AuthValuesInjector.cs.attic for the code + restore notes.
         public static bool   EnableTlsTrustBypass = true;
+        // Treat the local account as already fully registered so the
+        // first-dorm-entry registration flow never runs. That flow
+        // (DormroomSceneManager → PromptForRegistration) shows two
+        // back-to-back watch dialogs: first "Your username is @<auto-gen
+        // name> — want to change it?" (which broadcasts the throwaway
+        // auto-generated handle and makes the account look brand-new),
+        // then the "…permanently lost without a password…" warning whose
+        // confirm button never actually dismisses the modal on this
+        // build, hard-locking the player in the dorm. Both are gated on
+        // RRUI.Data.NUX.RegistrationModel.IsFullyRegistered(): when it
+        // returns true the watch jumps clean past the whole block
+        // (verified in DormroomSceneManager_NestedType_FBDKOJHAJMJ /
+        // ___c ISIL — `Call RegistrationModel.IsFullyRegistered` →
+        // `Compare rax,0` → `JumpIfNotEqual` skips the
+        // ShowConfirmationDialog calls). Forcing it true means new
+        // players drop straight into their dorm with no brand-new nag
+        // and no exposed auto-username. See RegistrationPatches.
+        public static bool   TreatAccountAsRegistered = true;
     }
 
     public override void OnInitializeMelon()
@@ -216,6 +234,25 @@ public class Mod : MelonMod
                        "RpcChatEmote",
                        args: new[] { typeof(string) },
                        prefix: nameof(ChatPatches.RpcChatEmote_Prefix));
+
+        // Skip the first-dorm "Change Username?" registration flow for
+        // brand-new accounts. DormroomSceneManager raises two dialogs the
+        // first time a not-fully-registered account enters its dorm — one
+        // that prints the auto-generated @username and one warning whose
+        // confirm button doesn't dismiss the modal on this build, leaving
+        // the player stuck. Both are gated on
+        // RRUI.Data.NUX.RegistrationModel.IsFullyRegistered(); forcing it
+        // true makes the watch skip the entire block, so new players land
+        // in their dorm without the brand-new nag or the exposed
+        // auto-username. See Cfg.TreatAccountAsRegistered for the ISIL
+        // evidence.
+        if (Cfg.TreatAccountAsRegistered)
+        {
+            TryPatchByName("RRUI.Data.NUX.RegistrationModel",
+                           "IsFullyRegistered",
+                           args: Type.EmptyTypes,
+                           postfix: nameof(RegistrationPatches.IsFullyRegistered_Postfix));
+        }
 
         RegisterJoinTracePatches();
 
@@ -461,6 +498,7 @@ public class Mod : MelonMod
             if (r.TryGetProperty("PhotonVoiceAppId", out v))         Cfg.PhotonVoiceAppId = v.GetString() ?? Cfg.PhotonVoiceAppId;
             if (r.TryGetProperty("PhotonCloudRegion", out v))        Cfg.PhotonCloudRegion = v.GetString() ?? Cfg.PhotonCloudRegion;
             if (r.TryGetProperty("EnableTlsTrustBypass", out v))     Cfg.EnableTlsTrustBypass = v.GetBoolean();
+            if (r.TryGetProperty("TreatAccountAsRegistered", out v)) Cfg.TreatAccountAsRegistered = v.GetBoolean();
             // "InjectAuthValues" key in the template is now ignored —
             // see attic/AuthValuesInjector.cs.attic.
             Log.Msg($"[config] loaded: ServerHost={Cfg.ServerHost}, PhotonAppId={(string.IsNullOrEmpty(Cfg.PhotonAppId) ? "<unset>" : "<set>")}, " +
@@ -611,7 +649,7 @@ public class Mod : MelonMod
     {
         // Look in all three patch holder classes — small enough that a
         // linear scan is cheaper than per-class lookups.
-        foreach (var holder in new[] { typeof(UriPatches), typeof(PhotonPatches), typeof(TlsPatches), typeof(DiagnosticPatches), typeof(SavePatches), typeof(ChatPatches), typeof(JoinPatches) })
+        foreach (var holder in new[] { typeof(UriPatches), typeof(PhotonPatches), typeof(TlsPatches), typeof(DiagnosticPatches), typeof(SavePatches), typeof(ChatPatches), typeof(JoinPatches), typeof(RegistrationPatches) })
         {
             var m = holder.GetMethod(name, BindingFlags.Public | BindingFlags.Static);
             if (m is not null) return m;
@@ -1450,6 +1488,31 @@ internal static class ChatPatches
     public static void RpcChatEmote_Prefix(string message)
     {
         Mod.Log.Msg($"[chat-trace] RpcChatEmote (RPC RECEIVED) msg=\"{message}\"");
+    }
+}
+
+// Registration-prompt suppression. See the registration site in
+// OnLateInitializeMelon and Cfg.TreatAccountAsRegistered for the full
+// rationale and the IL2CPP evidence.
+internal static class RegistrationPatches
+{
+    private static bool s_logged;
+
+    // Postfix on RRUI.Data.NUX.RegistrationModel.IsFullyRegistered().
+    // DormroomSceneManager checks this before raising either first-dorm
+    // "Change Username?" dialog; returning true makes the watch jump past
+    // the whole prompt block, so a brand-new account never gets the
+    // username-reveal prompt or the stuck "permanently lost" warning and
+    // drops straight into its dorm. Players who do want to set a username
+    // and password can still do it from the profile section of the watch.
+    public static void IsFullyRegistered_Postfix(ref bool __result)
+    {
+        if (!__result && !s_logged)
+        {
+            s_logged = true;
+            Mod.Log.Msg("[registration-fix] RegistrationModel.IsFullyRegistered returned false; forcing true so the first-dorm 'Change Username?' prompt is skipped");
+        }
+        __result = true;
     }
 }
 

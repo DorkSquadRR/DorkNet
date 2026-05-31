@@ -1,0 +1,2 @@
+total 530
+outfitType None = 530

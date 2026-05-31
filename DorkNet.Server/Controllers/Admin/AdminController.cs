@@ -1953,6 +1953,35 @@ public class AdminController(
         return Ok(new { p.Id, p.DisplayName });
     }
 
+    public sealed record UsernameRequest(string Username);
+
+    /// <summary>Force-set a player's username (the unique @handle).
+    /// Unlike the normal account flow this changes ONLY the username, not
+    /// the display name, and rejects a collision outright rather than
+    /// auto-suffixing — the admin types the exact handle they want.
+    /// Username rules mirror the account API: 2–24 chars, letters /
+    /// digits / underscore / hyphen.</summary>
+    [HttpPost("players/{id:long}/username")]
+    public async Task<ActionResult> SetUsername(long id, [FromBody] UsernameRequest body)
+    {
+        var p = await db.Players.FirstOrDefaultAsync(x => x.Id == id);
+        if (p is null) return NotFound();
+
+        var name = (body.Username ?? string.Empty).Trim();
+        if (name.Length is < 2 or > 24
+            || !name.All(ch => char.IsLetterOrDigit(ch) || ch is '_' or '-'))
+            return BadRequest(new { Error = "Username must be 2–24 chars: letters, numbers, _ or -." });
+
+        if (await db.Players.AnyAsync(x => x.Username == name && x.Id != id))
+            return BadRequest(new { Error = "That username is already taken." });
+
+        var previous = p.Username;
+        p.Username = name;
+        await LogAsync("set_username", "player", id, $"{previous} -> {name}");
+        await db.SaveChangesAsync();
+        return Ok(new { p.Id, p.Username });
+    }
+
     private sealed class InventoryEntry
     {
         [System.Text.Json.Serialization.JsonPropertyName("itemId")]

@@ -104,7 +104,7 @@ public class AvatarItemsController(DorkNetDbContext db, IConfiguration config) :
             .Select(a => new { a.InventoryJson, a.OutfitSelections })
             .FirstOrDefaultAsync();
 
-        var owned = ParseInventory(avatar?.InventoryJson);
+        var owned = ParseInventoryEntries(avatar?.InventoryJson);
         var ownedHairDyeSlugs = await db.PlayerInventory
             .Where(i => i.PlayerId == me && i.Quantity > 0)
             .Select(i => i.ItemSlug)
@@ -123,29 +123,48 @@ public class AvatarItemsController(DorkNetDbContext db, IConfiguration config) :
         // we want it to drop the OLDEST (starter seed) items rather than the
         // one the user just bought.
         var ordered = owned
-            .Select((guid, idx) => (Guid: guid, OriginalIndex: idx))
-            .OrderByDescending(x => equipped.Contains(x.Guid))
-            .ThenBy(x => catalog.SlotByGuid.TryGetValue(x.Guid, out var slot) ? slot : int.MaxValue)
+            .Select((entry, idx) => (Entry: entry, OriginalIndex: idx))
+            .OrderByDescending(x => equipped.Contains(x.Entry.BaseGuid))
+            .ThenBy(x => catalog.SlotByGuid.TryGetValue(x.Entry.BaseGuid, out var slot) ? slot : int.MaxValue)
             .ThenByDescending(x => x.OriginalIndex)
-            .Select(x => x.Guid);
+            .Select(x => x.Entry);
 
         var maxOutfitItems = Math.Max(0, maxItems - ownedHairDyes.Count);
         var perSlot = new Dictionary<int, int>();
         var result = new List<UnlockedAvatarItemDto>(Math.Min(owned.Count, maxItems));
-        foreach (var guid in ordered)
+        foreach (var entry in ordered)
         {
             if (result.Count >= maxOutfitItems) break;
             // Intersect against the safelist. Items not in the bundled
             // lookup would crash the watch's wardrobe parser, so they're
-            // silently dropped here.
-            if (!catalog.Items.TryGetValue(guid, out var item)) continue;
+            // silently dropped here. The catalog is keyed by the BARE GUID,
+            // so colored variants (stored as "{guid},{swatch},{mask},") must
+            // look up by BaseGuid — keying by the full comma string would
+            // miss and silently drop every owned colored item (the contest
+            // hat "I bought it but it never shows in my wardrobe" bug).
+            if (!catalog.Items.TryGetValue(entry.BaseGuid, out var item)) continue;
 
-            var slot = catalog.SlotByGuid.TryGetValue(guid, out var value) ? value : -1;
+            var slot = catalog.SlotByGuid.TryGetValue(entry.BaseGuid, out var value) ? value : -1;
             perSlot.TryGetValue(slot, out var count);
-            if (count >= maxPerSlot && !equipped.Contains(guid)) continue;
+            if (count >= maxPerSlot && !equipped.Contains(entry.BaseGuid)) continue;
 
             perSlot[slot] = count + 1;
-            result.Add(item);
+            // Preserve the bought color: a bare entry (FullDesc == BaseGuid)
+            // emits the catalog DTO as-is ("{guid},,,"); a colored entry
+            // overrides AvatarItemDesc with the stored swatch/mask desc so
+            // the watch renders the variant the player paid for instead of
+            // falling back to the default swatch.
+            result.Add(string.Equals(entry.FullDesc, entry.BaseGuid, StringComparison.OrdinalIgnoreCase)
+                ? item
+                : new UnlockedAvatarItemDto
+                {
+                    AvatarItemType = item.AvatarItemType,
+                    AvatarItemDesc = ToWatchDesc(entry.FullDesc),
+                    PlatformMask = item.PlatformMask,
+                    FriendlyName = item.FriendlyName,
+                    Tooltip = item.Tooltip,
+                    Rarity = item.Rarity,
+                });
             if (result.Count >= maxItems) break;
         }
 
@@ -248,47 +267,89 @@ public class AvatarItemsController(DorkNetDbContext db, IConfiguration config) :
         }
     }
 
-    private static List<string> ParseInventory(string? json)
+    /// <summary>An owned wardrobe entry: the bare AvatarItem GUID used as
+    /// the catalog / slot / equipped key, plus the full RecNet desc exactly
+    /// as stored in InventoryJson. For a plain item the two are identical;
+    /// for a colored variant the desc is "{guid},{swatch},{mask}," so the
+    /// swatch the player paid for survives the round-trip to the wardrobe.</summary>
+    private readonly record struct OwnedEntry(string BaseGuid, string FullDesc);
+
+    /// <summary>Parse InventoryJson into normalized owned entries. Accepts
+    /// both the plain JSON string array of descs (the shape
+    /// GrantWardrobeAsync / PurchaseAsync write) and the legacy
+    /// [{itemId,...}] object shape. Strips a leading "wardrobe-" slug
+    /// prefix, derives the bare GUID (substring before the first comma) for
+    /// catalog lookups, and keeps the full desc so a colored variant keeps
+    /// its swatch. Dedupes by full desc, so multiple colors of the same
+    /// base item remain distinct wardrobe tiles while exact duplicates
+    /// collapse.</summary>
+    private static List<OwnedEntry> ParseInventoryEntries(string? json)
     {
-        if (string.IsNullOrWhiteSpace(json)) return new();
+        if (string.IsNullOrWhiteSpace(json) || json == "[]") return new();
+
+        var raw = new List<string>();
         try
         {
             var strings = JsonSerializer.Deserialize<List<string>>(json);
-            if (strings is not null) return strings;
+            if (strings is not null) raw.AddRange(strings);
         }
         catch { }
 
-        try
+        if (raw.Count == 0)
         {
-            using var doc = JsonDocument.Parse(json);
-            if (doc.RootElement.ValueKind != JsonValueKind.Array) return new();
-
-            var result = new List<string>();
-            foreach (var element in doc.RootElement.EnumerateArray())
+            try
             {
-                string? value = null;
-                if (element.ValueKind == JsonValueKind.String)
-                    value = element.GetString();
-                else if (element.ValueKind == JsonValueKind.Object &&
-                         element.TryGetProperty("itemId", out var itemId) &&
-                         itemId.ValueKind == JsonValueKind.String)
-                    value = itemId.GetString();
-
-                if (string.IsNullOrWhiteSpace(value)) continue;
-                const string wardrobePrefix = "wardrobe-";
-                if (value.StartsWith(wardrobePrefix, StringComparison.Ordinal))
-                    value = value[wardrobePrefix.Length..];
-                var comma = value.IndexOf(',');
-                if (comma >= 0)
-                    value = value[..comma];
-                result.Add(value);
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.ValueKind != JsonValueKind.Array) return new();
+                foreach (var element in doc.RootElement.EnumerateArray())
+                {
+                    if (element.ValueKind == JsonValueKind.String)
+                        raw.Add(element.GetString() ?? string.Empty);
+                    else if (element.ValueKind == JsonValueKind.Object &&
+                             element.TryGetProperty("itemId", out var itemId) &&
+                             itemId.ValueKind == JsonValueKind.String)
+                        raw.Add(itemId.GetString() ?? string.Empty);
+                }
             }
-
-            return result
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .ToList();
+            catch { return new(); }
         }
-        catch { return new(); }
+
+        const string wardrobePrefix = "wardrobe-";
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<OwnedEntry>();
+        foreach (var entry in raw)
+        {
+            var value = entry;
+            if (string.IsNullOrWhiteSpace(value)) continue;
+            if (value.StartsWith(wardrobePrefix, StringComparison.Ordinal))
+                value = value[wardrobePrefix.Length..];
+            var comma = value.IndexOf(',');
+            var baseGuid = comma >= 0 ? value[..comma] : value;
+            if (string.IsNullOrWhiteSpace(baseGuid)) continue;
+            if (!seen.Add(value)) continue;
+            result.Add(new OwnedEntry(baseGuid, value));
+        }
+        return result;
+    }
+
+    /// <summary>Bare-GUID view of the owned set, for callers that only need
+    /// ownership membership (e.g. the locked-items diff), not the swatch.</summary>
+    private static List<string> ParseInventory(string? json) =>
+        ParseInventoryEntries(json)
+            .Select(e => e.BaseGuid)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    /// <summary>Ensure a stored desc carries the ≥4 comma-separated parts
+    /// (guid + 3 customizations) that the watch's
+    /// <c>AvatarItem.FromRecNetString</c> requires — anything shorter throws
+    /// inside the wardrobe parser. Stored colored descs are already
+    /// "{guid},{swatch},{mask}," (3 commas); this pads any shorter legacy
+    /// value.</summary>
+    private static string ToWatchDesc(string storedDesc)
+    {
+        var commas = storedDesc.Count(c => c == ',');
+        return commas >= 3 ? storedDesc : storedDesc + new string(',', 3 - commas);
     }
 
     private static HashSet<string> ParseEquippedItemGuids(string? outfitSelections)
