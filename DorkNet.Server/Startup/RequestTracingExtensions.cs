@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using DorkNet.Server.Services;
 
 namespace DorkNet.Server.Startup;
@@ -118,9 +119,15 @@ public static class RequestTracingExtensions
                     }
                 }
 
-                var trimmedRequest = requestBody is null ? null
-                    : (requestBody.Length > 200 ? requestBody[..200] + "..." : requestBody);
-                var trimmedResponse = responseBody.Length > 300 ? responseBody[..300] + "..." : responseBody;
+                // Redact credentials/tokens BEFORE trimming, so a secret
+                // can't survive either in the log line, the admin player-log
+                // tab, or the truncated tail. (Without this the platformlogin
+                // / admin-login bodies wrote the cleartext password to disk.)
+                var safeRequest = RedactSecrets(requestBody);
+                var safeResponse = RedactSecrets(responseBody) ?? "";
+                var trimmedRequest = safeRequest is null ? null
+                    : (safeRequest.Length > 200 ? safeRequest[..200] + "..." : safeRequest);
+                var trimmedResponse = safeResponse.Length > 300 ? safeResponse[..300] + "..." : safeResponse;
                 var level = thrown is not null || status >= 500 ? LogLevel.Error
                           : status >= 400 ? LogLevel.Warning
                           : LogLevel.Information;
@@ -151,6 +158,37 @@ public static class RequestTracingExtensions
                 }
             }
         });
+    }
+
+    // Property/field names whose values must never reach logs or the admin
+    // player-log tab. Covers JSON ("password":"…") and form (password=…)
+    // bodies, case-insensitively. The closing quote in the JSON pattern
+    // anchors on the whole key, so "passwordHash" is matched but
+    // "password_confirmed_at"-style siblings of a listed key are not partial-
+    // matched. Add new keys here as new credential-bearing endpoints land.
+    private const string SecretKeys =
+        "password|passwd|pwd|passwordhash|token|accesstoken|refreshtoken|idtoken|" +
+        "secret|clientsecret|apikey|api_key|authorization|deviceauth|sessionkey";
+
+    private static readonly Regex JsonSecretRegex = new(
+        "(\"(?:" + SecretKeys + ")\"\\s*:\\s*)\"(?:[^\"\\\\]|\\\\.)*\"",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private static readonly Regex FormSecretRegex = new(
+        "(?<=^|&)(?<k>" + SecretKeys + ")=[^&]*",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>Mask credential/token values in a captured request or
+    /// response body so they never land in the request-trace log or the
+    /// player-log store. Returns the input unchanged when there's nothing
+    /// to redact; null/empty pass through untouched.</summary>
+    private static string? RedactSecrets(string? body)
+    {
+        if (string.IsNullOrEmpty(body)) return body;
+        if (body.IndexOf('"') < 0 && body.IndexOf('=') < 0) return body;
+        var redacted = JsonSecretRegex.Replace(body, "$1\"***\"");
+        redacted = FormSecretRegex.Replace(redacted, "${k}=***");
+        return redacted;
     }
 
     private static bool IsHealthProbe(HttpRequest request)
