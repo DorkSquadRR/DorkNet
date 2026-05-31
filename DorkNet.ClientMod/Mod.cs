@@ -70,24 +70,16 @@ public class Mod : MelonMod
         // Photon Custom Auth injector parked 2026-05-28; see
         // attic/AuthValuesInjector.cs.attic for the code + restore notes.
         public static bool   EnableTlsTrustBypass = true;
-        // Treat the local account as already fully registered so the
-        // first-dorm-entry registration flow never runs. That flow
-        // (DormroomSceneManager → PromptForRegistration) shows two
-        // back-to-back watch dialogs: first "Your username is @<auto-gen
-        // name> — want to change it?" (which broadcasts the throwaway
-        // auto-generated handle and makes the account look brand-new),
-        // then the "…permanently lost without a password…" warning whose
-        // confirm button never actually dismisses the modal on this
-        // build, hard-locking the player in the dorm. Both are gated on
-        // RRUI.Data.NUX.RegistrationModel.IsFullyRegistered(): when it
-        // returns true the watch jumps clean past the whole block
-        // (verified in DormroomSceneManager_NestedType_FBDKOJHAJMJ /
-        // ___c ISIL — `Call RegistrationModel.IsFullyRegistered` →
-        // `Compare rax,0` → `JumpIfNotEqual` skips the
-        // ShowConfirmationDialog calls). Forcing it true means new
-        // players drop straight into their dorm with no brand-new nag
-        // and no exposed auto-username. See RegistrationPatches.
-        public static bool   TreatAccountAsRegistered = true;
+        // Log-only trace for the stuck first-dorm "Change Username?"
+        // dialog. When true, RegistrationPatches hooks the dorm
+        // registration-prompt flow + the confirm-dialog buttons and writes
+        // what fires to MelonLoader/UserData/dorknet-diagnostics.log, so a
+        // brand-new account that reproduces the freeze tells us exactly
+        // where it breaks (does the click reach Button_Affirmative? does
+        // the prompt even run?). No behaviour change — purely diagnostic.
+        // See RegistrationPatches and the registration site in
+        // OnLateInitializeMelon.
+        public static bool   TraceRegistrationDialog = true;
     }
 
     public override void OnInitializeMelon()
@@ -235,23 +227,53 @@ public class Mod : MelonMod
                        args: new[] { typeof(string) },
                        prefix: nameof(ChatPatches.RpcChatEmote_Prefix));
 
-        // Skip the first-dorm "Change Username?" registration flow for
-        // brand-new accounts. DormroomSceneManager raises two dialogs the
-        // first time a not-fully-registered account enters its dorm — one
-        // that prints the auto-generated @username and one warning whose
-        // confirm button doesn't dismiss the modal on this build, leaving
-        // the player stuck. Both are gated on
-        // RRUI.Data.NUX.RegistrationModel.IsFullyRegistered(); forcing it
-        // true makes the watch skip the entire block, so new players land
-        // in their dorm without the brand-new nag or the exposed
-        // auto-username. See Cfg.TreatAccountAsRegistered for the ISIL
-        // evidence.
-        if (Cfg.TreatAccountAsRegistered)
+        // Diagnostic trace for the stuck first-dorm "Change Username?"
+        // dialog (new accounts can't get past it; "Okay" highlights but
+        // never dismisses the modal, on every device). This is LOG-ONLY —
+        // no behaviour change. It bisects the failure for a brand-new
+        // account that reproduces the freeze, writing to
+        // MelonLoader/UserData/dorknet-diagnostics.log:
+        //
+        //   1. RegistrationModel.IsFullyRegistered() return value — if
+        //      false, the dorm prompt path runs; if true, no prompt (so a
+        //      freeze here would be something else entirely).
+        //   2. DormroomSceneManager.<PromptForRegistration>b__6_* lambdas —
+        //      which prompt branch executed (b__6_1 = a dialog was raised).
+        //   3. ConfirmUIDialog.Button_Affirmative/Negative/NotNow/Cancel —
+        //      whether the click actually reaches the dialog's button
+        //      handler when the user taps Okay. If these FIRE but the modal
+        //      stays, the break is in the resolve/hide completer
+        //      (UIDialog`1.KHKDGPHPIND's guard); if they DON'T fire, the
+        //      click never routes to the button (input/raycast) and the fix
+        //      is elsewhere. Either way the next step is unambiguous.
+        if (Cfg.TraceRegistrationDialog)
         {
             TryPatchByName("RRUI.Data.NUX.RegistrationModel",
                            "IsFullyRegistered",
                            args: Type.EmptyTypes,
                            postfix: nameof(RegistrationPatches.IsFullyRegistered_Postfix));
+
+            // The two registration dialogs are raised from
+            // DormroomSceneManager's PromptForRegistration via its
+            // compiler-generated <>c lambdas (b__6_0..b__6_3). Reuse the
+            // same nested-lambda patcher the join trace uses.
+            PatchNestedLambdas("DormroomSceneManager", "PromptForRegistration",
+                               nameof(RegistrationPatches.PromptLambda_Prefix));
+
+            // The confirm-dialog buttons. Clean, non-generic, no-arg names
+            // on AGUI.StackedUI.Dialog.ConfirmUIDialog — Okay maps to
+            // Button_Affirmative, the screenshot's only button.
+            foreach (var (method, label) in new[]
+            {
+                ("Button_Affirmative", nameof(RegistrationPatches.ButtonAffirmative_Prefix)),
+                ("Button_Negative",    nameof(RegistrationPatches.ButtonNegative_Prefix)),
+                ("Button_NotNow",      nameof(RegistrationPatches.ButtonNotNow_Prefix)),
+                ("Button_Cancel",      nameof(RegistrationPatches.ButtonCancel_Prefix)),
+            })
+            {
+                TryPatchByName("AGUI.StackedUI.Dialog.ConfirmUIDialog",
+                               method, args: Type.EmptyTypes, prefix: label);
+            }
         }
 
         RegisterJoinTracePatches();
@@ -498,7 +520,7 @@ public class Mod : MelonMod
             if (r.TryGetProperty("PhotonVoiceAppId", out v))         Cfg.PhotonVoiceAppId = v.GetString() ?? Cfg.PhotonVoiceAppId;
             if (r.TryGetProperty("PhotonCloudRegion", out v))        Cfg.PhotonCloudRegion = v.GetString() ?? Cfg.PhotonCloudRegion;
             if (r.TryGetProperty("EnableTlsTrustBypass", out v))     Cfg.EnableTlsTrustBypass = v.GetBoolean();
-            if (r.TryGetProperty("TreatAccountAsRegistered", out v)) Cfg.TreatAccountAsRegistered = v.GetBoolean();
+            if (r.TryGetProperty("TraceRegistrationDialog", out v)) Cfg.TraceRegistrationDialog = v.GetBoolean();
             // "InjectAuthValues" key in the template is now ignored —
             // see attic/AuthValuesInjector.cs.attic.
             Log.Msg($"[config] loaded: ServerHost={Cfg.ServerHost}, PhotonAppId={(string.IsNullOrEmpty(Cfg.PhotonAppId) ? "<unset>" : "<set>")}, " +
@@ -1491,28 +1513,147 @@ internal static class ChatPatches
     }
 }
 
-// Registration-prompt suppression. See the registration site in
-// OnLateInitializeMelon and Cfg.TreatAccountAsRegistered for the full
-// rationale and the IL2CPP evidence.
+// Log-only diagnostics for the stuck first-dorm "Change Username?" dialog.
+// See the registration site in OnLateInitializeMelon and
+// Cfg.TraceRegistrationDialog. Nothing here changes game behaviour — every
+// hook only writes to the diagnostics log.
 internal static class RegistrationPatches
 {
-    private static bool s_logged;
+    private static bool s_loggedFullyReg;
 
-    // Postfix on RRUI.Data.NUX.RegistrationModel.IsFullyRegistered().
-    // DormroomSceneManager checks this before raising either first-dorm
-    // "Change Username?" dialog; returning true makes the watch jump past
-    // the whole prompt block, so a brand-new account never gets the
-    // username-reveal prompt or the stuck "permanently lost" warning and
-    // drops straight into its dorm. Players who do want to set a username
-    // and password can still do it from the profile section of the watch.
-    public static void IsFullyRegistered_Postfix(ref bool __result)
+    // RRUI.Data.NUX.RegistrationModel.IsFullyRegistered() — postfix reads
+    // (does NOT modify) the return value. False ⇒ the dorm raises the
+    // "Change Username?" prompt; true ⇒ no prompt. Logged once so the file
+    // stays readable (it's polled from several call sites every boot).
+    public static void IsFullyRegistered_Postfix(bool __result)
     {
-        if (!__result && !s_logged)
+        if (!s_loggedFullyReg)
         {
-            s_logged = true;
-            Mod.Log.Msg("[registration-fix] RegistrationModel.IsFullyRegistered returned false; forcing true so the first-dorm 'Change Username?' prompt is skipped");
+            s_loggedFullyReg = true;
+            DiagnosticPatches.Write($"[reg-trace] RegistrationModel.IsFullyRegistered() = {__result}  ({(__result ? "no prompt — fully registered" : "NOT registered → dorm will raise the Change Username? prompt")})");
         }
-        __result = true;
+    }
+
+    // DormroomSceneManager.<PromptForRegistration>b__6_* lambdas. b__6_1 is
+    // the dialog-response handler (a dialog was shown). Names reach the
+    // prefix via __originalMethod so we can tell which branch ran.
+    public static void PromptLambda_Prefix(MethodBase __originalMethod)
+    {
+        DiagnosticPatches.Write($"[reg-trace] DormroomSceneManager prompt lambda fired: {__originalMethod.Name}");
+    }
+
+    // ConfirmUIDialog button handlers. If one of these fires when the user
+    // taps a dialog button but the modal stays open, the break is in the
+    // resolve/hide completer (UIDialog`1.Respond's close path) — not input
+    // routing. "Okay" on the screenshot is Button_Affirmative.
+    public static bool ButtonAffirmative_Prefix(object __instance)
+    {
+        DiagnosticPatches.Write("[reg-trace] >>> ConfirmUIDialog.Button_Affirmative pressed (this is 'Okay')");
+
+        if (!IsRegistrationWarningDialog(__instance))
+        {
+            return true;
+        }
+
+        if (TryResolveAffirmativeWithoutClose(__instance))
+        {
+            DiagnosticPatches.Write("[registration-fix] resolved first-dorm registration warning without the broken close-before-resolve path");
+            return false;
+        }
+
+        DiagnosticPatches.Write("[registration-fix] registration warning matched, but reflection resolve failed; falling back to original button handler");
+        return true;
+    }
+
+    public static void ButtonNegative_Prefix() =>
+        DiagnosticPatches.Write("[reg-trace] >>> ConfirmUIDialog.Button_Negative pressed");
+    public static void ButtonNotNow_Prefix() =>
+        DiagnosticPatches.Write("[reg-trace] >>> ConfirmUIDialog.Button_NotNow pressed");
+    public static void ButtonCancel_Prefix() =>
+        DiagnosticPatches.Write("[reg-trace] >>> ConfirmUIDialog.Button_Cancel pressed");
+
+    private static bool IsRegistrationWarningDialog(object instance)
+    {
+        var title = ReadTextField(instance, "titleText");
+        var body = ReadTextField(instance, "bodyText");
+
+        return Contains(title, "Change Username")
+            && Contains(body, "permanently lost")
+            && Contains(body, "password");
+    }
+
+    private static bool TryResolveAffirmativeWithoutClose(object instance)
+    {
+        try
+        {
+            var respond = AccessTools.Method(instance.GetType(), "Respond");
+            if (respond is null)
+            {
+                respond = AccessTools.Method(instance.GetType().BaseType, "Respond");
+            }
+
+            if (respond is null)
+            {
+                return false;
+            }
+
+            var parameters = respond.GetParameters();
+            if (parameters.Length != 2)
+            {
+                return false;
+            }
+
+            var response = CreateAffirmativeResponse(parameters[0].ParameterType);
+            respond.Invoke(instance, new[] { response, (object)false });
+            return true;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticPatches.Write($"[registration-fix] resolve failed: {ex.GetType().Name}: {ex.Message}");
+            return false;
+        }
+    }
+
+    private static object CreateAffirmativeResponse(Type responseType)
+    {
+        if (responseType.IsEnum)
+        {
+            return Enum.ToObject(responseType, 1);
+        }
+
+        return Convert.ChangeType(1, responseType);
+    }
+
+    private static string? ReadTextField(object instance, string fieldName)
+    {
+        try
+        {
+            var field = AccessTools.Field(instance.GetType(), fieldName);
+            var textObject = field?.GetValue(instance);
+            if (textObject is null)
+            {
+                return null;
+            }
+
+            var property = AccessTools.Property(textObject.GetType(), "text");
+            if (property?.GetValue(textObject) is string text)
+            {
+                return text;
+            }
+
+            var getter = AccessTools.Method(textObject.GetType(), "get_text");
+            return getter?.Invoke(textObject, Array.Empty<object>()) as string;
+        }
+        catch (Exception ex)
+        {
+            DiagnosticPatches.Write($"[registration-fix] could not read {fieldName}: {ex.GetType().Name}: {ex.Message}");
+            return null;
+        }
+    }
+
+    private static bool Contains(string? value, string fragment)
+    {
+        return value?.IndexOf(fragment, StringComparison.OrdinalIgnoreCase) >= 0;
     }
 }
 

@@ -80,6 +80,7 @@ public class PlayerPresenceController(PlayerPresenceService presence) : Controll
         // mid-coroutine. Only redact for OTHER players where the
         // privacy concern actually applies.
         var callerId = this.CurrentPlayerId();
+        var callerRoom = callerId is long cid ? presence.GetRoom(cid) : null;
         var result = ids.Select(id =>
         {
             var room = presence.GetRoom(id);
@@ -102,12 +103,41 @@ public class PlayerPresenceController(PlayerPresenceService presence) : Controll
                 StatusVisibility = 1,           // Visible
                 DeviceClass      = 0,           // Desktop / unknown — not VR
                 VrMovementMode   = 0,
-                RoomInstance     = id == callerId ? room : RoomInstanceDto.Redact(room),
+                // Full instance details are safe, and necessary, when the
+                // queried player is already co-present with the caller.
+                // PUN asks /player?{remotePlayerId} after a Photon actor
+                // joins; returning a redacted same-room instance there
+                // leaves the 2020 client with an incomplete roomInstance
+                // and can null-ref while reconciling player presence.
+                RoomInstance     = ShouldExposeFullRoom(callerId, callerRoom, id, room)
+                    ? room
+                    : RoomInstanceDto.Redact(room),
                 IsOnline         = isOnline,
             };
         }).ToList();
 
         return Ok(result);
+    }
+
+    private static bool ShouldExposeFullRoom(
+        long? callerId,
+        RoomInstanceDto? callerRoom,
+        long targetId,
+        RoomInstanceDto? targetRoom)
+    {
+        if (targetRoom is null) return false;
+        if (targetId == callerId) return true;
+        if (callerRoom is null) return false;
+
+        if (callerRoom.RoomInstanceId != 0
+            && callerRoom.RoomInstanceId == targetRoom.RoomInstanceId)
+        {
+            return true;
+        }
+
+        return !string.IsNullOrEmpty(callerRoom.PhotonRoomId)
+            && string.Equals(callerRoom.PhotonRoomId, targetRoom.PhotonRoomId,
+                StringComparison.Ordinal);
     }
 }
 
