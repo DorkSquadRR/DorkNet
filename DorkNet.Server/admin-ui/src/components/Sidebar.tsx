@@ -44,6 +44,7 @@ const groups: Array<{ title: string; items: Array<{ to: string; label: string; i
       { to: '/passwords',  label: 'Reset passwords',   icon: <KeyRound />, new: true },
       { to: '/grants',     label: 'Grant maker pen',   icon: <Wrench />,   new: true },
       { to: '/storage',    label: 'Storage backfill',  icon: <HardDrive />, new: true },
+      { to: '/signup-codes', label: 'Signup codes',    icon: <KeyRound />, new: true },
       { to: '/settings',   label: 'Server settings',   icon: <Settings />, new: true },
     ],
   },

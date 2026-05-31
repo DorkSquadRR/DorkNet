@@ -61,6 +61,8 @@ public class DorkNetDbContext(DbContextOptions<DorkNetDbContext> options) : DbCo
     public DbSet<CommunityBoardEntity> CommunityBoardRows => Set<CommunityBoardEntity>();
     public DbSet<LoadingScreenTipEntity> LoadingScreenTips => Set<LoadingScreenTipEntity>();
     public DbSet<ServerSettingsEntity> ServerSettings => Set<ServerSettingsEntity>();
+    public DbSet<SignupCodeEntity> SignupCodes => Set<SignupCodeEntity>();
+    public DbSet<PendingDeviceEntity> PendingDevices => Set<PendingDeviceEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -138,6 +138,7 @@ builder.Services.AddScoped<GameSessionService>();
 builder.Services.AddScoped<PrivateInstanceService>();
 builder.Services.AddScoped<CommunityBoardService>();
 builder.Services.AddScoped<ServerSettingsService>();
+builder.Services.AddScoped<SignupCodeService>();
 // Singletons — these own connectionless state (Redis-backed or
 // process-local) and don't need a per-request scope.
 builder.Services.AddSingleton<NotificationService>();
@@ -494,6 +495,35 @@ using (var scope = app.Services.CreateScope())
     {
         db.Database.EnsureCreated();
         ApplySqliteCompatibilityPatches(db);
+        // New tables that post-date this DB's EnsureCreated snapshot —
+        // EnsureCreated never revisits an existing file, so create them
+        // idempotently (matches the Postgres patch block below).
+        await db.Database.ExecuteSqlRawAsync(
+            @"CREATE TABLE IF NOT EXISTS ""SignupCodes"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_SignupCodes"" PRIMARY KEY AUTOINCREMENT,
+                ""Code"" TEXT NOT NULL,
+                ""Descriptor"" TEXT NOT NULL DEFAULT '',
+                ""CreatedByPlayerId"" INTEGER NOT NULL DEFAULT 0,
+                ""CreatedAt"" TEXT NOT NULL,
+                ""ExpiresAt"" TEXT NULL,
+                ""RedeemedByPlayerId"" INTEGER NULL,
+                ""RedeemedAt"" TEXT NULL,
+                ""Revoked"" INTEGER NOT NULL DEFAULT 0
+            );");
+        await db.Database.ExecuteSqlRawAsync(
+            @"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_SignupCodes_Code"" ON ""SignupCodes"" (""Code"");");
+        await db.Database.ExecuteSqlRawAsync(
+            @"CREATE TABLE IF NOT EXISTS ""PendingDevices"" (
+                ""Id"" INTEGER NOT NULL CONSTRAINT ""PK_PendingDevices"" PRIMARY KEY AUTOINCREMENT,
+                ""DeviceId"" TEXT NOT NULL,
+                ""Platform"" INTEGER NOT NULL DEFAULT 0,
+                ""PlatformId"" TEXT NOT NULL DEFAULT '',
+                ""LastIp"" TEXT NULL,
+                ""FirstSeenAt"" TEXT NOT NULL,
+                ""LastSeenAt"" TEXT NOT NULL
+            );");
+        await db.Database.ExecuteSqlRawAsync(
+            @"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_PendingDevices_DeviceId"" ON ""PendingDevices"" (""DeviceId"");");
     }
     else
     {
@@ -792,6 +822,36 @@ using (var scope = app.Services.CreateScope())
                 ""CreatedAt"" timestamp with time zone NOT NULL DEFAULT now(),
                 ""UpdatedAt"" timestamp with time zone NOT NULL DEFAULT now()
             );");
+
+        // 2026-05-31 — Signup codes + pending-device capture for the
+        // admin-issued invite flow (site /join). New tables, so
+        // EnsureCreated-skipped on existing DBs.
+        await RunPatchAsync("SignupCodes table",
+            @"CREATE TABLE IF NOT EXISTS ""SignupCodes"" (
+                ""Id"" bigserial PRIMARY KEY,
+                ""Code"" text NOT NULL,
+                ""Descriptor"" text NOT NULL DEFAULT '',
+                ""CreatedByPlayerId"" bigint NOT NULL DEFAULT 0,
+                ""CreatedAt"" timestamp with time zone NOT NULL DEFAULT now(),
+                ""ExpiresAt"" timestamp with time zone NULL,
+                ""RedeemedByPlayerId"" bigint NULL,
+                ""RedeemedAt"" timestamp with time zone NULL,
+                ""Revoked"" boolean NOT NULL DEFAULT false
+            );");
+        await RunPatchAsync("SignupCodes Code unique index",
+            @"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_SignupCodes_Code"" ON ""SignupCodes"" (""Code"");");
+        await RunPatchAsync("PendingDevices table",
+            @"CREATE TABLE IF NOT EXISTS ""PendingDevices"" (
+                ""Id"" bigserial PRIMARY KEY,
+                ""DeviceId"" text NOT NULL,
+                ""Platform"" integer NOT NULL DEFAULT 0,
+                ""PlatformId"" text NOT NULL DEFAULT '',
+                ""LastIp"" text NULL,
+                ""FirstSeenAt"" timestamp with time zone NOT NULL DEFAULT now(),
+                ""LastSeenAt"" timestamp with time zone NOT NULL DEFAULT now()
+            );");
+        await RunPatchAsync("PendingDevices DeviceId unique index",
+            @"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_PendingDevices_DeviceId"" ON ""PendingDevices"" (""DeviceId"");");
 
         await conn.CloseAsync();
     }

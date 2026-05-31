@@ -27,6 +27,7 @@ namespace DorkNet.Server.Controllers.Site;
 public class PublicSiteController(
     DorkNetDbContext db,
     PlayerService players,
+    SignupCodeService signupCodes,
     DomainConfig domain) : ControllerBase
 {
     // ── Players ──────────────────────────────────────────────────────
@@ -242,5 +243,42 @@ public class PublicSiteController(
                 createdAt = p.CreatedAt,
             };
         }).ToList();
+    }
+
+    // ── Signup (code redemption) ─────────────────────────────────────
+
+    /// <summary>GET /api/site/v1/join/pending-devices — device ids that
+    /// were refused account creation while signups are disabled, seen
+    /// from THIS caller's IP. Lets the /join page show a player the
+    /// device their own game client just reported so they don't have to
+    /// dig it out of Player.log. Best-effort: behind a proxy that
+    /// collapses client IPs this can be empty, in which case the player
+    /// pastes the id manually.</summary>
+    [HttpGet("join/pending-devices")]
+    public async Task<IActionResult> JoinPendingDevices()
+    {
+        var ip = SignupCodeService.ClientIp(HttpContext);
+        var rows = await signupCodes.RecentPendingByIpAsync(ip);
+        return Ok(rows.Select(d => new
+        {
+            deviceId = d.DeviceId,
+            platform = d.Platform,
+            lastSeenAt = d.LastSeenAt,
+        }).ToList());
+    }
+
+    public sealed record JoinRedeemRequest(string? Code, string? Username, string? DeviceId);
+
+    /// <summary>POST /api/site/v1/join/redeem — redeem a signup code,
+    /// minting an account bound to the supplied device id. On success the
+    /// player relaunches the game and the watch's device-id login finds
+    /// the new account. Returns {ok, error?, username?}.</summary>
+    [HttpPost("join/redeem")]
+    public async Task<IActionResult> JoinRedeem([FromBody] JoinRedeemRequest body)
+    {
+        var result = await signupCodes.RedeemAsync(body.Code, body.Username, body.DeviceId);
+        if (!result.Ok)
+            return BadRequest(new { ok = false, error = result.Error });
+        return Ok(new { ok = true, username = result.Username, playerId = result.PlayerId });
     }
 }

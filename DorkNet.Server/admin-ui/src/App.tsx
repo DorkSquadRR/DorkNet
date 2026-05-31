@@ -22,6 +22,7 @@ import { Passwords } from './pages/Passwords';
 import { Grants } from './pages/Grants';
 import { Storage } from './pages/Storage';
 import { Settings } from './pages/Settings';
+import { SignupCodes } from './pages/SignupCodes';
 
 export default function App() {
   return (
@@ -56,6 +57,7 @@ export default function App() {
           <Route path="grants"     element={<Grants />} />
           <Route path="storage"    element={<Storage />} />
           <Route path="settings"     element={<Settings />} />
+          <Route path="signup-codes" element={<SignupCodes />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

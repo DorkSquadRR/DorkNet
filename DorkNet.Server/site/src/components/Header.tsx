@@ -6,6 +6,7 @@ const NAV = [
   { to: '/feed', label: 'Feed' },
   { to: '/players', label: 'Players' },
   { to: '/rooms', label: 'Rooms' },
+  { to: '/join', label: 'Join' },
 ];
 
 export function Header() {

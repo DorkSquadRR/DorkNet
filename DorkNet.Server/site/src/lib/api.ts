@@ -26,3 +26,26 @@ export async function get<T = unknown>(path: string): Promise<T> {
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
+
+// POST with a JSON body. Used by the /join signup-code flow — the only
+// write path the otherwise read-only public site has. On a non-2xx the
+// server's { error } string (e.g. "code_expired") is surfaced as the
+// thrown ApiError message so the page can map it to friendly copy.
+export async function post<T = unknown>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(BASE + path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    let msg = `${res.status} ${res.statusText}`;
+    try {
+      const b = await res.json();
+      if (b?.error) msg = b.error;
+      else if (b?.message) msg = b.message;
+    } catch { /* keep status text */ }
+    throw new ApiError(res.status, msg);
+  }
+  if (res.status === 204) return undefined as T;
+  return res.json() as Promise<T>;
+}

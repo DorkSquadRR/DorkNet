@@ -125,6 +125,18 @@ Compared to `december-2020-12-18`, this branch's server is closer to
 the original 2020-Q1 wire shape — fewer endpoints, simpler entities,
 and the multi-step migrations haven't been consolidated.
 
+### Signup codes
+
+When account creation is disabled (admin **Server settings**), the only
+way in is an admin-issued single-use **signup code**: generate one in the
+admin panel's **Signup codes** page (with a descriptor + optional expiry),
+hand it to the player, and they redeem it on the site's **`/join`** page —
+which creates their account bound to the device their game client
+reported, so the next launch logs straight in. The `SignupCodes` /
+`PendingDevices` tables post-date the migration chain and are created by
+an idempotent `CREATE TABLE IF NOT EXISTS` step at boot (Program.cs), so
+existing SQLite/Postgres DBs pick them up without a new migration.
+
 ---
 
 ## Contributing
