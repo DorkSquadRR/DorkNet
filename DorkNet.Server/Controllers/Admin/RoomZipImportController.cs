@@ -636,6 +636,14 @@ public class RoomZipImportController(
             .Select(k => k.Substring(0, k.Length - "/RoomDetails.json".Length))
             .ToList();
 
+        var studioRoomFolders = entryByPath.Keys
+            .Where(k => k.EndsWith("/room.json", StringComparison.OrdinalIgnoreCase))
+            .Select(k => k[..^"/room.json".Length])
+            .Where(f => HasStudioSaveEntries(f, entryByPath.Keys))
+            .Where(f => !roomFolders.Contains(f, StringComparer.OrdinalIgnoreCase))
+            .ToList();
+        roomFolders.AddRange(studioRoomFolders);
+
         // Inventions can live either at the zip root (Inventions/Invention_<id>_<name>_<ts>/)
         // OR inside a room folder (Rooms/Room_<id>_<name>_<ts>/Inventions/Invention_…).
         // Both layouts show up in the wild — handle either.
@@ -734,10 +742,21 @@ public class RoomZipImportController(
         Dictionary<string, ZipArchiveEntry> entries,
         bool normalizeBlobs)
     {
-        // RoomDetails.json
+        // RoomDetails.json. Studio single-room dumps use room.json at
+        // the room root; it is the same rooms.rec.net detail payload and
+        // can be read through RoomDetailsDto directly.
         var detailsKey = $"{roomFolder}/RoomDetails.json";
-        var details = await ReadJsonAsync<RoomDetailsDto>(entries[detailsKey]) ?? new RoomDetailsDto();
-        var name = !string.IsNullOrWhiteSpace(details.Name) ? details.Name!.Trim() : Path.GetFileName(roomFolder);
+        var studioDetailsKey = $"{roomFolder}/room.json";
+        ZipArchiveEntry detailsEntry;
+        if (entries.TryGetValue(detailsKey, out var recNetDetailsEntry))
+            detailsEntry = recNetDetailsEntry;
+        else if (entries.TryGetValue(studioDetailsKey, out var studioDetailsEntry))
+            detailsEntry = studioDetailsEntry;
+        else
+            throw new InvalidOperationException($"Missing RoomDetails.json or room.json in {roomFolder}");
+
+        var details = await ReadJsonAsync<RoomDetailsDto>(detailsEntry) ?? new RoomDetailsDto();
+        var name = !string.IsNullOrWhiteSpace(details.Name) ? details.Name!.Trim() : StripStudioSuffix(ZipFileName(roomFolder));
 
         if (await db.Rooms.AnyAsync(r => r.Name == name))
             return new { name, ok = false, error = "duplicate_name", folder = roomFolder };
@@ -758,6 +777,12 @@ public class RoomZipImportController(
         }
         var resolvedScenes = new List<ResolvedSubroom>();
         var missingScenes = new List<string>();
+
+        if (scenes.Count == 0 && entries.ContainsKey(studioDetailsKey))
+        {
+            (resolvedScenes, missingScenes) = await ResolveStudioDumpSubroomsAsync(
+                roomFolder, details, name, entries, normalizeBlobs);
+        }
 
         foreach (var sceneName in scenes.Keys)
         {
@@ -985,6 +1010,7 @@ public class RoomZipImportController(
             imageEntry = entries.FirstOrDefault(kv =>
                 kv.Key.StartsWith($"{roomFolder}/RoomImage.", StringComparison.OrdinalIgnoreCase)).Value;
         }
+        imageEntry ??= FindStudioPhotoEntry(roomFolder, details.ImageName, entries);
 
         // Reorder so entry is first. Manifest order preserved for the rest.
         var ordered = new List<ResolvedSubroom> { entry };
@@ -1186,6 +1212,16 @@ public class RoomZipImportController(
                 var bytes = await ReadAllAsync(pentry);
                 await WriteBlobAsync(0, fname, bytes, creator);
             }
+            var studioPromoPrefix = $"{roomFolder}/photos/";
+            foreach (var (k, pentry) in entries.Where(kv =>
+                kv.Key.StartsWith(studioPromoPrefix, StringComparison.OrdinalIgnoreCase)
+                && Path.GetFileNameWithoutExtension(kv.Key).StartsWith("promo", StringComparison.OrdinalIgnoreCase)))
+            {
+                var fname = $"PromoImage_{Path.GetFileName(k)}";
+                if (await db.RoomDataBlobs.AnyAsync(b => b.BlobName == fname)) continue;
+                var bytes = await ReadAllAsync(pentry);
+                await WriteBlobAsync(0, fname, bytes, creator);
+            }
 
             db.Rooms.Add(new RoomEntity
             {
@@ -1316,6 +1352,148 @@ public class RoomZipImportController(
                 pvImages = s.PvImages.Count,
             }),
         };
+    }
+
+    private async Task<(List<ResolvedSubroom> Resolved, List<string> Missing)> ResolveStudioDumpSubroomsAsync(
+        string roomFolder,
+        RoomDetailsDto details,
+        string roomName,
+        Dictionary<string, ZipArchiveEntry> entries,
+        bool normalizeBlobs)
+    {
+        var resolvedScenes = new List<ResolvedSubroom>();
+        var missingScenes = new List<string>();
+        var rootPrefix = $"{roomFolder}/";
+        var sceneFolders = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var path in entries.Keys.Where(k => k.StartsWith(rootPrefix, StringComparison.OrdinalIgnoreCase)))
+        {
+            var rel = path[rootPrefix.Length..];
+            var slash = rel.IndexOf('/');
+            if (slash <= 0) continue;
+            var sceneFolder = rel[..slash];
+            if (rel[(slash + 1)..].StartsWith("saves/", StringComparison.OrdinalIgnoreCase))
+                sceneFolders.Add(sceneFolder);
+        }
+
+        foreach (var sceneFolderName in sceneFolders.OrderBy(StripStudioSuffix, StringComparer.OrdinalIgnoreCase))
+        {
+            var sceneName = StripStudioSuffix(sceneFolderName);
+            var savesPrefix = $"{rootPrefix}{sceneFolderName}/saves/";
+            var saves = new List<(long SaveId, HistorySidecarDto Sidecar, ZipArchiveEntry DataEntry)>();
+
+            foreach (var (path, jsonEntry) in entries.Where(kv =>
+                kv.Key.StartsWith(savesPrefix, StringComparison.OrdinalIgnoreCase)
+                && kv.Key.EndsWith(".json", StringComparison.OrdinalIgnoreCase)
+                && !kv.Key[savesPrefix.Length..].Contains('/')))
+            {
+                var stem = Path.GetFileNameWithoutExtension(path);
+                if (!long.TryParse(stem, out var saveId)) continue;
+                if (!entries.TryGetValue($"{savesPrefix}{saveId}__data.room", out var dataEntry))
+                {
+                    missingScenes.Add($"{sceneName} save {saveId} (missing {saveId}__data.room)");
+                    continue;
+                }
+                var sidecar = await ReadJsonAsync<HistorySidecarDto>(jsonEntry) ?? new HistorySidecarDto();
+                saves.Add((sidecar.SubRoomDataSaveId ?? saveId, sidecar, dataEntry));
+            }
+
+            if (saves.Count == 0)
+            {
+                missingScenes.Add($"{sceneName} (no usable saves)");
+                continue;
+            }
+
+            var current = saves.OrderBy(s => s.SaveId).Last();
+            var subroomDetails = details.SubRooms?.FirstOrDefault(s =>
+                (s.SubRoomId.HasValue && s.SubRoomId == (current.Sidecar.SubRoomId ?? TryParseStudioId(sceneFolderName)))
+                || string.Equals(s.Name, sceneName, StringComparison.OrdinalIgnoreCase));
+            var manifest = new SubRoomDto
+            {
+                SubRoomId = current.Sidecar.SubRoomId ?? subroomDetails?.SubRoomId ?? TryParseStudioId(sceneFolderName),
+                UnitySceneId = subroomDetails?.UnitySceneId,
+                Name = subroomDetails?.Name ?? sceneName,
+                IsSandbox = subroomDetails?.IsSandbox ?? true,
+                MaxPlayers = subroomDetails?.MaxPlayers ?? details.MaxPlayers ?? 8,
+                Accessibility = subroomDetails?.Accessibility ?? details.Accessibility ?? 1,
+                CurrentSave = new CurrentSaveDto
+                {
+                    SubRoomDataSaveId = current.SaveId,
+                    DataBlob = current.Sidecar.DataBlob ?? ZipFileName(current.DataEntry.FullName),
+                },
+            };
+
+            var blobBytes = await ReadAllAsync(current.DataEntry);
+            var norm = roomBlobNormalizer.Normalize(blobBytes);
+            var persistedBytes = normalizeBlobs ? norm.Bytes : blobBytes;
+
+            var htrAssets = new List<(string Name, ZipArchiveEntry Entry)>();
+            var pvImages = new List<(string Name, ZipArchiveEntry Entry)>();
+            var polaroids = new List<(string Name, ZipArchiveEntry Entry)>();
+
+            foreach (var save in saves)
+            {
+                var refPrefix = $"{savesPrefix}{save.SaveId}__ref_";
+                foreach (var (path, assetEntry) in entries.Where(kv =>
+                    kv.Key.StartsWith(refPrefix, StringComparison.OrdinalIgnoreCase)
+                    && !kv.Key[refPrefix.Length..].Contains('/')))
+                {
+                    var assetName = path[refPrefix.Length..];
+                    var ext = Path.GetExtension(assetName).ToLowerInvariant();
+                    if (ext == ".htr")
+                    {
+                        htrAssets.Add((assetName, assetEntry));
+                    }
+                    else if (IsImageExt(ext))
+                    {
+                        if (assetName.StartsWith("PVImage_", StringComparison.OrdinalIgnoreCase))
+                        {
+                            pvImages.Add((assetName, assetEntry));
+                            polaroids.Add((assetName["PVImage_".Length..], assetEntry));
+                        }
+                        else
+                        {
+                            pvImages.Add(($"PVImage_{assetName}", assetEntry));
+                            polaroids.Add((assetName, assetEntry));
+                        }
+                    }
+                }
+            }
+
+            var history = new List<HistorySave>();
+            foreach (var save in saves.Where(s => s.SaveId != current.SaveId))
+            {
+                history.Add(new HistorySave(
+                    DataBlob: !string.IsNullOrWhiteSpace(save.Sidecar.DataBlob)
+                        ? save.Sidecar.DataBlob!
+                        : ZipFileName(save.DataEntry.FullName),
+                    RoomEntry: save.DataEntry,
+                    SubRoomId: save.Sidecar.SubRoomId ?? manifest.SubRoomId,
+                    SubRoomDataSaveId: save.Sidecar.SubRoomDataSaveId ?? save.SaveId,
+                    CreatedAt: save.Sidecar.CreatedAt,
+                    Description: save.Sidecar.Description,
+                    SavedByAccountId: save.Sidecar.SavedByAccountId));
+            }
+
+            resolvedScenes.Add(new ResolvedSubroom(
+                Manifest: manifest,
+                SceneName: sceneName,
+                Bytes: persistedBytes,
+                RawBytes: blobBytes.Length,
+                NormalizedOk: norm.Normalized,
+                HtrAssets: htrAssets,
+                PvImages: pvImages,
+                Polaroids: polaroids,
+                History: history));
+
+            logger.LogInformation(
+                "[zip-import] studio-dump room='{Room}' scene='{Scene}' save={SaveId} raw={Raw:N0} normOutput={Norm:N0} persistedFrom={Source} htr={Htr} pv={Pv} polaroids={Pol} history={History}",
+                roomName, sceneName, current.SaveId, blobBytes.Length, norm.Bytes.Length,
+                normalizeBlobs ? "normaliser" : "raw",
+                htrAssets.Count, pvImages.Count, polaroids.Count, history.Count);
+        }
+
+        return (resolvedScenes, missingScenes);
     }
 
     // ── Per-invention import ─────────────────────────────────────────
@@ -1519,6 +1697,74 @@ public class RoomZipImportController(
     // ── Helpers ──────────────────────────────────────────────────────
 
     private static string Normalize(string path) => path.Replace('\\', '/').TrimStart('/');
+
+    private static string ZipFileName(string path)
+    {
+        var normalized = Normalize(path).TrimEnd('/');
+        var slash = normalized.LastIndexOf('/');
+        return slash >= 0 ? normalized[(slash + 1)..] : normalized;
+    }
+
+    private static string StripStudioSuffix(string name)
+    {
+        var marker = name.LastIndexOf("__", StringComparison.Ordinal);
+        return marker > 0 && long.TryParse(name[(marker + 2)..], out _)
+            ? name[..marker]
+            : name;
+    }
+
+    private static long? TryParseStudioId(string name)
+    {
+        var marker = name.LastIndexOf("__", StringComparison.Ordinal);
+        return marker > 0 && long.TryParse(name[(marker + 2)..], out var id) ? id : null;
+    }
+
+    private static bool IsImageExt(string ext) => ext.ToLowerInvariant() switch
+    {
+        ".jpg" or ".jpeg" or ".png" or ".webp" or ".gif" => true,
+        _ => false,
+    };
+
+    private static bool HasStudioSaveEntries(string roomFolder, IEnumerable<string> paths)
+    {
+        var prefix = $"{roomFolder.TrimEnd('/')}/";
+        return paths.Any(k =>
+        {
+            if (!k.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+                || !k.EndsWith("__data.room", StringComparison.OrdinalIgnoreCase))
+                return false;
+            var rel = k[prefix.Length..];
+            var parts = rel.Split('/');
+            return parts.Length == 3
+                && parts[0].Contains("__", StringComparison.Ordinal)
+                && string.Equals(parts[1], "saves", StringComparison.OrdinalIgnoreCase);
+        });
+    }
+
+    private static ZipArchiveEntry? FindStudioPhotoEntry(
+        string roomFolder,
+        string? imageName,
+        Dictionary<string, ZipArchiveEntry> entries)
+    {
+        var photosPrefix = $"{roomFolder}/photos/";
+        if (!string.IsNullOrWhiteSpace(imageName))
+        {
+            var byImageName = entries.FirstOrDefault(kv =>
+                kv.Key.StartsWith(photosPrefix, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(Path.GetFileName(kv.Key), imageName, StringComparison.OrdinalIgnoreCase)).Value;
+            if (byImageName is not null) return byImageName;
+
+            var imageStem = Path.GetFileNameWithoutExtension(imageName);
+            byImageName = entries.FirstOrDefault(kv =>
+                kv.Key.StartsWith(photosPrefix, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(Path.GetFileNameWithoutExtension(kv.Key), imageStem, StringComparison.OrdinalIgnoreCase)).Value;
+            if (byImageName is not null) return byImageName;
+        }
+
+        return entries.FirstOrDefault(kv =>
+            kv.Key.StartsWith(photosPrefix, StringComparison.OrdinalIgnoreCase)
+            && string.Equals(Path.GetFileNameWithoutExtension(kv.Key), "main", StringComparison.OrdinalIgnoreCase)).Value;
+    }
 
     private static async Task<byte[]> ReadAllAsync(ZipArchiveEntry entry)
     {

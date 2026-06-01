@@ -28,6 +28,16 @@ import { Upload, Trash, RefreshCw } from '../components/Icons';
 //     InventionImage.jpg
 //     <hash>.inv
 //
+// Studio single-room dump zips are also accepted directly:
+//
+//   <RoomName>__<RoomId>/
+//     room.json
+//     manifest.json
+//     photos/main.jpg
+//     <SubRoomName>__<SubRoomId>/saves/<SaveId>.json
+//     <SubRoomName>__<SubRoomId>/saves/<SaveId>__data.room
+//     <SubRoomName>__<SubRoomId>/saves/<SaveId>__ref_<hash>.htr|jpg|png
+//
 // We parse the archive client-side purely for a preview/validation
 // pass — the same blob is then POSTed to the server, which re-parses
 // it authoritatively.
@@ -930,16 +940,19 @@ async function parseZipPreview(file: File, onProgress?: (percent: number) => voi
   // counted the top-level ones, so a zip with many per-room inventions
   // hit 374% on the parse bar. Match the same predicates here.
   const roomManifestPaths: string[] = [];
+  const studioRoomManifestPaths: string[] = [];
   const inventionManifestPaths: string[] = [];
   for (const p of allPaths) {
     if (p.startsWith('Rooms/') && p.endsWith('/RoomDetails.json')) {
       roomManifestPaths.push(p);
+    } else if (p.endsWith('/room.json') && hasStudioSaveEntries(p.slice(0, -'/room.json'.length), allPaths)) {
+      studioRoomManifestPaths.push(p);
     } else if (p.endsWith('/Invention.json')
             && (p.startsWith('Inventions/') || p.includes('/Inventions/'))) {
       inventionManifestPaths.push(p);
     }
   }
-  const totalManifests = roomManifestPaths.length + inventionManifestPaths.length;
+  const totalManifests = roomManifestPaths.length + studioRoomManifestPaths.length + inventionManifestPaths.length;
   let processed = 0;
   const bump = () => {
     processed++;
@@ -1079,6 +1092,131 @@ async function parseZipPreview(file: File, onProgress?: (percent: number) => voi
     bump();
   }
 
+  // Studio single-room dump walk. Anchor on <RoomName>__<RoomId>/room.json.
+  for (const path of studioRoomManifestPaths) {
+    const roomFolder = path.slice(0, -'/room.json'.length);
+    let details: RoomDetailsJson = {};
+    try { details = JSON.parse(await readText(entryByPath.get(path)!)); } catch { /* leave as default */ }
+
+    const roomRoot = `${roomFolder}/`;
+    const sceneFolders = new Set<string>();
+    for (const p of allPaths) {
+      if (!p.startsWith(roomRoot)) continue;
+      const rest = p.slice(roomRoot.length);
+      const slash = rest.indexOf('/');
+      if (slash <= 0) continue;
+      const scene = rest.slice(0, slash);
+      if (rest.slice(slash + 1).startsWith('saves/')) sceneFolders.add(scene);
+    }
+
+    const subrooms: PreviewSubroom[] = [];
+    const candidateDates: number[] = [];
+    for (const raw of [details.CreatedAt, details.PublishedAt, details.ModifiedAt]) {
+      if (raw) {
+        const t = Date.parse(raw);
+        if (!Number.isNaN(t)) candidateDates.push(t);
+      }
+    }
+
+    for (const sceneFolder of sceneFolders) {
+      const savesPrefix = `${roomRoot}${sceneFolder}/saves/`;
+      const saveIds: number[] = [];
+      for (const p of allPaths) {
+        if (!p.startsWith(savesPrefix) || !p.endsWith('.json')) continue;
+        const stem = p.slice(savesPrefix.length, -'.json'.length);
+        if (/^\d+$/.test(stem)) saveIds.push(parseInt(stem, 10));
+      }
+      saveIds.sort((a, b) => a - b);
+      const latestSave = saveIds.at(-1) ?? null;
+      let latestSidecar: { CreatedAt?: string; DataBlob?: string } = {};
+      if (latestSave !== null) {
+        const sidecarEntry = entryByPath.get(`${savesPrefix}${latestSave}.json`);
+        if (sidecarEntry) {
+          try { latestSidecar = JSON.parse(await readText(sidecarEntry)); } catch { /* default */ }
+          if (latestSidecar.CreatedAt) {
+            const t = Date.parse(latestSidecar.CreatedAt);
+            if (!Number.isNaN(t)) candidateDates.push(t);
+          }
+        }
+      }
+
+      const blobFilename = latestSave !== null ? `${latestSave}__data.room` : null;
+      const blobFound = blobFilename ? entryByPath.has(`${savesPrefix}${blobFilename}`) : false;
+      let htrAssetCount = 0;
+      let pvImageCount = 0;
+      let polaroidCount = 0;
+      if (latestSave !== null) {
+        const refPrefix = `${savesPrefix}${latestSave}__ref_`;
+        for (const p of allPaths) {
+          if (!p.startsWith(refPrefix)) continue;
+          const assetName = p.slice(refPrefix.length);
+          const lower = assetName.toLowerCase();
+          if (lower.endsWith('.htr')) htrAssetCount++;
+          else if (isImageName(lower)) {
+            pvImageCount++;
+            polaroidCount++;
+          }
+        }
+      }
+
+      subrooms.push({
+        scene: stripStudioSuffix(sceneFolder),
+        blobFilename: latestSidecar.DataBlob ?? blobFilename,
+        blobFound,
+        htrAssetCount,
+        pvImageCount,
+        polaroidCount,
+        hasSubroomJson: true,
+      });
+    }
+
+    if (details.SubRooms && details.SubRooms.length > 0) {
+      const manifestOrder = details.SubRooms.map(s => s.Name ?? '').filter(Boolean);
+      subrooms.sort((a, b) => {
+        const ai = manifestOrder.indexOf(a.scene);
+        const bi = manifestOrder.indexOf(b.scene);
+        if (ai === -1 && bi === -1) return a.scene.localeCompare(b.scene);
+        if (ai === -1) return 1;
+        if (bi === -1) return -1;
+        return ai - bi;
+      });
+    } else {
+      subrooms.sort((a, b) => a.scene.localeCompare(b.scene));
+    }
+
+    const hasImage = (!!details.ImageName && Array.from(allPaths).some(p =>
+                    p.startsWith(`${roomFolder}/photos/`) && p.endsWith(`/${details.ImageName}`)))
+                  || allPaths.has(`${roomFolder}/photos/main.jpg`)
+                  || allPaths.has(`${roomFolder}/photos/main.png`);
+    let promoImageCount = 0;
+    for (const p of allPaths) {
+      if (p.startsWith(`${roomFolder}/photos/`) && p.split('/').pop()?.toLowerCase().startsWith('promo')) promoImageCount++;
+    }
+
+    const latestMs = candidateDates.length > 0 ? Math.max(...candidateDates) : null;
+    const latestModifiedAt = latestMs !== null ? new Date(latestMs).toISOString() : null;
+    const postBuildCutoff = latestMs !== null && latestMs > CLIENT_BUILD_CUTOFF.getTime();
+
+    rooms.push({
+      folder: roomFolder,
+      name: details.Name ?? details.FriendlyName ?? stripStudioSuffix(roomFolder.split('/').pop()!),
+      description: details.Description ?? '',
+      tags: (details.Tags ?? []).map(t => t.Tag).filter((t): t is string => !!t),
+      stats: {
+        visits: details.Stats?.VisitCount ?? 0,
+        visitors: details.Stats?.VisitorCount ?? 0,
+        cheers: details.Stats?.CheerCount ?? 0,
+        favorites: details.Stats?.FavoriteCount ?? 0,
+      },
+      subrooms,
+      hasImage,
+      promoImageCount,
+      latestModifiedAt,
+      postBuildCutoff,
+    });
+    bump();
+  }
+
   // Inventions — top-level `Inventions/` OR per-room `Rooms/<r>/Inventions/`.
   // The exporter uses either layout depending on the room (rooms with
   // their own attached inventions ship them inside the room folder).
@@ -1108,7 +1246,9 @@ async function parseZipPreview(file: File, onProgress?: (percent: number) => voi
   // Per-room Inventions/ paths are valid (live under Rooms/) so they
   // don't trigger here.
   const unknownTopLevel: string[] = [];
+  const studioRoomFolders = studioRoomManifestPaths.map(p => p.slice(0, -'/room.json'.length));
   for (const p of allPaths) {
+    if (studioRoomFolders.some(f => p === f || p.startsWith(`${f}/`))) continue;
     if (!p.startsWith('Rooms/') && !p.startsWith('Inventions/')) unknownTopLevel.push(p);
   }
   unknownTopLevel.sort();
@@ -1127,4 +1267,25 @@ async function readText(entry: Entry): Promise<string> {
   const file = entry as Entry & { getData?: (writer: TextWriter) => Promise<string> };
   if (!file.getData) throw new Error(`zip entry "${entry.filename}" has no data (directory entry)`);
   return file.getData(new TextWriter());
+}
+
+function stripStudioSuffix(name: string): string {
+  const idx = name.lastIndexOf('__');
+  if (idx <= 0) return name;
+  return /^\d+$/.test(name.slice(idx + 2)) ? name.slice(0, idx) : name;
+}
+
+function hasStudioSaveEntries(roomFolder: string, paths: Set<string>): boolean {
+  const prefix = `${roomFolder.replace(/\/+$/, '')}/`;
+  for (const p of paths) {
+    if (!p.startsWith(prefix) || !p.endsWith('__data.room')) continue;
+    const rel = p.slice(prefix.length);
+    const parts = rel.split('/');
+    if (parts.length === 3 && parts[0].includes('__') && parts[1].toLowerCase() === 'saves') return true;
+  }
+  return false;
+}
+
+function isImageName(name: string): boolean {
+  return /\.(jpe?g|png|webp|gif)$/i.test(name);
 }
