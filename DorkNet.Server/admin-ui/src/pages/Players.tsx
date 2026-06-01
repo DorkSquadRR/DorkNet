@@ -391,6 +391,7 @@ function GrantsTab({ data, onChanged }: { data: PlayerDetail; onChanged: () => v
   const [currType, setCurrType] = useState(2);
   const [currAmount, setCurrAmount] = useState(1000);
   const [xp, setXp] = useState(1000);
+  const [targetLevel, setTargetLevel] = useState(data.level);
   const [itemId, setItemId] = useState('');
   const [itemQty, setItemQty] = useState(1);
 
@@ -422,6 +423,26 @@ function GrantsTab({ data, onChanged }: { data: PlayerDetail; onChanged: () => v
           onClick={() => run('XP', () => api(`/players/${data.id}/xp`, { method: 'POST', body: { Amount: xp, Reason: 'admin_grant' } }))}
           className="btn-primary text-xs"
         >Grant XP</button>
+      </div>
+
+      <div className="card !p-4">
+        <h3 className="text-sm font-semibold text-ink-50 mb-1">Set level</h3>
+        <p className="text-xs text-ink-400 mb-3">Moves XP to the floor for that level.</p>
+        <div className="flex gap-2 mb-2">
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={targetLevel}
+            onChange={e => setTargetLevel(parseInt(e.target.value || '1'))}
+            className="input"
+          />
+        </div>
+        <button
+          onClick={() => run('Level', () => api(`/players/${data.id}/level`, { method: 'POST', body: { Level: targetLevel } }))}
+          disabled={!Number.isFinite(targetLevel) || targetLevel < 1 || targetLevel === data.level}
+          className="btn-primary text-xs"
+        >Set level</button>
       </div>
 
       <div className="card !p-4 md:col-span-2">

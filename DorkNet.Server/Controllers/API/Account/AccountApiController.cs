@@ -128,6 +128,8 @@ public class AccountApiController(
         var name = (displayName ?? value ?? string.Empty).Trim();
         if (name.Length == 0) return BadRequest(new RecNetResult { Success = false, Error = "empty" });
         await playerService.UpdateDisplayNameAsync(p.Id, name);
+        var updated = await playerService.GetByIdAsync(p.Id);
+        if (updated is not null) await notifications.AccountChanged(updated);
         return Ok(new RecNetResult { Success = true, Error = string.Empty });
     }
 
@@ -153,6 +155,7 @@ public class AccountApiController(
         if (taken) return Ok(new RecNetResult { Success = false, Error = "username_taken" });
         p.Username = newName;
         await db.SaveChangesAsync();
+        await notifications.AccountChanged(p);
         return Ok(new RecNetResult { Success = true, Error = string.Empty });
     }
 
@@ -222,42 +225,8 @@ public class AccountApiController(
             "[api-account] profile image set: player={PlayerId} -> {Name}",
             player.Id,
             player.ProfileImageName ?? "<cleared>");
-        await NotifyAccountImageChangedAsync(player);
+        await notifications.AccountChanged(player);
         return Ok(new RecNetResult { Success = true, Error = string.Empty });
-    }
-
-    private Task NotifyAccountImageChangedAsync(PlayerEntity player)
-    {
-        var account = new RecNetAccount
-        {
-            AccountId = (int)player.Id,
-            RawUsername = player.Username,
-            Username = player.Username,
-            DisplayName = player.DisplayName ?? player.Username,
-            ProfileImage = player.ProfileImageName ?? string.Empty,
-            TreatAsJunior = player.IsJunior,
-            HasBirthday = true,
-            Platforms = 1,
-        };
-        var selfAccount = new RecNetSelfAccount
-        {
-            AccountId = account.AccountId,
-            RawUsername = account.RawUsername,
-            Username = account.Username,
-            DisplayName = account.DisplayName,
-            ProfileImage = account.ProfileImage,
-            TreatAsJunior = account.TreatAsJunior,
-            HasBirthday = account.HasBirthday,
-            Platforms = account.Platforms,
-            Email = player.Email ?? string.Empty,
-            Phone = player.Phone ?? string.Empty,
-            Birthday = player.Birthday,
-            JuniorState = player.IsJunior ? 1 : 0,
-            ParentAccountId = null,
-        };
-        return Task.WhenAll(
-            notifications.NotifyTypedAsync(player.Id, "AccountUpdate", account),
-            notifications.NotifyTypedAsync(player.Id, "SelfAccountUpdate", selfAccount));
     }
 
     [HttpGet("api/account/v1/namegen")]

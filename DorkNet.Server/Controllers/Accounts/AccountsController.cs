@@ -393,17 +393,8 @@ public class AccountsController(
         logger.LogInformation(
             "[accounts] profile image set: player={PlayerId} → {Name}",
             player.Id, player.ProfileImageName ?? "<cleared>");
-        await NotifyAccountImageChangedAsync(player);
+        await notifications.AccountChanged(player);
         return Ok(new RecNetResult { Success = true, Error = string.Empty });
-    }
-
-    private Task NotifyAccountImageChangedAsync(PlayerEntity player)
-    {
-        var account = BuildAccount(player.Id, player.Username, player.DisplayName, player.ProfileImageName);
-        var selfAccount = BuildSelfAccount(player.Id, player.Username, player.DisplayName, player.ProfileImageName);
-        return Task.WhenAll(
-            notifications.NotifyTypedAsync(player.Id, "AccountUpdate", account),
-            notifications.NotifyTypedAsync(player.Id, "SelfAccountUpdate", selfAccount));
     }
 
     private static int AgeYears(DateTime birthday)
@@ -440,6 +431,7 @@ public class AccountsController(
         if (player is null) return Unauthorized();
         await playerService.UpdateUsernameAsync(player.Id, username.Trim());
         var updated = await playerService.GetByIdAsync(player.Id);
+        if (updated is not null) await notifications.AccountChanged(updated);
         return Ok(new
         {
             success = true,
@@ -468,6 +460,8 @@ public class AccountsController(
         var player = await GetCurrentPlayerAsync();
         if (player is null) return Unauthorized();
         await playerService.UpdateDisplayNameAsync(player.Id, displayName.Trim());
+        var updated = await playerService.GetByIdAsync(player.Id);
+        if (updated is not null) await notifications.AccountChanged(updated);
         return Ok(new { success = true, error = "" });
     }
 

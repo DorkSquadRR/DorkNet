@@ -351,12 +351,31 @@ public class CdnController(
         }
         if (s3Bytes is { Length: > 0 })
         {
+            var overlaidRoomRoleData = false;
+            if (await ShouldOverlayRroRoomRoleDataAsync(fileName))
+            {
+                try
+                {
+                    s3Bytes = roomDataBlob.OverlayAllPermsRoleData(s3Bytes);
+                    overlaidRoomRoleData = true;
+                    logger.LogInformation("[cdn] overlaid RRO room-role permissions host={Host} file={File} bytes={Bytes}",
+                        Request.Host.Host, fileName, s3Bytes.Length);
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning(ex, "[cdn] failed to overlay RRO room-role permissions for {File}; serving original blob",
+                        fileName);
+                }
+            }
+
             logger.LogInformation("[cdn] s3 hit host={Host} file={File} bytes={Bytes}",
                 Request.Host.Host, fileName, s3Bytes.Length);
             // Allow CF edge to cache for an hour. RoomDataBlobs are
             // content-addressed by hash so the same BlobName never
             // serves different bytes — safe to cache aggressively.
-            Response.Headers.CacheControl = "public, max-age=3600";
+            Response.Headers.CacheControl = overlaidRoomRoleData
+                ? "public, max-age=60"
+                : "public, max-age=3600";
             signatures.AddContentSignature(Response, s3Bytes);
             return new FileContentResult(s3Bytes, MimeFromName(fileName));
         }
@@ -379,6 +398,22 @@ public class CdnController(
         var fallbackBlob = roomDataBlob.GetDefaultBlob();
         signatures.AddContentSignature(Response, fallbackBlob);
         return new FileContentResult(fallbackBlob, "application/octet-stream");
+    }
+
+    private async Task<bool> ShouldOverlayRroRoomRoleDataAsync(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName)) return false;
+
+        if (await db.Rooms.AsNoTracking().AnyAsync(r =>
+                r.IsAGRoom && r.CurrentDataBlobName == fileName))
+            return true;
+
+        return await (
+            from scene in db.RoomScenes.AsNoTracking()
+            join room in db.Rooms.AsNoTracking() on scene.RoomId equals room.Id
+            where room.IsAGRoom && scene.DataBlobName == fileName
+            select scene.Id
+        ).AnyAsync();
     }
 
     /// <summary>

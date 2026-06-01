@@ -1,5 +1,7 @@
 using DorkNet.Models.Notification;
 using DorkNet.Server.Controllers.Match;
+using DorkNet.Models.Auth;
+using DorkNet.Server.Data.Entities;
 using DorkNet.Server.Hubs;
 using Microsoft.AspNetCore.SignalR;
 using System.Text.Json;
@@ -156,6 +158,48 @@ public class NotificationService(
                 "[notify] failed to send typed notification {Type} to player {PlayerId}",
                 notificationType, playerId);
         }
+    }
+
+    /// <summary>Push fresh account payloads to the affected player's
+    /// watch. The 2020 client caches Account/SelfAccount objects in memory;
+    /// without this, username and display-name edits persist server-side
+    /// but the current session keeps rendering the stale cached names until
+    /// a full relog rebuilds the account cache.</summary>
+    public Task AccountChanged(PlayerEntity player)
+    {
+        var account = new RecNetAccount
+        {
+            AccountId = (int)player.Id,
+            RawUsername = player.Username,
+            Username = player.Username,
+            DisplayName = string.IsNullOrWhiteSpace(player.DisplayName) ? player.Username : player.DisplayName,
+            ProfileImage = player.ProfileImageName ?? string.Empty,
+            TreatAsJunior = player.IsJunior,
+            HasBirthday = true,
+            Platforms = 1,
+            CreatedAt = player.CreatedAt,
+        };
+        var selfAccount = new RecNetSelfAccount
+        {
+            AccountId = account.AccountId,
+            RawUsername = account.RawUsername,
+            Username = account.Username,
+            DisplayName = account.DisplayName,
+            ProfileImage = account.ProfileImage,
+            TreatAsJunior = account.TreatAsJunior,
+            HasBirthday = account.HasBirthday,
+            Platforms = account.Platforms,
+            CreatedAt = account.CreatedAt,
+            Email = player.Email ?? string.Empty,
+            Phone = player.Phone ?? string.Empty,
+            Birthday = player.Birthday ?? new DateTime(2000, 1, 1),
+            JuniorState = player.IsJunior ? 1 : 0,
+            ParentAccountId = null,
+        };
+
+        return Task.WhenAll(
+            NotifyAsync(player.Id, PushNotificationId.SubscriptionUpdateProfile, account),
+            NotifyTypedAsync(player.Id, "SelfAccountUpdate", selfAccount));
     }
 
     /// <summary>Push a notification to every currently-connected

@@ -30,10 +30,28 @@ public class RoomDataBlobService
     /// startup beats rebuilding on every download request.
     /// </summary>
     private readonly byte[] _allPermsBlob = BuildAllPermsBlob();
+    private readonly RoomRoleCollectionData _allPermsRoleData = BuildAllPermsRoleData();
 
     public byte[] GetDefaultBlob() => _allPermsBlob;
 
+    public byte[] OverlayAllPermsRoleData(byte[] existingBlob)
+    {
+        var msg = PersistedRoomData.Parser.ParseFrom(existingBlob);
+        msg.RoomRoleData = _allPermsRoleData.Clone();
+        return msg.ToByteArray();
+    }
+
     private static byte[] BuildAllPermsBlob()
+    {
+        var msg = new PersistedRoomData
+        {
+            RoomRoleData = BuildAllPermsRoleData(),
+        };
+
+        return msg.ToByteArray();
+    }
+
+    private static RoomRoleCollectionData BuildAllPermsRoleData()
     {
         // OverridableBoolData(overrides=true, inner_value=true) — used for
         // every Can* field on the role.
@@ -101,11 +119,6 @@ public class RoomDataBlobService
         var collection = new RoomRoleCollectionData();
         collection.RoomRoles.Add(role);
 
-        var msg = new PersistedRoomData
-        {
-            RoomRoleData = collection,
-        };
-
-        return msg.ToByteArray();
+        return collection;
     }
 }

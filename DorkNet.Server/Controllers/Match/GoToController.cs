@@ -586,9 +586,11 @@ public class GoToController(
     /// <summary>POST <c>/goto/player/{playerId}</c> — join the room
     /// the target player is currently in.
     ///
-    /// For PUBLIC rooms: mirror the target's room name and rebuild a
-    /// fresh RoomInstance (the caller may end up in a different
-    /// matchmade instance, which is fine for public rooms).
+    /// For PUBLIC rooms: mirror the target's live RoomInstance. The
+    /// 2020.12 client reconciles joined players against the exact
+    /// roomInstanceId/photonRoomId pair it got from matchmaking; rebuilding
+    /// a fresh instance here can leave the caller in a different Photon
+    /// shard than the target and null-ref during the follow-join callback.
     ///
     /// For PRIVATE rooms: this route must NOT bypass the invite list.
     /// Earlier we mirrored the target's RoomInstance verbatim under
@@ -631,19 +633,48 @@ public class GoToController(
             }
             // Allowed — mirror the target's RoomInstance so we land
             // in the same Photon match.
-            resp = new MatchmakingResponseDto { ErrorCode = 0, RoomInstance = theirRoom };
+            resp = new MatchmakingResponseDto
+            {
+                ErrorCode = 0,
+                RoomInstance = CloneRoomInstance(theirRoom),
+            };
         }
         else
         {
-            var roomName = await db.Rooms
-                .Where(r => r.Id == theirRoom.RoomId)
-                .Select(r => r.Name)
-                .FirstOrDefaultAsync();
-            resp = await BuildResponseAsync(roomName ?? "DormRoom");
+            // Public follow-joins still need to land in the target's
+            // specific live instance, not just the same room name. This
+            // preserves sub-room and Photon shard identity for PUN's
+            // player-enter reconciliation.
+            resp = new MatchmakingResponseDto
+            {
+                ErrorCode = 0,
+                RoomInstance = CloneRoomInstance(theirRoom),
+            };
         }
         await RecordResponseAsync(resp);
         return Ok(resp);
     }
+
+    private static RoomInstanceDto CloneRoomInstance(RoomInstanceDto room) => new()
+    {
+        RoomInstanceId = room.RoomInstanceId,
+        RoomId = room.RoomId,
+        SubRoomId = room.SubRoomId,
+        Location = room.Location,
+        PhotonRegionId = room.PhotonRegionId,
+        PhotonRoomId = room.PhotonRoomId,
+        MaxCapacity = room.MaxCapacity,
+        IsFull = room.IsFull,
+        IsPrivate = room.IsPrivate,
+        IsInProgress = room.IsInProgress,
+        DataBlob = room.DataBlob,
+        EventId = room.EventId,
+        Name = room.Name,
+        RoomInstanceType = room.RoomInstanceType,
+        ClubId = room.ClubId,
+        RoomCode = room.RoomCode,
+        EncryptVoiceChat = room.EncryptVoiceChat,
+    };
 
     /// <summary>Record the just-built response against the bearer-token
     /// player so the next heartbeat reflects the room they joined.

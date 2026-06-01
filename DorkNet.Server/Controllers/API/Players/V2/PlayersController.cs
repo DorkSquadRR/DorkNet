@@ -47,7 +47,7 @@ public class PlayersController(PlayerService playerService, NotificationService 
         if (!updated) return NotFound();
 
         var player = await playerService.GetByIdAsync(CurrentPlayerId);
-        await notificationService.NotifyAsync(CurrentPlayerId, Models.Notification.PushNotificationId.SubscriptionUpdateProfile, PlayerService.ToProfile(player!));
+        await notificationService.AccountChanged(player!);
         return Ok(PlayerService.ToProfile(player!));
     }
 
@@ -63,6 +63,7 @@ public class PlayersController(PlayerService playerService, NotificationService 
             await playerService.UpdateBioAsync(id, req.Bio);
 
         var player = await playerService.GetByIdAsync(id);
+        await notificationService.AccountChanged(player!);
         return Ok(PlayerService.ToProfile(player!));
     }
 }

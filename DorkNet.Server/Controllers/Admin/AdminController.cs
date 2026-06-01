@@ -1046,6 +1046,7 @@ public class AdminController(
         }
         await LogAsync("room_role_add", "room", id, $"player={body.PlayerId} role={body.Role}");
         await db.SaveChangesAsync();
+        await NotifyRoomRolesChangedAsync(id, body.PlayerId, "AdminRoleGrant");
         return Ok(new { ok = true });
     }
 
@@ -1060,6 +1061,7 @@ public class AdminController(
         db.RoomRoles.Remove(row);
         await LogAsync("room_role_remove", "room", id, $"player={playerId} role={role}");
         await db.SaveChangesAsync();
+        await NotifyRoomRolesChangedAsync(id, playerId, "AdminRoleRevoke");
         return Ok(new { ok = true, deleted = 1 });
     }
 
@@ -1099,7 +1101,42 @@ public class AdminController(
 
         await LogAsync("room_transfer_owner", "room", id, $"from={previousOwner} to={body.NewCreatorPlayerId}");
         await db.SaveChangesAsync();
+        await NotifyRoomRolesChangedAsync(id, previousOwner, "AdminOwnerTransfer");
+        await NotifyRoomRolesChangedAsync(id, body.NewCreatorPlayerId, "AdminOwnerTransfer");
         return Ok(new { ok = true });
+    }
+
+    /// <summary>Push fresh RoomDetails after role/owner mutations. The
+    /// 2020 watch caches RoomDetails, including CoOwners/Moderators/Hosts,
+    /// and role-gated UI reads that cache until Rooms.OnSubscriptionUpdateRoom
+    /// stores a replacement.</summary>
+    private async Task NotifyRoomRolesChangedAsync(long roomId, long changedPlayerId, string reason)
+    {
+        var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
+        if (room is null) return;
+        var scenes = await db.RoomScenes
+            .Where(s => s.RoomId == roomId)
+            .OrderBy(s => s.OrderIndex)
+            .ToListAsync();
+        var roles = await db.RoomRoles
+            .Where(r => r.RoomId == roomId)
+            .ToListAsync();
+
+        var payload = DorkNet.Server.Controllers.API.Rooms.V2.RoomsController
+            .BuildRoomDetails(room, scenes, roles: roles);
+
+        var recipients = onlinePresence.OnlinePlayerIds()
+            .Where(pid => playerPresence.GetRoom(pid)?.RoomId == roomId)
+            .Append(changedPlayerId)
+            .Distinct()
+            .ToList();
+
+        adminLogger.LogInformation(
+            "[admin-room-role] pushing room details room={RoomId} reason={Reason} changedPlayer={PlayerId} recipients={RecipientCount}",
+            roomId, reason, changedPlayerId, recipients.Count);
+
+        foreach (var pid in recipients)
+            await notifications.NotifyAsync(pid, PushNotificationId.SubscriptionUpdateRoom, payload);
     }
 
     /// <summary>GET <c>api/admin/v1/rooms/{id}/instances</c> — active
@@ -1854,6 +1891,32 @@ public class AdminController(
         return Ok(new { id, level = lvl, xp });
     }
 
+    public sealed record SetLevelRequest(int Level);
+
+    /// <summary>Set a player's level directly from the admin console.
+    /// XP is moved to the minimum value for that level so the next normal
+    /// XP grant does not snap the row back to the curve-derived level.</summary>
+    [HttpPost("players/{id:long}/level")]
+    public async Task<ActionResult> SetLevel(long id, [FromBody] SetLevelRequest body)
+    {
+        var p = await db.Players.FirstOrDefaultAsync(x => x.Id == id);
+        if (p is null) return NotFound();
+
+        var newLevel = Math.Clamp(body.Level, 1, 100);
+        var previous = p.Level;
+        p.Level = newLevel;
+        p.XP = MinimumXpForLevel(newLevel);
+
+        await LogAsync("set_level", "player", id, $"{previous} -> {newLevel}");
+        await db.SaveChangesAsync();
+        await notifications.AccountChanged(p);
+        await notifications.NotifyAsync(id,
+            PushNotificationId.SubscriptionUpdateProfile,
+            new { Reason = "AdminLevelSet", Level = p.Level, XP = p.XP, PreviousLevel = previous });
+
+        return Ok(new { p.Id, p.Level, p.XP });
+    }
+
     /// <summary>Insert one <see cref="CheerEntity"/> row per cheer Type
     /// (0=General, 1=Helpful, 2=GreatHost, 3=Sportsman, 4=Creative,
     /// 5=Credit) so the player has at least one received cheer in every
@@ -1950,6 +2013,7 @@ public class AdminController(
         p.DisplayName = body.DisplayName.Trim();
         await LogAsync("set_display_name", "player", id, p.DisplayName);
         await db.SaveChangesAsync();
+        await notifications.AccountChanged(p);
         return Ok(new { p.Id, p.DisplayName });
     }
 
@@ -1979,7 +2043,14 @@ public class AdminController(
         p.Username = name;
         await LogAsync("set_username", "player", id, $"{previous} -> {name}");
         await db.SaveChangesAsync();
+        await notifications.AccountChanged(p);
         return Ok(new { p.Id, p.Username });
+    }
+
+    private static int MinimumXpForLevel(int level)
+    {
+        var normalized = Math.Max(1, level);
+        return 100 * (normalized - 1) * (normalized - 1);
     }
 
     private sealed class InventoryEntry
