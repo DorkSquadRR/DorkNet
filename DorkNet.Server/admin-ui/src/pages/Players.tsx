@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api, get } from '../lib/api';
 import type { Player, PlayerDetail } from '../lib/types';
 import { absoluteTime, currencyName, num, relativeTime } from '../lib/format';
@@ -11,7 +12,8 @@ import { PlayerAvatar } from '../components/PlayerAvatar';
 import { RefreshCw, Search } from '../components/Icons';
 
 export function Players() {
-  const [query, setQuery] = useState('');
+  const [params] = useSearchParams();
+  const [query, setQuery] = useState(params.get('query') ?? '');
   const [rows, setRows] = useState<Player[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -37,6 +39,11 @@ export function Players() {
   }, []);
 
   useEffect(() => { search(query); }, [query, search]);
+
+  useEffect(() => {
+    const next = params.get('query') ?? '';
+    if (next !== query) setQuery(next);
+  }, [params, query]);
 
   return (
     <div>

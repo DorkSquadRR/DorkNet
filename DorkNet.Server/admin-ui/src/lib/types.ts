@@ -170,12 +170,56 @@ export interface Report {
 }
 
 export interface Stats {
-  players: { total: number; onlineNow: number; bannedNow: number };
+  players: {
+    total: number;
+    onlineNow: number;
+    bannedNow: number;
+    newToday: number;
+    online: Array<{
+      id: number;
+      username: string;
+      displayName: string;
+      level: number;
+      profileImageName: string | null;
+      isAdmin: boolean;
+      isDeveloper: boolean;
+      isCommunityTeam: boolean;
+      isJunior: boolean;
+      isVerified: boolean;
+      bannedUntil: string | null;
+      lastSeenAt: string;
+      currentRoom: null | {
+        roomId: number;
+        name: string;
+        subRoomId: number;
+        roomInstanceId: number;
+        photonRoomId: string;
+        photonRegionId: string;
+        isPrivate: boolean;
+        maxCapacity: number;
+      };
+    }>;
+  };
   rooms: {
     total: number;
+    totalVisits: number;
+    totalCheers: number;
+    activeSessionCount: number;
+    inGamePlayerCount: number;
     topByVisits: Array<{ id: number; name: string; visitCount: number; visitorCount: number; cheerCount: number }>;
+    activeSessions: Array<{
+      id: number;
+      roomId: string;
+      activityLevelId: string;
+      region: string;
+      photonRoomName: string;
+      playerCount: number;
+      maxCapacity: number;
+      createdAt: string;
+    }>;
   };
   inventions: number;
+  photos: { today: number };
   moderation: { openReports: number; activeIpBans: number };
   recentJoins: Array<{ id: number; username: string; createdAt: string }>;
   serverTime: string;

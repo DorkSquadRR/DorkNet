@@ -1680,22 +1680,114 @@ public class AdminController(
     [HttpGet("stats")]
     public async Task<ActionResult> Stats()
     {
+        var now = DateTime.UtcNow;
         var totalPlayers = await db.Players.CountAsync();
         var totalRooms = await db.Rooms.CountAsync();
         var totalInventions = await db.Inventions.CountAsync();
         var openReports = await db.Reports.CountAsync(r => r.ResolvedAt == null);
         var bannedNow = await db.Players.CountAsync(p =>
-            p.BannedUntil != null && p.BannedUntil > DateTime.UtcNow);
+            p.BannedUntil != null && p.BannedUntil > now);
         var activeIpBans = await db.IpBans.CountAsync(b =>
-            b.Until == null || b.Until > DateTime.UtcNow);
+            b.Until == null || b.Until > now);
 
         var online = onlinePresence.OnlinePlayerIds().ToArray();
+        var onlineSet = online.ToHashSet();
+
+        var currentRoomsByPlayer = online
+            .Select(id => new { PlayerId = id, Room = playerPresence.GetRoom(id) })
+            .Where(x => x.Room is not null)
+            .ToDictionary(x => x.PlayerId, x => x.Room!);
+
+        var roomIds = currentRoomsByPlayer.Values.Select(r => r.RoomId).Distinct().ToList();
+        var roomNames = roomIds.Count == 0
+            ? new Dictionary<long, string>()
+            : await db.Rooms
+                .Where(r => roomIds.Contains(r.Id))
+                .Select(r => new { r.Id, r.Name })
+                .ToDictionaryAsync(r => r.Id, r => r.Name);
+
+        var onlinePlayers = await db.Players
+            .Where(p => onlineSet.Contains(p.Id))
+            .OrderBy(p => p.DisplayName)
+            .ThenBy(p => p.Username)
+            .Select(p => new
+            {
+                p.Id,
+                p.Username,
+                p.DisplayName,
+                p.Level,
+                p.ProfileImageName,
+                p.IsAdmin,
+                p.IsDeveloper,
+                p.IsCommunityTeam,
+                p.IsJunior,
+                p.IsVerified,
+                p.BannedUntil,
+                p.LastSeenAt,
+            })
+            .ToListAsync();
+        var onlinePlayerCards = onlinePlayers.Select(p =>
+        {
+            currentRoomsByPlayer.TryGetValue(p.Id, out var room);
+            roomNames.TryGetValue(room?.RoomId ?? 0, out var roomName);
+            return new
+            {
+                p.Id,
+                p.Username,
+                p.DisplayName,
+                p.Level,
+                p.ProfileImageName,
+                p.IsAdmin,
+                p.IsDeveloper,
+                p.IsCommunityTeam,
+                p.IsJunior,
+                p.IsVerified,
+                p.BannedUntil,
+                p.LastSeenAt,
+                CurrentRoom = room is null ? null : new
+                {
+                    room.RoomId,
+                    Name = roomName ?? room.Name,
+                    room.SubRoomId,
+                    room.RoomInstanceId,
+                    room.PhotonRoomId,
+                    room.PhotonRegionId,
+                    room.IsPrivate,
+                    room.MaxCapacity,
+                },
+            };
+        }).ToList();
 
         var topRooms = await db.Rooms
             .OrderByDescending(r => r.VisitCount)
             .Take(10)
             .Select(r => new { r.Id, r.Name, r.VisitCount, r.VisitorCount, r.CheerCount })
             .ToListAsync();
+
+        var activeSessions = await db.GameSessions
+            .Where(s => s.PlayerCount > 0)
+            .OrderByDescending(s => s.PlayerCount)
+            .ThenByDescending(s => s.CreatedAt)
+            .Take(8)
+            .Select(s => new
+            {
+                s.Id,
+                s.RoomId,
+                s.ActivityLevelId,
+                s.Region,
+                s.PhotonRoomName,
+                s.PlayerCount,
+                s.MaxCapacity,
+                s.CreatedAt,
+            })
+            .ToListAsync();
+        var inGamePlayerCount = await db.GameSessions.SumAsync(s => (int?)s.PlayerCount) ?? 0;
+        var activeSessionCount = await db.GameSessions.CountAsync(s => s.PlayerCount > 0);
+        var photosToday = await db.Photos.CountAsync(p =>
+            p.CreatedAt >= now.AddDays(-1) && p.DeletedAt == null);
+        var newPlayersToday = await db.Players.CountAsync(p => p.CreatedAt >= now.AddDays(-1));
+        var totalVisitCount = await db.Rooms.SumAsync(r => (long)r.VisitCount);
+        var totalCheerCount = await db.Rooms.SumAsync(r => (long)r.CheerCount);
 
         var recentJoins = await db.Players
             .OrderByDescending(p => p.CreatedAt)
@@ -1710,16 +1802,28 @@ public class AdminController(
                 Total = totalPlayers,
                 OnlineNow = online.Length,
                 BannedNow = bannedNow,
+                NewToday = newPlayersToday,
+                Online = onlinePlayerCards,
             },
-            Rooms = new { Total = totalRooms, TopByVisits = topRooms },
+            Rooms = new
+            {
+                Total = totalRooms,
+                TotalVisits = totalVisitCount,
+                TotalCheers = totalCheerCount,
+                TopByVisits = topRooms,
+                ActiveSessions = activeSessions,
+                ActiveSessionCount = activeSessionCount,
+                InGamePlayerCount = inGamePlayerCount,
+            },
             Inventions = totalInventions,
+            Photos = new { Today = photosToday },
             Moderation = new
             {
                 OpenReports = openReports,
                 ActiveIpBans = activeIpBans,
             },
             RecentJoins = recentJoins,
-            ServerTime = DateTime.UtcNow,
+            ServerTime = now,
         });
     }
 
