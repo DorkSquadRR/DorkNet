@@ -159,8 +159,8 @@ public class AdminController(
         await LogAsync("ban_player", "player", id, body.Reason ?? "");
         await db.SaveChangesAsync();
 
-        await notifications.NotifyAsync(id, PushNotificationId.ModerationKick,
-            new { Reason = body.Reason ?? "", Until = player.BannedUntil });
+        await notifications.KickPlayerAsync(id, body.Reason ?? "You have been banned.");
+        playerPresence.Clear(id);
 
         return Ok(new { player.Id, player.BannedUntil });
     }
@@ -1269,7 +1269,7 @@ public class AdminController(
         {
             var r = playerPresence.GetRoom(pid);
             if (r is null || r.RoomId != id || r.RoomInstanceId != instanceId) continue;
-            await notifications.NotifyAsync(pid, PushNotificationId.ModerationKick, new { Reason = reason });
+            await notifications.KickPlayerAsync(pid, reason);
             playerPresence.Clear(pid);
             kicked.Add(pid);
         }
@@ -1616,8 +1616,11 @@ public class AdminController(
     [HttpPost("players/{id:long}/kick")]
     public async Task<ActionResult> KickPlayer(long id, [FromBody] KickRequest? body)
     {
-        await notifications.NotifyAsync(id, PushNotificationId.ModerationKick,
-            new { Reason = body?.Reason ?? "" });
+        var reason = string.IsNullOrWhiteSpace(body?.Reason)
+            ? "Kicked by an admin."
+            : body!.Reason!.Trim();
+        await notifications.KickPlayerAsync(id, reason);
+        playerPresence.Clear(id);
         await LogAsync("kick_player", "player", id, body?.Reason ?? "");
         await db.SaveChangesAsync();
         return Ok(new { kicked = id });

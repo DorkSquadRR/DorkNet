@@ -329,14 +329,10 @@ public class NotificationService(
     /// <paramref name="playerId"/> to disconnect via the watch's
     /// ModerationKick flow. Wire path verified against decompilation:
     ///   <c>PushNotificationId.ModerationKick = 22</c> is registered
-    ///   at <c>PlayerReporting.txt:244</c> via the enum-overload, so
-    ///   the wire name resolves to <c>"ModerationKick"</c>.
-    ///   <c>OnModerationKick(Dictionary)</c> at
-    ///   <c>PlayerReporting.txt:1857</c> shows a confirmation dialog
-    ///   then calls <c>LocalModerationKickSelf</c>
-    ///   (<c>PlayerReporting.txt:2647</c>), which queues the
-    ///   disconnect through <c>Core.ShutdownForLogout</c> — the same
-    ///   graceful path the watch uses for real moderator kicks.
+    ///   by <c>LCCEEFHOBEN.OFFLOPLJBBG</c> via the enum overload.
+    ///   <c>LCCEEFHOBEN.KEIAFMLIMFA(Dictionary)</c> reads
+    ///   <c>Msg.Reason</c> as a ModerationBlockDetail object, then
+    ///   calls <c>PODFHPNOHGB</c> / <c>BootLocalPlayerToDormRoom</c>.
     ///
     /// Used by <see cref="Controllers.Match.MatchPlayerController.PlayerLogin"/>
     /// to enforce single-session-per-account: when a second login on
@@ -347,18 +343,11 @@ public class NotificationService(
     /// </summary>
     public Task KickStaleSession(long playerId, string reason) =>
         NotifyAsync(playerId, PushNotificationId.ModerationKick,
-            new
-            {
-                // Field names follow PlayerReporting's wire convention
-                // for moderation-related dialogs; the watch's
-                // OnModerationKick deserializes via Util.GetKeyOrDefault
-                // so missing fields are tolerated, but populating them
-                // makes the dialog read sensibly.
-                Reason = reason,
-                DisplayReason = reason,
-                BannedByPlayerId = 1,         // Coach
-                Source = "session_replaced",
-            });
+            ModerationKickPayload(reason, isBan: false, source: "session_replaced"));
+
+    public Task KickPlayerAsync(long playerId, string reason, bool isBan = false) =>
+        NotifyAsync(playerId, PushNotificationId.ModerationKick,
+            ModerationKickPayload(reason, isBan, source: "admin_kick"));
 
     /// <summary>Push a ModerationKick to a specific set of SignalR
     /// connection ids — used by <see cref="DorkNet.Server.Hubs.NotifyHub.OnConnectedAsync"/>
@@ -371,14 +360,36 @@ public class NotificationService(
     public Task KickConnectionsAsync(IReadOnlyCollection<string> connectionIds, string reason)
     {
         if (connectionIds.Count == 0) return Task.CompletedTask;
-        var payload = Serialize(PushNotificationId.ModerationKick, new
-        {
-            Reason = reason,
-            DisplayReason = reason,
-            BannedByPlayerId = 1,
-            Source = "session_replaced",
-        });
+        var payload = Serialize(PushNotificationId.ModerationKick,
+            ModerationKickPayload(reason, isBan: false, source: "session_replaced"));
         return hub.Clients.Clients(connectionIds).SendAsync(HubMethod, payload);
+    }
+
+    private static object ModerationKickPayload(string reason, bool isBan, string source)
+    {
+        var message = string.IsNullOrWhiteSpace(reason)
+            ? "Kicked to Dormroom"
+            : reason.Trim();
+
+        var blockDetail = new
+        {
+            ReportCategory = 10, // PlayerReporting.ReportCategory.VoteKick
+            Duration = 0,
+            GameSessionId = 0L,
+            Message = message,
+            IsHostKick = true,
+            PlayerIdReporter = 1,
+            IsBan = isBan,
+            VoteKickReason = message,
+        };
+
+        return new
+        {
+            Reason = blockDetail,
+            DisplayReason = message,
+            BannedByPlayerId = 1,
+            Source = source,
+        };
     }
 
     /// <summary>Notify a private-instance owner that someone tried to

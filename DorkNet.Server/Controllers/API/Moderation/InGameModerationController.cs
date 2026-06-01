@@ -136,12 +136,9 @@ public class InGameModerationController(
         foreach (var target in ids)
         {
             logger.LogInformation("[mod] instant-kick by {Caller}: target={Target}", caller, target);
-            // Push a SignalR ModerationKick notification — the watch's
-            // PlayerReporting.OnModerationKick handler boots the player
-            // back to their dorm.
-            await notifications.NotifyAsync(
-                target,
-                Models.Notification.PushNotificationId.ModerationKick);
+            // Push the ModerationKick shape the 2020.12 client expects:
+            // Msg.Reason must be a ModerationBlockDetail object.
+            await notifications.KickPlayerAsync(target, "Instant kick by moderator.");
         }
         return Ok(new { success = true, error = "" });
     }
