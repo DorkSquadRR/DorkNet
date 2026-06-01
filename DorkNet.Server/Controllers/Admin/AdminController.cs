@@ -2582,7 +2582,13 @@ public class AdminController(
         [FromQuery] string? storefront, [FromQuery] string? category,
         [FromQuery] int take = 200, [FromQuery] int skip = 0)
     {
-        take = Math.Clamp(take, 1, 500);
+        // Ceiling raised from 500: the wardrobe + color-variant seed pushes
+        // the live catalog past 800 rows, all under storefront "main". A
+        // 500-row window (ordered Storefront→Category→Price) silently hid
+        // every item that sorted past it — e.g. torso SKUs like the Sea
+        // Captain Contest shirt — so the admin UI couldn't find them even
+        // by search (it filters the fetched page client-side).
+        take = Math.Clamp(take, 1, 5000);
         skip = Math.Max(0, skip);
         IQueryable<StoreItemEntity> q = db.StoreItems;
         if (!string.IsNullOrWhiteSpace(storefront)) q = q.Where(i => i.Storefront == storefront);

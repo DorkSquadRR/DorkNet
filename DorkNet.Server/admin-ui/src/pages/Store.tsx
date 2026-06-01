@@ -69,12 +69,14 @@ export function Store() {
   const [bulkBusy, setBulkBusy] = useState(false);
   const toast = useToast();
 
-  // Server-side pagination is overkill for this dataset (low hundreds
-  // of rows typically); pull a generous slice and filter / sort in the
-  // browser so the storefront/category dropdowns don't trigger network
-  // round-trips on every change.
+  // Pull the whole catalog and filter / sort in the browser so the
+  // storefront/category dropdowns don't trigger network round-trips on
+  // every change. The wardrobe + color-variant seed makes this ~800-1000
+  // rows, so the slice must clear that — a 500 cap previously hid every
+  // item that sorted past row 500 (e.g. torso SKUs like the Sea Captain
+  // Contest shirt).
   const qs = new URLSearchParams();
-  qs.set('take', '500');
+  qs.set('take', '5000');
   const { data, loading, error, refresh } = useApi<StoreItem[]>(`/storeitems?${qs}`);
   const { data: storefrontData } = useApi<StorefrontDefinition[]>('/storefronts');
   const storefronts = storefrontData ?? FALLBACK_STOREFRONTS;

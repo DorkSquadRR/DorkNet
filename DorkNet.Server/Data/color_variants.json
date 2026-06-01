@@ -1774,6 +1774,105 @@
       "mask_guid": "a4e51b6b-fdfd-47dc-9d0e-f26f383e03e9"
     },
     {
+      "swatch_name": "Hat_SeaCaptainDarkDarkGold_Swatch",
+      "swatch_guid": "70112887-dc8d-49d5-96ed-0845204e0b58",
+      "color": "DarkDarkGold",
+      "item_name": "(Hat_SeaCaptain)",
+      "item_guid": "f5c9743f-e77c-42f2-ba63-9843342cbf8e",
+      "item_outfit_type": 0,
+      "mask_guid": "a4e51b6b-fdfd-47dc-9d0e-f26f383e03e9"
+    },
+    {
+      "swatch_name": "Hat_SeaCaptainDarkGold_Swatch",
+      "swatch_guid": "f5403c89-9769-479b-8a05-c71607f9b189",
+      "color": "DarkGold",
+      "item_name": "(Hat_SeaCaptain)",
+      "item_guid": "f5c9743f-e77c-42f2-ba63-9843342cbf8e",
+      "item_outfit_type": 0,
+      "mask_guid": "a4e51b6b-fdfd-47dc-9d0e-f26f383e03e9"
+    },
+    {
+      "swatch_name": "Hat_SeaCaptainDarkSilver_Swatch",
+      "swatch_guid": "36e63797-5a42-4779-a5cc-ef5c2e7d17d4",
+      "color": "DarkSilver",
+      "item_name": "(Hat_SeaCaptain)",
+      "item_guid": "f5c9743f-e77c-42f2-ba63-9843342cbf8e",
+      "item_outfit_type": 0,
+      "mask_guid": "a4e51b6b-fdfd-47dc-9d0e-f26f383e03e9"
+    },
+    {
+      "swatch_name": "Hat_SeaCaptainFushia_Swatch",
+      "swatch_guid": "2738ab5f-8c94-46b3-bac6-4a8111c41c21",
+      "color": "Fushia",
+      "item_name": "(Hat_SeaCaptain)",
+      "item_guid": "f5c9743f-e77c-42f2-ba63-9843342cbf8e",
+      "item_outfit_type": 0,
+      "mask_guid": "a4e51b6b-fdfd-47dc-9d0e-f26f383e03e9"
+    },
+    {
+      "swatch_name": "Torso_SeaCaptainBlue_Swatch",
+      "swatch_guid": "27af51bc-8226-4911-8d47-22d28ea8e378",
+      "color": "Blue",
+      "item_name": "(SeaCaptainTorso)",
+      "item_guid": "0bc6bd1b-8b7e-4945-a1d6-c26b9c043318",
+      "item_outfit_type": 101,
+      "mask_guid": "8ec5de40-73fc-4f09-9bf3-ddf4701107bc"
+    },
+    {
+      "swatch_name": "Torso_SeaCaptainBlueDark_Swatch",
+      "swatch_guid": "7c1aaa7e-503b-46ef-b1c5-0c61a75b916e",
+      "color": "BlueDark",
+      "item_name": "(SeaCaptainTorso)",
+      "item_guid": "0bc6bd1b-8b7e-4945-a1d6-c26b9c043318",
+      "item_outfit_type": 101,
+      "mask_guid": "8ec5de40-73fc-4f09-9bf3-ddf4701107bc"
+    },
+    {
+      "swatch_name": "Torso_SeaCaptainBlueDark2_Swatch",
+      "swatch_guid": "3df5d13b-ba77-4b51-90b2-7a946e4d0be7",
+      "color": "BlueDark2",
+      "item_name": "(SeaCaptainTorso)",
+      "item_guid": "0bc6bd1b-8b7e-4945-a1d6-c26b9c043318",
+      "item_outfit_type": 101,
+      "mask_guid": "8ec5de40-73fc-4f09-9bf3-ddf4701107bc"
+    },
+    {
+      "swatch_name": "Torso_SeaCaptainBlueWhite_Swatch",
+      "swatch_guid": "857fdcd8-704f-43d0-92b9-bca26619b153",
+      "color": "BlueWhite",
+      "item_name": "(SeaCaptainTorso)",
+      "item_guid": "0bc6bd1b-8b7e-4945-a1d6-c26b9c043318",
+      "item_outfit_type": 101,
+      "mask_guid": "8ec5de40-73fc-4f09-9bf3-ddf4701107bc"
+    },
+    {
+      "swatch_name": "Torso_SeaCaptainBlackDark_Swatch",
+      "swatch_guid": "6145292a-9002-41c6-8cd5-43679b6f542f",
+      "color": "BlackDark",
+      "item_name": "(SeaCaptainTorso)",
+      "item_guid": "0bc6bd1b-8b7e-4945-a1d6-c26b9c043318",
+      "item_outfit_type": 101,
+      "mask_guid": "8ec5de40-73fc-4f09-9bf3-ddf4701107bc"
+    },
+    {
+      "swatch_name": "Torso_SeaCaptainDark_Swatch",
+      "swatch_guid": "b9f51861-ad10-4878-a9b1-d849bccf532a",
+      "color": "Dark",
+      "item_name": "(SeaCaptainTorso)",
+      "item_guid": "0bc6bd1b-8b7e-4945-a1d6-c26b9c043318",
+      "item_outfit_type": 101,
+      "mask_guid": "8ec5de40-73fc-4f09-9bf3-ddf4701107bc"
+    },
+    {
+      "swatch_name": "Torso_SeaCaptainWhiteDark_Swatch",
+      "swatch_guid": "b5d62931-e756-4a8a-8f3b-760beba49319",
+      "color": "WhiteDark",
+      "item_name": "(SeaCaptainTorso)",
+      "item_guid": "0bc6bd1b-8b7e-4945-a1d6-c26b9c043318",
+      "item_outfit_type": 101,
+      "mask_guid": "8ec5de40-73fc-4f09-9bf3-ddf4701107bc"
+    },
+    {
       "swatch_name": "LaserTagGlove_Orange_Swatch",
       "swatch_guid": "EC0ttvk6eU2HEMacLAx2Iw",
       "color": "Orange",
