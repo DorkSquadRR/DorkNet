@@ -39,8 +39,19 @@ export interface PlayerDetail extends Player {
 // matches the host's signing key id).
 export function profileImageUrl(name: string | null | undefined, width = 96): string | null {
   if (!name) return null;
-  const apex = typeof window !== 'undefined' && window.location.host.endsWith('localhost') ? 'localhost' : 'rec.net';
-  return `https://img.${apex}/${encodeURIComponent(name)}?width=${width}&cropSquare=1&sig=p1`;
+  const apex = adminApex();
+  const scheme = apex === 'localhost' ? 'http' : 'https';
+  return `${scheme}://img.${apex}/${encodeURIComponent(name)}?width=${width}&cropSquare=1&sig=p1`;
+}
+
+function adminApex(): string {
+  if (typeof window === 'undefined') return 'rec.net';
+
+  const host = window.location.hostname.toLowerCase();
+  if (host === 'localhost' || host.endsWith('.localhost')) return 'localhost';
+
+  const parts = host.split('.');
+  return parts.length > 2 ? parts.slice(1).join('.') : host;
 }
 
 export interface Room {

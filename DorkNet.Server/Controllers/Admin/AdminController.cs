@@ -2318,31 +2318,7 @@ public class AdminController(
         // one that ends up invoking the GiftManager popup path.
         await notifications.NotifyAsync(id,
             PushNotificationId.GiftPackageReceivedImmediate,
-            new
-            {
-                gift.Id,
-                gift.FromPlayerId,
-                gift.AvatarItemType,
-                AvatarItemDesc = gift.AvatarItemDescOrHairDyeDesc,
-                gift.AvatarItemDescOrHairDyeDesc,
-                gift.EquipmentPrefabName,
-                gift.EquipmentModificationGuid,
-                gift.CurrencyType,
-                gift.Currency,
-                gift.Xp,
-                gift.Level,
-                gift.GiftContext,
-                gift.GiftRarity,
-                gift.Message,
-                gift.Platform,
-                gift.PackageMaterial,
-                gift.PackageVariant,
-                gift.Consumed,
-                gift.IsValid,
-                gift.ErrorMessage,
-                gift.SupportsCurrentPlatform,
-                gift.IsGifted,
-            });
+            DorkNet.Server.Controllers.API.Avatar.V2.AvatarGiftsController.ToWire(gift));
 
         return Ok(new { gift.Id, gift.RecipientPlayerId });
     }

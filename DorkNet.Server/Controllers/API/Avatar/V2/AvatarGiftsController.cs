@@ -262,7 +262,7 @@ public class AvatarGiftsController(
     // GiftRarity, GiftContext. Missing any one → KeyNotFoundException
     // surfaces as "Failed to download gifts: Malformed Response" from
     // BootSequence and BLOCKS LOGIN.
-    private static object ToWire(GiftPackageEntity g) => new
+    public static object ToWire(GiftPackageEntity g) => new
     {
         g.Id,
         g.FromPlayerId,
