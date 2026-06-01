@@ -16,6 +16,7 @@ local-releases/
 *.csproj.user
 
 # Local config (NEVER commit)
+.claude/
 appsettings.json
 appsettings.Local.json
 appsettings.Development.json
