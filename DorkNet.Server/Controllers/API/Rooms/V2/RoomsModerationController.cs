@@ -23,6 +23,9 @@ namespace DorkNet.Server.Controllers.API.Rooms.V2;
 [Authorize]
 public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
 {
+    private const int PublicAccessibility = 1;
+    private const long CanUseShareCamPermission = 1L << 18;
+
     private long Me => this.RequireCurrentPlayerId();
 
     private async Task<RoomEntity?> RequireOwnedRoomAsync(long roomId)
@@ -318,6 +321,14 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
             5  => 0x000000FFL,
             _  => 0x0000000FL,
         };
+        // RoomRole.BJICCBAKLAF.CAN_USE_SHARE_CAM = 18 in the
+        // 2020.12 decompile. Public rooms should allow desktop/share
+        // screens without requiring host/mod/co-owner, while private
+        // rooms keep their explicit role gate.
+        if (room?.Accessibility == PublicAccessibility)
+        {
+            permissions |= CanUseShareCamPermission;
+        }
         return Ok(new
         {
             success = true,
