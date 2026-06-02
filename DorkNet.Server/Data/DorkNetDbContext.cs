@@ -610,6 +610,7 @@ public class DorkNetDbContext(DbContextOptions<DorkNetDbContext> options) : DbCo
             e.Property(s => s.WeeklyChallengesJson).HasDefaultValue(string.Empty);
             e.Property(s => s.WeeklyChallengeRewardJson).HasDefaultValue(string.Empty);
             e.Property(s => s.PlayMenuTagsJson).HasDefaultValue(string.Empty);
+            e.Property(s => s.RecCenterDoorsJson).HasDefaultValue(string.Empty);
         });
 
         modelBuilder.Entity<RoomKeyEntity>(e =>

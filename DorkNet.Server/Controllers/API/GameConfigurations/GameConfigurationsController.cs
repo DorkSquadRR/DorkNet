@@ -1,9 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
+using DorkNet.Server.Services;
 
 namespace DorkNet.Server.Controllers.API.GameConfigurations;
 
 [ApiController]
-public class GameConfigurationsController : ControllerBase
+public class GameConfigurationsController(ServerSettingsService serverSettings) : ControllerBase
 {
     // Actual path used by the 2020 build
     [HttpGet("api/gameconfigs/v1/all")]
@@ -11,5 +12,6 @@ public class GameConfigurationsController : ControllerBase
     // Legacy path we originally assumed
     [HttpGet("api/gameconfigurations/v1/all")]
     [HttpGet("api/gameconfigurations/v1")]
-    public ActionResult<List<object>> GetAll() => Ok(new List<object>());
+    public async Task<ActionResult<IReadOnlyList<GameConfigurationSetting>>> GetAll()
+        => Ok(await serverSettings.GetGameConfigurationsAsync());
 }

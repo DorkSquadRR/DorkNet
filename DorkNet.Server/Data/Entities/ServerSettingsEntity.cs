@@ -43,5 +43,10 @@ public class ServerSettingsEntity
     /// the watch without leading # characters.</summary>
     public string PlayMenuTagsJson { get; set; } = string.Empty;
 
+    /// <summary>Admin-managed Rec Center category-door config. The
+    /// 2020.12 client reads this through api/gameconfigs/v1/all as
+    /// Door.{Category}.Title and Door.{Category}.Query entries.</summary>
+    public string RecCenterDoorsJson { get; set; } = string.Empty;
+
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

@@ -8,11 +8,22 @@ import { Empty } from '../components/Empty';
 import { Modal } from '../components/Modal';
 import { useToast } from '../components/Toast';
 import { Confirm } from '../components/Confirm';
-import { RefreshCw, Trash, Upload } from '../components/Icons';
+import { Plus, RefreshCw, Trash, Upload } from '../components/Icons';
 
 interface PlayMenuTagSettings {
   pinnedTags: string[];
   popularTags: string[];
+  updatedAt: string;
+}
+
+interface RecCenterDoorConfig {
+  key: string;
+  title: string;
+  query: string;
+}
+
+interface RecCenterDoorSettings {
+  doors: RecCenterDoorConfig[];
   updatedAt: string;
 }
 
@@ -24,6 +35,12 @@ export function Rooms() {
     error: tagsError,
     refresh: refreshPlayMenuTags,
   } = useApi<PlayMenuTagSettings>('/settings/play-menu-tags');
+  const {
+    data: recCenterDoors,
+    loading: doorsLoading,
+    error: doorsError,
+    refresh: refreshRecCenterDoors,
+  } = useApi<RecCenterDoorSettings>('/settings/rec-center-doors');
   const [filter, setFilter] = useState('');
   const [filterKind, setFilterKind] = useState<'all' | 'original' | 'custom' | 'dorm'>('all');
   const [pendingDelete, setPendingDelete] = useState<Room | null>(null);
@@ -81,6 +98,13 @@ export function Rooms() {
         loading={tagsLoading}
         error={tagsError}
         onSaved={refreshPlayMenuTags}
+      />
+
+      <RecCenterDoorsPanel
+        settings={recCenterDoors}
+        loading={doorsLoading}
+        error={doorsError}
+        onSaved={refreshRecCenterDoors}
       />
 
       <div className="card overflow-hidden">
@@ -186,22 +210,16 @@ function PlayMenuTagsPanel({
   error: string | null;
   onSaved: () => void;
 }) {
-  const [pinnedText, setPinnedText] = useState('');
-  const [popularText, setPopularText] = useState('');
+  const [pinnedTags, setPinnedTags] = useState<string[]>([]);
+  const [popularTags, setPopularTags] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const toast = useToast();
 
   useEffect(() => {
     if (!tags) return;
-    setPinnedText(tags.pinnedTags.join('\n'));
-    setPopularText(tags.popularTags.join('\n'));
+    setPinnedTags(tags.pinnedTags);
+    setPopularTags(tags.popularTags);
   }, [tags]);
-
-  const parseTags = (text: string) =>
-    text
-      .split(/[\n,]+/)
-      .map(t => t.trim().replace(/^#+/, '').toLowerCase())
-      .filter(Boolean);
 
   const save = async (reset = false) => {
     setBusy(true);
@@ -210,7 +228,7 @@ function PlayMenuTagsPanel({
         method: 'POST',
         body: reset
           ? { PinnedTags: [], PopularTags: [] }
-          : { PinnedTags: parseTags(pinnedText), PopularTags: parseTags(popularText) },
+          : { PinnedTags: pinnedTags, PopularTags: popularTags },
       });
       toast.push(reset ? 'Play menu tags reset.' : 'Play menu tags saved.', 'success');
       onSaved();
@@ -227,7 +245,7 @@ function PlayMenuTagsPanel({
         <div>
           <h2 className="text-sm font-semibold text-ink-50">Play menu tags</h2>
           <p className="mt-1 text-xs text-ink-400">
-            Filter chips shown in the watch Play menu. Use one tag per line or commas; leave off the #.
+            Filter chips shown in the watch Play menu.
           </p>
           {tags && (
             <p className="mt-1 text-[11px] text-ink-500">
@@ -249,24 +267,220 @@ function PlayMenuTagsPanel({
       {loading && !tags && <div className="mt-3 text-xs text-ink-400">Loading tags...</div>}
       {tags && (
         <div className="mt-4 grid gap-3 md:grid-cols-2">
-          <label className="block">
-            <span className="label">Pinned tags</span>
-            <textarea
-              value={pinnedText}
-              onChange={e => setPinnedText(e.target.value)}
-              className="input mt-1 min-h-36 font-mono text-xs"
-            />
-          </label>
-          <label className="block">
-            <span className="label">Popular tags</span>
-            <textarea
-              value={popularText}
-              onChange={e => setPopularText(e.target.value)}
-              className="input mt-1 min-h-36 font-mono text-xs"
-            />
-          </label>
+          <TagListEditor
+            label="Pinned tags"
+            tags={pinnedTags}
+            onChange={setPinnedTags}
+            max={16}
+          />
+          <TagListEditor
+            label="Popular tags"
+            tags={popularTags}
+            onChange={setPopularTags}
+            max={32}
+          />
         </div>
       )}
+    </div>
+  );
+}
+
+function RecCenterDoorsPanel({
+  settings,
+  loading,
+  error,
+  onSaved,
+}: {
+  settings: RecCenterDoorSettings | null;
+  loading: boolean;
+  error: string | null;
+  onSaved: () => void;
+}) {
+  const [doors, setDoors] = useState<RecCenterDoorConfig[]>([]);
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+
+  useEffect(() => {
+    if (!settings) return;
+    setDoors(settings.doors);
+  }, [settings]);
+
+  const updateDoor = (index: number, patch: Partial<RecCenterDoorConfig>) => {
+    setDoors(current => current.map((door, i) => i === index ? { ...door, ...patch } : door));
+  };
+
+  const removeDoor = (index: number) => {
+    setDoors(current => current.filter((_, i) => i !== index));
+  };
+
+  const addDoor = () => {
+    setDoors(current => [...current, { key: 'New', title: 'New', query: '#tag' }]);
+  };
+
+  const save = async (reset = false) => {
+    setBusy(true);
+    try {
+      await api<RecCenterDoorSettings>('/settings/rec-center-doors', {
+        method: 'POST',
+        body: reset ? { Doors: [] } : { Doors: doors },
+      });
+      toast.push(reset ? 'Rec Center doors reset.' : 'Rec Center doors saved.', 'success');
+      onSaved();
+    } catch (e) {
+      toast.push((e as Error).message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card !p-4 mb-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-ink-50">Rec Center doors</h2>
+          <p className="mt-1 text-xs text-ink-400">
+            Door titles and tag queries served through the 2020 gameconfig endpoint.
+          </p>
+          {settings && (
+            <p className="mt-1 text-[11px] text-ink-500">
+              Last changed {new Date(settings.updatedAt).toLocaleString()}.
+            </p>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <button onClick={addDoor} disabled={busy || loading} className="btn-secondary text-xs">
+            <Plus /> Add
+          </button>
+          <button onClick={() => save(true)} disabled={busy || loading} className="btn-secondary text-xs">
+            Defaults
+          </button>
+          <button onClick={() => save(false)} disabled={busy || loading} className="btn-primary text-xs">
+            {busy ? 'Saving...' : 'Save doors'}
+          </button>
+        </div>
+      </div>
+
+      {error && <div className="mt-3 text-sm text-danger">{error}</div>}
+      {loading && !settings && <div className="mt-3 text-xs text-ink-400">Loading Rec Center doors...</div>}
+      {settings && (
+        <div className="mt-4 table-scroll">
+          <table className="w-full min-w-[760px] text-sm">
+            <thead className="text-[11px] uppercase tracking-wider text-ink-400 bg-ink-900/50 border-y border-ink-800">
+              <tr>
+                <th className="text-left font-medium px-3 py-2">Key</th>
+                <th className="text-left font-medium px-3 py-2">Title</th>
+                <th className="text-left font-medium px-3 py-2">Query tags</th>
+                <th className="w-12" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-ink-800">
+              {doors.map((door, index) => (
+                <tr key={`${door.key}-${index}`}>
+                  <td className="px-3 py-2 align-top">
+                    <input
+                      value={door.key}
+                      onChange={e => updateDoor(index, { key: e.target.value })}
+                      className="input font-mono text-xs"
+                      placeholder="Shooters"
+                    />
+                    <div className="mt-1 text-[11px] text-ink-500">Door.{door.key || 'Key'}.*</div>
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    <input
+                      value={door.title}
+                      onChange={e => updateDoor(index, { title: e.target.value })}
+                      className="input"
+                      placeholder="Shooters"
+                    />
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    <input
+                      value={door.query}
+                      onChange={e => updateDoor(index, { query: e.target.value })}
+                      className="input font-mono text-xs"
+                      placeholder="#paintball|#lasertag"
+                    />
+                  </td>
+                  <td className="px-3 py-2 align-top text-right">
+                    <button
+                      onClick={() => removeDoor(index)}
+                      className="btn-ghost text-xs text-danger"
+                      title="Remove door"
+                    >
+                      <Trash />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TagListEditor({
+  label,
+  tags,
+  onChange,
+  max,
+}: {
+  label: string;
+  tags: string[];
+  onChange: (tags: string[]) => void;
+  max: number;
+}) {
+  const [draft, setDraft] = useState('');
+
+  const normalize = (value: string) =>
+    value.trim().replace(/^#+/, '').toLowerCase();
+
+  const add = () => {
+    const next = normalize(draft);
+    if (!next || tags.includes(next) || tags.length >= max) return;
+    onChange([...tags, next]);
+    setDraft('');
+  };
+
+  const remove = (tag: string) => {
+    onChange(tags.filter(t => t !== tag));
+  };
+
+  return (
+    <div className="rounded-lg border border-ink-800 bg-ink-950/30 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="label">{label}</span>
+        <span className="text-[11px] text-ink-500">{tags.length}/{max}</span>
+      </div>
+      <div className="mt-2 flex gap-2">
+        <input
+          value={draft}
+          onChange={e => setDraft(e.target.value)}
+          onKeyDown={e => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              add();
+            }
+          }}
+          className="input font-mono text-xs"
+          placeholder="paintball"
+        />
+        <button onClick={add} disabled={!draft.trim() || tags.length >= max} className="btn-secondary text-xs">
+          <Plus /> Add
+        </button>
+      </div>
+      <div className="mt-3 flex min-h-20 flex-wrap content-start gap-2">
+        {tags.map(tag => (
+          <span key={tag} className="inline-flex items-center gap-1 rounded-md border border-ink-700 bg-ink-900 px-2 py-1 text-xs text-ink-100">
+            <span className="font-mono">#{tag}</span>
+            <button onClick={() => remove(tag)} className="text-ink-500 hover:text-danger" title={`Remove ${tag}`}>
+              ×
+            </button>
+          </span>
+        ))}
+        {tags.length === 0 && <span className="text-xs text-ink-500">No tags set. Defaults will be used on save.</span>}
+      </div>
     </div>
   );
 }

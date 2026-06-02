@@ -1514,6 +1514,23 @@ public class AdminController(
         return Ok(tags);
     }
 
+    [HttpGet("settings/rec-center-doors")]
+    public async Task<ActionResult> GetRecCenterDoors()
+        => Ok(await serverSettings.GetRecCenterDoorsAsync());
+
+    public sealed record RecCenterDoorsRequest(
+        List<RecCenterDoorConfig>? Doors);
+
+    [HttpPost("settings/rec-center-doors")]
+    public async Task<ActionResult> SetRecCenterDoors([FromBody] RecCenterDoorsRequest body)
+    {
+        var doors = await serverSettings.SetRecCenterDoorsAsync(body.Doors ?? []);
+        await LogAsync("rec_center_doors_updated", "system", 0,
+            string.Join(";", doors.Doors.Select(d => $"{d.Key}:{d.Query}")));
+        await db.SaveChangesAsync();
+        return Ok(doors);
+    }
+
     // ── Signup codes ─────────────────────────────────────────────────────
 
     /// <summary>GET <c>api/admin/v1/signup-codes</c> — every issued code

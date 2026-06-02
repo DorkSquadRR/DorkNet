@@ -60,6 +60,18 @@ public class ServerSettingsService(DorkNetDbContext db)
         return ToPlayMenuTags(row);
     }
 
+    public async Task<RecCenterDoorSettings> GetRecCenterDoorsAsync()
+    {
+        var row = await GetAsync();
+        return ToRecCenterDoors(row);
+    }
+
+    public async Task<IReadOnlyList<GameConfigurationSetting>> GetGameConfigurationsAsync()
+    {
+        var doors = await GetRecCenterDoorsAsync();
+        return ToGameConfigurations(doors);
+    }
+
     public async Task<PlayMenuTagSettings> SetPlayMenuTagsAsync(
         IReadOnlyList<string> pinned,
         IReadOnlyList<string> popular)
@@ -67,6 +79,17 @@ public class ServerSettingsService(DorkNetDbContext db)
         var normalized = NormalizePlayMenuTags(pinned, popular);
         var existing = await GetTrackedRowAsync();
         existing.PlayMenuTagsJson = JsonSerializer.Serialize(normalized, JsonOptions);
+        existing.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return normalized with { UpdatedAt = existing.UpdatedAt };
+    }
+
+    public async Task<RecCenterDoorSettings> SetRecCenterDoorsAsync(
+        IReadOnlyList<RecCenterDoorConfig> doors)
+    {
+        var normalized = NormalizeRecCenterDoors(doors);
+        var existing = await GetTrackedRowAsync();
+        existing.RecCenterDoorsJson = JsonSerializer.Serialize(normalized, JsonOptions);
         existing.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
         return normalized with { UpdatedAt = existing.UpdatedAt };
@@ -161,6 +184,29 @@ public class ServerSettingsService(DorkNetDbContext db)
         }
 
         return DefaultPlayMenuTags() with { UpdatedAt = row.UpdatedAt };
+    }
+
+    private static RecCenterDoorSettings ToRecCenterDoors(ServerSettingsEntity row)
+    {
+        if (!string.IsNullOrWhiteSpace(row.RecCenterDoorsJson))
+        {
+            try
+            {
+                var parsed = JsonSerializer.Deserialize<RecCenterDoorSettings>(
+                    row.RecCenterDoorsJson,
+                    JsonOptions);
+                if (parsed is not null)
+                    return NormalizeRecCenterDoors(parsed.Doors)
+                        with { UpdatedAt = row.UpdatedAt };
+            }
+            catch
+            {
+                // Bad settings should not break Rec Center startup; admins
+                // can overwrite them from the SPA.
+            }
+        }
+
+        return DefaultRecCenterDoors() with { UpdatedAt = row.UpdatedAt };
     }
 
     private static List<WeeklyChallengeTemplate> NormalizeWeeklyChallenges(
@@ -265,6 +311,42 @@ public class ServerSettingsService(DorkNetDbContext db)
             ],
             UpdatedAt: DateTime.UtcNow);
 
+    public static RecCenterDoorSettings DefaultRecCenterDoors() =>
+        new(
+            Doors:
+            [
+                new("Shooters", "Shooters", "#paintball|#lasertag|#recroyale"),
+                new("Creative", "Creative", "#creative|#makerpen|#template"),
+                new("Quests", "Quests", "#quest"),
+                new("Sports", "Sports", "#sport"),
+                new("Featured", "Featured", "#featured|#recroomoriginal"),
+            ],
+            UpdatedAt: DateTime.UtcNow);
+
+    public static IReadOnlyList<GameConfigurationSetting> ToGameConfigurations(
+        RecCenterDoorSettings doors)
+    {
+        var rows = new List<GameConfigurationSetting>();
+        foreach (var door in NormalizeRecCenterDoors(doors.Doors).Doors)
+        {
+            rows.Add(new($"Door.{door.Key}.Title", door.Title));
+            rows.Add(new($"Door.{door.Key}.Query", door.Query));
+        }
+
+        rows.AddRange([
+            new("Rewards.UseRewardSelection", "false"),
+            new("RoomDetails.PhotoRollEnabled", "false"),
+            new("SynchronizedField.RemoveDefaultEntries", "false"),
+            new("Rendering.DisableSrpBatcher", "false"),
+            new("splitTestSoftOverrides", "{}"),
+            new("splitTestHardOverrides", "{}"),
+            new("splitTestSegmentProbabilities", "{}"),
+            new("loadingNetworkTimeout", "30"),
+            new("runningNetworkTimeout", "30"),
+        ]);
+        return rows;
+    }
+
     private static PlayMenuTagSettings NormalizePlayMenuTags(
         IReadOnlyList<string> pinned,
         IReadOnlyList<string> popular)
@@ -287,6 +369,50 @@ public class ServerSettingsService(DorkNetDbContext db)
         return new PlayMenuTagSettings(
             pinnedTags.Count > 0 ? pinnedTags : defaults.PinnedTags,
             popularTags.Count > 0 ? popularTags : defaults.PopularTags,
+            DateTime.UtcNow);
+    }
+
+    private static RecCenterDoorSettings NormalizeRecCenterDoors(
+        IReadOnlyList<RecCenterDoorConfig> doors)
+    {
+        static string NormalizeKey(string value)
+        {
+            var clean = new string((value ?? string.Empty)
+                .Where(char.IsLetterOrDigit)
+                .ToArray());
+            return string.IsNullOrWhiteSpace(clean) ? string.Empty : clean;
+        }
+
+        static string NormalizeQuery(string value)
+        {
+            var tags = (value ?? string.Empty)
+                .Split(['|', ',', '\n', '\r', ' ', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(t => t.Trim().TrimStart('#').ToLowerInvariant())
+                .Where(t => t.Length > 0)
+                .Where(t => t.All(c => char.IsLetterOrDigit(c) || c is '-' or '_'))
+                .Select(t => $"#{t}")
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(12)
+                .ToList();
+            return string.Join("|", tags);
+        }
+
+        var normalized = doors
+            .Select(d =>
+            {
+                var key = NormalizeKey(d.Key);
+                var title = string.IsNullOrWhiteSpace(d.Title) ? key : d.Title.Trim();
+                var query = NormalizeQuery(d.Query);
+                return new RecCenterDoorConfig(key, title, query);
+            })
+            .Where(d => d.Key.Length > 0 && d.Query.Length > 0)
+            .GroupBy(d => d.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.First())
+            .Take(8)
+            .ToList();
+
+        return new RecCenterDoorSettings(
+            normalized.Count > 0 ? normalized : DefaultRecCenterDoors().Doors,
             DateTime.UtcNow);
     }
 }
@@ -320,3 +446,18 @@ public sealed record PlayMenuTagSettings(
     List<string> PinnedTags,
     List<string> PopularTags,
     DateTime UpdatedAt);
+
+public sealed record RecCenterDoorSettings(
+    List<RecCenterDoorConfig> Doors,
+    DateTime UpdatedAt);
+
+public sealed record RecCenterDoorConfig(
+    string Key,
+    string Title,
+    string Query);
+
+public sealed record GameConfigurationSetting(
+    string Key,
+    string Value,
+    DateTime? StartTime = null,
+    DateTime? EndTime = null);

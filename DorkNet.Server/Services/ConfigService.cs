@@ -45,15 +45,15 @@ public class ConfigService(IConfiguration config, DomainConfig domain)
                 // config lookups. Missing values leave the door browser
                 // and door-specific return spawns without a category.
                 ["Door.Shooters.Title"] = "Shooters",
-                ["Door.Shooters.Query"] = "#paintball,#lasertag,#recroyale",
+                ["Door.Shooters.Query"] = "#paintball|#lasertag|#recroyale",
                 ["Door.Creative.Title"] = "Creative",
-                ["Door.Creative.Query"] = "#creative,#makerpen,#template",
+                ["Door.Creative.Query"] = "#creative|#makerpen|#template",
                 ["Door.Quests.Title"]   = "Quests",
                 ["Door.Quests.Query"]   = "#quest",
                 ["Door.Sports.Title"]   = "Sports",
                 ["Door.Sports.Query"]   = "#sport",
                 ["Door.Featured.Title"] = "Featured",
-                ["Door.Featured.Query"] = "#featured",
+                ["Door.Featured.Query"] = "#featured|#recroomoriginal",
             },
         };
     }
