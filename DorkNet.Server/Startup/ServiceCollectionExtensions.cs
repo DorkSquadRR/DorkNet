@@ -148,6 +148,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<NotificationService>();
         services.AddSingleton<OrphanAccountTracker>();
         services.AddSingleton<PlayerPresenceService>();
+        services.AddSingleton<JoinTimeoutService>();
         services.AddSingleton<OnlinePresenceService>();
         services.AddSingleton<PlayerLogService>();
         // S3-compatible object storage (Garage in production, MinIO/disk in dev)

@@ -36,6 +36,7 @@ public class GoToController(
     RoomService rooms,
     DorkNet.Server.Data.DorkNetDbContext db,
     NotificationService notifications,
+    JoinTimeoutService joinTimeouts,
     ILogger<GoToController> logger) : ControllerBase
 {
     [HttpPost("/goto/room/{roomName}")]
@@ -687,8 +688,10 @@ public class GoToController(
     private async Task RecordResponseAsync(MatchmakingResponseDto response)
     {
         if (this.CurrentPlayerId() is not long playerId) return;
+        if (response.RoomInstance is null) return;
 
         presence.SetRoom(playerId, response.RoomInstance);
+        joinTimeouts.MarkPending(playerId, response.RoomInstance);
 
         // Real visit tracking: upsert the per-(room, player) row so
         // we get distinct VisitorCount (unique players ever) AND the

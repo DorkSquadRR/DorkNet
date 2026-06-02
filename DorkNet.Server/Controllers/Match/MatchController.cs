@@ -20,6 +20,7 @@ public class MatchController(
     GameSessionService sessionService,
     PlayerPresenceService presence,
     PrivateInstanceService privateInstances,
+    JoinTimeoutService joinTimeouts,
     DorkNetDbContext db,
     ILogger<MatchController> logger) : ControllerBase
 {
@@ -33,9 +34,11 @@ public class MatchController(
     /// response body and just needs 2xx (Matchmaking.txt:6668-6699), so
     /// we mostly use this for visibility into Photon-side issues —
     /// without it, all we see in the catch-all is an opaque "200, empty
-    /// reply" and no clue why a player crashed back to dorm.</summary>
+    /// reply" and no clue why a player crashed back to dorm. Failure
+    /// reports also clear the pending /goto room and push a ModerationKick
+    /// so the watch leaves the "Joining room" overlay instead of softlocking.</summary>
     [HttpPost("/roominstance/{instanceId:long}/reportjoinresult")]
-    public IActionResult ReportJoinResult(long instanceId, [FromForm(Name = "result")] int? result)
+    public async Task<IActionResult> ReportJoinResult(long instanceId, [FromForm(Name = "result")] int? result)
     {
         var code = result ?? -1;
         var label = code switch
@@ -49,12 +52,14 @@ public class MatchController(
         var pid = this.RequireCurrentPlayerId();
         if (code == 0)
         {
+            joinTimeouts.MarkCompleted(pid, instanceId, label);
             logger.LogInformation(
                 "[joinresult] player={Player} instance={Instance} OK ({Label})",
                 pid, instanceId, label);
         }
         else
         {
+            await joinTimeouts.MarkFailedAsync(pid, instanceId, label);
             logger.LogWarning(
                 "[joinresult] player={Player} instance={Instance} FAILED code={Code} ({Label}) — Photon-side error, check Photon AppId/region/auth",
                 pid, instanceId, code, label);
