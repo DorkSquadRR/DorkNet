@@ -66,10 +66,18 @@ public class ServerSettingsService(DorkNetDbContext db)
         return ToRecCenterDoors(row);
     }
 
+    public async Task<DiscoveredGameConfigSettings> GetDiscoveredGameConfigsAsync()
+    {
+        var row = await GetAsync();
+        return ToDiscoveredGameConfigs(row);
+    }
+
     public async Task<IReadOnlyList<GameConfigurationSetting>> GetGameConfigurationsAsync()
     {
-        var doors = await GetRecCenterDoorsAsync();
-        return ToGameConfigurations(doors);
+        var row = await GetAsync();
+        return ToGameConfigurations(
+            ToRecCenterDoors(row),
+            ToDiscoveredGameConfigs(row));
     }
 
     public async Task<PlayMenuTagSettings> SetPlayMenuTagsAsync(
@@ -90,6 +98,17 @@ public class ServerSettingsService(DorkNetDbContext db)
         var normalized = NormalizeRecCenterDoors(doors);
         var existing = await GetTrackedRowAsync();
         existing.RecCenterDoorsJson = JsonSerializer.Serialize(normalized, JsonOptions);
+        existing.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return normalized with { UpdatedAt = existing.UpdatedAt };
+    }
+
+    public async Task<DiscoveredGameConfigSettings> SetDiscoveredGameConfigsAsync(
+        DiscoveredGameConfigSettings settings)
+    {
+        var normalized = NormalizeDiscoveredGameConfigs(settings);
+        var existing = await GetTrackedRowAsync();
+        existing.DiscoveredGameConfigsJson = JsonSerializer.Serialize(normalized, JsonOptions);
         existing.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
         return normalized with { UpdatedAt = existing.UpdatedAt };
@@ -209,6 +228,28 @@ public class ServerSettingsService(DorkNetDbContext db)
         return DefaultRecCenterDoors() with { UpdatedAt = row.UpdatedAt };
     }
 
+    private static DiscoveredGameConfigSettings ToDiscoveredGameConfigs(ServerSettingsEntity row)
+    {
+        if (!string.IsNullOrWhiteSpace(row.DiscoveredGameConfigsJson))
+        {
+            try
+            {
+                var parsed = JsonSerializer.Deserialize<DiscoveredGameConfigSettings>(
+                    row.DiscoveredGameConfigsJson,
+                    JsonOptions);
+                if (parsed is not null)
+                    return NormalizeDiscoveredGameConfigs(parsed)
+                        with { UpdatedAt = row.UpdatedAt };
+            }
+            catch
+            {
+                // Bad settings should not break gameconfig bootstrap.
+            }
+        }
+
+        return DefaultDiscoveredGameConfigs() with { UpdatedAt = row.UpdatedAt };
+    }
+
     private static List<WeeklyChallengeTemplate> NormalizeWeeklyChallenges(
         IReadOnlyList<WeeklyChallengeTemplate> challenges)
     {
@@ -323,8 +364,27 @@ public class ServerSettingsService(DorkNetDbContext db)
             ],
             UpdatedAt: DateTime.UtcNow);
 
+    public static DiscoveredGameConfigSettings DefaultDiscoveredGameConfigs() =>
+        new(
+            FriendsPostGamePromptUnderFriendCount: 3,
+            FriendsSuggestFriendCodeOnFriendsScreenCount: 5,
+            ScreensForceVerification: false,
+            VrForceVerification: false,
+            RewardsUseRewardSelection: false,
+            RewardsSelectionTimeout: 30,
+            RoomDetailsPhotoRollEnabled: false,
+            LoadingNetworkTimeout: 30,
+            RunningNetworkTimeout: 30,
+            SynchronizedFieldRemoveDefaultEntries: false,
+            RenderingDisableSrpBatcher: false,
+            SplitTestSoftOverrides: "{}",
+            SplitTestHardOverrides: "{}",
+            SplitTestSegmentProbabilities: "{}",
+            UpdatedAt: DateTime.UtcNow);
+
     public static IReadOnlyList<GameConfigurationSetting> ToGameConfigurations(
-        RecCenterDoorSettings doors)
+        RecCenterDoorSettings doors,
+        DiscoveredGameConfigSettings discovered)
     {
         var rows = new List<GameConfigurationSetting>();
         foreach (var door in NormalizeRecCenterDoors(doors.Doors).Doors)
@@ -333,16 +393,22 @@ public class ServerSettingsService(DorkNetDbContext db)
             rows.Add(new($"Door.{door.Key}.Query", door.Query));
         }
 
+        var gameConfig = NormalizeDiscoveredGameConfigs(discovered);
         rows.AddRange([
-            new("Rewards.UseRewardSelection", "false"),
-            new("RoomDetails.PhotoRollEnabled", "false"),
-            new("SynchronizedField.RemoveDefaultEntries", "false"),
-            new("Rendering.DisableSrpBatcher", "false"),
-            new("splitTestSoftOverrides", "{}"),
-            new("splitTestHardOverrides", "{}"),
-            new("splitTestSegmentProbabilities", "{}"),
-            new("loadingNetworkTimeout", "30"),
-            new("runningNetworkTimeout", "30"),
+            new("Friends.PostGamePromptUnderFriendCount", gameConfig.FriendsPostGamePromptUnderFriendCount.ToString()),
+            new("Friends.SuggestFriendCodeOnFriendsScreenCount", gameConfig.FriendsSuggestFriendCodeOnFriendsScreenCount.ToString()),
+            new("Screens.ForceVerification", gameConfig.ScreensForceVerification ? "1" : "0"),
+            new("VR.ForceVerification", gameConfig.VrForceVerification ? "1" : "0"),
+            new("Rewards.UseRewardSelection", gameConfig.RewardsUseRewardSelection.ToString().ToLowerInvariant()),
+            new("Rewards.SelectionTimeout", gameConfig.RewardsSelectionTimeout.ToString()),
+            new("RoomDetails.PhotoRollEnabled", gameConfig.RoomDetailsPhotoRollEnabled.ToString().ToLowerInvariant()),
+            new("loadingNetworkTimeout", gameConfig.LoadingNetworkTimeout.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            new("runningNetworkTimeout", gameConfig.RunningNetworkTimeout.ToString(System.Globalization.CultureInfo.InvariantCulture)),
+            new("SynchronizedField.RemoveDefaultEntries", gameConfig.SynchronizedFieldRemoveDefaultEntries.ToString().ToLowerInvariant()),
+            new("Rendering.DisableSrpBatcher", gameConfig.RenderingDisableSrpBatcher.ToString().ToLowerInvariant()),
+            new("splitTestSoftOverrides", gameConfig.SplitTestSoftOverrides),
+            new("splitTestHardOverrides", gameConfig.SplitTestHardOverrides),
+            new("splitTestSegmentProbabilities", gameConfig.SplitTestSegmentProbabilities),
         ]);
         return rows;
     }
@@ -415,6 +481,41 @@ public class ServerSettingsService(DorkNetDbContext db)
             normalized.Count > 0 ? normalized : DefaultRecCenterDoors().Doors,
             DateTime.UtcNow);
     }
+
+    private static DiscoveredGameConfigSettings NormalizeDiscoveredGameConfigs(
+        DiscoveredGameConfigSettings settings)
+    {
+        static string JsonObjectOrDefault(string value)
+        {
+            value = string.IsNullOrWhiteSpace(value) ? "{}" : value.Trim();
+            try
+            {
+                using var doc = JsonDocument.Parse(value);
+                return doc.RootElement.ValueKind == JsonValueKind.Object ? value : "{}";
+            }
+            catch
+            {
+                return "{}";
+            }
+        }
+
+        return new DiscoveredGameConfigSettings(
+            FriendsPostGamePromptUnderFriendCount: Math.Clamp(settings.FriendsPostGamePromptUnderFriendCount, 0, 100),
+            FriendsSuggestFriendCodeOnFriendsScreenCount: Math.Clamp(settings.FriendsSuggestFriendCodeOnFriendsScreenCount, 0, 100),
+            ScreensForceVerification: settings.ScreensForceVerification,
+            VrForceVerification: settings.VrForceVerification,
+            RewardsUseRewardSelection: settings.RewardsUseRewardSelection,
+            RewardsSelectionTimeout: Math.Clamp(settings.RewardsSelectionTimeout, 0, 300),
+            RoomDetailsPhotoRollEnabled: settings.RoomDetailsPhotoRollEnabled,
+            LoadingNetworkTimeout: Math.Clamp(settings.LoadingNetworkTimeout, 1, 300),
+            RunningNetworkTimeout: Math.Clamp(settings.RunningNetworkTimeout, 1, 300),
+            SynchronizedFieldRemoveDefaultEntries: settings.SynchronizedFieldRemoveDefaultEntries,
+            RenderingDisableSrpBatcher: settings.RenderingDisableSrpBatcher,
+            SplitTestSoftOverrides: JsonObjectOrDefault(settings.SplitTestSoftOverrides),
+            SplitTestHardOverrides: JsonObjectOrDefault(settings.SplitTestHardOverrides),
+            SplitTestSegmentProbabilities: JsonObjectOrDefault(settings.SplitTestSegmentProbabilities),
+            UpdatedAt: DateTime.UtcNow);
+    }
 }
 
 public sealed record WeeklyChallengeSettings(
@@ -461,3 +562,20 @@ public sealed record GameConfigurationSetting(
     string Value,
     DateTime? StartTime = null,
     DateTime? EndTime = null);
+
+public sealed record DiscoveredGameConfigSettings(
+    int FriendsPostGamePromptUnderFriendCount,
+    int FriendsSuggestFriendCodeOnFriendsScreenCount,
+    bool ScreensForceVerification,
+    bool VrForceVerification,
+    bool RewardsUseRewardSelection,
+    int RewardsSelectionTimeout,
+    bool RoomDetailsPhotoRollEnabled,
+    float LoadingNetworkTimeout,
+    float RunningNetworkTimeout,
+    bool SynchronizedFieldRemoveDefaultEntries,
+    bool RenderingDisableSrpBatcher,
+    string SplitTestSoftOverrides,
+    string SplitTestHardOverrides,
+    string SplitTestSegmentProbabilities,
+    DateTime UpdatedAt);

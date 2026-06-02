@@ -1531,6 +1531,19 @@ public class AdminController(
         return Ok(doors);
     }
 
+    [HttpGet("settings/gameconfigs")]
+    public async Task<ActionResult> GetDiscoveredGameConfigs()
+        => Ok(await serverSettings.GetDiscoveredGameConfigsAsync());
+
+    [HttpPost("settings/gameconfigs")]
+    public async Task<ActionResult> SetDiscoveredGameConfigs([FromBody] DiscoveredGameConfigSettings body)
+    {
+        var settings = await serverSettings.SetDiscoveredGameConfigsAsync(body);
+        await LogAsync("gameconfigs_updated", "system", 0, "discovered");
+        await db.SaveChangesAsync();
+        return Ok(settings);
+    }
+
     // ── Signup codes ─────────────────────────────────────────────────────
 
     /// <summary>GET <c>api/admin/v1/signup-codes</c> — every issued code

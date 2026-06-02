@@ -54,9 +54,28 @@ interface RewardOptions {
   equipment: RewardOption[];
 }
 
+interface DiscoveredGameConfigSettings {
+  friendsPostGamePromptUnderFriendCount: number;
+  friendsSuggestFriendCodeOnFriendsScreenCount: number;
+  screensForceVerification: boolean;
+  vrForceVerification: boolean;
+  rewardsUseRewardSelection: boolean;
+  rewardsSelectionTimeout: number;
+  roomDetailsPhotoRollEnabled: boolean;
+  loadingNetworkTimeout: number;
+  runningNetworkTimeout: number;
+  synchronizedFieldRemoveDefaultEntries: boolean;
+  renderingDisableSrpBatcher: boolean;
+  splitTestSoftOverrides: string;
+  splitTestHardOverrides: string;
+  splitTestSegmentProbabilities: string;
+  updatedAt: string;
+}
+
 export function Settings({ embedded }: { embedded?: boolean } = {}) {
   const [settings, setSettings] = useState<ServerSettings | null>(null);
   const [weekly, setWeekly] = useState<WeeklyChallengeSettings | null>(null);
+  const [gameConfigs, setGameConfigs] = useState<DiscoveredGameConfigSettings | null>(null);
   const [rewardOptions, setRewardOptions] = useState<RewardOptions>({
     avatarItems: [],
     consumables: [],
@@ -65,18 +84,21 @@ export function Settings({ embedded }: { embedded?: boolean } = {}) {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [weeklyBusy, setWeeklyBusy] = useState(false);
+  const [gameConfigBusy, setGameConfigBusy] = useState(false);
   const toast = useToast();
 
   const load = async () => {
     try {
-      const [s, w, rewards] = await Promise.all([
+      const [s, w, rewards, configs] = await Promise.all([
         get<ServerSettings>('/settings'),
         get<WeeklyChallengeSettings>('/settings/weekly-challenges'),
         get<RewardOptions>('/settings/weekly-challenges/reward-options'),
+        get<DiscoveredGameConfigSettings>('/settings/gameconfigs'),
       ]);
       setSettings(s);
       setWeekly(w);
       setRewardOptions(rewards);
+      setGameConfigs(configs);
       setErr(null);
     } catch (e) {
       setErr((e as Error).message);
@@ -252,6 +274,28 @@ export function Settings({ embedded }: { embedded?: boolean } = {}) {
     }
   };
 
+  const updateGameConfigs = (patch: Partial<DiscoveredGameConfigSettings>) => {
+    setGameConfigs((current) => current ? { ...current, ...patch } : current);
+  };
+
+  const saveGameConfigs = async (reset = false) => {
+    if (!gameConfigs && !reset) return;
+    setGameConfigBusy(true);
+    try {
+      const body = reset ? defaultGameConfigs() : gameConfigs;
+      const updated = await api<DiscoveredGameConfigSettings>('/settings/gameconfigs', {
+        method: 'POST',
+        body,
+      });
+      setGameConfigs(updated);
+      toast.push(reset ? 'GameConfig settings reset.' : 'GameConfig settings saved.', 'success');
+    } catch (e) {
+      toast.push((e as Error).message, 'error');
+    } finally {
+      setGameConfigBusy(false);
+    }
+  };
+
   const refreshBtn = (
     <button onClick={load} className="btn-secondary text-xs" disabled={busy}>
       <RefreshCw className={busy ? 'animate-spin' : ''} />
@@ -306,6 +350,16 @@ export function Settings({ embedded }: { embedded?: boolean } = {}) {
               : <span className="badge-online">Signups allowed</span>}
           </div>
         </div>
+      )}
+
+      {gameConfigs && (
+        <DiscoveredGameConfigsPanel
+          settings={gameConfigs}
+          busy={gameConfigBusy}
+          onChange={updateGameConfigs}
+          onSave={() => saveGameConfigs(false)}
+          onReset={() => saveGameConfigs(true)}
+        />
       )}
 
       {weekly && (
@@ -506,4 +560,242 @@ export function Settings({ embedded }: { embedded?: boolean } = {}) {
       )}
     </div>
   );
+}
+
+function DiscoveredGameConfigsPanel({
+  settings,
+  busy,
+  onChange,
+  onSave,
+  onReset,
+}: {
+  settings: DiscoveredGameConfigSettings;
+  busy: boolean;
+  onChange: (patch: Partial<DiscoveredGameConfigSettings>) => void;
+  onSave: () => void;
+  onReset: () => void;
+}) {
+  const number = (key: keyof DiscoveredGameConfigSettings, value: string) => {
+    const n = Number.parseFloat(value);
+    onChange({ [key]: Number.isFinite(n) ? n : 0 } as Partial<DiscoveredGameConfigSettings>);
+  };
+
+  return (
+    <div className="card !p-5 max-w-5xl mt-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold text-ink-50">GameConfig</h2>
+          <p className="mt-1 text-xs text-ink-400">
+            Typed keys confirmed in the 2020.12 client decomp.
+          </p>
+          <p className="mt-2 text-[11px] text-ink-500">
+            Last changed {new Date(settings.updatedAt).toLocaleString()}.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={onReset} disabled={busy} className="btn-secondary text-xs">
+            <RefreshCw />
+            Defaults
+          </button>
+          <button onClick={onSave} disabled={busy} className="btn-primary text-xs">
+            {busy ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        <div className="rounded-lg border border-ink-800 bg-ink-950/30 p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-400">Social</h3>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <NumberConfig
+              label="Friends.PostGamePromptUnderFriendCount"
+              value={settings.friendsPostGamePromptUnderFriendCount}
+              onChange={(v) => number('friendsPostGamePromptUnderFriendCount', v)}
+            />
+            <NumberConfig
+              label="Friends.SuggestFriendCodeOnFriendsScreenCount"
+              value={settings.friendsSuggestFriendCodeOnFriendsScreenCount}
+              onChange={(v) => number('friendsSuggestFriendCodeOnFriendsScreenCount', v)}
+            />
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-ink-800 bg-ink-950/30 p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-400">Account gates</h3>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <BoolConfig
+              label="Screens.ForceVerification"
+              checked={settings.screensForceVerification}
+              onChange={(v) => onChange({ screensForceVerification: v })}
+            />
+            <BoolConfig
+              label="VR.ForceVerification"
+              checked={settings.vrForceVerification}
+              onChange={(v) => onChange({ vrForceVerification: v })}
+            />
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-ink-800 bg-ink-950/30 p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-400">Rewards</h3>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <BoolConfig
+              label="Rewards.UseRewardSelection"
+              checked={settings.rewardsUseRewardSelection}
+              onChange={(v) => onChange({ rewardsUseRewardSelection: v })}
+            />
+            <NumberConfig
+              label="Rewards.SelectionTimeout"
+              value={settings.rewardsSelectionTimeout}
+              onChange={(v) => number('rewardsSelectionTimeout', v)}
+            />
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-ink-800 bg-ink-950/30 p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-400">Room details</h3>
+          <div className="mt-3">
+            <BoolConfig
+              label="RoomDetails.PhotoRollEnabled"
+              checked={settings.roomDetailsPhotoRollEnabled}
+              onChange={(v) => onChange({ roomDetailsPhotoRollEnabled: v })}
+            />
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-ink-800 bg-ink-950/30 p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-400">Networking</h3>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <NumberConfig
+              label="loadingNetworkTimeout"
+              value={settings.loadingNetworkTimeout}
+              onChange={(v) => number('loadingNetworkTimeout', v)}
+            />
+            <NumberConfig
+              label="runningNetworkTimeout"
+              value={settings.runningNetworkTimeout}
+              onChange={(v) => number('runningNetworkTimeout', v)}
+            />
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-ink-800 bg-ink-950/30 p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-400">Rendering / sync</h3>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <BoolConfig
+              label="SynchronizedField.RemoveDefaultEntries"
+              checked={settings.synchronizedFieldRemoveDefaultEntries}
+              onChange={(v) => onChange({ synchronizedFieldRemoveDefaultEntries: v })}
+            />
+            <BoolConfig
+              label="Rendering.DisableSrpBatcher"
+              checked={settings.renderingDisableSrpBatcher}
+              onChange={(v) => onChange({ renderingDisableSrpBatcher: v })}
+            />
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-ink-800 bg-ink-950/30 p-4 lg:col-span-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-400">Split tests</h3>
+          <div className="mt-3 grid gap-3 lg:grid-cols-3">
+            <JsonConfig
+              label="splitTestSoftOverrides"
+              value={settings.splitTestSoftOverrides}
+              onChange={(v) => onChange({ splitTestSoftOverrides: v })}
+            />
+            <JsonConfig
+              label="splitTestHardOverrides"
+              value={settings.splitTestHardOverrides}
+              onChange={(v) => onChange({ splitTestHardOverrides: v })}
+            />
+            <JsonConfig
+              label="splitTestSegmentProbabilities"
+              value={settings.splitTestSegmentProbabilities}
+              onChange={(v) => onChange({ splitTestSegmentProbabilities: v })}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function NumberConfig({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="label font-mono normal-case tracking-normal">{label}</span>
+      <input className="input mt-1" type="number" value={value} onChange={(e) => onChange(e.target.value)} />
+    </label>
+  );
+}
+
+function BoolConfig({
+  label,
+  checked,
+  onChange,
+}: {
+  label: string;
+  checked: boolean;
+  onChange: (value: boolean) => void;
+}) {
+  return (
+    <label className="flex min-h-10 items-center justify-between gap-3 rounded-md border border-ink-800 bg-ink-900/50 px-3 py-2">
+      <span className="font-mono text-xs text-ink-100">{label}</span>
+      <input
+        type="checkbox"
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="size-4 rounded border-ink-700 bg-ink-950 text-brand-500 focus:ring-brand-500/30"
+      />
+    </label>
+  );
+}
+
+function JsonConfig({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="block">
+      <span className="label font-mono normal-case tracking-normal">{label}</span>
+      <textarea
+        className="input mt-1 min-h-28 font-mono text-xs"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </label>
+  );
+}
+
+function defaultGameConfigs(): DiscoveredGameConfigSettings {
+  return {
+    friendsPostGamePromptUnderFriendCount: 3,
+    friendsSuggestFriendCodeOnFriendsScreenCount: 5,
+    screensForceVerification: false,
+    vrForceVerification: false,
+    rewardsUseRewardSelection: false,
+    rewardsSelectionTimeout: 30,
+    roomDetailsPhotoRollEnabled: false,
+    loadingNetworkTimeout: 30,
+    runningNetworkTimeout: 30,
+    synchronizedFieldRemoveDefaultEntries: false,
+    renderingDisableSrpBatcher: false,
+    splitTestSoftOverrides: '{}',
+    splitTestHardOverrides: '{}',
+    splitTestSegmentProbabilities: '{}',
+    updatedAt: new Date().toISOString(),
+  };
 }

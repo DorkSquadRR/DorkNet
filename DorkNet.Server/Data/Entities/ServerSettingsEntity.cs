@@ -48,5 +48,11 @@ public class ServerSettingsEntity
     /// Door.{Category}.Title and Door.{Category}.Query entries.</summary>
     public string RecCenterDoorsJson { get; set; } = string.Empty;
 
+    /// <summary>Admin-managed values for GameConfig keys confirmed in
+    /// the 2020.12 decomp. Kept typed in the admin API; stored as JSON
+    /// here so newly discovered built-in keys do not require a table
+    /// migration each time.</summary>
+    public string DiscoveredGameConfigsJson { get; set; } = string.Empty;
+
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
