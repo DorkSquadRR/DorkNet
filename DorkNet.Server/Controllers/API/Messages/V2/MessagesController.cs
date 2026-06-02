@@ -475,9 +475,8 @@ public class MessagesController(
     /// long), <c>Type</c> (int), <c>Data</c> (string), <c>RoomId</c>
     /// (optional long). KEBJPIGKGOI.txt:1456-1478 shows the sibling
     /// sendMultiple path uses <c>ToPlayerIds</c> (plural) — same
-    /// other fields. v1 and v2 of <c>/send</c> are protocol-identical
-    /// so we accept both.</para></summary>
-    [HttpPost("/api/messages/v1/send")]
+    /// other fields. The older <c>v1/send</c> route is handled above
+    /// by <see cref="SendFormMessage"/>.</para></summary>
     [HttpPost("/api/messages/v2/send")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
     public async Task<IActionResult> SendSingle(

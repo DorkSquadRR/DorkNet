@@ -73,6 +73,7 @@ public class InventionsController(
     /// <summary><c>GetLocalPlayerInventions</c> — same as Saved but
     /// at v1 path. Watch hits both depending on tab.</summary>
     [HttpGet("api/inventions/v1/mine")]
+    [HttpGet("api/inventions/v2/mine")]
     [Authorize]
     public Task<ActionResult> Mine() => Saved(100);
 
