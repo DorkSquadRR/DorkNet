@@ -82,13 +82,14 @@ message RoomRoleCollectionData {
 
 // ── PersistedRoomData top-level (rec_room/persistence/persisted_room_data.proto)
 //
-// The 2026 schema has 30+ fields — we only set field 23 (room_role_data).
-// Everything else stays at proto3 defaults, which the client treats as
-// "no saved state for this room" — exactly what we want for a fresh dorm
-// /clone with the role config injected.
+// The full schema has many more fields — we only set the fields the
+// December 2020 client needs for an editable minimal blob. Its
+// RoomPersistenceManager checks field 1 against a minimum editable
+// persistence version of 20, so generated blobs must carry a current
+// version or room editors see the native "save data is out-of-date" prompt.
 
 message PersistedRoomData {
-  // field 1 (DEPRECATED_version) — reserved, do not set.
+  int32 DEPRECATED_version = 1;
   // field 2 (persistence_views) — repeated, default empty list.
   // fields 3..22 — left at defaults.
   RoomRoleCollectionData room_role_data = 23;

@@ -24,6 +24,8 @@ namespace DorkNet.Server.Services;
 /// </summary>
 public class RoomDataBlobService
 {
+    private const int December2020PersistenceVersion = 26;
+
     /// <summary>
     /// Cached bytes of the "all-permissions-on" blob. Identical for every
     /// room — there's no per-room state we vary yet, so building once at
@@ -40,6 +42,7 @@ public class RoomDataBlobService
     public byte[] OverlayAllPermsRoleData(byte[] existingBlob)
     {
         var msg = PersistedRoomData.Parser.ParseFrom(existingBlob);
+        EnsureEditablePersistenceVersion(msg);
         msg.RoomRoleData = _allPermsRoleData.Clone();
         return msg.ToByteArray();
     }
@@ -47,6 +50,7 @@ public class RoomDataBlobService
     public byte[] OverlayRroEditableRoleData(byte[] existingBlob)
     {
         var msg = PersistedRoomData.Parser.ParseFrom(existingBlob);
+        EnsureEditablePersistenceVersion(msg);
         msg.RoomRoleData = _rroEditableRoleData.Clone();
         return msg.ToByteArray();
     }
@@ -55,6 +59,7 @@ public class RoomDataBlobService
     {
         var msg = new PersistedRoomData
         {
+            DEPRECATEDVersion = December2020PersistenceVersion,
             RoomRoleData = BuildAllPermsRoleData(),
         };
 
@@ -73,6 +78,7 @@ public class RoomDataBlobService
     {
         var msg = new PersistedRoomData
         {
+            DEPRECATEDVersion = December2020PersistenceVersion,
             RoomRoleData = BuildRroEditableRoleData(),
         };
 
@@ -151,6 +157,14 @@ public class RoomDataBlobService
                 InnerValue = 0,
             },
         };
+    }
+
+    private static void EnsureEditablePersistenceVersion(PersistedRoomData msg)
+    {
+        if (msg.DEPRECATEDVersion < 20)
+        {
+            msg.DEPRECATEDVersion = December2020PersistenceVersion;
+        }
     }
 
     private static string StableRoleGuid(int roleId) =>

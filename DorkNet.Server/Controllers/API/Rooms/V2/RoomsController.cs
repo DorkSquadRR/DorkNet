@@ -397,6 +397,7 @@ public class RoomsController(
         if (room is null) return NotFound(new { error = "room_not_found" });
 
         var newBlob = body.RoomDataFilename?.Trim() ?? string.Empty;
+        var savedAt = DateTime.UtcNow;
 
         // Multi-scene rooms have a RoomScenes row per scene. The 2020
         // client usually sends the scene's OrderIndex, but some flows
@@ -426,27 +427,33 @@ public class RoomsController(
                 db.DormStates.Add(dormState);
             }
             dormState.CurrentDataBlobName = newBlob;
-            dormState.UpdatedAt = DateTime.UtcNow;
+            dormState.UpdatedAt = savedAt;
         }
         else
         {
-            // Owned rooms: only the creator can save. Admin override
-            // intentionally not included — admins should use /restore
-            // when they need to roll a room back.
-            if (room.CreatorPlayerId != pid) return Forbid();
+            var canSave = room.CreatorPlayerId == pid
+                || await db.Players.AnyAsync(p => p.Id == pid && p.IsAdmin)
+                || await db.RoomRoles.AnyAsync(r =>
+                    r.RoomId == room.Id &&
+                    r.PlayerId == pid &&
+                    r.Accepted &&
+                    r.Role == 0);
+            if (!canSave) return Forbid();
         }
 
         if (sceneRow is not null)
         {
             sceneRow.DataBlobName = newBlob;
-            sceneRow.DataModifiedAt = DateTime.UtcNow;
+            sceneRow.DataModifiedAt = savedAt;
         }
         await db.Rooms
             .Where(r => r.Id == roomId)
             .ExecuteUpdateAsync(s => s
                 .SetProperty(r => r.CurrentDataBlobName, newBlob)
-                .SetProperty(r => r.UpdatedAt, DateTime.UtcNow));
+                .SetProperty(r => r.UpdatedAt, savedAt));
         await db.SaveChangesAsync();
+        room.CurrentDataBlobName = newBlob;
+        room.UpdatedAt = savedAt;
 
         // The watch's MasterUploadRoomDataBlobCoroutine waits for BOTH
         // the /upload + /saveData responses AND a SubscriptionUpdateRoom
@@ -470,7 +477,7 @@ public class RoomsController(
             if (sceneRow is not null && scene.Id == sceneRow.Id)
             {
                 scene.DataBlobName = newBlob;
-                scene.DataModifiedAt = DateTime.UtcNow;
+                scene.DataModifiedAt = savedAt;
             }
         }
         var savedSceneId = sceneRow?.OrderIndex ?? body.RoomSceneId;
@@ -577,7 +584,7 @@ public class RoomsController(
             DataBlobName = newBlob,
             MaxPlayers = sceneRow?.MaxPlayers ?? 8,
             CanMatchmakeInto = sceneRow?.CanMatchmakeInto ?? true,
-            DataModifiedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
+            DataModifiedAt = savedAt.ToString("yyyy-MM-ddTHH:mm:ssZ"),
         });
     }
 
