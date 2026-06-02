@@ -440,6 +440,12 @@ $cfg = [ordered]@{
     PhotonCloudRegion    = $PhotonCloudRegion
     InjectAuthValues     = $true
     EnableTlsTrustBypass = $true
+    # Opt-in: force-enable the client's built-in debug console (dev gate
+    # bypassed) + silence CheatManager so SetTimeScale / Fly / Teleport etc.
+    # don't drop you to the dorm. Flip to $true and relaunch; press the
+    # toggle key (a UnityEngine.KeyCode name; BackQuote = the `~` key).
+    EnableDebugConsole    = $false
+    DebugConsoleToggleKey = 'BackQuote'
 }
 Write-Step "Writing mod config -> $cfgPath"
 [System.IO.File]::WriteAllText($cfgPath, ($cfg | ConvertTo-Json -Depth 4))

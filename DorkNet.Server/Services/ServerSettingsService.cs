@@ -259,13 +259,101 @@ public class ServerSettingsService(DorkNetDbContext db)
             .Select((c, i) => new WeeklyChallengeTemplate(
                 i,
                 c.Name.Trim(),
-                string.IsNullOrWhiteSpace(c.Config) ? "{}" : c.Config.Trim(),
+                NormalizeWeeklyChallengeConfig(c.Config),
                 c.Description?.Trim() ?? string.Empty,
                 c.Tooltip?.Trim() ?? string.Empty))
             .ToList();
 
         return normalized.Count > 0 ? normalized : DefaultWeeklyChallenges();
     }
+
+    private static string NormalizeWeeklyChallengeConfig(string? config)
+    {
+        if (TryGetLegacyWeeklyGoal(config, out var legacyGoal))
+            return CountedAnyChallengeConfig(legacyGoal);
+
+        if (IsClientWeeklyChallengeConfig(config))
+            return config!.Trim();
+
+        return CountedAnyChallengeConfig(1);
+    }
+
+    private static bool TryGetLegacyWeeklyGoal(string? config, out int goal)
+    {
+        goal = 1;
+        if (string.IsNullOrWhiteSpace(config)) return false;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(config);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                return false;
+
+            if (!doc.RootElement.TryGetProperty("Type", out _))
+                return false;
+
+            if (doc.RootElement.TryGetProperty("Goal", out var goalElement)
+                && goalElement.TryGetInt32(out var parsedGoal))
+            {
+                goal = Math.Clamp(parsedGoal, 1, 1000);
+            }
+
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool IsClientWeeklyChallengeConfig(string? config)
+    {
+        if (string.IsNullOrWhiteSpace(config)) return false;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(config);
+            return IsClientWeeklyChallengeConfigElement(doc.RootElement);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool IsClientWeeklyChallengeConfigElement(JsonElement element)
+    {
+        if (element.ValueKind != JsonValueKind.Object)
+            return false;
+
+        if (!element.TryGetProperty("ct", out var typeElement) || !typeElement.TryGetInt32(out var type))
+            return false;
+
+        if (type == 0)
+            return true;
+
+        if (type != 1)
+            return false;
+
+        if (!element.TryGetProperty("t", out var targetElement)
+            || !targetElement.TryGetInt32(out var target)
+            || target <= 0)
+        {
+            return false;
+        }
+
+        if (!element.TryGetProperty("ctc", out var children)
+            || children.ValueKind != JsonValueKind.Array
+            || children.GetArrayLength() == 0)
+        {
+            return false;
+        }
+
+        return children.EnumerateArray().All(IsClientWeeklyChallengeConfigElement);
+    }
+
+    private static string CountedAnyChallengeConfig(int target) =>
+        "{\"ct\":1,\"ctc\":[{\"ct\":0}],\"t\":" + Math.Clamp(target, 1, 1000) + ",\"cc\":0}";
 
     private static WeeklyChallengeReward NormalizeWeeklyReward(WeeklyChallengeReward? reward)
     {
@@ -288,19 +376,19 @@ public class ServerSettingsService(DorkNetDbContext db)
         new(
             Index: 0,
             Name: "Play 3 Rec Room Originals",
-            Config: "{\"Type\":\"CompleteActivity\",\"Goal\":3}",
+            Config: CountedAnyChallengeConfig(3),
             Description: "Complete three Rec Room Original activities.",
             Tooltip: "Play any RRO activity to make progress."),
         new(
             Index: 1,
             Name: "Cheer 5 Players",
-            Config: "{\"Type\":\"CheerPlayers\",\"Goal\":5}",
+            Config: CountedAnyChallengeConfig(5),
             Description: "Send cheers to five players.",
             Tooltip: "Use the watch to cheer players you meet."),
         new(
             Index: 2,
             Name: "Visit 5 Rooms",
-            Config: "{\"Type\":\"VisitRooms\",\"Goal\":5}",
+            Config: CountedAnyChallengeConfig(5),
             Description: "Visit five rooms this week.",
             Tooltip: "Any room visit counts toward this challenge."),
     ];

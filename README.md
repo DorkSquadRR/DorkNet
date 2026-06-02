@@ -102,6 +102,17 @@ self-signed certs work. (First run prints "launch the game once"; do
 that, then re-run with `-ResumeBuild` to finish — see the script's
 `-?` help.)
 
+### Debug console (opt-in)
+
+The 2020 client ships a built-in dev console
+(`RecRoom.Debugging.DebugConsole`) with commands like `SetTimeScale`,
+`Fly`, `Teleport`, `GoToRoom`, and `KillAllEnemies` — normally locked to
+developer accounts. Set `"EnableDebugConsole": true` in
+`dorknet-clientmod.json` and relaunch: the mod force-toggles the console
+UI on a hotkey (`"DebugConsoleToggleKey"`, default `BackQuote` = the `~`
+key) and silences `CheatManager` so the movement/time commands don't drop
+you to the dorm. Both default off.
+
 ---
 
 ## Code map
