@@ -8,14 +8,16 @@ import { Empty } from '../components/Empty';
 import { absoluteTime, relativeTime } from '../lib/format';
 import { RefreshCw, Trash } from '../components/Icons';
 
-export function Bans() {
+export function Bans({ embedded }: { embedded?: boolean } = {}) {
   const [tab, setTab] = useState<'players' | 'ip'>('players');
   return (
     <div>
-      <PageHeader
-        title="Bans"
-        blurb="Player bans and IP-level bans, all in one place."
-      />
+      {!embedded && (
+        <PageHeader
+          title="Bans"
+          blurb="Player bans and IP-level bans, all in one place."
+        />
+      )}
       <div className="flex border-b border-ink-800 text-sm mb-4">
         {(['players', 'ip'] as const).map(t => (
           <button

@@ -141,9 +141,9 @@ so both providers pick them up on existing DBs without a new migration
 
 ### Signup codes
 
-When account creation is disabled (admin **Server settings**), the only
+When account creation is disabled (admin **Settings → Server**), the only
 way in is an admin-issued single-use **signup code**: generate one in the
-admin panel's **Signup codes** page (with a descriptor + optional expiry),
+admin panel's **Settings → Signup codes** tab (with a descriptor + optional expiry),
 hand it to the player, and they redeem it on the site's **`/join`** page —
 which creates their account bound to the device their game client
 reported, so the next launch logs straight in.

@@ -29,7 +29,7 @@ function blankTip(): LoadingScreenTip {
   };
 }
 
-export function LoadingTips() {
+export function LoadingTips({ embedded }: { embedded?: boolean } = {}) {
   const [tips, setTips] = useState<LoadingScreenTip[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const toast = useToast();
@@ -100,13 +100,19 @@ export function LoadingTips() {
     }
   };
 
+  const addBtn = <button onClick={addNew} className="btn-primary text-xs"><Plus /> Add tip</button>;
+
   return (
     <div>
-      <PageHeader
-        title="Loading screen tips"
-        blurb="The list the watch fetches from cdn.localhost/config/LoadingScreenTipData on every dorm load. Edit, upload an image, or scope a tip to specific rooms — saves are live immediately."
-        actions={<button onClick={addNew} className="btn-primary text-xs"><Plus /> Add tip</button>}
-      />
+      {embedded ? (
+        <div className="flex justify-end mb-3">{addBtn}</div>
+      ) : (
+        <PageHeader
+          title="Loading screen tips"
+          blurb="The list the watch fetches from cdn.localhost/config/LoadingScreenTipData on every dorm load. Edit, upload an image, or scope a tip to specific rooms — saves are live immediately."
+          actions={addBtn}
+        />
+      )}
 
       {err && (
         <div className="card border-danger/30 bg-danger/5 px-4 py-3 text-sm text-danger mb-4">

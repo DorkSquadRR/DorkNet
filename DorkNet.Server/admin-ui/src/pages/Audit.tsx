@@ -6,26 +6,34 @@ import { Empty } from '../components/Empty';
 import { absoluteTime, clip, relativeTime } from '../lib/format';
 import { RefreshCw } from '../components/Icons';
 
-export function Audit() {
+export function Audit({ embedded }: { embedded?: boolean } = {}) {
   const [take, setTake] = useState(200);
   const { data, loading, error, refresh } = useApi<AuditEntry[]>(`/audit?take=${take}`);
 
+  const controls = (
+    <>
+      <select value={take} onChange={e => setTake(parseInt(e.target.value))} className="input w-24 text-xs !py-1.5">
+        <option value={100}>last 100</option>
+        <option value={200}>last 200</option>
+        <option value={500}>last 500</option>
+      </select>
+      <button onClick={refresh} className="btn-secondary text-xs" disabled={loading}>
+        <RefreshCw className={loading ? 'animate-spin' : ''} /> Refresh
+      </button>
+    </>
+  );
+
   return (
     <div>
-      <PageHeader
-        title="Audit log"
-        blurb="Every admin action with actor, target, and reason. Newest first."
-        actions={<>
-          <select value={take} onChange={e => setTake(parseInt(e.target.value))} className="input w-24 text-xs !py-1.5">
-            <option value={100}>last 100</option>
-            <option value={200}>last 200</option>
-            <option value={500}>last 500</option>
-          </select>
-          <button onClick={refresh} className="btn-secondary text-xs" disabled={loading}>
-            <RefreshCw className={loading ? 'animate-spin' : ''} /> Refresh
-          </button>
-        </>}
-      />
+      {embedded ? (
+        <div className="flex justify-end gap-2 mb-3">{controls}</div>
+      ) : (
+        <PageHeader
+          title="Audit log"
+          blurb="Every admin action with actor, target, and reason. Newest first."
+          actions={controls}
+        />
+      )}
 
       {error && <div className="card border-danger/30 bg-danger/5 px-4 py-3 text-sm text-danger">{error}</div>}
 

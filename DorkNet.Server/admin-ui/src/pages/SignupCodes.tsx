@@ -24,7 +24,7 @@ const STATUS_BADGE: Record<SignupCode['status'], string> = {
   expired: 'badge-neutral',
 };
 
-export function SignupCodes() {
+export function SignupCodes({ embedded }: { embedded?: boolean } = {}) {
   const [codes, setCodes] = useState<SignupCode[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [descriptor, setDescriptor] = useState('');
@@ -84,18 +84,24 @@ export function SignupCodes() {
     }
   };
 
+  const refreshBtn = (
+    <button onClick={load} className="btn-secondary text-xs">
+      <RefreshCw />
+      Refresh
+    </button>
+  );
+
   return (
     <div>
-      <PageHeader
-        title="Signup codes"
-        blurb="Single-use invite codes. Hand one to a player; they redeem it on the site's /join page to create an account while signups are disabled."
-        actions={
-          <button onClick={load} className="btn-secondary text-xs">
-            <RefreshCw />
-            Refresh
-          </button>
-        }
-      />
+      {embedded ? (
+        <div className="flex justify-end mb-3">{refreshBtn}</div>
+      ) : (
+        <PageHeader
+          title="Signup codes"
+          blurb="Single-use invite codes. Hand one to a player; they redeem it on the site's /join page to create an account while signups are disabled."
+          actions={refreshBtn}
+        />
+      )}
 
       {err && (
         <div className="card border-danger/30 bg-danger/5 px-4 py-3 text-sm text-danger mb-4">{err}</div>

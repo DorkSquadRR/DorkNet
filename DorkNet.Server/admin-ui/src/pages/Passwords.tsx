@@ -1,13 +1,12 @@
 import { useState } from 'react';
 import { api } from '../lib/api';
-import type { Player } from '../lib/types';
-import { useApi } from '../lib/useApi';
-import { PageHeader } from '../components/PageHeader';
 import { useToast } from '../components/Toast';
 
-export function Passwords() {
-  const { data: players } = useApi<Player[]>('/players?take=500');
-  const [playerId, setPlayerId] = useState<number | null>(null);
+// Admin password reset, rendered as a card inside the player detail
+// modal's Profile tab. The target account is the open player, so there's
+// no picker — just set-and-confirm. Issues a Logout push so any active
+// sessions on the old password get dropped.
+export function PasswordResetCard({ playerId, username }: { playerId: number; username: string }) {
   const [pw, setPw] = useState('');
   const [pw2, setPw2] = useState('');
   const [show, setShow] = useState(false);
@@ -27,11 +26,9 @@ export function Passwords() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!playerId) return;
     if (pw !== pw2) return toast.push("Passwords don't match", 'error');
     if (pw.length < 8) return toast.push('Password must be at least 8 characters', 'error');
-    const player = players?.find(p => p.id === playerId);
-    if (!confirm(`Reset password for @${player?.username ?? `#${playerId}`}? This forces a logout on every active session.`)) return;
+    if (!confirm(`Reset password for @${username}? This forces a logout on every active session.`)) return;
     setBusy(true);
     try {
       await api(`/players/${playerId}/password`, {
@@ -48,62 +45,49 @@ export function Passwords() {
   };
 
   return (
-    <div>
-      <PageHeader
-        title="Reset passwords"
-        blurb="Admin-set a new password for any account. Issues a Logout push so any active sessions on the old password get dropped."
-      />
+    <form onSubmit={submit} className="card !p-4 md:col-span-2 space-y-3">
+      <div>
+        <h3 className="text-sm font-semibold text-ink-50 mb-1">Reset password</h3>
+        <p className="text-xs text-ink-400">
+          Admin-set a new password. The plaintext is hashed with BCrypt before write — we never store it, and the audit log
+          records the action but not the password. Issues a Logout push that drops any session still on the old password.
+        </p>
+      </div>
 
-      <form onSubmit={submit} className="card !p-5 max-w-xl space-y-4">
-        <label className="flex flex-col gap-1">
-          <span className="label">Account</span>
-          <select value={playerId ?? ''} onChange={e => setPlayerId(e.target.value ? parseInt(e.target.value) : null)} required className="input">
-            <option value="">— pick an account —</option>
-            {(players ?? []).map(p => <option key={p.id} value={p.id}>{p.displayName || p.username} · @{p.username} · #{p.id}</option>)}
-          </select>
-        </label>
-
-        <label className="flex flex-col gap-1">
-          <span className="label">New password</span>
-          <div className="flex gap-2">
-            <input
-              type={show ? 'text' : 'password'}
-              value={pw}
-              onChange={e => setPw(e.target.value)}
-              minLength={8}
-              required
-              autoComplete="new-password"
-              className="input flex-1 font-mono"
-            />
-            <button type="button" onClick={() => setShow(s => !s)} className="btn-ghost text-xs">{show ? 'Hide' : 'Show'}</button>
-            <button type="button" onClick={random} className="btn-secondary text-xs">Random</button>
-          </div>
-        </label>
-
-        <label className="flex flex-col gap-1">
-          <span className="label">Confirm new password</span>
+      <label className="flex flex-col gap-1">
+        <span className="label">New password</span>
+        <div className="flex gap-2">
           <input
             type={show ? 'text' : 'password'}
-            value={pw2}
-            onChange={e => setPw2(e.target.value)}
+            value={pw}
+            onChange={e => setPw(e.target.value)}
             minLength={8}
-            required
             autoComplete="new-password"
-            className="input font-mono"
+            className="input flex-1 font-mono"
           />
-        </label>
-
-        <div className="rounded-lg border border-warn/30 bg-warn/10 px-3 py-2 text-xs text-warn">
-          The plaintext is hashed with BCrypt before write — we never store it. The audit log records the action but not the password.
+          <button type="button" onClick={() => setShow(s => !s)} className="btn-ghost text-xs">{show ? 'Hide' : 'Show'}</button>
+          <button type="button" onClick={random} className="btn-secondary text-xs">Random</button>
         </div>
+      </label>
 
-        <div className="flex justify-end gap-2">
-          <button type="button" onClick={() => { setPw(''); setPw2(''); setShow(false); }} className="btn-ghost text-xs" disabled={busy}>Clear</button>
-          <button className="btn-primary text-xs" disabled={busy || !playerId || pw.length < 8 || pw !== pw2}>
-            {busy ? 'Updating…' : 'Update password'}
-          </button>
-        </div>
-      </form>
-    </div>
+      <label className="flex flex-col gap-1">
+        <span className="label">Confirm new password</span>
+        <input
+          type={show ? 'text' : 'password'}
+          value={pw2}
+          onChange={e => setPw2(e.target.value)}
+          minLength={8}
+          autoComplete="new-password"
+          className="input font-mono"
+        />
+      </label>
+
+      <div className="flex justify-end gap-2">
+        <button type="button" onClick={() => { setPw(''); setPw2(''); setShow(false); }} className="btn-ghost text-xs" disabled={busy}>Clear</button>
+        <button className="btn-primary text-xs" disabled={busy || pw.length < 8 || pw !== pw2}>
+          {busy ? 'Updating…' : 'Update password'}
+        </button>
+      </div>
+    </form>
   );
 }

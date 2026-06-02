@@ -54,7 +54,7 @@ interface RewardOptions {
   equipment: RewardOption[];
 }
 
-export function Settings() {
+export function Settings({ embedded }: { embedded?: boolean } = {}) {
   const [settings, setSettings] = useState<ServerSettings | null>(null);
   const [weekly, setWeekly] = useState<WeeklyChallengeSettings | null>(null);
   const [rewardOptions, setRewardOptions] = useState<RewardOptions>({
@@ -252,18 +252,24 @@ export function Settings() {
     }
   };
 
+  const refreshBtn = (
+    <button onClick={load} className="btn-secondary text-xs" disabled={busy}>
+      <RefreshCw className={busy ? 'animate-spin' : ''} />
+      Refresh
+    </button>
+  );
+
   return (
     <div>
-      <PageHeader
-        title="Server settings"
-        blurb="Runtime toggles applied across every replica without a redeploy."
-        actions={
-          <button onClick={load} className="btn-secondary text-xs" disabled={busy}>
-            <RefreshCw className={busy ? 'animate-spin' : ''} />
-            Refresh
-          </button>
-        }
-      />
+      {embedded ? (
+        <div className="flex justify-end mb-3">{refreshBtn}</div>
+      ) : (
+        <PageHeader
+          title="Server settings"
+          blurb="Runtime toggles applied across every replica without a redeploy."
+          actions={refreshBtn}
+        />
+      )}
 
       {err && (
         <div className="card border-danger/30 bg-danger/5 px-4 py-3 text-sm text-danger mb-4">{err}</div>

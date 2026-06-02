@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, get } from '../lib/api';
-import type { Player } from '../lib/types';
 import { useApi } from '../lib/useApi';
-import { PageHeader } from '../components/PageHeader';
 import { useToast } from '../components/Toast';
 import { Confirm } from '../components/Confirm';
 import { RefreshCw, Search, Trash } from '../components/Icons';
@@ -41,10 +39,11 @@ interface AvatarItem {
 // and the consume endpoint writes the avatar item into their inventory.
 // This is the only flow that triggers the popup — directly poking
 // InventoryJson skips it entirely.
-export function Gift() {
-  const { data: players } = useApi<Player[]>('/players?take=500');
-  const [playerId, setPlayerId] = useState<number | null>(null);
-
+// Per-player gift composer, rendered as the "Gift" tab of the player
+// detail modal. The recipient is fixed to the open player, so there's
+// no picker and no page chrome — just the reward builder, presentation
+// options, and that player's pending-gift inbox.
+export function GiftPanel({ playerId }: { playerId: number }) {
   const [includeItem, setIncludeItem] = useState(true);
   const [includeCurrency, setIncludeCurrency] = useState(false);
   const [includeXp, setIncludeXp] = useState(false);
@@ -66,7 +65,6 @@ export function Gift() {
   const toast = useToast();
 
   const send = async () => {
-    if (!playerId) return toast.push('Pick a recipient first', 'error');
     if (!includeItem && !includeCurrency && !includeXp) {
       return toast.push('Pick at least one reward (item / currency / xp)', 'error');
     }
@@ -101,23 +99,14 @@ export function Gift() {
 
   return (
     <div>
-      <PageHeader
-        title="Send a gift"
-        blurb="Drops a wrapped gift box on the recipient's HUD — they tap to open it and the rewards land in their inventory / wallet."
-      />
+      <p className="text-xs text-ink-400 mb-4">
+        Drops a wrapped gift box on this player's HUD — they tap to open it and the rewards land in their inventory / wallet.
+      </p>
 
-      {playerId !== null && <PendingGifts playerId={playerId} refreshKey={pendingRefreshKey} />}
+      <PendingGifts playerId={playerId} refreshKey={pendingRefreshKey} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr,360px] gap-4 max-w-5xl">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr,360px] gap-4">
         <div className="card !p-5 space-y-4">
-          <label className="flex flex-col gap-1">
-            <span className="label">Recipient</span>
-            <select value={playerId ?? ''} onChange={e => setPlayerId(e.target.value ? parseInt(e.target.value) : null)} className="input">
-              <option value="">— pick a player —</option>
-              {(players ?? []).map(p => <option key={p.id} value={p.id}>{p.displayName || p.username} · @{p.username} · #{p.id}</option>)}
-            </select>
-          </label>
-
           <div className="space-y-2">
             <label className="flex items-center gap-2 text-sm text-ink-100 font-medium">
               <input type="checkbox" checked={includeItem} onChange={e => setIncludeItem(e.target.checked)} className="size-4 accent-brand-500" />
@@ -198,7 +187,7 @@ export function Gift() {
             <span className="label">Message (shown on the open card)</span>
             <textarea value={message} onChange={e => setMessage(e.target.value)} rows={3} className="input" />
           </label>
-          <button onClick={send} disabled={busy || !playerId} className="btn-primary w-full text-xs">
+          <button onClick={send} disabled={busy} className="btn-primary w-full text-xs">
             {busy ? 'Sending…' : 'Send gift'}
           </button>
           <div className="text-[11px] text-ink-500">
