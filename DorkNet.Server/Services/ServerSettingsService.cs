@@ -329,7 +329,7 @@ public class ServerSettingsService(DorkNetDbContext db)
         if (!element.TryGetProperty("ct", out var typeElement) || !typeElement.TryGetInt32(out var type))
             return false;
 
-        if (type == 0)
+        if (type == 0 || IsKnownClientChallengeType(type))
             return true;
 
         if (type != 1)
@@ -351,6 +351,21 @@ public class ServerSettingsService(DorkNetDbContext db)
 
         return children.EnumerateArray().All(IsClientWeeklyChallengeConfigElement);
     }
+
+    private static bool IsKnownClientChallengeType(int type) => type is
+        2  // TimedBufferChallenge
+        or 3  // DynamicFloatArithmeticChallenge
+        or 4  // DynamicIntArithmeticChallenge
+        or 6  // RequiredEventTypeChallenge
+        or 7  // RequiredRoomSceneLocationChallenge
+        or 8  // RequiredEnemyTypeChallenge
+        or 9  // BoolVarEqualsChallenge
+        or 11 // DiscGolfFinishUnderParChallenge
+        or 12 // RequiredGameModeActivityChallenge
+        or 13 // CompleteGameWithoutChallenge
+        or 14 // RequiredGestureChallenge
+        or 15 // HitstreakChallenge
+        or 16; // HitstreakCountChallenge
 
     private static string CountedAnyChallengeConfig(int target) =>
         "{\"ct\":1,\"ctc\":[{\"ct\":0}],\"t\":" + Math.Clamp(target, 1, 1000) + ",\"cc\":0}";

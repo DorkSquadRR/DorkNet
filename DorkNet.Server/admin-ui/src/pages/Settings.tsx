@@ -54,6 +54,69 @@ interface RewardOptions {
   equipment: RewardOption[];
 }
 
+interface WeeklyChallengeTypeOption {
+  value: number;
+  label: string;
+  note: string;
+}
+
+const WEEKLY_CHALLENGE_TYPES: WeeklyChallengeTypeOption[] = [
+  { value: 0, label: 'Any challenge event', note: 'Base Challenge' },
+  { value: 2, label: 'Timed buffer', note: 'TimedBufferChallenge' },
+  { value: 3, label: 'Dynamic float arithmetic', note: 'DynamicFloatArithmeticChallenge' },
+  { value: 4, label: 'Dynamic int arithmetic', note: 'DynamicIntArithmeticChallenge' },
+  { value: 6, label: 'Required event type', note: 'RequiredEventTypeChallenge' },
+  { value: 7, label: 'Required room scene location', note: 'RequiredRoomSceneLocationChallenge' },
+  { value: 8, label: 'Required enemy type', note: 'RequiredEnemyTypeChallenge' },
+  { value: 9, label: 'Bool var equals', note: 'BoolVarEqualsChallenge' },
+  { value: 11, label: 'Disc golf under par', note: 'DiscGolfFinishUnderParChallenge' },
+  { value: 12, label: 'Required game mode activity', note: 'RequiredGameModeActivityChallenge' },
+  { value: 13, label: 'Complete game without', note: 'CompleteGameWithoutChallenge' },
+  { value: 14, label: 'Required gesture', note: 'RequiredGestureChallenge' },
+  { value: 15, label: 'Hitstreak', note: 'HitstreakChallenge' },
+  { value: 16, label: 'Hitstreak count', note: 'HitstreakCountChallenge' },
+];
+
+const WEEKLY_TYPE_BY_VALUE = new Map(WEEKLY_CHALLENGE_TYPES.map((type) => [type.value, type]));
+const DEFAULT_WEEKLY_CHALLENGE_TYPE = 0;
+const MAX_WEEKLY_CHALLENGE_AMOUNT = 1000;
+
+function clampWeeklyAmount(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(MAX_WEEKLY_CHALLENGE_AMOUNT, Math.max(1, Math.trunc(value)));
+}
+
+function buildWeeklyChallengeConfig(type: number, amount: number): string {
+  const safeType = WEEKLY_TYPE_BY_VALUE.has(type) ? type : DEFAULT_WEEKLY_CHALLENGE_TYPE;
+  const target = clampWeeklyAmount(amount);
+  const child = { ct: safeType };
+  if (target <= 1) return JSON.stringify(child);
+  return JSON.stringify({ ct: 1, ctc: [child], t: target, cc: 0 });
+}
+
+function parseWeeklyChallengeConfig(config: string): { type: number; amount: number } {
+  try {
+    const parsed = JSON.parse(config) as unknown;
+    if (!parsed || typeof parsed !== 'object') throw new Error('not an object');
+    const root = parsed as { ct?: unknown; ctc?: unknown; t?: unknown };
+    const rootType = typeof root.ct === 'number' ? root.ct : DEFAULT_WEEKLY_CHALLENGE_TYPE;
+    if (rootType === 1 && Array.isArray(root.ctc) && root.ctc.length > 0) {
+      const child = root.ctc[0] as { ct?: unknown };
+      const childType = typeof child?.ct === 'number' && WEEKLY_TYPE_BY_VALUE.has(child.ct)
+        ? child.ct
+        : DEFAULT_WEEKLY_CHALLENGE_TYPE;
+      const amount = typeof root.t === 'number' ? root.t : 1;
+      return { type: childType, amount: clampWeeklyAmount(amount) };
+    }
+    return {
+      type: WEEKLY_TYPE_BY_VALUE.has(rootType) ? rootType : DEFAULT_WEEKLY_CHALLENGE_TYPE,
+      amount: 1,
+    };
+  } catch {
+    return { type: DEFAULT_WEEKLY_CHALLENGE_TYPE, amount: 1 };
+  }
+}
+
 interface DiscoveredGameConfigSettings {
   friendsPostGamePromptUnderFriendCount: number;
   friendsSuggestFriendCodeOnFriendsScreenCount: number;
@@ -148,7 +211,7 @@ export function Settings({ embedded }: { embedded?: boolean } = {}) {
           {
             index: current.challenges.length,
             name: 'New weekly challenge',
-            config: '{}',
+            config: buildWeeklyChallengeConfig(DEFAULT_WEEKLY_CHALLENGE_TYPE, 1),
             description: '',
             tooltip: '',
           },
@@ -162,6 +225,19 @@ export function Settings({ embedded }: { embedded?: boolean } = {}) {
       if (!current) return current;
       const next = current.challenges.filter((_, i) => i !== index);
       return { ...current, challenges: next.map((challenge, i) => ({ ...challenge, index: i })) };
+    });
+  };
+
+  const updateWeeklyChallengeConfig = (
+    index: number,
+    patch: Partial<{ type: number; amount: number }>,
+  ) => {
+    const challenge = weekly?.challenges[index];
+    if (!challenge) return;
+    const current = parseWeeklyChallengeConfig(challenge.config);
+    const next = { ...current, ...patch };
+    updateWeeklyChallenge(index, {
+      config: buildWeeklyChallengeConfig(next.type, next.amount),
     });
   };
 
@@ -544,20 +620,65 @@ export function Settings({ embedded }: { embedded?: boolean } = {}) {
                       onChange={(e) => updateWeeklyChallenge(index, { description: e.target.value })}
                     />
                   </label>
-                  <label className="block md:col-span-2">
-                    <span className="label">Config</span>
-                    <textarea
-                      className="input mt-1 min-h-24 font-mono text-xs"
-                      value={challenge.config}
-                      onChange={(e) => updateWeeklyChallenge(index, { config: e.target.value })}
-                    />
-                  </label>
+                  <WeeklyChallengeConfigForm
+                    challenge={challenge}
+                    onChange={(patch) => updateWeeklyChallengeConfig(index, patch)}
+                  />
                 </div>
               </div>
             ))}
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function WeeklyChallengeConfigForm({
+  challenge,
+  onChange,
+}: {
+  challenge: WeeklyChallenge;
+  onChange: (patch: Partial<{ type: number; amount: number }>) => void;
+}) {
+  const parsed = parseWeeklyChallengeConfig(challenge.config);
+  const selected = WEEKLY_TYPE_BY_VALUE.get(parsed.type) ?? WEEKLY_TYPE_BY_VALUE.get(DEFAULT_WEEKLY_CHALLENGE_TYPE)!;
+
+  return (
+    <div className="md:col-span-2 rounded-lg border border-ink-800 bg-ink-950/40 p-3">
+      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_160px]">
+        <label className="block">
+          <span className="label">Challenge type</span>
+          <select
+            className="input mt-1"
+            value={parsed.type}
+            onChange={(e) => onChange({ type: Number.parseInt(e.target.value, 10) })}
+          >
+            {WEEKLY_CHALLENGE_TYPES.map((type) => (
+              <option key={type.value} value={type.value}>{type.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="block">
+          <span className="label">Amount</span>
+          <input
+            className="input mt-1"
+            type="number"
+            min={1}
+            max={MAX_WEEKLY_CHALLENGE_AMOUNT}
+            value={parsed.amount}
+            onChange={(e) => onChange({ amount: Number.parseInt(e.target.value, 10) })}
+          />
+        </label>
+      </div>
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-ink-400">
+        <span className="badge-neutral">ct {selected.value}</span>
+        <span>{selected.note}</span>
+        {parsed.amount > 1 && <span className="badge-admin">wrapped by ct 1 count</span>}
+      </div>
+      <div className="mt-3 rounded border border-ink-800 bg-ink-950 px-3 py-2 font-mono text-[11px] text-ink-400 break-all">
+        {challenge.config}
+      </div>
     </div>
   );
 }
