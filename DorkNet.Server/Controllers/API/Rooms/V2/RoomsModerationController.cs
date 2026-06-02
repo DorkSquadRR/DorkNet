@@ -29,7 +29,11 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
     {
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
         if (room is null) return null;
-        return room.CreatorPlayerId == Me ? room : null;
+        if (room.CreatorPlayerId == Me) return room;
+
+        var coOwner = await db.RoomRoles.AnyAsync(r =>
+            r.RoomId == roomId && r.PlayerId == Me && r.Accepted && r.Role == 0);
+        return coOwner ? room : null;
     }
 
     // ── /modify (general fields) ─────────────────────────────────────────
@@ -468,14 +472,50 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
 
     [HttpPost("rooms/{roomId:long}/accessibility")]
     [HttpPut("rooms/{roomId:long}/accessibility")]
-    public async Task<IActionResult> BareAccessibility(long roomId, [FromBody] BareIntRequest? body,
-        [FromForm(Name = "Accessibility")] int? form) =>
-        await ApplyAndReturn(roomId, r =>
+    [HttpPost("roomserver/rooms/{roomId:long}/accessibility")]
+    [HttpPut("roomserver/rooms/{roomId:long}/accessibility")]
+    [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    public async Task<IActionResult> BareAccessibility(long roomId)
+    {
+        var value = await ReadBareIntAsync("accessibility", "Accessibility", "value", "Value");
+        return await ApplyAndReturn(roomId, r =>
         {
-            var v = body?.Value ?? form;
-            if (v is int vv) r.Accessibility = Math.Clamp(vv, 0, 2);
+            if (value is int vv) r.Accessibility = Math.Clamp(vv, 0, 2);
         });
+    }
 
+    private async Task<int?> ReadBareIntAsync(params string[] keys)
+    {
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync();
+            foreach (var key in keys)
+                if (int.TryParse(form[key].FirstOrDefault(), out var value)) return value;
+            return null;
+        }
+
+        foreach (var key in keys)
+            if (int.TryParse(Request.Query[key].FirstOrDefault(), out var value)) return value;
+
+        if ((Request.ContentLength ?? 0) <= 0) return null;
+        try
+        {
+            using var doc = await JsonDocument.ParseAsync(Request.Body);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return null;
+            foreach (var key in keys)
+            {
+                if (!doc.RootElement.TryGetProperty(key, out var prop)) continue;
+                if (prop.ValueKind == JsonValueKind.Number && prop.TryGetInt32(out var n)) return n;
+                if (prop.ValueKind == JsonValueKind.String && int.TryParse(prop.GetString(), out n)) return n;
+            }
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        return null;
+    }
     [HttpPost("rooms/{roomId:long}/cloning")]
     [HttpPut("rooms/{roomId:long}/cloning")]
     public async Task<IActionResult> BareCloning(long roomId, [FromBody] BareBoolRequest? body,
