@@ -38,13 +38,18 @@ export interface PlayerDetail extends Player {
 // 2020 watch uses (cropSquare=1 produces a face-zoomed square, sig
 // matches the host's signing key id).
 export function profileImageUrl(name: string | null | undefined, width = 96): string | null {
-  if (!name) return null;
-  const apex = adminApex();
-  const scheme = apex === 'localhost' ? 'http' : 'https';
-  return `${scheme}://img.${apex}/${encodeURIComponent(name)}?width=${width}&cropSquare=1&sig=p1`;
+  return imageCdnUrl(name, `width=${width}&cropSquare=1&sig=p1`);
 }
 
-function adminApex(): string {
+export function imageCdnUrl(name: string | null | undefined, query?: string): string | null {
+  return subdomainUrl('img', name, query, false);
+}
+
+export function assetCdnUrl(path: string | null | undefined): string | null {
+  return subdomainUrl('cdn', path, undefined, true);
+}
+
+export function adminApex(): string {
   if (typeof window === 'undefined') return 'rec.net';
 
   const host = window.location.hostname.toLowerCase();
@@ -52,6 +57,17 @@ function adminApex(): string {
 
   const parts = host.split('.');
   return parts.length > 2 ? parts.slice(1).join('.') : host;
+}
+
+function subdomainUrl(subdomain: string, path: string | null | undefined, query?: string, preserveSlashes = false): string | null {
+  if (!path) return null;
+  const apex = adminApex();
+  const scheme = apex === 'localhost' ? 'http' : 'https';
+  const suffix = query ? `?${query}` : '';
+  const encodedPath = preserveSlashes
+    ? path.split('/').map(encodeURIComponent).join('/')
+    : encodeURIComponent(path);
+  return `${scheme}://${subdomain}.${apex}/${encodedPath}${suffix}`;
 }
 
 export interface Room {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, get } from '../lib/api';
-import type { CommunityBoardState, Player, Room } from '../lib/types';
+import { assetCdnUrl, imageCdnUrl, type CommunityBoardState, type Player, type Room } from '../lib/types';
 import { useApi } from '../lib/useApi';
 import { PageHeader } from '../components/PageHeader';
 import { useToast } from '../components/Toast';
@@ -276,8 +276,7 @@ function InstagramImageRow({
     }
   };
 
-  const apex = typeof window !== 'undefined' && window.location.host.endsWith('localhost') ? 'localhost' : 'rec.net';
-  const preview = img.imageName ? `https://img.${apex}/${encodeURIComponent(img.imageName)}?width=128&sig=p1` : null;
+  const preview = imageCdnUrl(img.imageName, 'width=128&sig=p1');
 
   return (
     <div className="rounded border border-ink-800 p-2 flex gap-2 items-start">
@@ -439,15 +438,14 @@ function VideoRow({
   // because it overwrites thumbnailBlobName).
   const [autoThumb, setAutoThumb] = useState(true);
 
-  const apex = typeof window !== 'undefined' && window.location.host.endsWith('localhost') ? 'localhost' : 'rec.net';
-  const thumbPreview = video.thumbnailBlobName ? `https://img.${apex}/${encodeURIComponent(video.thumbnailBlobName)}?width=160&sig=p1` : null;
-  // The watch fetches videos under cdn.{apex}/video/<BlobName>
+  const thumbPreview = imageCdnUrl(video.thumbnailBlobName, 'width=160&sig=p1');
+  // The watch fetches videos under cdn.<apex>/video/<BlobName>
   // (RecNet/CommunityBoard.txt:1068 — `String.Concat("/video/", BlobName)`).
   // Match that path here so the inline admin preview hits the same
   // route the watch does; previously we built a bare `cdn.{apex}/<name>`
   // URL which 404'd because CdnController's catch-all regex didn't
   // include video extensions.
-  const videoUrl = video.blobName ? `https://cdn.${apex}/video/${encodeURIComponent(video.blobName)}` : null;
+  const videoUrl = assetCdnUrl(video.blobName ? `video/${video.blobName}` : null);
 
   // Video file picker → POST /communityboard/video/upload (timeout
   // generous: 100 MB at 5 MB/s is 20s of body time alone, plus S3

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { api, get } from '../lib/api';
+import { imageCdnUrl } from '../lib/types';
 import { PageHeader } from '../components/PageHeader';
 import { useToast } from '../components/Toast';
 import { Plus, Trash } from '../components/Icons';
@@ -185,8 +186,7 @@ function TipEditor({
     }
   };
 
-  const apex = typeof window !== 'undefined' && window.location.host.endsWith('localhost') ? 'localhost' : 'rec.net';
-  const preview = tip.imageName ? `https://img.${apex}/${encodeURIComponent(tip.imageName)}?width=160&sig=p1` : null;
+  const preview = imageCdnUrl(tip.imageName, 'width=160&sig=p1');
 
   return (
     <div className="card !p-4 space-y-3">
