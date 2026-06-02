@@ -31,13 +31,23 @@ public class RoomDataBlobService
     /// </summary>
     private readonly byte[] _allPermsBlob = BuildAllPermsBlob();
     private readonly RoomRoleCollectionData _allPermsRoleData = BuildAllPermsRoleData();
+    private readonly byte[] _rroEditableBlob = BuildRroEditableBlob();
+    private readonly RoomRoleCollectionData _rroEditableRoleData = BuildRroEditableRoleData();
 
     public byte[] GetDefaultBlob() => _allPermsBlob;
+    public byte[] GetRroEditableBlob() => _rroEditableBlob;
 
     public byte[] OverlayAllPermsRoleData(byte[] existingBlob)
     {
         var msg = PersistedRoomData.Parser.ParseFrom(existingBlob);
         msg.RoomRoleData = _allPermsRoleData.Clone();
+        return msg.ToByteArray();
+    }
+
+    public byte[] OverlayRroEditableRoleData(byte[] existingBlob)
+    {
+        var msg = PersistedRoomData.Parser.ParseFrom(existingBlob);
+        msg.RoomRoleData = _rroEditableRoleData.Clone();
         return msg.ToByteArray();
     }
 
@@ -53,6 +63,35 @@ public class RoomDataBlobService
 
     private static RoomRoleCollectionData BuildAllPermsRoleData()
     {
+        var collection = new RoomRoleCollectionData();
+        collection.RoomRoles.Add(BuildPermissiveRole(0, 100, "Creator"));
+
+        return collection;
+    }
+
+    private static byte[] BuildRroEditableBlob()
+    {
+        var msg = new PersistedRoomData
+        {
+            RoomRoleData = BuildRroEditableRoleData(),
+        };
+
+        return msg.ToByteArray();
+    }
+
+    private static RoomRoleCollectionData BuildRroEditableRoleData()
+    {
+        var collection = new RoomRoleCollectionData();
+        collection.RoomRoles.Add(BuildPermissiveRole(2_097_152, 100, "Creator"));   // AG_CREATOR
+        collection.RoomRoles.Add(BuildPermissiveRole(4_194_304, 90, "Co-owner"));   // AG_COOWNER
+        collection.RoomRoles.Add(BuildPermissiveRole(8_388_608, 80, "Host"));       // AG_HOST
+        collection.RoomRoles.Add(BuildPermissiveRole(16_777_216, 70, "Moderator")); // AG_MODERATOR
+
+        return collection;
+    }
+
+    private static PlayerRoomRoleData BuildPermissiveRole(int roleId, int rank, string name)
+    {
         // OverridableBoolData(overrides=true, inner_value=true) — used for
         // every Can* field on the role.
         OverridableBoolData OverrideTrue() => new()
@@ -61,27 +100,24 @@ public class RoomDataBlobService
             InnerValue = true,
         };
 
-        var role = new PlayerRoomRoleData
+        return new PlayerRoomRoleData
         {
             // Identity fields — these are deprecated in the 2026 schema
-            // but the 2020 client still reads them. role_id=0 = AG_EVERYONE
-            // which the client treats as "applies to all players in an AG
-            // room"; combined with all permissions overridden true, every
-            // player slot inherits maker pen.
-            DEPRECATEDRoleId = 0,
-            DEPRECATEDRoleRank = 100,
+            // but the 2020 client still reads them.
+            DEPRECATEDRoleId = roleId,
+            DEPRECATEDRoleRank = rank,
             DEPRECATEDIsRoleActive = true,
             DEPRECATEDIsAgRole = true,
-            RoleName = "Creator",
+            RoleName = name,
             RoleVersion = 1,
-            RoleGuid = Guid.NewGuid().ToString(),
+            RoleGuid = StableRoleGuid(roleId),
 
             // Display name override — keeps the watch's role-list UI from
             // showing a blank label.
             Name = new OverridableStringData
             {
                 Overrides = true,
-                InnerValue = "Creator",
+                InnerValue = name,
             },
 
             // Permission grants. Each Overridable*Data(overrides=true,
@@ -115,10 +151,42 @@ public class RoomDataBlobService
                 InnerValue = 0,
             },
         };
+    }
 
-        var collection = new RoomRoleCollectionData();
-        collection.RoomRoles.Add(role);
+    private static string StableRoleGuid(int roleId) =>
+        GuidUtility.Create(GuidUtility.UrlNamespace, $"dorknet-room-role:{roleId}").ToString();
+}
 
-        return collection;
+internal static class GuidUtility
+{
+    public static readonly Guid UrlNamespace = new("6ba7b811-9dad-11d1-80b4-00c04fd430c8");
+
+    public static Guid Create(Guid namespaceId, string name)
+    {
+        var namespaceBytes = namespaceId.ToByteArray();
+        SwapByteOrder(namespaceBytes);
+
+        var nameBytes = System.Text.Encoding.UTF8.GetBytes(name);
+        var data = new byte[namespaceBytes.Length + nameBytes.Length];
+        Buffer.BlockCopy(namespaceBytes, 0, data, 0, namespaceBytes.Length);
+        Buffer.BlockCopy(nameBytes, 0, data, namespaceBytes.Length, nameBytes.Length);
+
+        var hash = System.Security.Cryptography.SHA1.HashData(data);
+        var newGuid = new byte[16];
+        Array.Copy(hash, 0, newGuid, 0, 16);
+
+        newGuid[6] = (byte)((newGuid[6] & 0x0F) | 0x50);
+        newGuid[8] = (byte)((newGuid[8] & 0x3F) | 0x80);
+
+        SwapByteOrder(newGuid);
+        return new Guid(newGuid);
+    }
+
+    private static void SwapByteOrder(byte[] guid)
+    {
+        (guid[0], guid[3]) = (guid[3], guid[0]);
+        (guid[1], guid[2]) = (guid[2], guid[1]);
+        (guid[4], guid[5]) = (guid[5], guid[4]);
+        (guid[6], guid[7]) = (guid[7], guid[6]);
     }
 }

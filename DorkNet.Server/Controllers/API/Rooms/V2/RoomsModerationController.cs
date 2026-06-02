@@ -299,10 +299,17 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
             return Ok(new { success = true, error = "" });
 
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
-        int role = (room?.CreatorPlayerId == playerId) ? 30 : 0;
+        var acceptedRoles = await db.RoomRoles
+            .Where(r => r.RoomId == roomId && r.PlayerId == playerId && r.Accepted)
+            .Select(r => r.Role)
+            .ToListAsync();
+        int role = (room?.CreatorPlayerId == playerId)
+            ? 30
+            : acceptedRoles.Select(RoomRoleRank).DefaultIfEmpty(0).Max();
         long permissions = role switch
         {
             30 => -1L,
+            20 => 0x0FFFFFFFL,
             10 => 0x0FFFFFFFL,
             5  => 0x000000FFL,
             _  => 0x0000000FL,

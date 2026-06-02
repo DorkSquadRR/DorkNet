@@ -356,7 +356,7 @@ public class CdnController(
             {
                 try
                 {
-                    s3Bytes = roomDataBlob.OverlayAllPermsRoleData(s3Bytes);
+                    s3Bytes = roomDataBlob.OverlayRroEditableRoleData(s3Bytes);
                     overlaidRoomRoleData = true;
                     logger.LogInformation("[cdn] overlaid RRO room-role permissions host={Host} file={File} bytes={Bytes}",
                         Request.Host.Host, fileName, s3Bytes.Length);
@@ -393,6 +393,16 @@ public class CdnController(
             return new FileContentResult(TransparentPng, "image/png");
         }
 
+        if (await ShouldOverlayRroRoomRoleDataAsync(fileName))
+        {
+            logger.LogInformation("[cdn] MISS host={Host} file={File} -> RRO editable role blob",
+                Request.Host.Host, fileName);
+            var rroBlob = roomDataBlob.GetRroEditableBlob();
+            Response.Headers.CacheControl = "public, max-age=60";
+            signatures.AddContentSignature(Response, rroBlob);
+            return new FileContentResult(rroBlob, "application/octet-stream");
+        }
+
         logger.LogInformation("[cdn] MISS host={Host} file={File} -> default blob",
             Request.Host.Host, fileName);
         var fallbackBlob = roomDataBlob.GetDefaultBlob();
@@ -405,13 +415,24 @@ public class CdnController(
         if (string.IsNullOrWhiteSpace(fileName)) return false;
 
         if (await db.Rooms.AsNoTracking().AnyAsync(r =>
-                r.IsAGRoom && r.CurrentDataBlobName == fileName))
+                r.IsAGRoom &&
+                r.CurrentDataBlobName == fileName &&
+                db.RoomRoles.Any(rr => rr.RoomId == r.Id && rr.Accepted)))
+            return true;
+
+        if (fileName.StartsWith("room_", StringComparison.OrdinalIgnoreCase) &&
+            fileName.EndsWith("_v1.dat", StringComparison.OrdinalIgnoreCase) &&
+            long.TryParse(fileName[5..^7], out var roomId) &&
+            await db.Rooms.AsNoTracking().AnyAsync(r => r.Id == roomId && r.IsAGRoom) &&
+            await db.RoomRoles.AsNoTracking().AnyAsync(r => r.RoomId == roomId && r.Accepted))
             return true;
 
         return await (
             from scene in db.RoomScenes.AsNoTracking()
             join room in db.Rooms.AsNoTracking() on scene.RoomId equals room.Id
-            where room.IsAGRoom && scene.DataBlobName == fileName
+            where room.IsAGRoom &&
+                  scene.DataBlobName == fileName &&
+                  db.RoomRoles.Any(rr => rr.RoomId == room.Id && rr.Accepted)
             select scene.Id
         ).AnyAsync();
     }

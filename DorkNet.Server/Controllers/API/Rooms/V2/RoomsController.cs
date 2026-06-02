@@ -1079,7 +1079,9 @@ public class RoomsController(
         // the all-perms default blob until their first save replaces
         // it via StorageController; the rec center / paintball / etc.
         // serve "" so the persistence flow short-circuits.
-        var customisable = room.IsDormRoom || room.CreatorPlayerId != 1;
+        var roleList = roles ?? Array.Empty<RoomRoleEntity>();
+        var editableRro = room.IsAGRoom && roleList.Any(r => r.Accepted);
+        var customisable = room.IsDormRoom || room.CreatorPlayerId != 1 || editableRro;
         var dataBlobName = !string.IsNullOrEmpty(room.CurrentDataBlobName)
             ? room.CurrentDataBlobName
             : customisable ? $"room_{room.Id}_v1.dat" : "";
@@ -1153,7 +1155,6 @@ public class RoomsController(
         // Additional grants come from RoomRoleEntity rows when supplied;
         // callers without role data (clone/myrooms/etc.) ship just the
         // implicit creator.
-        var roleList = roles ?? Array.Empty<RoomRoleEntity>();
         int[] PlayersIn(int role, bool accepted) => roleList
             .Where(r => r.Role == role && r.Accepted == accepted)
             .Select(r => (int)r.PlayerId)
@@ -1194,7 +1195,9 @@ public class RoomsController(
         string? overrideDataBlobName = null,
         IReadOnlyList<RoomRoleEntity>? roles = null)
     {
-        var customisable = room.IsDormRoom || room.CreatorPlayerId != 1;
+        var roleList = roles ?? Array.Empty<RoomRoleEntity>();
+        var editableRro = room.IsAGRoom && roleList.Any(r => r.Accepted);
+        var customisable = room.IsDormRoom || room.CreatorPlayerId != 1 || editableRro;
         var dataBlobName = !string.IsNullOrEmpty(room.CurrentDataBlobName)
             ? room.CurrentDataBlobName
             : customisable ? $"room_{room.Id}_v1.dat" : "";
@@ -1233,7 +1236,6 @@ public class RoomsController(
                 },
             };
 
-        var roleList = roles ?? Array.Empty<RoomRoleEntity>();
         static int WireRole(int role) => role switch
         {
             0 => 30, // CoOwner

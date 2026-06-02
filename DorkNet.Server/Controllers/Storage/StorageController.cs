@@ -28,10 +28,9 @@ namespace DorkNet.Server.Controllers.Storage;
 ///     the room.</item>
 /// </list>
 ///
-/// Permission rule: only the room's creator (or the dorm owner for a
-/// dorm save) can persist a new blob. Saves from other players in the
-/// same room are silently rejected with 403 — they can build with the
-/// Maker Pen but their changes won't outlive the session.
+/// Permission rule: the room's creator, accepted co-owners, and admins
+/// can persist a new blob. Dorm saves are always scoped to the local
+/// player's own dorm row.
 /// </summary>
 [ApiController]
 [Authorize]
@@ -174,12 +173,14 @@ public class StorageController(
         if (room.IsDormRoom)
             return await UploadDormSaveAsync(playerId, bytes, references, room.Id);
 
-        // Permission: only the room owner can save. (Future Phase 5
-        // expansion: co-owners + admins. For now, strict owner-only —
-        // matches the 2020 official server's "RoomRolePermissions
-        // .CanUseMakerPen" behaviour, which rejects upload at the wire
-        // for non-owners.)
-        if (room.CreatorPlayerId != playerId)
+        var canSave = room.CreatorPlayerId == playerId
+            || await db.Players.AnyAsync(p => p.Id == playerId && p.IsAdmin)
+            || await db.RoomRoles.AnyAsync(r =>
+                r.RoomId == room.Id &&
+                r.PlayerId == playerId &&
+                r.Accepted &&
+                r.Role == 0);
+        if (!canSave)
         {
             logger.LogWarning(
                 "[storage] player {PlayerId} tried to save room {RoomId} (creator={CreatorId})",
