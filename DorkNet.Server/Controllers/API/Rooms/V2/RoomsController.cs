@@ -33,6 +33,7 @@ public class RoomsController(
     OnlinePresenceService onlinePresence,
     DomainConfig domain,
     NotificationService notifications,
+    ServerSettingsService serverSettings,
     ILogger<RoomsController> logger) : ControllerBase
 {
     private long? CurrentPlayerId => ControllerBaseExtensions.CurrentPlayerId(this);
@@ -143,23 +144,30 @@ public class RoomsController(
     // '#' at render time, so sending "#community" produces "##community" in
     // the UI. Names stored in the DB also drop the prefix.
     [HttpGet("api/rooms/v1/filters")]
-    public IActionResult Filters() => Ok(new
+    public async Task<IActionResult> Filters()
     {
-        PinnedFilters = new[] { "community", "recroomoriginal", "featured", "quest" },
-        PopularFilters = new[] { "paintball", "dodgeball", "soccer", "lasertag", "discgolf" },
-    });
+        var tags = await serverSettings.GetPlayMenuTagsAsync();
+        return Ok(new
+        {
+            PinnedFilters = tags.PinnedTags,
+            PopularFilters = tags.PopularTags,
+        });
+    }
 
     [HttpGet("api/rooms/v1/tags")]
-    public IActionResult Tags() => Ok(new[] {
-        "community", "recroomoriginal", "featured", "quest",
-        "paintball", "dodgeball", "soccer", "lasertag", "discgolf",
-    });
+    public async Task<IActionResult> Tags()
+    {
+        var tags = await serverSettings.GetPlayMenuTagsAsync();
+        return Ok(tags.PinnedTags.Concat(tags.PopularTags).Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
+    }
 
     [HttpGet("api/rooms/v1/pinnedtags")]
-    public IActionResult PinnedTags() => Ok(new[] { "community", "recroomoriginal", "featured" });
+    public async Task<IActionResult> PinnedTags()
+        => Ok((await serverSettings.GetPlayMenuTagsAsync()).PinnedTags);
 
     [HttpGet("api/rooms/v1/populartags")]
-    public IActionResult PopularTags() => Ok(new[] { "paintball", "dodgeball", "soccer" });
+    public async Task<IActionResult> PopularTags()
+        => Ok((await serverSettings.GetPlayMenuTagsAsync()).PopularTags);
 
     // ── Single room lookups ──────────────────────────────────────────────
 

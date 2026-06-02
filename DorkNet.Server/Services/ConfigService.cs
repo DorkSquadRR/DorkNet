@@ -41,6 +41,19 @@ public class ConfigService(IConfiguration config, DomainConfig domain)
                 ["FriendsEnabled"]     = "true",
                 ["ChatEnabled"]        = "true",
                 ["VoiceEnabled"]       = "true",
+                // Rec Center category doors are baked with these
+                // config lookups. Missing values leave the door browser
+                // and door-specific return spawns without a category.
+                ["Door.Shooters.Title"] = "Shooters",
+                ["Door.Shooters.Query"] = "#paintball,#lasertag,#recroyale",
+                ["Door.Creative.Title"] = "Creative",
+                ["Door.Creative.Query"] = "#creative,#makerpen,#template",
+                ["Door.Quests.Title"]   = "Quests",
+                ["Door.Quests.Query"]   = "#quest",
+                ["Door.Sports.Title"]   = "Sports",
+                ["Door.Sports.Query"]   = "#sport",
+                ["Door.Featured.Title"] = "Featured",
+                ["Door.Featured.Query"] = "#featured",
             },
         };
     }

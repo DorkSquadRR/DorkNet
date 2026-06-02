@@ -10,8 +10,20 @@ import { useToast } from '../components/Toast';
 import { Confirm } from '../components/Confirm';
 import { RefreshCw, Trash, Upload } from '../components/Icons';
 
+interface PlayMenuTagSettings {
+  pinnedTags: string[];
+  popularTags: string[];
+  updatedAt: string;
+}
+
 export function Rooms() {
   const { data, loading, error, refresh } = useApi<Room[]>('/rooms');
+  const {
+    data: playMenuTags,
+    loading: tagsLoading,
+    error: tagsError,
+    refresh: refreshPlayMenuTags,
+  } = useApi<PlayMenuTagSettings>('/settings/play-menu-tags');
   const [filter, setFilter] = useState('');
   const [filterKind, setFilterKind] = useState<'all' | 'original' | 'custom' | 'dorm'>('all');
   const [pendingDelete, setPendingDelete] = useState<Room | null>(null);
@@ -62,6 +74,13 @@ export function Rooms() {
             <RefreshCw className={loading ? 'animate-spin' : ''} /> Refresh
           </button>
         </>}
+      />
+
+      <PlayMenuTagsPanel
+        tags={playMenuTags}
+        loading={tagsLoading}
+        error={tagsError}
+        onSaved={refreshPlayMenuTags}
       />
 
       <div className="card overflow-hidden">
@@ -151,6 +170,102 @@ export function Rooms() {
           onClose={() => setPendingPurge(null)}
           onPurged={refresh}
         />
+      )}
+    </div>
+  );
+}
+
+function PlayMenuTagsPanel({
+  tags,
+  loading,
+  error,
+  onSaved,
+}: {
+  tags: PlayMenuTagSettings | null;
+  loading: boolean;
+  error: string | null;
+  onSaved: () => void;
+}) {
+  const [pinnedText, setPinnedText] = useState('');
+  const [popularText, setPopularText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+
+  useEffect(() => {
+    if (!tags) return;
+    setPinnedText(tags.pinnedTags.join('\n'));
+    setPopularText(tags.popularTags.join('\n'));
+  }, [tags]);
+
+  const parseTags = (text: string) =>
+    text
+      .split(/[\n,]+/)
+      .map(t => t.trim().replace(/^#+/, '').toLowerCase())
+      .filter(Boolean);
+
+  const save = async (reset = false) => {
+    setBusy(true);
+    try {
+      await api<PlayMenuTagSettings>('/settings/play-menu-tags', {
+        method: 'POST',
+        body: reset
+          ? { PinnedTags: [], PopularTags: [] }
+          : { PinnedTags: parseTags(pinnedText), PopularTags: parseTags(popularText) },
+      });
+      toast.push(reset ? 'Play menu tags reset.' : 'Play menu tags saved.', 'success');
+      onSaved();
+    } catch (e) {
+      toast.push((e as Error).message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card !p-4 mb-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-ink-50">Play menu tags</h2>
+          <p className="mt-1 text-xs text-ink-400">
+            Filter chips shown in the watch Play menu. Use one tag per line or commas; leave off the #.
+          </p>
+          {tags && (
+            <p className="mt-1 text-[11px] text-ink-500">
+              Last changed {new Date(tags.updatedAt).toLocaleString()}.
+            </p>
+          )}
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => save(true)} disabled={busy || loading} className="btn-secondary text-xs">
+            Defaults
+          </button>
+          <button onClick={() => save(false)} disabled={busy || loading} className="btn-primary text-xs">
+            {busy ? 'Saving...' : 'Save tags'}
+          </button>
+        </div>
+      </div>
+
+      {error && <div className="mt-3 text-sm text-danger">{error}</div>}
+      {loading && !tags && <div className="mt-3 text-xs text-ink-400">Loading tags...</div>}
+      {tags && (
+        <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <label className="block">
+            <span className="label">Pinned tags</span>
+            <textarea
+              value={pinnedText}
+              onChange={e => setPinnedText(e.target.value)}
+              className="input mt-1 min-h-36 font-mono text-xs"
+            />
+          </label>
+          <label className="block">
+            <span className="label">Popular tags</span>
+            <textarea
+              value={popularText}
+              onChange={e => setPopularText(e.target.value)}
+              className="input mt-1 min-h-36 font-mono text-xs"
+            />
+          </label>
+        </div>
       )}
     </div>
   );

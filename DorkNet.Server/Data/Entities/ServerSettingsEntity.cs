@@ -38,5 +38,10 @@ public class ServerSettingsEntity
     /// server-side XP/token grant.</summary>
     public string WeeklyChallengeRewardJson { get; set; } = string.Empty;
 
+    /// <summary>Admin-managed Play menu room filter chips as JSON. Stores
+    /// separate pinned and popular tag lists; wire endpoints serve them to
+    /// the watch without leading # characters.</summary>
+    public string PlayMenuTagsJson { get; set; } = string.Empty;
+
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

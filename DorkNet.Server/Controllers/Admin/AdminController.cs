@@ -1494,6 +1494,26 @@ public class AdminController(
         return Ok(weekly);
     }
 
+    [HttpGet("settings/play-menu-tags")]
+    public async Task<ActionResult> GetPlayMenuTags()
+        => Ok(await serverSettings.GetPlayMenuTagsAsync());
+
+    public sealed record PlayMenuTagsRequest(
+        List<string>? PinnedTags,
+        List<string>? PopularTags);
+
+    [HttpPost("settings/play-menu-tags")]
+    public async Task<ActionResult> SetPlayMenuTags([FromBody] PlayMenuTagsRequest body)
+    {
+        var tags = await serverSettings.SetPlayMenuTagsAsync(
+            body.PinnedTags ?? [],
+            body.PopularTags ?? []);
+        await LogAsync("play_menu_tags_updated", "system", 0,
+            $"pinned={string.Join(",", tags.PinnedTags)} popular={string.Join(",", tags.PopularTags)}");
+        await db.SaveChangesAsync();
+        return Ok(tags);
+    }
+
     // ── Signup codes ─────────────────────────────────────────────────────
 
     /// <summary>GET <c>api/admin/v1/signup-codes</c> — every issued code

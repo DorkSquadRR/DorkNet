@@ -77,50 +77,50 @@ public class RoomService(DorkNetDbContext db)
             // tools/extract-locations-binary.py. Output cached at data/room_locations.json.
             // Each Location has a SceneName matching one of the .unity scenes the client
             // ships (see tools/dump-all-scenes.py for the 96-scene index).
-            ("RecCenter",        "Rec Center",         "A social hub to meet and mingle with friends new and old.", "cbad71af-0831-44d8-b8ef-69edafa841f6", "recroomoriginal,featured", "image_RecCenter.png"),
-            ("3DCharades",       "3D Charades",        "Take turns drawing, acting, and guessing funny phrases with your friends!", "4078dfed-24bb-4db7-863f-578ba48d726b", "recroomoriginal", "image_3DCharades.png"),
-            ("DiscGolfLake",     "DiscGolf Lake",      "A leisurely stroll through the grass. Throw your disc into the goal.", "f6f7256c-e438-4299-b99e-d20bef8cf7e0", "recroomoriginal,sport", "image_DiscGolfLake.png"),
-            ("DiscGolfPropulsion","DiscGolf Propulsion","Throw your disc through hazards and around wind machines on this challenging course!", "d9378c9f-80bc-46fb-ad1e-1bed8a674f55", "recroomoriginal,sport", "image_DiscGolfPropulsion.png"),
-            ("Dodgeball",        "Dodgeball",          "Throw dodgeballs to knock out your friends in this gym classic!", "3d474b26-26f7-45e9-9a36-9b02847d5e6f", "recroomoriginal,sport", "image_Dodgeball.png"),
-            ("Paddleball",       "Paddleball",         "A simple rally game between two players in a plexiglass tube with a zero-g ball.", "d89f74fa-d51e-477a-a425-025a891dd499", "recroomoriginal,sport", "image_Paddleball.png"),
-            ("Paintball",        "Paintball",          "Red and Blue teams splat each other in capture the flag and team battle.", "e122fe98-e7db-49e8-a1b1-105424b6e1f0", "recroomoriginal,sport", "image_Paintball.png"),
+            ("RecCenter",        "Rec Center",         "A social hub to meet and mingle with friends new and old.", "cbad71af-0831-44d8-b8ef-69edafa841f6", "recroomoriginal,featured,hangout,chill,social", "image_RecCenter.png"),
+            ("3DCharades",       "3D Charades",        "Take turns drawing, acting, and guessing funny phrases with your friends!", "4078dfed-24bb-4db7-863f-578ba48d726b", "recroomoriginal,charades,party,creative", "image_3DCharades.png"),
+            ("DiscGolfLake",     "DiscGolf Lake",      "A leisurely stroll through the grass. Throw your disc into the goal.", "f6f7256c-e438-4299-b99e-d20bef8cf7e0", "recroomoriginal,sport,discgolf", "image_DiscGolfLake.png"),
+            ("DiscGolfPropulsion","DiscGolf Propulsion","Throw your disc through hazards and around wind machines on this challenging course!", "d9378c9f-80bc-46fb-ad1e-1bed8a674f55", "recroomoriginal,sport,discgolf", "image_DiscGolfPropulsion.png"),
+            ("Dodgeball",        "Dodgeball",          "Throw dodgeballs to knock out your friends in this gym classic!", "3d474b26-26f7-45e9-9a36-9b02847d5e6f", "recroomoriginal,sport,dodgeball,pvp", "image_Dodgeball.png"),
+            ("Paddleball",       "Paddleball",         "A simple rally game between two players in a plexiglass tube with a zero-g ball.", "d89f74fa-d51e-477a-a425-025a891dd499", "recroomoriginal,sport,paddleball,pvp", "image_Paddleball.png"),
+            ("Paintball",        "Paintball",          "Red and Blue teams splat each other in capture the flag and team battle.", "e122fe98-e7db-49e8-a1b1-105424b6e1f0", "recroomoriginal,sport,paintball,pvp", "image_Paintball.png"),
             // Soccer scene = soccer.unity, Location ReplicationId verified
             // (was previously mis-mapped to IsleOfLostSkulls' GUID).
-            ("Soccer",           "Soccer",             "Teams of three run around slamming themselves into an over-sized soccer ball. Goal!", "6d5eea4b-f069-4ed0-9916-0e2f07df0d03", "recroomoriginal,sport", "image_Soccer.png"),
+            ("Soccer",           "Soccer",             "Teams of three run around slamming themselves into an over-sized soccer ball. Goal!", "6d5eea4b-f069-4ed0-9916-0e2f07df0d03", "recroomoriginal,sport,soccer,pvp", "image_Soccer.png"),
             // LaserTag in the 2020 build IS the CyberJunkCity arena scene
             // (Arena_Cyberjunk_City.unity). Was previously mis-mapped to
             // soccer's GUID. Hangar (Arena_Hangar3.unity) is the alternate
             // map players reach via the in-game lobby.
-            ("LaserTag",         "Laser Tag",          "Teams battle each other and waves of robots in a totally cyber neon future city.", "9d6456ce-6264-48b4-808d-2d96b3d91038", "recroomoriginal,sport", "image_LaserTag.png"),
-            ("CyberJunkCity",    "Laser Tag CyberJunk","Teams battle each other and waves of robots in a totally cyber neon future city.", "9d6456ce-6264-48b4-808d-2d96b3d91038", "recroomoriginal,sport", "image_CyberJunkCity.png"),
-            ("LaserTagHangar",   "Laser Tag Hangar",   "Teams battle in an industrial warehouse map.", "239e676c-f12f-489f-bf3a-d4c383d692c3", "recroomoriginal,sport", "image_LaserTag.png"),
-            ("RecRoyaleSquads",  "Rec Royale Squads",  "Squads of three battle it out on Frontier Island. Last squad standing wins!", "253fa009-6e65-4c90-91a1-7137a56a267f", "recroomoriginal,featured,sport", "image_RecRoyaleSquads.png"),
+            ("LaserTag",         "Laser Tag",          "Teams battle each other and waves of robots in a totally cyber neon future city.", "9d6456ce-6264-48b4-808d-2d96b3d91038", "recroomoriginal,sport,lasertag,pvp", "image_LaserTag.png"),
+            ("CyberJunkCity",    "Laser Tag CyberJunk","Teams battle each other and waves of robots in a totally cyber neon future city.", "9d6456ce-6264-48b4-808d-2d96b3d91038", "recroomoriginal,sport,lasertag,pvp", "image_CyberJunkCity.png"),
+            ("LaserTagHangar",   "Laser Tag Hangar",   "Teams battle in an industrial warehouse map.", "239e676c-f12f-489f-bf3a-d4c383d692c3", "recroomoriginal,sport,lasertag,pvp", "image_LaserTag.png"),
+            ("RecRoyaleSquads",  "Rec Royale Squads",  "Squads of three battle it out on Frontier Island. Last squad standing wins!", "253fa009-6e65-4c90-91a1-7137a56a267f", "recroomoriginal,featured,sport,recroyale,pvp,battle", "image_RecRoyaleSquads.png"),
             // RecRoyaleSolos was previously pointing at a Home location
             // GUID (85b43509-…); the real Solos Location is b010171f-….
-            ("RecRoyaleSolos",   "Rec Royale Solos",   "Battle it out on Frontier Island. Last person standing wins!", "b010171f-4875-4e89-baba-61e878cd41e1", "recroomoriginal,sport", "image_RecRoyaleSolos.png"),
-            ("GoldenTrophy",     "Quest For The Golden Trophy", "The goblin king stole Coach's Golden Trophy. Team up and embark on an epic quest to recover it!", "91e16e35-f48f-4700-ab8a-a1b79e50e51b", "recroomoriginal,quest", "image_GoldenTrophy.png"),
-            ("TheRiseofJumbotron","The Rise of Jumbotron", "Robot invaders threaten the galaxy! Team up with your friends and bring the laser heat!", "acc06e66-c2d0-4361-b0cd-46246a4c455c", "recroomoriginal,quest", "image_TheRiseofJumbotron.png"),
-            ("CrimsonCauldron",  "Curse of the Crimson Cauldron", "Can your band of adventurers brave the enchanted wilds, and lift the curse of the crimson cauldron?", "949fa41f-4347-45c0-b7ac-489129174045", "recroomoriginal,quest", "image_CrimsonCauldron.png"),
+            ("RecRoyaleSolos",   "Rec Royale Solos",   "Battle it out on Frontier Island. Last person standing wins!", "b010171f-4875-4e89-baba-61e878cd41e1", "recroomoriginal,sport,recroyale,pvp,battle", "image_RecRoyaleSolos.png"),
+            ("GoldenTrophy",     "Quest For The Golden Trophy", "The goblin king stole Coach's Golden Trophy. Team up and embark on an epic quest to recover it!", "91e16e35-f48f-4700-ab8a-a1b79e50e51b", "recroomoriginal,quest,co-op,adventure", "image_GoldenTrophy.png"),
+            ("TheRiseofJumbotron","The Rise of Jumbotron", "Robot invaders threaten the galaxy! Team up with your friends and bring the laser heat!", "acc06e66-c2d0-4361-b0cd-46246a4c455c", "recroomoriginal,quest,co-op,adventure", "image_TheRiseofJumbotron.png"),
+            ("CrimsonCauldron",  "Curse of the Crimson Cauldron", "Can your band of adventurers brave the enchanted wilds, and lift the curse of the crimson cauldron?", "949fa41f-4347-45c0-b7ac-489129174045", "recroomoriginal,quest,co-op,adventure", "image_CrimsonCauldron.png"),
             // IsleOfLostSkulls was previously pointing at Quarry's GUID;
             // real Location ReplicationId is 7e01cfe0-… (scene Quest_Pirate1_additive).
-            ("IsleOfLostSkulls", "The Isle of Lost Skulls", "Can your pirate crew get to the Isle, defeat its fearsome guardian, and escape with the gold?", "7e01cfe0-820a-406f-b1b3-0a5bf575235c", "recroomoriginal,quest", "image_IsleOfLostSkulls.png"),
-            ("Crescendo",        "Crescendo of the Blood Moon", "Brave the haunted halls of Castle Dracula and survive the night.", "49cb8993-a956-43e2-86f4-1318f279b22a", "recroomoriginal,quest", "image_Crescendo.png"),
-            ("StuntRunner",      "Stunt Runner",       "A solo platforming gauntlet — sprint, climb and dodge to reach the trophy at the top.", "b7281665-a715-4051-826b-8e08e69c6172", "recroomoriginal,sport,quest", "image_StuntRunner.png"),
-            ("Drive-In",         "Rec Drive-In",       "Watch movies, hang out with friends, or chill at the bar.", "65ddbb48-5a01-4e3e-972d-e5c7419e2bc3", "recroomoriginal,featured", "image_DriveIn.png"),
+            ("IsleOfLostSkulls", "The Isle of Lost Skulls", "Can your pirate crew get to the Isle, defeat its fearsome guardian, and escape with the gold?", "7e01cfe0-820a-406f-b1b3-0a5bf575235c", "recroomoriginal,quest,co-op,adventure", "image_IsleOfLostSkulls.png"),
+            ("Crescendo",        "Crescendo of the Blood Moon", "Brave the haunted halls of Castle Dracula and survive the night.", "49cb8993-a956-43e2-86f4-1318f279b22a", "recroomoriginal,quest,co-op,adventure", "image_Crescendo.png"),
+            ("StuntRunner",      "Stunt Runner",       "A solo platforming gauntlet — sprint, climb and dodge to reach the trophy at the top.", "b7281665-a715-4051-826b-8e08e69c6172", "recroomoriginal,sport,quest,stuntrunner,parkour", "image_StuntRunner.png"),
+            ("Drive-In",         "Rec Drive-In",       "Watch movies, hang out with friends, or chill at the bar.", "65ddbb48-5a01-4e3e-972d-e5c7419e2bc3", "recroomoriginal,featured,hangout,chill", "image_DriveIn.png"),
             // Hub / hang rooms — no specific gameplay, just shared spaces.
-            ("Park",             "The Park",           "An outdoor park with picnic tables and lawn games — a chill place to hang out.", "0a864c86-5a71-4e18-8041-8124e4dc9d98", "recroomoriginal,featured", "image_Park.png"),
-            ("PerformanceHall",  "Performance Hall",   "A big stage for live performances. Sing, perform, or just enjoy the show.", "9932f88f-3929-43a0-a012-a40b5128e346", "recroomoriginal", "image_PerformanceHall.png"),
-            ("EventRoom",        "The Lounge",         "A modular event hall with movable furniture for parties and meetings.", "a067557f-ca32-43e6-b6e5-daaec60b4f5a", "recroomoriginal", "image_EventRoom.png"),
-            ("BowlingAlley",     "Bowling Alley",      "Classic ten-pin bowling. Roll strikes, beat your friends.", "ae929543-9a07-41d5-8ee9-dbbee8c36800", "recroomoriginal,sport", "image_BowlingAlley.png"),
+            ("Park",             "The Park",           "An outdoor park with picnic tables and lawn games — a chill place to hang out.", "0a864c86-5a71-4e18-8041-8124e4dc9d98", "recroomoriginal,featured,hangout,chill", "image_Park.png"),
+            ("PerformanceHall",  "Performance Hall",   "A big stage for live performances. Sing, perform, or just enjoy the show.", "9932f88f-3929-43a0-a012-a40b5128e346", "recroomoriginal,hangout,music", "image_PerformanceHall.png"),
+            ("EventRoom",        "The Lounge",         "A modular event hall with movable furniture for parties and meetings.", "a067557f-ca32-43e6-b6e5-daaec60b4f5a", "recroomoriginal,hangout,chill", "image_EventRoom.png"),
+            ("BowlingAlley",     "Bowling Alley",      "Classic ten-pin bowling. Roll strikes, beat your friends.", "ae929543-9a07-41d5-8ee9-dbbee8c36800", "recroomoriginal,sport,bowling", "image_BowlingAlley.png"),
             // Sandbox templates (cloning canvases) — every "Home"-named
             // Location with a recognizable scene. Players land in these
             // when picking a stage for a custom room.
-            ("River",            "River",              "An outdoor template for building. Mountains, river, and forest as your starting canvas.", "e122fe98-e7db-49e8-a1b1-105424b6e1f0", "recroomoriginal,template", "image_River.png"),
-            ("Homestead",        "Homestead",          "A frontier-themed template — barn, fences, dusty trails. Build your homestead.", "a785267d-c579-42ea-be43-fec1992d1ca7", "recroomoriginal,template", "image_Homestead.png"),
-            ("Quarry",           "Quarry",             "A rocky open-pit template, ideal for industrial and obstacle-course builds.", "ff4c6427-7079-4f59-b22a-69b089420827", "recroomoriginal,template", "image_Quarry.png"),
-            ("Clearcut",         "Clearcut",           "An open clearing template — flat ground, mountains in the distance.", "380d18b5-de9c-49f3-80f7-f4a95c1de161", "recroomoriginal,template", "image_Clearcut.png"),
-            ("Spillway",         "Spillway",           "A water-park template — pools, waterslides, and concrete chutes for action builds.", "58763055-2dfb-4814-80b8-16fac5c85709", "recroomoriginal,template", "image_Spillway.png"),
-            ("MakerRoom",        "Maker Room",         "A blank-walled canvas. The classic starting point for a Maker Pen build.", "a75f7547-79eb-47c6-8986-6767abcb4f92", "recroomoriginal,template,featured", "image_RecCenter.png"),
+            ("River",            "River",              "An outdoor template for building. Mountains, river, and forest as your starting canvas.", "e122fe98-e7db-49e8-a1b1-105424b6e1f0", "recroomoriginal,template,creative,makerpen", "image_River.png"),
+            ("Homestead",        "Homestead",          "A frontier-themed template — barn, fences, dusty trails. Build your homestead.", "a785267d-c579-42ea-be43-fec1992d1ca7", "recroomoriginal,template,creative,makerpen", "image_Homestead.png"),
+            ("Quarry",           "Quarry",             "A rocky open-pit template, ideal for industrial and obstacle-course builds.", "ff4c6427-7079-4f59-b22a-69b089420827", "recroomoriginal,template,creative,makerpen", "image_Quarry.png"),
+            ("Clearcut",         "Clearcut",           "An open clearing template — flat ground, mountains in the distance.", "380d18b5-de9c-49f3-80f7-f4a95c1de161", "recroomoriginal,template,creative,makerpen", "image_Clearcut.png"),
+            ("Spillway",         "Spillway",           "A water-park template — pools, waterslides, and concrete chutes for action builds.", "58763055-2dfb-4814-80b8-16fac5c85709", "recroomoriginal,template,creative,makerpen", "image_Spillway.png"),
+            ("MakerRoom",        "Maker Room",         "A blank-walled canvas. The classic starting point for a Maker Pen build.", "a75f7547-79eb-47c6-8986-6767abcb4f92", "recroomoriginal,template,featured,creative,makerpen", "image_RecCenter.png"),
         };
 
         // Stable id allocation: 100..1000 reserved for seeded rooms. User
@@ -571,7 +571,10 @@ public class RoomService(DorkNetDbContext db)
             if (bareTag.Length > 0)
             {
                 var needle = $"%{bareTag}%";
-                q = q.Where(r => EF.Functions.Like(r.TagsCsv, needle));
+                q = q.Where(r =>
+                    EF.Functions.Like(r.TagsCsv, needle) ||
+                    EF.Functions.Like(r.Name, needle) ||
+                    EF.Functions.Like(r.Description, needle));
             }
         }
         return await q.OrderByDescending(r => r.HotScore).Take(take).ToListAsync();

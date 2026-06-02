@@ -100,6 +100,7 @@ public static class DatabaseBootstrap
         // idempotent raw SQL that works on a fresh DB too (CREATE TABLE
         // IF NOT EXISTS no-ops when EnsureCreated already built them).
         await EnsureSignupCodeTablesAsync(db);
+        await EnsureServerSettingsColumnsAsync(db);
 
         // Coach system account at Player.Id=1. The RR-Original room seeder
         // below assigns CreatorPlayerId=1 to every canonical room
@@ -234,6 +235,29 @@ public static class DatabaseBootstrap
 
         foreach (var sql in statements)
             await db.Database.ExecuteSqlRawAsync(sql);
+    }
+
+    private static async Task EnsureServerSettingsColumnsAsync(DorkNetDbContext db)
+    {
+        var provider = db.Database.ProviderName ?? string.Empty;
+        if (provider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""ServerSettings"" ADD COLUMN IF NOT EXISTS ""PlayMenuTagsJson"" text NOT NULL DEFAULT '';");
+            return;
+        }
+
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""ServerSettings"" ADD COLUMN ""PlayMenuTagsJson"" TEXT NOT NULL DEFAULT '';");
+        }
+        catch
+        {
+            // SQLite has no ADD COLUMN IF NOT EXISTS. If it already exists,
+            // ignore the duplicate-column error; any other schema problem
+            // will surface when EF reads ServerSettings.
+        }
     }
 
     /// <summary>SQLite migration-history reconciliation. Handles two

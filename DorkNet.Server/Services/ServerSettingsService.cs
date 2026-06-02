@@ -54,6 +54,24 @@ public class ServerSettingsService(DorkNetDbContext db)
         return ToWeeklySettings(row);
     }
 
+    public async Task<PlayMenuTagSettings> GetPlayMenuTagsAsync()
+    {
+        var row = await GetAsync();
+        return ToPlayMenuTags(row);
+    }
+
+    public async Task<PlayMenuTagSettings> SetPlayMenuTagsAsync(
+        IReadOnlyList<string> pinned,
+        IReadOnlyList<string> popular)
+    {
+        var normalized = NormalizePlayMenuTags(pinned, popular);
+        var existing = await GetTrackedRowAsync();
+        existing.PlayMenuTagsJson = JsonSerializer.Serialize(normalized, JsonOptions);
+        existing.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return normalized with { UpdatedAt = existing.UpdatedAt };
+    }
+
     public async Task<WeeklyChallengeSettings> SetWeeklyChallengesAsync(
         bool completedRequired,
         IReadOnlyList<WeeklyChallengeTemplate> challenges,
@@ -120,6 +138,29 @@ public class ServerSettingsService(DorkNetDbContext db)
             challenges,
             reward,
             row.UpdatedAt);
+    }
+
+    private static PlayMenuTagSettings ToPlayMenuTags(ServerSettingsEntity row)
+    {
+        if (!string.IsNullOrWhiteSpace(row.PlayMenuTagsJson))
+        {
+            try
+            {
+                var parsed = JsonSerializer.Deserialize<PlayMenuTagSettings>(
+                    row.PlayMenuTagsJson,
+                    JsonOptions);
+                if (parsed is not null)
+                    return NormalizePlayMenuTags(parsed.PinnedTags, parsed.PopularTags)
+                        with { UpdatedAt = row.UpdatedAt };
+            }
+            catch
+            {
+                // Bad settings should not break the Play menu; admins can
+                // overwrite them from the SPA.
+            }
+        }
+
+        return DefaultPlayMenuTags() with { UpdatedAt = row.UpdatedAt };
     }
 
     private static List<WeeklyChallengeTemplate> NormalizeWeeklyChallenges(
@@ -189,6 +230,65 @@ public class ServerSettingsService(DorkNetDbContext db)
             ConsumableItemDesc: string.Empty,
             EquipmentPrefabName: string.Empty,
             EquipmentModificationGuid: string.Empty);
+
+    public static PlayMenuTagSettings DefaultPlayMenuTags() =>
+        new(
+            PinnedTags:
+            [
+                "community",
+                "recroomoriginal",
+                "featured",
+                "quest",
+                "sport",
+                "template",
+                "hangout",
+                "creative",
+            ],
+            PopularTags:
+            [
+                "paintball",
+                "dodgeball",
+                "soccer",
+                "lasertag",
+                "recroyale",
+                "discgolf",
+                "charades",
+                "bowling",
+                "paddleball",
+                "stuntrunner",
+                "makerpen",
+                "pvp",
+                "co-op",
+                "chill",
+                "music",
+                "parkour",
+            ],
+            UpdatedAt: DateTime.UtcNow);
+
+    private static PlayMenuTagSettings NormalizePlayMenuTags(
+        IReadOnlyList<string> pinned,
+        IReadOnlyList<string> popular)
+    {
+        static List<string> Normalize(IReadOnlyList<string> tags, int max)
+        {
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            return tags
+                .Select(t => (t ?? string.Empty).Trim().TrimStart('#').ToLowerInvariant())
+                .Where(t => t.Length > 0)
+                .Where(t => t.All(c => char.IsLetterOrDigit(c) || c is '-' or '_'))
+                .Where(seen.Add)
+                .Take(max)
+                .ToList();
+        }
+
+        var defaults = DefaultPlayMenuTags();
+        var pinnedTags = Normalize(pinned, 16);
+        var popularTags = Normalize(popular, 32);
+        return new PlayMenuTagSettings(
+            pinnedTags.Count > 0 ? pinnedTags : defaults.PinnedTags,
+            popularTags.Count > 0 ? popularTags : defaults.PopularTags,
+            DateTime.UtcNow);
+    }
 }
 
 public sealed record WeeklyChallengeSettings(
@@ -215,3 +315,8 @@ public sealed record WeeklyChallengeReward(
     string ConsumableItemDesc,
     string EquipmentPrefabName,
     string EquipmentModificationGuid);
+
+public sealed record PlayMenuTagSettings(
+    List<string> PinnedTags,
+    List<string> PopularTags,
+    DateTime UpdatedAt);
