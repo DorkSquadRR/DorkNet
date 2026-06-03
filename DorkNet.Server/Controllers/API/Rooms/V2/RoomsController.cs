@@ -909,22 +909,30 @@ public class RoomsController(
         return Ok(BuildRoomServerDetails(room, scenes, roles: roomRoles));
     }
 
-    /// <summary>GET <c>/roomserver/rooms/bulk?name=X&amp;name=Y</c> — bulk
-    /// lookup by room name. Used by EJDCNGBEICB's room cache to resolve
-    /// well-known names (RecCenter, etc.) to their RoomServerDetails
-    /// shape in one round-trip. Returns the same per-room object that
-    /// <c>/roomserver/rooms/{id}</c> emits, one per requested name; names
-    /// we can't resolve are silently skipped (watch handles a shorter
+    /// <summary>GET <c>/roomserver/rooms/bulk?name=X&amp;name=Y</c> or
+    /// <c>?id=1&amp;id=2</c> — bulk room cache lookup. Decomp-verified
+    /// in EJDCNGBEICB: the Int64 overload writes query key <c>id</c>
+    /// and the string overload writes <c>name</c>. Returns the same
+    /// per-room object that <c>/roomserver/rooms/{id}</c> emits;
+    /// unresolved entries are silently skipped (watch handles a shorter
     /// list fine, but a 404 wedges the room browser).</summary>
     [HttpGet("roomserver/rooms/bulk")]
     [HttpGet("rooms/bulk")]
     public async Task<IActionResult> RoomServerBulkByName()
     {
         var names = Request.Query["name"].Where(n => !string.IsNullOrWhiteSpace(n)).ToArray();
-        if (names.Length == 0) return Ok(Array.Empty<object>());
+        var ids = Request.Query["id"]
+            .Where(v => !string.IsNullOrWhiteSpace(v))
+            .SelectMany(v => v!.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Select(v => long.TryParse(v, out var id) ? id : 0)
+            .Where(id => id > 0)
+            .Distinct()
+            .ToArray();
+        if (names.Length == 0 && ids.Length == 0) return Ok(Array.Empty<object>());
 
         var pid = CurrentPlayerId ?? 0;
-        var results = new List<object>(names.Length);
+        var results = new List<object>(names.Length + ids.Length);
+        var emitted = new HashSet<long>();
         foreach (var raw in names)
         {
             var name = raw!.Trim();
@@ -946,6 +954,34 @@ public class RoomsController(
                 // name-keyed room cache (OJMCBOKJFOF.NHBPIIGDAJP) finds it.
                 room = CloneWithCreator(room, room.CreatorPlayerId, dormBlobName,
                     overrideName: DormNameOverride(name));
+            }
+
+            var scenes = await db.RoomScenes
+                .Where(s => s.RoomId == room.Id)
+                .OrderBy(s => s.OrderIndex)
+                .ToListAsync();
+            var roomRoles = await db.RoomRoles
+                .Where(r => r.RoomId == room.Id)
+                .ToListAsync();
+            results.Add(BuildRoomServerDetails(room, scenes, roles: roomRoles));
+            emitted.Add(room.Id);
+        }
+
+        foreach (var id in ids)
+        {
+            if (!emitted.Add(id)) continue;
+
+            var room = await rooms.GetByIdAsync(id);
+            if (room is null) continue;
+
+            if (room.IsDormRoom)
+            {
+                var dormBlobName = await db.DormStates
+                    .Where(d => d.PlayerId == room.CreatorPlayerId)
+                    .Select(d => d.CurrentDataBlobName)
+                    .FirstOrDefaultAsync()
+                    ?? string.Empty;
+                room = CloneWithCreator(room, room.CreatorPlayerId, dormBlobName);
             }
 
             var scenes = await db.RoomScenes

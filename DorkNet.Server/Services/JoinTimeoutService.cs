@@ -15,7 +15,7 @@ public sealed class JoinTimeoutService(
     private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);
     private readonly ConcurrentDictionary<long, PendingJoin> _pending = new();
 
-    public void MarkPending(long playerId, RoomInstanceDto? room)
+    public void MarkPending(long playerId, RoomInstanceDto? room, bool deferPresenceCommit = false)
     {
         if (room is null) return;
 
@@ -28,9 +28,8 @@ public sealed class JoinTimeoutService(
         ClearForPlayer(playerId, "replaced");
 
         var pending = new PendingJoin(
-            room.RoomInstanceId,
-            room.RoomId,
-            room.Name ?? string.Empty,
+            room,
+            deferPresenceCommit,
             new CancellationTokenSource());
 
         _pending[playerId] = pending;
@@ -41,26 +40,28 @@ public sealed class JoinTimeoutService(
         _ = WatchAsync(playerId, pending);
     }
 
-    public void MarkCompleted(long playerId, long instanceId, string outcome)
+    public (RoomInstanceDto TargetRoom, bool DeferPresenceCommit)? MarkCompleted(long playerId, long instanceId, string outcome)
     {
         if (!_pending.TryGetValue(playerId, out var pending) || pending.InstanceId != instanceId)
-            return;
+            return null;
 
         if (!RemovePending(playerId, pending))
-            return;
+            return null;
 
         pending.Cancellation.Cancel();
         logger.LogInformation(
             "[join-watchdog] completed player={PlayerId} instance={InstanceId} outcome={Outcome}",
             playerId, instanceId, outcome);
+        return (pending.TargetRoom, pending.DeferPresenceCommit);
     }
 
     public async Task MarkFailedAsync(long playerId, long instanceId, string outcome)
     {
-        MarkCompleted(playerId, instanceId, outcome);
+        var completed = MarkCompleted(playerId, instanceId, outcome);
 
         var current = presence.GetRoom(playerId);
-        if (current is null || current.RoomInstanceId != instanceId)
+        var failedRoom = completed.HasValue ? completed.Value.TargetRoom : current;
+        if (failedRoom is null || (!completed.HasValue && current?.RoomInstanceId != instanceId))
         {
             logger.LogInformation(
                 "[join-watchdog] failure ignored player={PlayerId} instance={InstanceId} current={CurrentInstance}",
@@ -72,7 +73,7 @@ public sealed class JoinTimeoutService(
         await notifications.KickPlayerAsync(playerId, "Room join failed. Returning to dorm.");
         logger.LogWarning(
             "[join-watchdog] kicked failed join player={PlayerId} room={RoomId}/{RoomName} instance={InstanceId} outcome={Outcome}",
-            playerId, current.RoomId, current.Name, instanceId, outcome);
+            playerId, failedRoom.RoomId, failedRoom.Name, instanceId, outcome);
     }
 
     private async Task WatchAsync(long playerId, PendingJoin pending)
@@ -95,7 +96,7 @@ public sealed class JoinTimeoutService(
             return;
 
         var current = presence.GetRoom(playerId);
-        if (current is null || current.RoomInstanceId != pending.InstanceId)
+        if (!pending.DeferPresenceCommit && (current is null || current.RoomInstanceId != pending.InstanceId))
         {
             logger.LogInformation(
                 "[join-watchdog] timeout skipped player={PlayerId} pending={PendingInstance} current={CurrentInstance}",
@@ -107,7 +108,7 @@ public sealed class JoinTimeoutService(
         await notifications.KickPlayerAsync(playerId, "Room join timed out. Returning to dorm.");
         logger.LogWarning(
             "[join-watchdog] timed out player={PlayerId} room={RoomId}/{RoomName} instance={InstanceId}",
-            playerId, pending.RoomId, pending.RoomName, pending.InstanceId);
+            playerId, pending.TargetRoom.RoomId, pending.TargetRoom.Name, pending.InstanceId);
     }
 
     private void ClearForPlayer(long playerId, string reason)
@@ -135,8 +136,10 @@ public sealed class JoinTimeoutService(
         (room.PhotonRoomId?.StartsWith("^dormroom_", StringComparison.OrdinalIgnoreCase) ?? false);
 
     private sealed record PendingJoin(
-        long InstanceId,
-        long RoomId,
-        string RoomName,
-        CancellationTokenSource Cancellation);
+        RoomInstanceDto TargetRoom,
+        bool DeferPresenceCommit,
+        CancellationTokenSource Cancellation)
+    {
+        public long InstanceId => TargetRoom.RoomInstanceId;
+    }
 }

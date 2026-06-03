@@ -703,28 +703,40 @@ public class GoToController(
     private async Task RecordResponseAsync(MatchmakingResponseDto response)
     {
         if (this.CurrentPlayerId() is not long playerId) return;
-        var room = response.RoomInstance;
-        if (room is null) return;
+        if (response.RoomInstance is null) return;
 
-        var previousRoom = presence.GetRoom(playerId);
-        var additionalPlayerIds = await GetEligibleAdditionalPlayerIdsAsync(playerId, previousRoom);
-        await RecordPlayerMoveAsync(playerId, room);
-
-        if (additionalPlayerIds.Count == 0)
-            return;
-
-        logger.LogInformation(
-            "[goto-party] player={PlayerId} moving additional players [{AdditionalPlayerIds}] to instance={InstanceId}",
-            playerId, string.Join(",", additionalPlayerIds), room.RoomInstanceId);
-
-        foreach (var additionalPlayerId in additionalPlayerIds)
+        var targetRoom = response.RoomInstance;
+        var currentRoom = presence.GetRoom(playerId);
+        var deferPresenceCommit = ShouldDeferPresenceCommit(currentRoom, targetRoom);
+        joinTimeouts.MarkPending(playerId, targetRoom, deferPresenceCommit);
+        if (deferPresenceCommit)
         {
-            var roomForPartyMember = CloneRoomInstance(room);
-            if (roomForPartyMember.IsPrivate)
-                await privateInstances.InviteAsync(roomForPartyMember.RoomInstanceId, additionalPlayerId);
-
-            await RecordPlayerMoveAsync(additionalPlayerId, roomForPartyMember);
+            logger.LogInformation(
+                "[goto] deferred presence commit player={PlayerId} room={RoomId} subRoom={SubRoomId} fromInstance={FromInstance} toInstance={ToInstance} fromPhoton={FromPhoton} toPhoton={ToPhoton}",
+                playerId,
+                targetRoom.RoomId,
+                targetRoom.SubRoomId,
+                currentRoom?.RoomInstanceId,
+                targetRoom.RoomInstanceId,
+                currentRoom?.PhotonRoomId,
+                targetRoom.PhotonRoomId);
+            return;
         }
+
+        presence.SetRoom(playerId, targetRoom);
+
+        // Real visit tracking: upsert the per-(room, player) row so
+        // we get distinct VisitorCount (unique players ever) AND the
+        // gross VisitCount (every join, including rejoins). Skip the
+        // canonical dorm (RoomId=1) so per-day boots don't skew it.
+        if (targetRoom.RoomId != 1)
+            await RecordVisitAsync(playerId, targetRoom.RoomId);
+
+        // Push a presence-update notification to every accepted-friend
+        // so their watch's "friends" list shows the new room. Cheap
+        // query — Relationships is small, and we only fan out to the
+        // actually-connected friends.
+        await NotifyFriendsOfMoveAsync(playerId, targetRoom);
 
         // NOTE: we INTENTIONALLY do NOT self-push SubscriptionUpdateRoom
         // from /goto. The watch's Rooms.OnSubscriptionUpdateRoom
@@ -744,76 +756,13 @@ public class GoToController(
         // first one for any (room, subRoom).
     }
 
-    private async Task RecordPlayerMoveAsync(long playerId, RoomInstanceDto room)
-    {
-        presence.SetRoom(playerId, room);
-        joinTimeouts.MarkPending(playerId, room);
-
-        // Real visit tracking: upsert the per-(room, player) row so
-        // we get distinct VisitorCount (unique players ever) AND the
-        // gross VisitCount (every join, including rejoins). Skip the
-        // canonical dorm (RoomId=1) so per-day boots don't skew it.
-        if (room.RoomId != 1)
-            await RecordVisitAsync(playerId, room.RoomId);
-
-        // Push a presence-update notification to every accepted-friend
-        // so their watch's "friends" list shows the new room. Cheap
-        // query — Relationships is small, and we only fan out to the
-        // actually-connected friends.
-        await NotifyFriendsOfMoveAsync(playerId, room);
-    }
-
-    private async Task<IReadOnlyList<long>> GetEligibleAdditionalPlayerIdsAsync(
-        long callerPlayerId,
-        RoomInstanceDto? callerPreviousRoom)
-    {
-        if (!Request.HasFormContentType || callerPreviousRoom is null)
-            return Array.Empty<long>();
-
-        var form = await Request.ReadFormAsync();
-        var rawValues = form["AdditionalPlayerIds"]
-            .Concat(form["additionalPlayerIds"])
-            .Concat(form["additionalPlayerIds[]"])
-            .ToArray();
-        if (rawValues.Length == 0)
-            return Array.Empty<long>();
-
-        var ids = rawValues
-            .SelectMany(v => (v ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            .Select(v => long.TryParse(v, out var id) ? id : 0)
-            .Where(id => id > 0 && id != callerPlayerId)
-            .Distinct()
-            .ToList();
-
-        if (ids.Count == 0)
-            return Array.Empty<long>();
-
-        var eligible = new List<long>(ids.Count);
-        foreach (var id in ids)
-        {
-            var current = presence.GetRoom(id);
-            if (current is not null && IsSameLiveInstance(current, callerPreviousRoom))
-            {
-                eligible.Add(id);
-                continue;
-            }
-
-            logger.LogWarning(
-                "[goto-party] ignoring AdditionalPlayerIds entry caller={CallerId} additional={AdditionalId} callerPrevious={CallerInstance} additionalCurrent={AdditionalInstance}",
-                callerPlayerId, id, callerPreviousRoom.RoomInstanceId, current?.RoomInstanceId);
-        }
-
-        return eligible;
-    }
-
-    private static bool IsSameLiveInstance(RoomInstanceDto a, RoomInstanceDto b)
-    {
-        if (a.RoomInstanceId == b.RoomInstanceId)
-            return true;
-
-        return !string.IsNullOrWhiteSpace(a.PhotonRoomId)
-            && string.Equals(a.PhotonRoomId, b.PhotonRoomId, StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool ShouldDeferPresenceCommit(RoomInstanceDto? currentRoom, RoomInstanceDto targetRoom) =>
+        currentRoom is not null
+        && targetRoom.IsPrivate
+        && currentRoom.RoomId == targetRoom.RoomId
+        && currentRoom.SubRoomId == targetRoom.SubRoomId
+        && (currentRoom.RoomInstanceId != targetRoom.RoomInstanceId
+            || !string.Equals(currentRoom.PhotonRoomId, targetRoom.PhotonRoomId, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>Mutate the response so it represents a fresh invite-only
     /// match: forks the PhotonRoomId with a per-(player, nonce) suffix

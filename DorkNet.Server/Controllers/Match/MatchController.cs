@@ -52,7 +52,18 @@ public class MatchController(
         var pid = this.RequireCurrentPlayerId();
         if (code == 0)
         {
-            joinTimeouts.MarkCompleted(pid, instanceId, label);
+            var completed = joinTimeouts.MarkCompleted(pid, instanceId, label);
+            if (completed.HasValue)
+            {
+                presence.SetRoom(pid, completed.Value.TargetRoom);
+                logger.LogInformation(
+                    "[joinresult] committed presence player={Player} room={RoomId}/{RoomName} instance={Instance} deferred={Deferred}",
+                    pid,
+                    completed.Value.TargetRoom.RoomId,
+                    completed.Value.TargetRoom.Name,
+                    completed.Value.TargetRoom.RoomInstanceId,
+                    completed.Value.DeferPresenceCommit);
+            }
             logger.LogInformation(
                 "[joinresult] player={Player} instance={Instance} OK ({Label})",
                 pid, instanceId, label);
