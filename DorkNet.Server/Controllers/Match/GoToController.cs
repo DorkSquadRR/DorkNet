@@ -1,7 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System.Text.Json.Serialization;
+using DorkNet.Models.Notification;
 using DorkNet.Server.Auth;
+using DorkNet.Server.Controllers.API.Messages.V2;
+using DorkNet.Server.Data.Entities;
 using DorkNet.Server.Services;
 
 namespace DorkNet.Server.Controllers.Match;
@@ -57,7 +60,12 @@ public class GoToController(
         // identical instance id + photon room => the watch's transition
         // state machine never fires and "Going to <room>" hangs forever
         // (the player softlocks; the join-watchdog then times out at 30s).
-        [FromForm(Name = "JoinMode")] int joinMode = 0)
+        [FromForm(Name = "JoinMode")] int joinMode = 0,
+        // Party members the watch wants to bring along (added as repeated
+        // `AdditionalPlayerIds` form fields by RecNet.Matchmaking — verified
+        // at Matchmaking.txt:5798-5806). Each gets a follow invite once the
+        // leader's new instance is built. See NotifyAdditionalPlayersAsync.
+        [FromForm(Name = "AdditionalPlayerIds")] List<long>? additionalPlayerIds = null)
     {
         // Unknown room name shouldn't silently drop the player into a
         // synth'd dorm scene any more — that masked typo bug reports
@@ -86,6 +94,7 @@ public class GoToController(
         var resp = await BuildResponseAsync(roomName);
         await ApplyNewInstanceAsync(resp, subRoomId: 0, createPrivateInstance, joinMode);
         await RecordResponseAsync(resp);
+        await NotifyAdditionalPlayersAsync(additionalPlayerIds, resp);
         return Ok(resp);
     }
 
@@ -94,7 +103,8 @@ public class GoToController(
         [FromForm(Name = "RoomName")] string? roomNameForm,
         [FromForm(Name = "roomName")] string? roomNameLower,
         [FromForm(Name = "CreatePrivateInstance")] bool createPrivateInstance = false,
-        [FromForm(Name = "JoinMode")] int joinMode = 0)
+        [FromForm(Name = "JoinMode")] int joinMode = 0,
+        [FromForm(Name = "AdditionalPlayerIds")] List<long>? additionalPlayerIds = null)
     {
         var roomName = roomNameForm
                        ?? roomNameLower
@@ -102,7 +112,7 @@ public class GoToController(
                        ?? Request.Query["roomName"].FirstOrDefault();
         if (string.IsNullOrWhiteSpace(roomName))
             return BadRequest(new { error = "missing roomName" });
-        return await GoToRoom(roomName, createPrivateInstance, joinMode);
+        return await GoToRoom(roomName, createPrivateInstance, joinMode, additionalPlayerIds);
     }
 
     [HttpPost("/goto/none")]
@@ -128,7 +138,8 @@ public class GoToController(
         [FromForm(Name = "CreatePrivateInstance")] bool createPrivateInstance = false,
         // See GoToRoom: JoinMode 1/2 = fork a fresh public/private
         // instance of this sub-room rather than rejoining the shared one.
-        [FromForm(Name = "JoinMode")] int joinMode = 0)
+        [FromForm(Name = "JoinMode")] int joinMode = 0,
+        [FromForm(Name = "AdditionalPlayerIds")] List<long>? additionalPlayerIds = null)
     {
         // Build (don't record yet) — we need to mutate the RoomInstance
         // for the sub-room before presence is recorded, otherwise the
@@ -224,6 +235,7 @@ public class GoToController(
         await ApplyNewInstanceAsync(resp, subRoomId: subId, createPrivateInstance, joinMode);
 
         await RecordResponseAsync(resp);
+        await NotifyAdditionalPlayersAsync(additionalPlayerIds, resp);
         return Ok(resp);
     }
 
@@ -758,6 +770,89 @@ public class GoToController(
         // cached tuple so the save's own push gets deduplicated → no
         // event → spinner wedges forever. Let the save's push be the
         // first one for any (room, subRoom).
+    }
+
+    /// <summary>Party-follow. When the leader's /goto carries
+    /// <c>AdditionalPlayerIds</c> (party members the watch wants to bring
+    /// along — added as repeated form fields by RecNet.Matchmaking,
+    /// Matchmaking.txt:5798-5806), drop a GameInviteV2 (Type 6) into each
+    /// member's inbox pointing at the leader's freshly-built RoomInstance.
+    /// Mirrors <see cref="MessagesController.SendInvite"/>: registers each
+    /// member on the private instance (so /goto/instance|invite accepts
+    /// them) and pushes a MessageReceived notification carrying
+    /// {inviteId,name,roomInstanceId} so their watch's GameInviteController
+    /// follows via /goto/invite/{inviteId}. Without this the leader travels
+    /// alone and the party silently stays behind — the reported bug. We
+    /// notify ONLY the members, not the leader (unlike SendInvite's
+    /// both-sides chat sync): the leader doesn't want an invite to the room
+    /// they're already entering.</summary>
+    private async Task NotifyAdditionalPlayersAsync(
+        List<long>? additionalPlayerIds, MatchmakingResponseDto resp)
+    {
+        if (additionalPlayerIds is null || additionalPlayerIds.Count == 0) return;
+        if (resp.RoomInstance is null) return;
+        if (this.CurrentPlayerId() is not long leaderId) return;
+
+        var targets = additionalPlayerIds
+            .Where(id => id > 0 && id != leaderId)
+            .Distinct()
+            .ToList();
+        if (targets.Count == 0) return;
+
+        var instance = resp.RoomInstance;
+        var roomName = !string.IsNullOrWhiteSpace(instance.Name) ? instance.Name : "Room";
+
+        foreach (var target in targets)
+        {
+            // Type 6 = RecNet.Message.MessageType.GameInviteV2 — the watch's
+            // GameInviteController turns this into goto/invite/{inviteId}.
+            // First save allocates the Id that BECOMES the inviteId; the
+            // second backfills the JSON Body once we know it (EF identity
+            // columns only populate on SaveChanges).
+            var entry = new MessageEntity
+            {
+                SenderPlayerId = leaderId,
+                RecipientPlayerId = target,
+                Body = string.Empty,
+                Type = 6,
+                RoomId = instance.RoomId,
+            };
+            db.Messages.Add(entry);
+            await db.SaveChangesAsync();
+
+            // Private instances gate joins on the invitee list; register the
+            // member so /goto/instance|invite lets them in. Public rooms have
+            // no registered instance — GoToInvite falls back to the message's
+            // RoomId, so no registration is needed there.
+            if (instance.IsPrivate)
+                await privateInstances.InviteAsync(instance.RoomInstanceId, target, messageId: entry.Id);
+
+            // roomInstanceId MUST be a JSON STRING — LitJson NREs on a >int32
+            // long in the dict cast and aborts the whole Message.Deserialize
+            // (see the detailed note in MessagesController.SendInvite).
+            entry.Body = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                inviteId = entry.Id,
+                name = roomName,
+                roomInstanceId = instance.RoomInstanceId.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            });
+            await db.SaveChangesAsync();
+
+            var dto = new MessagesController.MessageDto(
+                Id: entry.Id,
+                FromPlayerId: entry.SenderPlayerId,
+                SentTime: entry.SentAt,
+                Type: entry.Type,
+                Data: entry.Body,
+                RoomId: entry.RoomId,
+                PlayerEventId: null);
+            await notifications.NotifyAsync(target, PushNotificationId.MessageReceived, dto);
+        }
+
+        logger.LogInformation(
+            "[goto-party] leader={Leader} room={Room}/\"{Name}\" instance={Instance} isPrivate={Priv} → invited {Count} member(s): {Members}",
+            leaderId, instance.RoomId, roomName, instance.RoomInstanceId,
+            instance.IsPrivate, targets.Count, string.Join(",", targets));
     }
 
     private static bool ShouldDeferPresenceCommit(RoomInstanceDto? currentRoom, RoomInstanceDto targetRoom) =>

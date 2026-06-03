@@ -460,53 +460,19 @@ public class MessagesController(
         return Ok(Array.Empty<object>());
     }
 
-    /// <summary>POST <c>api/messages/v{N}/send</c> — single-recipient
-    /// send. The 2020.12 watch uses this for any 1:1 message that
-    /// isn't a game invite, notably the <c>PartyUpRequest</c>
-    /// (MessageType = 120 in IGCIBGKPPMO.BBELBJELLHN) that fires
-    /// when the player taps "party up" on someone NOT in the same
-    /// room (in-room party formation goes purely through PunRPCs in
-    /// PlayerParty, no HTTP). Without this route, the watch's
-    /// Messages.SendMessage call 404s and party invites silently
-    /// fail with no on-screen feedback.
-    ///
-    /// <para>Wire shape verified at KEBJPIGKGOI.txt:2618-2655 —
-    /// <c>{0}v2/send</c> with form fields <c>ToPlayerId</c> (singular,
-    /// long), <c>Type</c> (int), <c>Data</c> (string), <c>RoomId</c>
-    /// (optional long). KEBJPIGKGOI.txt:1456-1478 shows the sibling
-    /// sendMultiple path uses <c>ToPlayerIds</c> (plural) — same
-    /// other fields. The older <c>v1/send</c> route is handled above
-    /// by <see cref="SendFormMessage"/>.</para></summary>
-    [HttpPost("/api/messages/v2/send")]
-    [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
-    public async Task<IActionResult> SendSingle(
-        [FromForm(Name = "ToPlayerId")] long? toPlayerIdForm,
-        [FromForm(Name = "Type")] int typeForm,
-        [FromForm(Name = "Data")] string? dataForm,
-        [FromForm(Name = "RoomId")] long? roomIdForm)
-    {
-        var toPlayerId = toPlayerIdForm ?? 0;
-        if (toPlayerId <= 0 || toPlayerId == Me)
-            return BadRequest(new { error = "invalid_recipient" });
-
-        var entry = new MessageEntity
-        {
-            SenderPlayerId    = Me,
-            RecipientPlayerId = toPlayerId,
-            Body              = dataForm ?? string.Empty,
-            Type              = typeForm,
-            RoomId            = roomIdForm,
-        };
-        db.Messages.Add(entry);
-        await db.SaveChangesAsync();
-        await BroadcastMessageAsync(entry);
-
-        logger.LogInformation(
-            "[send] from={From} to={To} type={Type} roomId={RoomId} messageId={Id}",
-            Me, toPlayerId, typeForm, roomIdForm, entry.Id);
-
-        return Ok(new { success = true, messageId = entry.Id });
-    }
+    // NOTE: There is intentionally NO separate handler for
+    // `/api/messages/v2/send`. The controller route is
+    // `api/[controller]/v2`, so SendFormMessage's relative
+    // `[HttpPost("send")]` already binds `api/messages/v2/send` for
+    // form posts (and SendMessage binds it for JSON, disambiguated by
+    // [Consumes]). A previous standalone `SendSingle` action with an
+    // explicit `[HttpPost("/api/messages/v2/send")]` duplicated that
+    // binding, which made every form post to v2/send match two
+    // endpoints → AmbiguousMatchException (500). That broke the very
+    // thing it was meant to add: the watch's PartyUpRequest /
+    // "send join request" (MessageType 120), which posts the same
+    // ToPlayerId/Type/Data form shape SendFormMessage already accepts.
+    // Do not re-add a v2/send action; extend SendFormMessage instead.
 
     /// <summary>POST <c>api/offlineinvite/v1/send</c> — send an invite
     /// message to a player who's offline; surfaces in their inbox on
