@@ -224,14 +224,12 @@ public class RoomService(DorkNetDbContext db)
             .ToListAsync();
 
         // The watch fetches each tile thumbnail by ImageName; a name
-        // that doesn't resolve to a file on disk (or in S3) lands on
-        // the transparent-PNG fallback, which the watch's image pipe
-        // renders as the red "?" placeholder. For each seeded row pick
-        // the best ImageName in this priority order: (1) the hash
-        // filename from room_images.json, (2) the original
-        // image_<slug>.png placeholder, (3) image_RecCenter.png as a
-        // guaranteed-present fallback. Anything we pick must exist as
-        // a file under data/images so the disk hit path serves it.
+        // that doesn't resolve in S3/disk lands on the transparent-PNG
+        // fallback, which the watch renders as the placeholder image.
+        // In production, RRO thumbnails live in S3 under BlobRouter's
+        // image/<blob-name> keys, so do NOT require the mapped blob
+        // filename to exist on local disk before using it. Local disk
+        // is only a fallback for rooms with no blob-name mapping.
         const string ultimateFallback = "image_RecCenter.png";
         var imagesDir = Path.Combine(AppContext.BaseDirectory, "data", "images");
         bool OnDisk(string name) =>
@@ -241,7 +239,7 @@ public class RoomService(DorkNetDbContext db)
         foreach (var r in rows)
         {
             string preferred;
-            if (RoomImagesByName.TryGetValue(r.Name, out var realImg) && OnDisk(realImg))
+            if (RoomImagesByName.TryGetValue(r.Name, out var realImg) && !string.IsNullOrWhiteSpace(realImg))
                 preferred = realImg;
             else if (OnDisk($"image_{r.Name}.png"))
                 preferred = $"image_{r.Name}.png";
