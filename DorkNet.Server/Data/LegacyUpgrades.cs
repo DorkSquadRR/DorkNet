@@ -128,7 +128,7 @@ public static class LegacyUpgrades
                 {
                     bloodMoon.Name = "Crescendo";
                     bloodMoon.Description = "Brave the haunted halls of Castle Dracula and survive the night.";
-                    bloodMoon.ImageName = "image_Crescendo.png";
+                    bloodMoon.ImageName = "by3mjs9jbozpdvu6g9aje7jgz.png";
                     bloodMoon.HiddenFromBrowse = false;
                     await db.SaveChangesAsync(ct);
                     logger.LogInformation(

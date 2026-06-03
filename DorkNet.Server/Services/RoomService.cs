@@ -104,7 +104,7 @@ public class RoomService(DorkNetDbContext db)
             // IsleOfLostSkulls was previously pointing at Quarry's GUID;
             // real Location ReplicationId is 7e01cfe0-… (scene Quest_Pirate1_additive).
             ("IsleOfLostSkulls", "The Isle of Lost Skulls", "Can your pirate crew get to the Isle, defeat its fearsome guardian, and escape with the gold?", "7e01cfe0-820a-406f-b1b3-0a5bf575235c", "recroomoriginal,quest,co-op,adventure", "image_IsleOfLostSkulls.png"),
-            ("Crescendo",        "Crescendo of the Blood Moon", "Brave the haunted halls of Castle Dracula and survive the night.", "49cb8993-a956-43e2-86f4-1318f279b22a", "recroomoriginal,quest,co-op,adventure", "image_Crescendo.png"),
+            ("Crescendo",        "Crescendo of the Blood Moon", "Brave the haunted halls of Castle Dracula and survive the night.", "49cb8993-a956-43e2-86f4-1318f279b22a", "recroomoriginal,quest,co-op,adventure", "by3mjs9jbozpdvu6g9aje7jgz.png"),
             ("StuntRunner",      "Stunt Runner",       "A solo platforming gauntlet — sprint, climb and dodge to reach the trophy at the top.", "b7281665-a715-4051-826b-8e08e69c6172", "recroomoriginal,sport,quest,stuntrunner,parkour", "image_StuntRunner.png"),
             ("Drive-In",         "Rec Drive-In",       "Watch movies, hang out with friends, or chill at the bar.", "65ddbb48-5a01-4e3e-972d-e5c7419e2bc3", "recroomoriginal,featured,hangout,chill", "image_DriveIn.png"),
             // Hub / hang rooms — no specific gameplay, just shared spaces.
@@ -368,7 +368,7 @@ public class RoomService(DorkNetDbContext db)
             ("PerformanceHall", "Performance Hall",      "A big stage for live performances. Sing, perform, or just enjoy the show.", "9932f88f-3929-43a0-a012-a40b5128e346", "recroomoriginal", "image_PerformanceHall.png"),
             ("EventRoom",       "The Lounge",            "A modular event hall with movable furniture for parties and meetings.", "a067557f-ca32-43e6-b6e5-daaec60b4f5a", "recroomoriginal", "image_EventRoom.png"),
             ("BowlingAlley",    "Bowling Alley",         "Classic ten-pin bowling. Roll strikes, beat your friends.", "ae929543-9a07-41d5-8ee9-dbbee8c36800", "recroomoriginal,sport", "image_BowlingAlley.png"),
-            ("Crescendo",       "Crescendo of the Blood Moon", "Brave the haunted halls of Castle Dracula and survive the night.", "49cb8993-a956-43e2-86f4-1318f279b22a", "recroomoriginal,quest", "image_Crescendo.png"),
+            ("Crescendo",       "Crescendo of the Blood Moon", "Brave the haunted halls of Castle Dracula and survive the night.", "49cb8993-a956-43e2-86f4-1318f279b22a", "recroomoriginal,quest", "by3mjs9jbozpdvu6g9aje7jgz.png"),
             ("LaserTagHangar",  "Laser Tag Hangar",      "Teams battle in an industrial warehouse map.", "239e676c-f12f-489f-bf3a-d4c383d692c3", "recroomoriginal,sport", "image_LaserTag.png"),
             ("MakerRoom",       "Maker Room",            "A blank-walled canvas. The classic starting point for a Maker Pen build.", "a75f7547-79eb-47c6-8986-6767abcb4f92", "recroomoriginal,template,featured", "image_RecCenter.png"),
         };
@@ -939,7 +939,7 @@ public class RoomService(DorkNetDbContext db)
         // (no UI for that yet) since the user didn't pass a custom URL.
         Directory.CreateDirectory(imagesDir);
         await TryDownloadAsync(http, "https://img.rec.net/by3mjs9jbozpdvu6g9aje7jgz.png",
-            Path.Combine(imagesDir, "image_Crescendo.png"));
+            Path.Combine(imagesDir, "by3mjs9jbozpdvu6g9aje7jgz.png"));
         await TryDownloadAsync(http,
             "https://static.wikia.nocookie.net/rec-room/images/4/48/Paintball_-_Key_Art.png/revision/latest/scale-to-width-down/1000?cb=20200513122350",
             Path.Combine(imagesDir, "image_PaintballKeyArt.png"));

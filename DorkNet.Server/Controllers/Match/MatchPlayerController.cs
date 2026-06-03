@@ -21,6 +21,9 @@ namespace DorkNet.Server.Controllers.Match;
 public class MatchPlayerController(
     PlayerPresenceService presence,
     NotificationService notifications,
+    RoomService rooms,
+    PrivateInstanceService privateInstances,
+    IConfiguration config,
     DorkNetDbContext db,
     ILogger<MatchPlayerController> log) : ControllerBase
 {
@@ -298,34 +301,58 @@ public class MatchPlayerController(
     /// <summary>Build a RoomInstance that matches the shape
     /// <c>/goto/room/DormRoom</c> would have produced for this player
     /// — used as a heartbeat fallback when presence is empty (boot
-    /// race, replica restart, Redis TTL expiry). Same RoomInstanceId
-    /// math, same PhotonRoomId pattern, same location GUID; the
-    /// watch's RoomInstancesAreDifferent finds the fallback identical
-    /// to its own cached state, so no out-of-sync. Returns null only
-    /// if we can't find the player's dorm row in the DB.</summary>
+    /// race, replica restart, Redis TTL expiry).
+    ///
+    /// CRITICAL: this MUST reproduce <c>/goto</c>'s RoomInstance
+    /// byte-for-byte (RoomInstanceId, PhotonRoomId, Location, DataBlob),
+    /// or the watch's RoomInstancesAreDifferent fires
+    /// "presence heartbeat response indicates local presence is
+    /// out-of-sync!" and boot-loops the player. The previous version
+    /// computed <c>RoomInstanceId = roomId * 100_000</c>, but
+    /// <c>GoToController</c> stamps the dorm with
+    /// <c>EnsureForDormAsync</c>'s id (<c>0xDD0000 ^ …</c>) — so the two
+    /// disagreed and every cache-miss heartbeat (e.g. right after a
+    /// server restart) kicked the player. We now go through the exact
+    /// same <see cref="RoomService.EnsurePersonalDormAsync"/> +
+    /// <see cref="PrivateInstanceService.EnsureForDormAsync"/> path
+    /// <c>/goto/room/DormRoom</c> uses, so the id math can never drift
+    /// again. Returns null only for anonymous callers.</summary>
     private async Task<RoomInstanceDto?> BuildDefaultDormPresenceAsync(int playerId)
     {
-        var dormRow = await db.Rooms.AsNoTracking()
-            .Where(r => r.IsDormRoom && r.CreatorPlayerId == playerId)
-            .Select(r => new { r.Id, r.CurrentDataBlobName, r.LocationReplicationId })
-            .FirstOrDefaultAsync();
+        if (playerId == 0) return null;
 
-        // Fall back to the canonical dorm template row if the player
-        // doesn't yet have their own dorm record — same id space
-        // /goto uses.
-        long roomId = dormRow?.Id ?? 1;
-        string dataBlob = dormRow?.CurrentDataBlobName ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(dataBlob))
-            dataBlob = await ResolveDataBlobForPresenceAsync(roomId, playerId);
+        // Same resolution /goto does: the caller's personal dorm row is
+        // the source of truth for RoomId + LocationReplicationId.
+        var personal = await rooms.EnsurePersonalDormAsync(playerId);
+        var roomId = personal.Id;
+        var location = personal.LocationReplicationId;
+
+        var dataBlob = await ResolveDataBlobForPresenceAsync(roomId, playerId);
+        var photonRegion = (config["Photon:CloudRegion"] ?? "us").ToLowerInvariant();
+        var photonRoomId = $"^dormroom_p{playerId}";
+
+        // EnsureForDormAsync owns the deterministic dorm instance-id
+        // formula; reusing it here guarantees the heartbeat's
+        // RoomInstanceId equals the one /goto handed the watch.
+        var dorm = await privateInstances.EnsureForDormAsync(
+            ownerPlayerId: playerId,
+            roomId: roomId,
+            subRoomId: 0,
+            baseName: "DormRoom",
+            location: location,
+            dataBlob: dataBlob,
+            photonRegion: photonRegion,
+            maxCapacity: 8,
+            photonRoomId: photonRoomId);
 
         return new RoomInstanceDto
         {
-            RoomInstanceId = roomId * 100_000L,
+            RoomInstanceId = dorm.InstanceId,
             RoomId = roomId,
             SubRoomId = 0,
-            Location = dormRow?.LocationReplicationId ?? "76d98498-60a1-430c-ab76-b54a29b7a163",
-            PhotonRegionId = "us",
-            PhotonRoomId = $"^dormroom_p{playerId}",
+            Location = location,
+            PhotonRegionId = photonRegion,
+            PhotonRoomId = photonRoomId,
             Name = "DormRoom",
             MaxCapacity = 8,
             IsFull = false,
