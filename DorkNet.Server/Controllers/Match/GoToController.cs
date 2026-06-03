@@ -84,7 +84,7 @@ public class GoToController(
             }
         }
         var resp = await BuildResponseAsync(roomName);
-        if (createPrivateInstance) await ApplyPrivateInstanceAsync(resp, subRoomId: 0);
+        await ApplyNewInstanceAsync(resp, subRoomId: 0, createPrivateInstance, joinMode);
         await RecordResponseAsync(resp);
         return Ok(resp);
     }
@@ -93,7 +93,8 @@ public class GoToController(
     public async Task<ActionResult<MatchmakingResponseDto>> GoToRoomFromBody(
         [FromForm(Name = "RoomName")] string? roomNameForm,
         [FromForm(Name = "roomName")] string? roomNameLower,
-        [FromForm(Name = "CreatePrivateInstance")] bool createPrivateInstance = false)
+        [FromForm(Name = "CreatePrivateInstance")] bool createPrivateInstance = false,
+        [FromForm(Name = "JoinMode")] int joinMode = 0)
     {
         var roomName = roomNameForm
                        ?? roomNameLower
@@ -101,7 +102,7 @@ public class GoToController(
                        ?? Request.Query["roomName"].FirstOrDefault();
         if (string.IsNullOrWhiteSpace(roomName))
             return BadRequest(new { error = "missing roomName" });
-        return await GoToRoom(roomName, createPrivateInstance);
+        return await GoToRoom(roomName, createPrivateInstance, joinMode);
     }
 
     [HttpPost("/goto/none")]
@@ -124,7 +125,10 @@ public class GoToController(
     [HttpPost("/goto/room/{roomName}/{subRoomName}")]
     public async Task<ActionResult<MatchmakingResponseDto>> GoToSubRoom(
         string roomName, string subRoomName,
-        [FromForm(Name = "CreatePrivateInstance")] bool createPrivateInstance = false)
+        [FromForm(Name = "CreatePrivateInstance")] bool createPrivateInstance = false,
+        // See GoToRoom: JoinMode 1/2 = fork a fresh public/private
+        // instance of this sub-room rather than rejoining the shared one.
+        [FromForm(Name = "JoinMode")] int joinMode = 0)
     {
         // Build (don't record yet) — we need to mutate the RoomInstance
         // for the sub-room before presence is recorded, otherwise the
@@ -213,11 +217,11 @@ public class GoToController(
         // blob, so the sub-scene visually never changes.
         if (!string.IsNullOrEmpty(subDataBlob)) resp.RoomInstance.DataBlob = subDataBlob;
 
-        // Private instance mutation goes AFTER sub-room mutation so the
+        // Private/new-instance mutation goes AFTER sub-room mutation so the
         // PhotonRoomId we register includes the _sub{N} suffix as its
         // base — invitees coming in via /goto/instance/{id} land in the
         // exact same sub-room photon match, not the lobby's.
-        if (createPrivateInstance) await ApplyPrivateInstanceAsync(resp, subRoomId: subId);
+        await ApplyNewInstanceAsync(resp, subRoomId: subId, createPrivateInstance, joinMode);
 
         await RecordResponseAsync(resp);
         return Ok(resp);
@@ -799,6 +803,59 @@ public class GoToController(
         logger.LogInformation(
             "[goto-private] room={Room} sub={Sub} owner={Owner} → instId={Id} photon={Photon}",
             resp.RoomInstance.RoomId, subRoomId, ownerId, inst.InstanceId, inst.PhotonRoomId);
+    }
+
+    /// <summary>Apply the "make a new instance" mutation to a freshly
+    /// built matchmaking response based on the watch's JoinMode (and the
+    /// legacy CreatePrivateInstance flag). Does nothing for ordinary
+    /// PublicMatchmaking joins (JoinMode=0) — those keep the shared,
+    /// deterministic instance that lets randos matchmake together.
+    ///   • JoinMode=2 / CreatePrivateInstance → fresh invite-gated
+    ///     instance (registered + owned, isPrivate=true).
+    ///   • JoinMode=1 → fresh PUBLIC instance (unique id+photon room,
+    ///     isPrivate=false, not persisted — lives only while populated).
+    /// Both forks change roomInstanceId AND photonRoomId, which is what
+    /// the watch's transition state machine needs to actually leave the
+    /// current match instead of softlocking on "Going to &lt;room&gt;".</summary>
+    private async Task ApplyNewInstanceAsync(
+        MatchmakingResponseDto resp, long subRoomId, bool createPrivateInstance, int joinMode)
+    {
+        if (createPrivateInstance || joinMode == 2 /* PrivateNewInstance */)
+        {
+            await ApplyPrivateInstanceAsync(resp, subRoomId);
+        }
+        else if (joinMode == 1 /* PublicNewInstance */)
+        {
+            ApplyNewPublicInstance(resp);
+        }
+    }
+
+    /// <summary>Fork a fresh PUBLIC instance of the room the watch just
+    /// asked for (JoinMode=PublicNewInstance). Unlike a private instance
+    /// this isn't persisted or invite-gated — it's discoverable through
+    /// live <see cref="PlayerPresenceService"/> presence (friends joining
+    /// via /goto/player) and evaporates once empty. The id is packed the
+    /// same way as <see cref="PrivateInstanceService.RegisterAsync"/>
+    /// (nonce in the low 24 bits, roomId/subRoomId in the high bits, kept
+    /// inside int63 for LitJson) so it can't collide with the shared
+    /// roomId*100000 instance the player is forking away from. The photon
+    /// room id gets a <c>_new{nonce}</c> suffix on the existing base so it
+    /// differs from the shared lobby's room.</summary>
+    private void ApplyNewPublicInstance(MatchmakingResponseDto resp)
+    {
+        var nonce = Random.Shared.Next(0x10000, 0xFFFFFF);
+        var instanceId = (long)(((ulong)(uint)nonce & 0xFFFFFFul)
+            ^ ((ulong)resp.RoomInstance.RoomId << 24)
+            ^ ((ulong)resp.RoomInstance.SubRoomId << 40));
+        if (instanceId < 0) instanceId = -instanceId;
+
+        resp.RoomInstance.RoomInstanceId = instanceId;
+        resp.RoomInstance.PhotonRoomId = $"{resp.RoomInstance.PhotonRoomId}_new{nonce:x6}";
+        resp.RoomInstance.IsPrivate = false;
+        logger.LogInformation(
+            "[goto-newpublic] room={Room} sub={Sub} → instId={Id} photon={Photon}",
+            resp.RoomInstance.RoomId, resp.RoomInstance.SubRoomId,
+            instanceId, resp.RoomInstance.PhotonRoomId);
     }
 
     /// <summary>Upsert the (room, player) <see cref="RoomVisitEntity"/>
