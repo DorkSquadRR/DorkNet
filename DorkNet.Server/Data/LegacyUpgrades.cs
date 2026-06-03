@@ -34,10 +34,86 @@ public static class LegacyUpgrades
     public static async Task RunAsync(DorkNetDbContext db, IConfiguration config, ILogger logger, CancellationToken ct = default)
     {
         await RenameBloodMoonToCrescendoAsync(db, logger, ct);
+        await BackfillCanonicalRoomImagesAsync(db, logger, ct);
         await CoercePhotonRegionAsync(db, config, logger, ct);
         // Future data transforms go here, one per release. Keep them
         // narrowly scoped — anything that can be expressed as a
         // schema change should be a migration instead.
+    }
+
+    /// <summary>Update existing Rec Room Original rows to the canonical
+    /// Rec.Net CDN blob names used by <c>Data/room_images.json</c>.
+    ///
+    /// <para>Fresh databases get these names from <see cref="Services.RoomService"/>
+    /// seeding, but older production databases can be stuck on
+    /// <c>image_RecCenter.png</c> / <c>image_{Room}.png</c> aliases. Those
+    /// aliases only work when local bundled image files exist; production
+    /// serves RRO thumbnails from S3 under <c>dorknet-content/image/{blob}</c>,
+    /// so the DB row itself must point at the blob filename.</para>
+    /// </summary>
+    private static async Task BackfillCanonicalRoomImagesAsync(
+        DorkNetDbContext db, ILogger logger, CancellationToken ct)
+    {
+        var canonical = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["RecCenter"] = "50xrbhogfdae0mcgzfkomlghu.png",
+            ["3DCharades"] = "aj7w8q5nrfyt2ssfoovawtz4l.png",
+            ["TheRiseofJumbotron"] = "8x6qaj4nlbudf1412tupxkq9n.png",
+            ["RecRoyaleSolos"] = "8ners1eg89dy974ixbim40sky.png",
+            ["Dodgeball"] = "086ug40lugly2prjest6kw4dz.png",
+            ["Paintball"] = "d1es44q1u6hlhykxpy8uq0lci.png",
+            ["LaserTag"] = "4xy3n0voagf6t9bbfnxft1txt.png",
+            ["Paddleball"] = "61qgagldqpy5opgpbrbg5wxvo.png",
+            ["DiscGolfPropulsion"] = "6wvnxmrmsw98wsttajp0nreci.png",
+            ["DiscGolfLake"] = "86s8y4ihyhx7n9ac41gwahwze.png",
+            ["RecRoyaleSquads"] = "0c1qdk77fbl8c5slphl3k1t8e.png",
+            ["GoldenTrophy"] = "1g7pq04z9xseircwla8sf9py5.png",
+            ["Crescendo"] = "by3mjs9jbozpdvu6g9aje7jgz.png",
+            ["BowlingAlley"] = "8gwqibu0anm4j0rw54xo2y0yd.png",
+            ["CrimsonCauldron"] = "ae6yh8p6y8p3cuyqkc4l8wi4z.png",
+            ["IsleOfLostSkulls"] = "3v6ak7k2ljui4ubj0xh21sjys.png",
+            ["Park"] = "4o5lschc01nani8xeywao622n.png",
+            ["Soccer"] = "apo2sd115tuwueyoprp8jhx7b.png",
+            ["StuntRunner"] = "8j4f516axpnpjgnj342t85vkd.png",
+        };
+
+        var names = canonical.Keys.ToArray();
+        var rooms = await db.Rooms
+            .Where(r => names.Contains(r.Name))
+            .ToListAsync(ct);
+
+        var now = DateTime.UtcNow;
+        var changed = 0;
+        foreach (var room in rooms)
+        {
+            if (!canonical.TryGetValue(room.Name, out var imageName) || room.ImageName == imageName)
+                continue;
+
+            room.ImageName = imageName;
+            room.UpdatedAt = now;
+            changed++;
+        }
+
+        if (changed == 0)
+        {
+            logger.LogInformation(
+                "[legacy-upgrade] BackfillCanonicalRoomImages: skipped (all present RRO rows already use canonical blob names)");
+        }
+        else
+        {
+            await db.SaveChangesAsync(ct);
+            logger.LogInformation(
+                "[legacy-upgrade] BackfillCanonicalRoomImages: applied — updated {Count} room image rows",
+                changed);
+        }
+
+        var missing = names.Except(rooms.Select(r => r.Name), StringComparer.OrdinalIgnoreCase).ToArray();
+        if (missing.Length > 0)
+        {
+            logger.LogInformation(
+                "[legacy-upgrade] BackfillCanonicalRoomImages: {Count} canonical rooms not present yet ({Names})",
+                missing.Length, string.Join(", ", missing));
+        }
     }
 
     /// <summary>Coerce every <see cref="Entities.PrivateInstanceEntity.PhotonRegion"/>
