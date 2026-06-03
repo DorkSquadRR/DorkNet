@@ -949,16 +949,16 @@ public class RoomService(DorkNetDbContext db)
             Path.Combine(imagesDir, "image_Park.png"));
 
         var paintball = await db.Rooms.FirstOrDefaultAsync(r => r.Name == "Paintball");
-        if (paintball is not null && paintball.ImageName != "image_PaintballKeyArt.png")
-            paintball.ImageName = "image_PaintballKeyArt.png";
+        if (paintball is not null && paintball.ImageName != "d1es44q1u6hlhykxpy8uq0lci.png")
+            paintball.ImageName = "d1es44q1u6hlhykxpy8uq0lci.png";
 
         var bowling = await db.Rooms.FirstOrDefaultAsync(r => r.Name == "BowlingAlley");
-        if (bowling is not null && bowling.ImageName != "image_BowlingAlley.png")
-            bowling.ImageName = "image_BowlingAlley.png";
+        if (bowling is not null && bowling.ImageName != "8gwqibu0anm4j0rw54xo2y0yd.png")
+            bowling.ImageName = "8gwqibu0anm4j0rw54xo2y0yd.png";
 
         var park = await db.Rooms.FirstOrDefaultAsync(r => r.Name == "Park");
-        if (park is not null && park.ImageName != "image_Park.png")
-            park.ImageName = "image_Park.png";
+        if (park is not null && park.ImageName != "4o5lschc01nani8xeywao622n.png")
+            park.ImageName = "4o5lschc01nani8xeywao622n.png";
 
         // Paintball sub-room scenes — one RoomSceneEntity row per map.
         // Each row carries the map's old standalone-room
