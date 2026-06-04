@@ -1390,12 +1390,41 @@ public class AdminController(
         return Ok(new
         {
             row.SignupsDisabled,
+            row.GlobalFriendsEnabled,
             row.WeeklyChallengesCompletedRequired,
             row.UpdatedAt,
         });
     }
 
     public sealed record SignupsToggleRequest(bool Disabled);
+    public sealed record GlobalFriendsToggleRequest(bool Enabled);
+
+    /// <summary>POST <c>api/admin/v1/settings/global-friends</c> — flip the
+    /// "everyone is friends" toggle. No relationship rows are written; the
+    /// friend graph is synthesized at read time (see
+    /// <see cref="RelationshipQueries"/>). After flipping, broadcast
+    /// <c>RelationshipsInvalid</c> to every connected watch so it re-fetches
+    /// <c>api/relationships/v2/get</c> and shows the new state live — no
+    /// relog (the 2020 watch handles that push via
+    /// <c>Relationships.RefreshList</c>).</summary>
+    [HttpPost("settings/global-friends")]
+    public async Task<ActionResult> SetGlobalFriends([FromBody] GlobalFriendsToggleRequest body)
+    {
+        var row = await serverSettings.SetGlobalFriendsEnabledAsync(body.Enabled);
+        await LogAsync(body.Enabled ? "global_friends_enabled" : "global_friends_disabled", "system", 0, "");
+        await db.SaveChangesAsync();
+
+        // Live refresh: every connected watch re-pulls its relationship list.
+        await notifications.BroadcastAsync(DorkNet.Models.Notification.PushNotificationId.RelationshipsInvalid);
+
+        return Ok(new
+        {
+            row.SignupsDisabled,
+            row.GlobalFriendsEnabled,
+            row.WeeklyChallengesCompletedRequired,
+            row.UpdatedAt,
+        });
+    }
 
     /// <summary>POST <c>api/admin/v1/settings/signups</c> — flip the
     /// server-wide account-creation kill switch. While disabled, both
@@ -1412,6 +1441,7 @@ public class AdminController(
         return Ok(new
         {
             row.SignupsDisabled,
+            row.GlobalFriendsEnabled,
             row.WeeklyChallengesCompletedRequired,
             row.UpdatedAt,
         });

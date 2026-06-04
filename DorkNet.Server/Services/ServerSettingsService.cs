@@ -48,6 +48,26 @@ public class ServerSettingsService(DorkNetDbContext db)
         return existing;
     }
 
+    /// <summary>When true, every account is treated as a friend of every
+    /// other account (synthesized at read time — no relationship rows are
+    /// written). See <see cref="ServerSettingsEntity.GlobalFriendsEnabled"/>
+    /// and <see cref="RelationshipQueries"/>.</summary>
+    public async Task<bool> IsGlobalFriendsEnabledAsync()
+    {
+        var row = await db.ServerSettings.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == RowId);
+        return row?.GlobalFriendsEnabled ?? false;
+    }
+
+    public async Task<ServerSettingsEntity> SetGlobalFriendsEnabledAsync(bool enabled)
+    {
+        var existing = await GetTrackedRowAsync();
+        existing.GlobalFriendsEnabled = enabled;
+        existing.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return existing;
+    }
+
     public async Task<WeeklyChallengeSettings> GetWeeklyChallengesAsync()
     {
         var row = await GetAsync();

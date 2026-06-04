@@ -6,6 +6,7 @@ import { Plus, RefreshCw, Trash } from '../components/Icons';
 
 interface ServerSettings {
   signupsDisabled: boolean;
+  globalFriendsEnabled: boolean;
   weeklyChallengesCompletedRequired: boolean;
   updatedAt: string;
 }
@@ -183,6 +184,30 @@ export function Settings({ embedded }: { embedded?: boolean } = {}) {
       });
       setSettings(updated);
       toast.push(next ? 'New signups blocked.' : 'New signups allowed.', 'success');
+    } catch (e) {
+      toast.push((e as Error).message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleGlobalFriends = async () => {
+    if (!settings) return;
+    const next = !settings.globalFriendsEnabled;
+    const verb = next ? 'make everyone friends' : 'turn off all-friends';
+    if (!confirm(
+      next
+        ? 'Make every account friends with every other account? No friend rows are written — it\'s synthesized live, and connected players refresh instantly. Toggle off to revert.'
+        : `Really ${verb}? Players will revert to their real friends list.`,
+    )) return;
+    setBusy(true);
+    try {
+      const updated = await api<ServerSettings>('/settings/global-friends', {
+        method: 'POST',
+        body: { Enabled: next },
+      });
+      setSettings(updated);
+      toast.push(next ? 'Everyone is now friends — players refreshing live.' : 'All-friends turned off.', 'success');
     } catch (e) {
       toast.push((e as Error).message, 'error');
     } finally {
@@ -424,6 +449,38 @@ export function Settings({ embedded }: { embedded?: boolean } = {}) {
             {settings.signupsDisabled
               ? <span className="badge-banned">Signups disabled</span>
               : <span className="badge-online">Signups allowed</span>}
+          </div>
+        </div>
+      )}
+
+      {settings && (
+        <div className="card !p-5 max-w-2xl mt-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm font-semibold text-ink-50">Everyone is friends</h2>
+              <p className="mt-1 text-xs text-ink-400">
+                When on, every account is treated as a friend of every other account, so players
+                don't have to search and friend-request each other on a small server. Nothing is
+                written to the database — it's synthesized live, and connected players get a refresh
+                signal so their friends list updates without relogging. Turn it off to instantly
+                revert to real friend lists. Blocks are still respected.
+              </p>
+              <p className="mt-2 text-[11px] text-ink-500">
+                Last changed {new Date(settings.updatedAt).toLocaleString()}.
+              </p>
+            </div>
+            <button
+              onClick={toggleGlobalFriends}
+              disabled={busy}
+              className={(settings.globalFriendsEnabled ? 'btn-danger' : 'btn-primary') + ' text-xs shrink-0'}
+            >
+              {busy ? 'Working…' : settings.globalFriendsEnabled ? 'Turn off' : 'Make everyone friends'}
+            </button>
+          </div>
+          <div className="mt-4 text-xs">
+            {settings.globalFriendsEnabled
+              ? <span className="badge-online">Everyone is friends</span>
+              : <span className="badge-neutral">Normal friend lists</span>}
           </div>
         </div>
       )}

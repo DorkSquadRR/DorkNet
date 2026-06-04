@@ -48,7 +48,7 @@ namespace DorkNet.Server.Controllers.API.Relationships.V2;
 /// </summary>
 [ApiController]
 [Authorize]
-public class RelationshipsController(DorkNetDbContext db, NotificationService notifications) : ControllerBase
+public class RelationshipsController(DorkNetDbContext db, NotificationService notifications, ServerSettingsService settings) : ControllerBase
 {
     // RelationshipType — int values match Relationship.RelationshipType
     // in the patched dump.cs.
@@ -72,11 +72,67 @@ public class RelationshipsController(DorkNetDbContext db, NotificationService no
     public async Task<ActionResult> GetMyRelationships()
     {
         var me = CurrentPlayerId;
+
+        // Global-friends mode (admin toggle): synthesize a Friend row for
+        // every other account WITHOUT persisting anything. Real rows are
+        // overlaid so mute/favorite still apply and Blocked stays non-friend.
+        if (await settings.IsGlobalFriendsEnabledAsync())
+            return Ok(await BuildGlobalFriendListAsync(me));
+
         var rels = await db.Relationships
             .Where(r => r.RequesterId == me || r.TargetId == me)
             .ToListAsync();
         var wire = rels.Select(r => BuildRelationship(r, me)).ToList();
         return Ok(wire);
+    }
+
+    /// <summary>Synthesize the caller's friend list as "everyone" for the
+    /// global-friends toggle. One Friend entry per other account; real rows
+    /// are overlaid so a Block stays None and mute/favorite carry through.</summary>
+    private async Task<List<Dictionary<string, object>>> BuildGlobalFriendListAsync(long me)
+    {
+        var realRows = await db.Relationships
+            .Where(r => r.RequesterId == me || r.TargetId == me)
+            .ToListAsync();
+        var realByOther = new Dictionary<long, RelationshipEntity>();
+        foreach (var r in realRows)
+            realByOther[r.RequesterId == me ? r.TargetId : r.RequesterId] = r;
+
+        var others = await db.Players
+            .Where(p => p.Id != me && p.Id != RelationshipQueries.SystemAccountId)
+            .Select(p => p.Id)
+            .ToListAsync();
+
+        var wire = new List<Dictionary<string, object>>(others.Count);
+        foreach (var otherId in others)
+        {
+            if (realByOther.TryGetValue(otherId, out var row))
+            {
+                // A real block wins — that pair is genuinely not friends.
+                if (row.Status == EntityStatus.Blocked) { wire.Add(EmptyRelationship(otherId)); continue; }
+                wire.Add(SynthFriend(otherId, row, me));
+            }
+            else
+            {
+                wire.Add(SynthFriend(otherId, null, me));
+            }
+        }
+        return wire;
+    }
+
+    /// <summary>A synthetic Friend relationship for global-friends mode,
+    /// carrying mute/ignore/favorite from the caller's real row when present.</summary>
+    private static Dictionary<string, object> SynthFriend(long other, RelationshipEntity? real, long me)
+    {
+        var mineDir = real is not null && real.RequesterId == me;
+        return new()
+        {
+            ["PlayerID"]         = (int)other,
+            ["RelationshipType"] = RT_Friend,
+            ["Muted"]            = mineDir && real!.Muted     ? 1 : 0,
+            ["Ignored"]          = mineDir && real!.Ignored   ? 1 : 0,
+            ["Favorited"]        = mineDir && real!.Favorited ? 1 : 0,
+        };
     }
 
     /// <summary>GET <c>api/relationships/v2/personaldetails/{playerId}</c>
@@ -90,6 +146,14 @@ public class RelationshipsController(DorkNetDbContext db, NotificationService no
         var me = CurrentPlayerId;
         if (playerId <= 0 || playerId == me) return Ok(EmptyRelationship(playerId));
         var row = await FindAsync(me, playerId);
+
+        // Global-friends mode: report Friend for any real account that isn't
+        // the system account and isn't explicitly blocked.
+        if (playerId != RelationshipQueries.SystemAccountId
+            && (row is null || row.Status != EntityStatus.Blocked)
+            && await settings.IsGlobalFriendsEnabledAsync())
+            return Ok(SynthFriend(playerId, row, me));
+
         return Ok(row is null ? EmptyRelationship(playerId) : BuildRelationship(row, me));
     }
 

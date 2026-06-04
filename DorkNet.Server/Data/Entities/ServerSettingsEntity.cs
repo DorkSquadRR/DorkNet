@@ -22,6 +22,16 @@ public class ServerSettingsEntity
     /// brand-new account requests are blocked.</summary>
     public bool SignupsDisabled { get; set; }
 
+    /// <summary>When true, every account on the server is treated as a
+    /// friend of every other account — the relationships list, friend
+    /// online-status HUD, and room-move fan-out all behave as if everyone
+    /// is mutually friended. Built for small private servers where
+    /// searching + manually friend-requesting each other is friction; no
+    /// rows are written, so flipping it off instantly reverts to the real
+    /// relationship graph. Blocked relationships still suppress the pairing,
+    /// and the system/coach account (Id=1) is excluded.</summary>
+    public bool GlobalFriendsEnabled { get; set; }
+
     /// <summary>When true, the challenge map tells the 2020 watch that
     /// weekly challenge completion is required for the weekly reward flow.
     /// Individual player challenge rows still default to incomplete until

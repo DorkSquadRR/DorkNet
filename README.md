@@ -176,6 +176,21 @@ hand it to the player, and they redeem it on the site's **`/join`** page —
 which creates their account bound to the device their game client
 reported, so the next launch logs straight in.
 
+### Everyone-is-friends toggle
+
+For small servers where searching + friend-requesting each other is
+friction, admin **Settings → Server → "Everyone is friends"** makes every
+account a friend of every other account. It writes **no** relationship
+rows — the friend graph is synthesized at read time
+(`RelationshipQueries.EffectiveFriendIdsAsync`, gated on
+`ServerSettings.GlobalFriendsEnabled`), so flipping it off reverts
+instantly. Blocks are still honored and the system/coach account is
+excluded. Flipping it broadcasts `RelationshipsInvalid` to every connected
+watch, which calls `Relationships.RefreshList` and re-pulls
+`api/relationships/v2/get` — so players see everyone appear (or disappear)
+**without relogging**. It covers the friends list, the friends-online HUD,
+and room-move presence fan-out.
+
 ---
 
 ## Contributing

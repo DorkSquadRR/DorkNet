@@ -24,6 +24,7 @@ public class MessagesController(
     PrivateInstanceService privateInstances,
     OnlinePresenceService onlinePresence,
     PlayerPresenceService presence,
+    ServerSettingsService serverSettings,
     ILogger<MessagesController> logger) : ControllerBase
 {
     private long Me => this.RequireCurrentPlayerId();
@@ -534,11 +535,8 @@ public class MessagesController(
     [HttpGet("/api/messages/v1/onlineStatus")]
     public async Task<ActionResult> FavoriteFriendOnlineStatus()
     {
-        var friendIds = await db.Relationships
-            .Where(r => r.Status == RelationshipStatus.Friend &&
-                        (r.RequesterId == Me || r.TargetId == Me))
-            .Select(r => r.RequesterId == Me ? r.TargetId : r.RequesterId)
-            .ToListAsync();
+        // Honors the global-friends toggle (everyone is a friend when on).
+        var friendIds = await RelationshipQueries.EffectiveFriendIdsAsync(db, serverSettings, Me);
         var online = onlinePresence.OnlinePlayerIds().ToHashSet();
         return Ok(friendIds.Select(id => new
         {
