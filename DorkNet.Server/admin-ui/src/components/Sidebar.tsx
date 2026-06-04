@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard, Users, Building2, Activity,
-  Megaphone, ShoppingBag, MessageSquare, Settings, X,
+  Megaphone, MessageSquare, Settings, X,
 } from './Icons';
 
 // Consolidated navigation. Per-player moderation (bans, grants, gifts,
@@ -29,7 +29,6 @@ const groups: Array<{ title: string; items: Array<{ to: string; label: string; i
     title: 'Content',
     items: [
       { to: '/rooms',  label: 'Rooms',   icon: <Building2 /> },
-      { to: '/store',  label: 'Store',   icon: <ShoppingBag /> },
       { to: '/content', label: 'Content', icon: <MessageSquare /> },
     ],
   },

@@ -9,6 +9,12 @@ namespace DorkNet.Server.Data.Entities;
 /// </summary>
 public enum RelationshipStatus
 {
+    /// <summary>No friendship/block — the row exists only to hold the
+    /// requester's own favorite/mute/ignore preference about the target.
+    /// The actual relationship status (if any) lives on the paired row in
+    /// the other direction; the read path merges the two.</summary>
+    None = 0,
+
     /// <summary>Mutual friend (both directions accepted).</summary>
     Friend = 1,
 

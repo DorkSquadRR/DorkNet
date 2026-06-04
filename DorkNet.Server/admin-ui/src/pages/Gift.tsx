@@ -25,12 +25,14 @@ const RARITY_OPTIONS: Array<{ value: number; label: string }> = [
 ];
 
 interface AvatarItem {
+  // The exact RecNet desc to gift: a bare base GUID (default colour) or a
+  // "{guid},{swatch},{mask}," string for a colour variant.
+  desc: string;
   guid: string;
   slot: number;
   friendlyName: string;
-  tooltip: string;
-  rarity: number;
-  safe: boolean;
+  color: string | null;
+  isVariant: boolean;
 }
 
 // Gifting fires the in-game gift-box popup by inserting a GiftPackageEntity
@@ -68,8 +70,11 @@ export function GiftPanel({ playerId }: { playerId: number }) {
     if (!includeItem && !includeCurrency && !includeXp) {
       return toast.push('Pick at least one reward (item / currency / xp)', 'error');
     }
-    const guid = includeItem ? (manualGuid.trim() || item?.guid) : null;
-    if (includeItem && !guid) {
+    // The picked item carries the full desc (colour variants included);
+    // a manually pasted value may be a bare GUID or a full desc — both are
+    // normalised server-side.
+    const desc = includeItem ? (manualGuid.trim() || item?.desc) : null;
+    if (includeItem && !desc) {
       return toast.push('Pick an avatar item from the list, or paste a GUID', 'error');
     }
     setBusy(true);
@@ -77,7 +82,7 @@ export function GiftPanel({ playerId }: { playerId: number }) {
       const res = await api<{ id: number }>(`/players/${playerId}/gift`, {
         method: 'POST',
         body: {
-          AvatarItemGuid: includeItem ? guid : null,
+          AvatarItemGuid: includeItem ? desc : null,
           AvatarItemType: includeItem ? avatarItemType : null,
           CurrencyType: includeCurrency ? currencyType : null,
           Currency: includeCurrency ? currencyAmount : null,
@@ -208,7 +213,10 @@ function AvatarItemPicker({ selected, onSelect }: { selected: AvatarItem | null;
     const term = search.trim().toLowerCase();
     return (catalog ?? []).filter(it => {
       if (slotFilter !== 'all' && it.slot !== slotFilter) return false;
-      if (term && !it.friendlyName.toLowerCase().includes(term) && !it.guid.toLowerCase().includes(term)) return false;
+      if (term
+          && !it.friendlyName.toLowerCase().includes(term)
+          && !(it.color ?? '').toLowerCase().includes(term)
+          && !it.guid.toLowerCase().includes(term)) return false;
       return true;
     });
   }, [catalog, search, slotFilter]);
@@ -233,21 +241,24 @@ function AvatarItemPicker({ selected, onSelect }: { selected: AvatarItem | null;
         {filtered.length > 0 && (
           <div className="table-scroll"><table className="w-full text-sm min-w-[560px]">
             <tbody className="divide-y divide-ink-800">
-              {filtered.slice(0, 200).map(it => (
+              {filtered.slice(0, 500).map(it => (
                 <tr
-                  key={it.guid}
+                  key={it.desc}
                   onClick={() => onSelect(it)}
-                  className={`cursor-pointer table-row-hover ${selected?.guid === it.guid ? 'bg-brand-500/10' : ''}`}
+                  className={`cursor-pointer table-row-hover ${selected?.desc === it.desc ? 'bg-brand-500/10' : ''}`}
                 >
                   <td className="px-3 py-1.5">
-                    <div className="text-ink-100 text-sm">{it.friendlyName || <span className="text-ink-500">unnamed</span>}</div>
-                    <div className="font-mono text-[10px] text-ink-500">{it.guid}</div>
+                    <div className="text-ink-100 text-sm flex items-center gap-1.5">
+                      {it.friendlyName || <span className="text-ink-500">unnamed</span>}
+                      {it.isVariant && <span className="badge-neutral text-[10px]">{it.color}</span>}
+                    </div>
+                    <div className="font-mono text-[10px] text-ink-500">{it.desc}</div>
                   </td>
                   <td className="px-3 py-1.5 text-xs text-ink-300 whitespace-nowrap">{SLOT_NAMES[it.slot] ?? `slot ${it.slot}`}</td>
                 </tr>
               ))}
-              {filtered.length > 200 && (
-                <tr><td colSpan={2} className="p-3 text-center text-xs text-ink-500">+ {filtered.length - 200} more — refine the search.</td></tr>
+              {filtered.length > 500 && (
+                <tr><td colSpan={2} className="p-3 text-center text-xs text-ink-500">+ {filtered.length - 500} more — refine the search.</td></tr>
               )}
             </tbody>
           </table></div>

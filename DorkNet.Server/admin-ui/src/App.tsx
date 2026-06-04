@@ -10,7 +10,6 @@ import { Rooms } from './pages/Rooms';
 import { Room } from './pages/Room';
 import { ImportRoom } from './pages/ImportRoom';
 import { LegacyImportRoom } from './pages/LegacyImportRoom';
-import { Store } from './pages/Store';
 import { Broadcast } from './pages/Broadcast';
 import { Content } from './pages/Content';
 import { SettingsHome } from './pages/SettingsHome';
@@ -51,7 +50,6 @@ export default function App() {
           <Route path="leaderboards" element={<Navigate to="/rooms" replace />} />
           <Route path="import-room"        element={<ImportRoom />} />
           <Route path="import-room-legacy" element={<LegacyImportRoom />} />
-          <Route path="store"      element={<Store />} />
 
           {/* Content hub — community board + loading-screen tips. */}
           <Route path="content"      element={<Content />} />
