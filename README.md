@@ -185,7 +185,9 @@ rows — the friend graph is synthesized at read time
 (`RelationshipQueries.EffectiveFriendIdsAsync`, gated on
 `ServerSettings.GlobalFriendsEnabled`), so flipping it off reverts
 instantly. Blocks are still honored and the system/coach account is
-excluded. Flipping it broadcasts `RelationshipsInvalid` to every connected
+excluded, as are auto-generated `Player_NNN` placeholder accounts that
+never set a real username (they only appear if there's a genuine friend
+row). Flipping it broadcasts `RelationshipsInvalid` to every connected
 watch, which calls `Relationships.RefreshList` and re-pulls
 `api/relationships/v2/get` — so players see everyone appear (or disappear)
 **without relogging**. It covers the friends list, the friends-online HUD,

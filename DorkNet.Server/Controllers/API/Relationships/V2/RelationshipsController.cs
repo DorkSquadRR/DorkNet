@@ -100,12 +100,13 @@ public class RelationshipsController(DorkNetDbContext db, NotificationService no
 
         var others = await db.Players
             .Where(p => p.Id != me && p.Id != RelationshipQueries.SystemAccountId)
-            .Select(p => p.Id)
+            .Select(p => new { p.Id, p.Username })
             .ToListAsync();
 
         var wire = new List<Dictionary<string, object>>(others.Count);
-        foreach (var otherId in others)
+        foreach (var other in others)
         {
+            var otherId = other.Id;
             if (realByOther.TryGetValue(otherId, out var row))
             {
                 // A real block wins — that pair is genuinely not friends.
@@ -114,6 +115,9 @@ public class RelationshipsController(DorkNetDbContext db, NotificationService no
             }
             else
             {
+                // Hide auto-generated Player_NNN placeholders from the
+                // synthesized list (they never set a real username).
+                if (RelationshipQueries.IsPlaceholderUsername(other.Username)) continue;
                 wire.Add(SynthFriend(otherId, null, me));
             }
         }
@@ -148,11 +152,17 @@ public class RelationshipsController(DorkNetDbContext db, NotificationService no
         var row = await FindAsync(me, playerId);
 
         // Global-friends mode: report Friend for any real account that isn't
-        // the system account and isn't explicitly blocked.
+        // the system account and isn't explicitly blocked. Placeholder
+        // Player_NNN accounts are hidden unless there's a genuine row.
         if (playerId != RelationshipQueries.SystemAccountId
             && (row is null || row.Status != EntityStatus.Blocked)
             && await settings.IsGlobalFriendsEnabledAsync())
-            return Ok(SynthFriend(playerId, row, me));
+        {
+            var isPlaceholder = row is null && RelationshipQueries.IsPlaceholderUsername(
+                await db.Players.Where(p => p.Id == playerId)
+                    .Select(p => p.Username).FirstOrDefaultAsync());
+            if (!isPlaceholder) return Ok(SynthFriend(playerId, row, me));
+        }
 
         return Ok(row is null ? EmptyRelationship(playerId) : BuildRelationship(row, me));
     }
