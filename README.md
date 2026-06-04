@@ -113,6 +113,23 @@ UI on a hotkey (`"DebugConsoleToggleKey"`, default `BackQuote` = the `~`
 key) and silences `CheatManager` so the movement/time commands don't drop
 you to the dorm. Both default off.
 
+### Desktop Screen Sharing FPS (opt-in)
+
+The Maker Pen "Desktop Sharing Screen"
+(`RecRoom.Tools.Productivity.DesktopScreenSharingDisplay`) broadcasts at a
+baked refresh rate (~5 fps). Set `"DesktopScreenShareFps"` in
+`dorknet-clientmod.json` (e.g. `30`) and relaunch to override it — the mod
+rewrites the gadget's `screenShareImageRefreshFrequency` at runtime and,
+when `"DesktopScreenShareRaisePhotonRate"` is true (default), lifts
+`PhotonNetwork.SendRate`/`SerializationRate` to match so the frames
+actually transmit (the image streams over `OnPhotonSerializeView`, capped
+at the serialization rate otherwise). This is **global** — it raises every
+object's network sync rate, so back it off on a busy room.
+`"DesktopScreenShareResolution"`/`"DesktopScreenShareQuality"` (both `0` =
+keep the prefab value) trade per-frame size for bandwidth if a high FPS
+saturates the link. Only the player *sharing* needs the override. Default
+`0` (off).
+
 ---
 
 ## Code map

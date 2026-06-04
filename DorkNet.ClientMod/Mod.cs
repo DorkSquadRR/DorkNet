@@ -87,6 +87,52 @@ public class Mod : MelonMod
         // is a UnityEngine.KeyCode name; BackQuote is the `~` key.
         public static bool   EnableDebugConsole = false;
         public static string DebugConsoleToggleKey = "BackQuote";
+
+        // ── Desktop Screen Sharing gadget FPS ──
+        // RecRoom.Tools.Productivity.DesktopScreenSharingDisplay broadcasts
+        // the shared desktop image. Its cadence is a baked [SerializeField]
+        // float screenShareImageRefreshFrequency — the broadcast tick gates
+        // on (Time.time - lastSend >= 1f / frequency), verified at
+        // DesktopScreenSharingDisplay.txt:697-703, so the field IS the FPS
+        // and its editor-only [Range] is NOT enforced at runtime. Set a
+        // target here to override it (default prefab value is low, ~5).
+        // 0 = leave the prefab value alone (patch not even registered).
+        public static float  DesktopScreenShareFps = 0f;
+        // The captured frame ships via the gadget's IPunObservable
+        // OnPhotonSerializeView, which only fires at
+        // PhotonNetwork.SerializationRate (default 10 Hz) — so 30 fps capture
+        // still delivers ~10 unless we raise it. This lifts SendRate +
+        // SerializationRate to >= the FPS target. GLOBAL: affects every
+        // PhotonView's sync traffic, so turn off if it lags a busy room.
+        public static bool   DesktopScreenShareRaisePhotonRate = true;
+        // Optional per-frame size knobs (0 = leave the prefab value). Higher
+        // FPS needs smaller frames to fit the Photon serialization budget;
+        // lower these if 30 fps saturates bandwidth (chunked frames stall).
+        public static int    DesktopScreenShareResolution = 0; // horizontal px
+        public static int    DesktopScreenShareQuality = 0;    // JPEG quality
+
+        // One-shot dev-UI diagnostic (no behaviour change). When true,
+        // ~5s after load the mod logs whether the watch's native developer
+        // menu content actually exists in this build (HomeScreenFlow.
+        // devMenuPanel / devButtonPrefab present vs NULL), the dev-flow list
+        // counts, and whether RecRoom.Debugging.DebugConsole is in the scene
+        // + whether its static Execute() command path works. This tells us
+        // stripped-vs-gated so we know whether to un-gate the game's own dev
+        // menu or build a custom watch entry. Output goes to the MelonLoader
+        // console + dorknet-diagnostics.log.
+        public static bool   DiagnoseDevMenu = false;
+
+        // Inject a "Dev Console" button into the watch's native dev-menu
+        // panel (HomeScreenFlow.devMenuPanel) by cloning the game's own
+        // devButtonPrefab. The panel/prefab exist in this build (just gated
+        // off), so we instantiate + activate + label, then wire its click to
+        // run console commands. Native Button3D → works in VR and Screen Mode.
+        public static bool   EnableDevWatchButton = false;
+        // Preset dev commands shown as watch buttons (when EnableDevWatchButton
+        // is on). Each entry is "Label=command"; clicking runs
+        // DebugConsole.Execute(command). Edit to match this build's actual
+        // DebugConsoleCommandConfig command names/args.
+        public static string[] DevCommands = { "Help=help", "Fly=fly", "NoClip=noclip" };
     }
 
     public override void OnInitializeMelon()
@@ -296,6 +342,19 @@ public class Mod : MelonMod
             Log.Msg($"[debugconsole] enabled — CheatManager detectors silenced; press '{Cfg.DebugConsoleToggleKey}' to toggle the console.");
         }
 
+        // Desktop Screen Sharing FPS override. Only register when a target
+        // is set; the postfix on the gadget's Awake rewrites the baked
+        // refresh-frequency field (and, if enabled, raises the Photon
+        // serialization rate so the higher capture rate actually transmits).
+        if (Cfg.DesktopScreenShareFps > 0f)
+        {
+            TryPatchByName("RecRoom.Tools.Productivity.DesktopScreenSharingDisplay",
+                           "Awake", args: Type.EmptyTypes,
+                           postfix: nameof(ScreenSharePatches.DisplayAwake_Postfix));
+            Log.Msg($"[screenshare] override armed: target {Cfg.DesktopScreenShareFps} fps " +
+                    $"(raisePhotonRate={Cfg.DesktopScreenShareRaisePhotonRate})");
+        }
+
         RegisterDiagnostics();
         Log.Msg("=== Client patches registered ===");
     }
@@ -493,6 +552,8 @@ public class Mod : MelonMod
             Log.Msg("[lifecycle] first OnUpdate tick (Unity frame loop is live)");
         }
         if (Cfg.EnableDebugConsole) DebugConsolePatches.PollToggleKey();
+        if (Cfg.DiagnoseDevMenu) DevMenuProbe.Tick();
+        if (Cfg.EnableDevWatchButton) DevWatchButton.Tick();
         if (_diagnosticGameComplete) return;
         if (_diagnosticRetryFrame++ > 3600) return;
         if ((_diagnosticRetryFrame % 60) != 0) return;
@@ -542,6 +603,22 @@ public class Mod : MelonMod
             if (r.TryGetProperty("TraceRegistrationDialog", out v)) Cfg.TraceRegistrationDialog = v.GetBoolean();
             if (r.TryGetProperty("EnableDebugConsole", out v))      Cfg.EnableDebugConsole = v.GetBoolean();
             if (r.TryGetProperty("DebugConsoleToggleKey", out v))   Cfg.DebugConsoleToggleKey = v.GetString() ?? Cfg.DebugConsoleToggleKey;
+            if (r.TryGetProperty("DesktopScreenShareFps", out v))             Cfg.DesktopScreenShareFps = (float)v.GetDouble();
+            if (r.TryGetProperty("DesktopScreenShareRaisePhotonRate", out v)) Cfg.DesktopScreenShareRaisePhotonRate = v.GetBoolean();
+            if (r.TryGetProperty("DesktopScreenShareResolution", out v))      Cfg.DesktopScreenShareResolution = v.GetInt32();
+            if (r.TryGetProperty("DesktopScreenShareQuality", out v))         Cfg.DesktopScreenShareQuality = v.GetInt32();
+            if (r.TryGetProperty("DiagnoseDevMenu", out v))                   Cfg.DiagnoseDevMenu = v.GetBoolean();
+            if (r.TryGetProperty("EnableDevWatchButton", out v))              Cfg.EnableDevWatchButton = v.GetBoolean();
+            if (r.TryGetProperty("DevCommands", out v) && v.ValueKind == JsonValueKind.Array)
+            {
+                var list = new List<string>();
+                foreach (var e in v.EnumerateArray())
+                {
+                    var s = e.GetString();
+                    if (!string.IsNullOrWhiteSpace(s)) list.Add(s!);
+                }
+                if (list.Count > 0) Cfg.DevCommands = list.ToArray();
+            }
             // "InjectAuthValues" key in the template is now ignored —
             // see attic/AuthValuesInjector.cs.attic.
             Log.Msg($"[config] loaded: ServerHost={Cfg.ServerHost}, PhotonAppId={(string.IsNullOrEmpty(Cfg.PhotonAppId) ? "<unset>" : "<set>")}, " +
@@ -692,7 +769,7 @@ public class Mod : MelonMod
     {
         // Look in all three patch holder classes — small enough that a
         // linear scan is cheaper than per-class lookups.
-        foreach (var holder in new[] { typeof(UriPatches), typeof(PhotonPatches), typeof(TlsPatches), typeof(DiagnosticPatches), typeof(SavePatches), typeof(ChatPatches), typeof(JoinPatches), typeof(RegistrationPatches), typeof(DebugConsolePatches) })
+        foreach (var holder in new[] { typeof(UriPatches), typeof(PhotonPatches), typeof(TlsPatches), typeof(DiagnosticPatches), typeof(SavePatches), typeof(ChatPatches), typeof(JoinPatches), typeof(RegistrationPatches), typeof(DebugConsolePatches), typeof(ScreenSharePatches) })
         {
             var m = holder.GetMethod(name, BindingFlags.Public | BindingFlags.Static);
             if (m is not null) return m;
@@ -969,6 +1046,377 @@ internal static class DebugConsolePatches
             }
         }
         catch { /* best-effort — the toggle still works without it */ }
+    }
+}
+
+
+// ── Dev-menu runtime probe (one-shot diagnostic) ────────────────────────
+// Answers stripped-vs-gated for the watch developer menu. With a real dev
+// account + forced flag the menu still doesn't appear, so the gate isn't the
+// account flag — either the native dev-menu prefab content is stripped from
+// this retail build, or a build-level flag skips its init. This logs the
+// actual runtime state once ~5s after load (no behaviour change) so we know
+// whether to un-gate the game's own dev menu or build our own watch entry.
+// Called from OnUpdate when Cfg.DiagnoseDevMenu is set; self-gates to run
+// once. Not a Harmony holder — invoked directly, so it's not registered in
+// GetPatchMethod.
+internal static class DevMenuProbe
+{
+    private static int _frame;
+    private static bool _done;
+
+    public static void Tick()
+    {
+        if (_done) return;
+        _frame++;
+        if (_frame < 120) return;        // ~2s — let MelonLoader/game boot
+        if ((_frame % 60) != 0) return;  // then check ~once per second
+        // Wait until the watch's HomeScreenFlow is actually instantiated
+        // (only happens once you're in-game with the watch up), so the
+        // devMenuPanel/devButtonPrefab fields are meaningful. Give up and
+        // dump whatever exists after ~60s so we still get a report.
+        var homeType = Mod.ResolveType("AGUI.StackedUI.HomeScreenFlow") ?? Mod.ResolveType("HomeScreenFlow");
+        var homeLive = homeType != null && FindOne(homeType) != null;
+        if (!homeLive && _frame < 3600) return;
+        _done = true;
+        try { Run(); }
+        catch (Exception ex) { Mod.Log.Warning($"[devmenu-probe] failed: {ex}"); }
+    }
+
+    private static void Run()
+    {
+        Mod.Log.Msg("=== [devmenu-probe] runtime dev-UI state ===");
+        ProbeType("RecRoom.Core.WatchUI",            "WatchUI",        DumpWatchUi);
+        ProbeType("AGUI.StackedUI.HomeScreenFlow",   "HomeScreenFlow", DumpHomeScreen);
+        ProbeType("RecRoom.Debugging.DebugConsole",  "DebugConsole",   DumpDebugConsole);
+        Mod.Log.Msg("=== [devmenu-probe] done ===");
+    }
+
+    private static void ProbeType(string fullName, string shortName, Action<Type, object?> dump)
+    {
+        var t = Mod.ResolveType(fullName) ?? Mod.ResolveType(shortName);
+        if (t is null) { Mod.Log.Msg($"[devmenu-probe] {shortName}: TYPE NOT FOUND"); return; }
+        var inst = FindOne(t);
+        Mod.Log.Msg($"[devmenu-probe] {shortName}: type={t.FullName}, liveInstance={(inst is null ? "null" : "FOUND")}");
+        try { dump(t, inst); } catch (Exception ex) { Mod.Log.Warning($"[devmenu-probe] {shortName} dump failed: {ex.Message}"); }
+    }
+
+    private static void DumpHomeScreen(Type t, object? inst)
+    {
+        if (inst is null) { Mod.Log.Msg("  (no HomeScreenFlow instance live yet — open the watch, then re-probe)"); return; }
+        // Il2CppInterop exposes IL2CPP instance fields as PROPERTIES on the
+        // managed proxy, so a plain AccessTools.Field misses them (the earlier
+        // "field not found" was a false negative). Try property first, then
+        // field. NULL => content stripped from the prefab (can't un-gate);
+        // present => only gated.
+        foreach (var name in new[] { "devMenuPanel", "devButtonPrefab", "reportBugButtonSpacer" })
+        {
+            var (found, mt, v) = GetMember(t, inst, name);
+            if (!found) { Mod.Log.Msg($"  {name}: <not found as property or field>"); continue; }
+            var extra = "";
+            if (v != null && name == "devMenuPanel")
+            {
+                try { var cc = v.GetType().GetProperty("childCount")?.GetValue(v); if (cc != null) extra = $" childCount={cc}"; } catch { }
+            }
+            Mod.Log.Msg($"  {name} ({mt.Name}): {(v is null ? "NULL  <-- stripped/unset" : "present")}{extra}");
+        }
+        // Calibration: are ordinary serialized field names exposed at all on
+        // the runtime proxy? If 'profileButton' (a non-dev [SerializeField])
+        // IS found but devMenuPanel isn't, the dev fields are genuinely absent
+        // in this build. If profileButton is ALSO not found, Il2CppInterop
+        // isn't exposing these fields by name (need a different access path).
+        foreach (var cal in new[] { "profileButton", "settingsButton" })
+        {
+            var (cf, cmt, cv) = GetMember(t, inst, cal);
+            Mod.Log.Msg($"  [calib] {cal}: {(cf ? $"FOUND ({cmt.Name}, {(cv is null ? "null" : "present")})" : "not found")}");
+        }
+        // Named lookups miss → dump the proxy's actual member names to see
+        // Il2CppInterop's scheme, then enumerate Button3D children directly
+        // (no field names needed) — those are our clone sources for injection.
+        var fs = t.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+        var ps = t.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+        var fn = new List<string>(); foreach (var f in fs) fn.Add(f.Name);
+        var pn = new List<string>(); foreach (var p in ps) pn.Add(p.Name);
+        Mod.Log.Msg($"  [members] fields={fn.Count}, props={pn.Count}");
+        if (fn.Count > 0) Mod.Log.Msg($"  [fieldnames] {string.Join(", ", fn.GetRange(0, Math.Min(40, fn.Count)))}");
+        if (pn.Count > 0) Mod.Log.Msg($"  [propnames] {string.Join(", ", pn.GetRange(0, Math.Min(40, pn.Count)))}");
+        DumpWatchButtons(t, inst);
+        DumpCollections(t, inst, "HomeScreenFlow");
+    }
+
+    // Enumerate Button3D components under the HomeScreenFlow via Unity's
+    // GetComponentsInChildren(Type, includeInactive) — needs no field names.
+    // Confirms we can grab native buttons to clone for the dev entry.
+    private static void DumpWatchButtons(Type homeType, object homeInst)
+    {
+        var btnType = Mod.ResolveType("AGUI.StackedUI.Button3D");
+        if (btnType is null) { Mod.Log.Msg("  [buttons] Button3D type NOT FOUND"); return; }
+        var il2 = ToIl2CppType(btnType);
+        if (il2 is null) { Mod.Log.Msg("  [buttons] Button3D il2cppType null"); return; }
+        MethodInfo? m = null;
+        foreach (var mi in homeType.GetMethods(BindingFlags.Public | BindingFlags.Instance))
+        {
+            if (mi.Name != "GetComponentsInChildren") continue;
+            var mp = mi.GetParameters();
+            if (mp.Length == 2 && mp[0].ParameterType.IsInstanceOfType(il2) && mp[1].ParameterType == typeof(bool)) { m = mi; break; }
+        }
+        if (m is null) { Mod.Log.Msg("  [buttons] GetComponentsInChildren(Type,bool) not found"); return; }
+        object? arr;
+        try { arr = m.Invoke(homeInst, new object[] { il2, true }); }
+        catch (Exception ex) { Mod.Log.Msg($"  [buttons] GetComponentsInChildren threw: {(ex.InnerException ?? ex).Message}"); return; }
+        int n = ArrLen(arr);
+        Mod.Log.Msg($"  [buttons] Button3D children: {n}");
+        for (int i = 0; i < n && i < 20; i++)
+        {
+            var b = ArrItem(arr, i);
+            var nm = b?.GetType().GetProperty("name")?.GetValue(b)?.ToString() ?? "?";
+            Mod.Log.Msg($"    [{i}] {nm}");
+        }
+    }
+
+    private static int ArrLen(object? arr)
+    {
+        if (arr is null) return 0;
+        if (arr is Array a) return a.Length;
+        var lp = arr.GetType().GetProperty("Length") ?? arr.GetType().GetProperty("Count");
+        return (lp?.GetValue(arr) as int?) ?? 0;
+    }
+
+    private static object? ArrItem(object? arr, int i)
+    {
+        if (arr is null) return null;
+        if (arr is Array a) return a.GetValue(i);
+        var gi = arr.GetType().GetMethod("get_Item", new[] { typeof(int) });
+        return gi?.Invoke(arr, new object[] { i });
+    }
+
+    private static (bool found, Type type, object? val) GetMember(Type t, object inst, string name)
+    {
+        var p = t.GetProperty(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+        if (p != null && p.CanRead && p.GetIndexParameters().Length == 0)
+            { try { return (true, p.PropertyType, p.GetValue(inst)); } catch { } }
+        var f = AccessTools.Field(t, name);
+        if (f != null) { try { return (true, f.FieldType, f.GetValue(inst)); } catch { } }
+        return (false, typeof(object), null);
+    }
+
+    private static void DumpWatchUi(Type t, object? inst)
+    {
+        if (inst is null) { Mod.Log.Msg("  (no WatchUI instance live yet)"); return; }
+        DumpCollections(t, inst, "WatchUI");
+    }
+
+    private static void DumpDebugConsole(Type t, object? inst)
+    {
+        foreach (var name in new[] { "GJIKMPIMDHH", "IEGCNLHPKFH", "ShowButton", "ShowErrorsInHeadset", "ShowUnityDevelopmentConsole" })
+        {
+            try
+            {
+                var p = t.GetProperty(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                if (p != null && p.CanRead) { Mod.Log.Msg($"  static {name} = {p.GetValue(null)}"); continue; }
+                var f = t.GetField(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+                if (f != null) Mod.Log.Msg($"  static {name} = {f.GetValue(null)}");
+            }
+            catch (Exception ex) { Mod.Log.Msg($"  {name}: read failed ({ex.Message})"); }
+        }
+        // Does the static command path work without the console UI in-scene?
+        var exec = AccessTools.Method(t, "Execute", new[] { typeof(string) });
+        if (exec is null) { Mod.Log.Msg("  Execute(string): <not found>"); return; }
+        try { exec.Invoke(null, new object[] { "help" }); Mod.Log.Msg("  Execute(\"help\"): invoked OK — static command path is usable"); }
+        catch (Exception ex) { var e = ex.InnerException ?? ex; Mod.Log.Msg($"  Execute(\"help\"): threw {e.GetType().Name} ({e.Message})"); }
+    }
+
+    // Log every array / List<> field whose element type mentions Flow/Watch,
+    // with its count — surfaces the dev-flow list (devOnlyFlows-equivalent)
+    // regardless of its obfuscated name, so we can see if dev flows exist.
+    private static void DumpCollections(Type t, object inst, string label)
+    {
+        var members = new List<(string name, object? val)>();
+        foreach (var f in t.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+            { try { members.Add((f.Name, f.GetValue(inst))); } catch { } }
+        foreach (var p in t.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+            { if (p.CanRead && p.GetIndexParameters().Length == 0) { try { members.Add((p.Name, p.GetValue(inst))); } catch { } } }
+
+        foreach (var (name, v) in members)
+        {
+            if (v is null) continue;
+            int? count = null; string elem = "";
+            if (v is Array arr) { count = arr.Length; elem = v.GetType().GetElementType()?.Name ?? "?"; }
+            else
+            {
+                var ft = v.GetType();
+                if (ft.IsGenericType && typeof(System.Collections.IEnumerable).IsAssignableFrom(ft))
+                {
+                    var cp = ft.GetProperty("Count");
+                    if (cp != null && cp.PropertyType == typeof(int))
+                    {
+                        count = (int?)cp.GetValue(v);
+                        var ga = ft.GetGenericArguments();
+                        elem = ga.Length > 0 ? ga[0].Name : "?";
+                    }
+                }
+            }
+            if (count.HasValue &&
+                (elem.IndexOf("Flow", StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 elem.IndexOf("Watch", StringComparison.OrdinalIgnoreCase) >= 0))
+                Mod.Log.Msg($"  {label}.{name}: {elem}[{count}]");
+        }
+    }
+
+    // Under Il2CppInterop, UnityEngine.Object.FindObjectOfType takes an
+    // Il2CppSystem.Type (NOT System.Type), so AccessTools.Method(...,
+    // typeof(Type)) misses — that's the "FindObjectOfType(Type) not found"
+    // in the log. Convert the managed Type to an Il2CppSystem.Type via
+    // Il2CppType.From, then use Resources.FindObjectsOfTypeAll (which also
+    // returns INACTIVE objects + loaded prefab instances — important, the
+    // watch UI is usually inactive until opened). Falls back to the
+    // active-only FindObjectOfType.
+    private static object? FindOne(Type t)
+    {
+        try
+        {
+            var il2cppType = ToIl2CppType(t);
+            if (il2cppType is null) return null;
+
+            var resources = Mod.ResolveType("UnityEngine.Resources");
+            var all = OneArgMethod(resources, "FindObjectsOfTypeAll", il2cppType);
+            var first = FirstOf(all?.Invoke(null, new[] { il2cppType }));
+            if (first != null) return first;
+
+            var objType = Mod.ResolveType("UnityEngine.Object");
+            var findOne = OneArgMethod(objType, "FindObjectOfType", il2cppType);
+            return findOne?.Invoke(null, new[] { il2cppType });
+        }
+        catch { return null; }
+    }
+
+    private static object? ToIl2CppType(Type managed)
+    {
+        try
+        {
+            var il2cppTypeType = Mod.ResolveType("Il2CppInterop.Runtime.Il2CppType");
+            var from = il2cppTypeType?.GetMethod("From", new[] { typeof(Type), typeof(bool) })
+                       ?? il2cppTypeType?.GetMethod("From", new[] { typeof(Type) });
+            if (from is null) return null;
+            var args = from.GetParameters().Length == 2
+                ? new object[] { managed, true } : new object[] { managed };
+            return from.Invoke(null, args);
+        }
+        catch { return null; }
+    }
+
+    // Find a public static method `name` whose single parameter accepts `arg`.
+    private static MethodInfo? OneArgMethod(Type? t, string name, object arg)
+    {
+        if (t is null) return null;
+        foreach (var m in t.GetMethods(BindingFlags.Public | BindingFlags.Static))
+        {
+            if (m.Name != name) continue;
+            var ps = m.GetParameters();
+            if (ps.Length == 1 && ps[0].ParameterType.IsInstanceOfType(arg)) return m;
+        }
+        return null;
+    }
+
+    // First element of an Il2CppReferenceArray / Array / IList, or null.
+    private static object? FirstOf(object? arr)
+    {
+        if (arr is null) return null;
+        if (arr is Array a) return a.Length > 0 ? a.GetValue(0) : null;
+        var at = arr.GetType();
+        var lenProp = at.GetProperty("Length") ?? at.GetProperty("Count");
+        if (lenProp?.GetValue(arr) is int n && n > 0)
+        {
+            var getItem = at.GetMethod("get_Item", new[] { typeof(int) });
+            if (getItem != null) return getItem.Invoke(arr, new object[] { 0 });
+        }
+        return null;
+    }
+}
+
+// ── Desktop Screen Sharing FPS override ─────────────────────────────────
+// RecRoom.Tools.Productivity.DesktopScreenSharingDisplay broadcasts the
+// shared desktop image. Capture cadence is the baked [SerializeField]
+// float screenShareImageRefreshFrequency; the broadcast tick gates on
+//   if (Time.time - lastSend >= 1f / screenShareImageRefreshFrequency)
+// (DesktopScreenSharingDisplay.txt:697-703) — so the field is literally the
+// FPS, with no runtime clamp (the [Range] is editor-only). We rewrite it in
+// an Awake postfix. The captured frame is transmitted via the component's
+// IPunObservable OnPhotonSerializeView, which only fires at
+// PhotonNetwork.SerializationRate (default 10 Hz), so we also lift the
+// Photon send/serialization rate to cover the target — otherwise a 30 fps
+// capture still only delivers ~10. Field names are un-obfuscated on both
+// builds (confirmed in the 2020.12.18 dump), so a plain AccessTools.Field
+// lookup works.
+internal static class ScreenSharePatches
+{
+    private static bool _photonRateApplied;
+
+    public static void DisplayAwake_Postfix(object __instance)
+    {
+        try
+        {
+            var fps = Mod.Cfg.DesktopScreenShareFps;
+            if (fps <= 0f || __instance is null) return;
+            var t = __instance.GetType();
+
+            SetField(t, __instance, "screenShareImageRefreshFrequency", fps);
+            if (Mod.Cfg.DesktopScreenShareResolution > 0)
+                SetField(t, __instance, "screenShareImageHorizontalResolution", Mod.Cfg.DesktopScreenShareResolution);
+            if (Mod.Cfg.DesktopScreenShareQuality > 0)
+                SetField(t, __instance, "screenShareImageCompressionQuality", Mod.Cfg.DesktopScreenShareQuality);
+
+            Mod.Log.Msg($"[screenshare] {t.Name}: refreshFrequency→{fps}fps" +
+                        (Mod.Cfg.DesktopScreenShareResolution > 0 ? $" res→{Mod.Cfg.DesktopScreenShareResolution}px" : "") +
+                        (Mod.Cfg.DesktopScreenShareQuality > 0 ? $" quality→{Mod.Cfg.DesktopScreenShareQuality}" : ""));
+
+            if (Mod.Cfg.DesktopScreenShareRaisePhotonRate && !_photonRateApplied)
+                RaisePhotonRates((int)Math.Ceiling(fps));
+        }
+        catch (Exception ex) { Mod.Log.Warning($"[screenshare] Awake postfix failed: {ex.Message}"); }
+    }
+
+    private static void SetField(Type t, object inst, string name, object value)
+    {
+        var f = AccessTools.Field(t, name);
+        if (f is null) { Mod.Log.Warning($"[screenshare] field '{name}' not found on {t.Name}"); return; }
+        f.SetValue(inst, value);
+    }
+
+    // Lift PhotonNetwork.SendRate + SerializationRate to >= hz. PUN requires
+    // SerializationRate <= SendRate, so SendRate is kept at the max of the
+    // two. Both are public static int members (property on some PUN builds,
+    // field on others) — handle either. GLOBAL: every PhotonView's
+    // OnPhotonSerializeView now fires at this rate.
+    private static void RaisePhotonRates(int hz)
+    {
+        var pn = Mod.ResolveType("PhotonNetwork");
+        if (pn is null) { Mod.Log.Warning("[screenshare] PhotonNetwork not found; can't raise serialization rate (delivered FPS will stay ~10)"); return; }
+        var send = ReadInt(pn, "SendRate");
+        var ser  = ReadInt(pn, "SerializationRate");
+        var target = Math.Max(hz, 1);
+        var newSend = Math.Max(target, Math.Max(send, ser));
+        WriteInt(pn, "SendRate", newSend);
+        WriteInt(pn, "SerializationRate", target);
+        _photonRateApplied = true;
+        Mod.Log.Msg($"[screenshare] Photon rates raised (GLOBAL): SendRate {send}→{newSend}, SerializationRate {ser}→{target}");
+    }
+
+    private static int ReadInt(Type t, string name)
+    {
+        var p = t.GetProperty(name, BindingFlags.Public | BindingFlags.Static);
+        if (p is not null && p.CanRead && p.GetValue(null) is int pv) return pv;
+        var f = t.GetField(name, BindingFlags.Public | BindingFlags.Static);
+        if (f is not null && f.GetValue(null) is int fv) return fv;
+        return 0;
+    }
+
+    private static void WriteInt(Type t, string name, int value)
+    {
+        var p = t.GetProperty(name, BindingFlags.Public | BindingFlags.Static);
+        if (p is not null && p.CanWrite) { p.SetValue(null, value); return; }
+        var f = t.GetField(name, BindingFlags.Public | BindingFlags.Static);
+        if (f is not null) f.SetValue(null, value);
     }
 }
 

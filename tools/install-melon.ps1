@@ -446,6 +446,19 @@ $cfg = [ordered]@{
     # toggle key (a UnityEngine.KeyCode name; BackQuote = the `~` key).
     EnableDebugConsole    = $false
     DebugConsoleToggleKey = 'BackQuote'
+    # Desktop Screen Sharing gadget FPS. 0 = leave the game's baked rate
+    # (~5 fps). Set a target (e.g. 30) to override it; the mod also raises
+    # the Photon serialization rate so the higher capture rate actually
+    # transmits (RaisePhotonRate). Resolution/Quality 0 = keep prefab values
+    # — lower them if 30 fps saturates bandwidth.
+    DesktopScreenShareFps             = 0
+    DesktopScreenShareRaisePhotonRate = $true
+    DesktopScreenShareResolution      = 0
+    DesktopScreenShareQuality         = 0
+    # One-shot dev-UI diagnostic: logs (once, ~5s after load) whether the
+    # watch's native dev menu content exists in this build vs is stripped,
+    # and whether the debug console's static command path works. Log-only.
+    DiagnoseDevMenu                   = $false
 }
 Write-Step "Writing mod config -> $cfgPath"
 [System.IO.File]::WriteAllText($cfgPath, ($cfg | ConvertTo-Json -Depth 4))
