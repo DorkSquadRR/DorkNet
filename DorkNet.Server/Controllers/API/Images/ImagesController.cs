@@ -29,10 +29,10 @@ namespace DorkNet.Server.Controllers.API.Images;
 ///       Returning [] (the previous catch-all) made the watch silently
 ///       drop the photo.
 ///
-/// Saved photos are stored as <see cref="PhotoEntity"/> rows with
-/// IsPublic=false by default. A separate Share button (POST
-/// api/images/v4/share/{id}) flips IsPublic=true and surfaces them on
-/// feed.rec.net.
+/// Saved photos are stored as <see cref="PhotoEntity"/> rows. The 2020
+/// client sends camera share state inside an imgMeta JSON form field
+/// (accessibility=1 for public ShareCamera uploads), while newer callers
+/// can still send top-level IsPublic.
 /// </summary>
 [ApiController]
 public class ImagesController(
@@ -82,12 +82,17 @@ public class ImagesController(
         // Pull optional metadata from the form (the 2020 watch sometimes
         // includes a caption / room context, sometimes posts bytes only).
         var form = Request.HasFormContentType ? await Request.ReadFormAsync() : null;
+        var imageMeta = ParseImageMeta(form);
         var caption = form?["Caption"].ToString() ?? form?["Description"].ToString() ?? string.Empty;
         var taggedIds = form?["TaggedPlayerIds"].ToString() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(taggedIds) && imageMeta?.PlayerIds.Count > 0)
+            taggedIds = string.Join(",", imageMeta.PlayerIds);
         long roomId = 0;
         if (form is not null && long.TryParse(form["RoomId"].ToString(), out var rid)) roomId = rid;
+        if (roomId == 0 && imageMeta?.RoomId is > 0) roomId = imageMeta.RoomId.Value;
         if (roomId == 0) roomId = presence.GetRoom(pid)?.RoomId ?? 0;
-        var isPublic = string.Equals(form?["IsPublic"].ToString(), "true", StringComparison.OrdinalIgnoreCase);
+        var explicitPublic = form is null ? null : TryReadBool(form["IsPublic"].ToString());
+        var isPublic = explicitPublic ?? (imageMeta?.Accessibility == 1 || imageMeta?.SavedImageType == 1);
         var isProfileThumbnail = IsProfileThumbnail(form);
         LogUploadForm("uploadsaved", pid, form, isProfileThumbnail);
 
@@ -280,13 +285,23 @@ public class ImagesController(
     /// <summary>GET <c>api/images/v1/slideshow</c> — the watch's lobby
     /// slideshow info. Response shape per <c>SlideshowInfoDTO.Deserialize</c>:
     /// <c>{ValidTill (DateTime, required), Images (list, required)}</c>.
-    /// Far-future <c>ValidTill</c> stops the watch from re-polling.</summary>
+    /// A short <c>ValidTill</c> lets the Rec Center board pick up newly
+    /// shared camera photos without needing a server restart.</summary>
     [HttpGet("api/images/v1/slideshow")]
-    public IActionResult SlideshowInfo() => Ok(new
+    public async Task<IActionResult> SlideshowInfo()
     {
-        ValidTill = new DateTime(9999, 12, 31, 0, 0, 0, DateTimeKind.Utc),
-        Images = Array.Empty<object>(),
-    });
+        var rows = await db.Photos
+            .Where(p => p.IsPublic && p.DeletedAt == null)
+            .OrderByDescending(p => p.CreatedAt)
+            .Take(50)
+            .ToListAsync();
+
+        return Ok(new
+        {
+            ValidTill = DateTime.UtcNow.AddMinutes(5),
+            Images = rows.Select(p => BuildImageInfo(p, p.UploaderPlayerId)),
+        });
+    }
 
     /// <summary>Binary image fallback for clients that request image bytes
     /// through api/images/{name} instead of img.rec.net/{name}. Specific JSON
@@ -791,6 +806,104 @@ public class ImagesController(
         }
 
         return false;
+    }
+
+    private sealed class ParsedImageMeta
+    {
+        public int? SavedImageType { get; init; }
+        public int? Accessibility { get; init; }
+        public long? RoomId { get; init; }
+        public IReadOnlyList<long> PlayerIds { get; init; } = Array.Empty<long>();
+    }
+
+    private static ParsedImageMeta? ParseImageMeta(IFormCollection? form)
+    {
+        if (form is null) return null;
+
+        var meta = form["imgMeta"].ToString();
+        if (string.IsNullOrWhiteSpace(meta))
+            meta = form["imageMeta"].ToString();
+        if (string.IsNullOrWhiteSpace(meta))
+            return null;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(meta);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                return null;
+
+            return new ParsedImageMeta
+            {
+                SavedImageType = TryGetInt(doc.RootElement, "savedImageType", "SavedImageType", "imageType", "ImageType"),
+                Accessibility = TryGetInt(doc.RootElement, "accessibility", "Accessibility"),
+                RoomId = TryGetLong(doc.RootElement, "roomId", "RoomId"),
+                PlayerIds = TryGetLongArray(doc.RootElement, "playerIds", "PlayerIds"),
+            };
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private static bool? TryReadBool(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        if (bool.TryParse(value, out var parsed)) return parsed;
+        if (value == "1") return true;
+        if (value == "0") return false;
+        return null;
+    }
+
+    private static int? TryGetInt(JsonElement root, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (!root.TryGetProperty(name, out var value))
+                continue;
+            if (value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var n))
+                return n;
+            if (value.ValueKind == JsonValueKind.String && int.TryParse(value.GetString(), out n))
+                return n;
+        }
+
+        return null;
+    }
+
+    private static long? TryGetLong(JsonElement root, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (!root.TryGetProperty(name, out var value))
+                continue;
+            if (value.ValueKind == JsonValueKind.Number && value.TryGetInt64(out var n))
+                return n;
+            if (value.ValueKind == JsonValueKind.String && long.TryParse(value.GetString(), out n))
+                return n;
+        }
+
+        return null;
+    }
+
+    private static IReadOnlyList<long> TryGetLongArray(JsonElement root, params string[] names)
+    {
+        foreach (var name in names)
+        {
+            if (!root.TryGetProperty(name, out var value) || value.ValueKind != JsonValueKind.Array)
+                continue;
+
+            return value.EnumerateArray()
+                .Select(x => x.ValueKind == JsonValueKind.Number && x.TryGetInt64(out var n)
+                    ? n
+                    : x.ValueKind == JsonValueKind.String && long.TryParse(x.GetString(), out n)
+                        ? n
+                        : 0L)
+                .Where(x => x > 0)
+                .Distinct()
+                .ToArray();
+        }
+
+        return Array.Empty<long>();
     }
 
     /// <summary>Build the response shape every images/v* endpoint
