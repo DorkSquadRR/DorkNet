@@ -68,7 +68,10 @@ public class OnlinePresenceService
         lock (set) set.Add(connectionId);
     }
 
-    public async Task RemoveConnectionAsync(long playerId, string connectionId)
+    /// <summary>Remove one SignalR connection. Returns true when that was
+    /// the player's final active connection and they should now be treated
+    /// as offline by friends-list presence.</summary>
+    public async Task<bool> RemoveConnectionAsync(long playerId, string connectionId)
     {
         if (_redis is { } mux)
         {
@@ -84,16 +87,25 @@ public class OnlinePresenceService
                     // from the online set so admin queries see "offline".
                     await db.SetRemoveAsync(OnlineSetKey, playerId);
                     await db.KeyDeleteAsync(connsKey);
+                    return true;
                 }
             }
-            return;
+            return false;
         }
 
         if (_localConns.TryGetValue(playerId, out var set))
         {
-            lock (set) set.Remove(connectionId);
-            if (set.Count == 0) _localConns.TryRemove(playerId, out _);
+            lock (set)
+            {
+                set.Remove(connectionId);
+                if (set.Count != 0) return false;
+            }
+
+            _localConns.TryRemove(playerId, out _);
+            return true;
         }
+
+        return false;
     }
 
     /// <summary>Snapshot of SignalR connection ids that currently belong

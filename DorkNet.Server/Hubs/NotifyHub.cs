@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using DorkNet.Server.Data;
 using DorkNet.Server.Services;
 using System.Security.Claims;
 using System.Text.Json;
@@ -40,6 +41,8 @@ namespace DorkNet.Server.Hubs;
 public class NotifyHub(
     OnlinePresenceService presence,
     NotificationService notifications,
+    DorkNetDbContext db,
+    ServerSettingsService serverSettings,
     ILogger<NotifyHub> logger) : Hub
 {
     /// <summary>SignalR group name for a given player id. Use this
@@ -111,11 +114,17 @@ public class NotifyHub(
         var pid = TryGetPlayerId();
         if (pid is long id)
         {
-            await presence.RemoveConnectionAsync(id, Context.ConnectionId);
+            var wentOffline = await presence.RemoveConnectionAsync(id, Context.ConnectionId);
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, GroupForPlayer(id));
+            if (wentOffline)
+            {
+                var friendIds = await RelationshipQueries.EffectiveFriendIdsAsync(db, serverSettings, id);
+                if (friendIds.Count > 0)
+                    await notifications.PlayerWentOffline(friendIds, id);
+            }
             logger.LogInformation(
-                "[hub] disconnected player={PlayerId} conn={ConnectionId} error={Error}",
-                id, Context.ConnectionId, exception?.Message);
+                "[hub] disconnected player={PlayerId} conn={ConnectionId} wentOffline={WentOffline} error={Error}",
+                id, Context.ConnectionId, wentOffline, exception?.Message);
         }
         else
         {

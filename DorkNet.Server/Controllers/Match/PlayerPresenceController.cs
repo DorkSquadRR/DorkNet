@@ -35,7 +35,9 @@ namespace DorkNet.Server.Controllers.Match;
 /// null. Players who haven't /goto'd anywhere still report offline.
 /// </summary>
 [ApiController]
-public class PlayerPresenceController(PlayerPresenceService presence) : ControllerBase
+public class PlayerPresenceController(
+    PlayerPresenceService presence,
+    OnlinePresenceService onlinePresence) : ControllerBase
 {
     [HttpGet("/player")]
     public ActionResult<List<PlayerPresenceDto>> GetPresences()
@@ -81,17 +83,19 @@ public class PlayerPresenceController(PlayerPresenceService presence) : Controll
         // privacy concern actually applies.
         var callerId = this.CurrentPlayerId();
         var callerRoom = callerId is long cid ? presence.GetRoom(cid) : null;
+        var onlineIds = onlinePresence.OnlinePlayerIds().ToHashSet();
         var result = ids.Select(id =>
         {
             var room = presence.GetRoom(id);
-            // IsOnline is derived from current room presence: a player
-            // who has heartbeated recently has a non-null RoomInstance
-            // in PlayerPresenceService; one who hasn't shows up as
-            // null. Without this, IsOnline defaulted to `true` and the
-            // watch's friends list showed every queried account as
-            // Online regardless of actual session state — verified live
-            // (six accounts shown Online despite none being connected).
-            var isOnline = room is not null;
+            // Other players need both a room presence and an active
+            // notify connection. Presence keys intentionally live for
+            // minutes to survive long room loads, so using them alone
+            // leaves friends stuck online after a graceful disconnect.
+            // For self, keep using room presence: boot-time bulk probes
+            // can race the SignalR connection, and returning self as
+            // offline there can desync the heartbeat cache.
+            var isSelf = callerId == id;
+            var isOnline = room is not null && (isSelf || onlineIds.Contains(id));
             return new PlayerPresenceDto
             {
                 PlayerId         = (int)id,
@@ -109,9 +113,9 @@ public class PlayerPresenceController(PlayerPresenceService presence) : Controll
                 // joins; returning a redacted same-room instance there
                 // leaves the 2020 client with an incomplete roomInstance
                 // and can null-ref while reconciling player presence.
-                RoomInstance     = ShouldExposeFullRoom(callerId, callerRoom, id, room)
+                RoomInstance     = isOnline && ShouldExposeFullRoom(callerId, callerRoom, id, room)
                     ? room
-                    : RoomInstanceDto.Redact(room),
+                    : RoomInstanceDto.Redact(isOnline ? room : null),
                 IsOnline         = isOnline,
             };
         }).ToList();
