@@ -36,8 +36,7 @@ namespace DorkNet.Server.Controllers.Match;
 /// </summary>
 [ApiController]
 public class PlayerPresenceController(
-    PlayerPresenceService presence,
-    OnlinePresenceService onlinePresence) : ControllerBase
+    PlayerPresenceService presence) : ControllerBase
 {
     [HttpGet("/player")]
     public ActionResult<List<PlayerPresenceDto>> GetPresences()
@@ -83,19 +82,19 @@ public class PlayerPresenceController(
         // privacy concern actually applies.
         var callerId = this.CurrentPlayerId();
         var callerRoom = callerId is long cid ? presence.GetRoom(cid) : null;
-        var onlineIds = onlinePresence.OnlinePlayerIds().ToHashSet();
         var result = ids.Select(id =>
         {
             var room = presence.GetRoom(id);
             // Other players need both a room presence and an active
-            // notify connection. Presence keys intentionally live for
-            // minutes to survive long room loads, so using them alone
-            // leaves friends stuck online after a graceful disconnect.
-            // For self, keep using room presence: boot-time bulk probes
-            // can race the SignalR connection, and returning self as
-            // offline there can desync the heartbeat cache.
+            // live signal. Use the recent-heartbeat marker as the
+            // truth source: SignalR can drop while the player is still
+            // heartbeating, or linger after the game is gone. Presence
+            // keys intentionally live for minutes to survive long room
+            // loads, so using them alone leaves friends stuck online
+            // after a graceful disconnect.
             var isSelf = callerId == id;
-            var isOnline = room is not null && (isSelf || onlineIds.Contains(id));
+            var active = isSelf || presence.IsRecentlyActive(id);
+            var isOnline = room is not null && active;
             return new PlayerPresenceDto
             {
                 PlayerId         = (int)id,

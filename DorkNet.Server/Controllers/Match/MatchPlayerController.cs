@@ -128,6 +128,11 @@ public class MatchPlayerController(
         // an HTTP 401 mid-heartbeat.
         var playerId = TryGetCurrentPlayerId();
         var room = await GetPresenceRoomForResponseAsync(playerId);
+        if (playerId != 0)
+        {
+            presence.MarkActive(playerId);
+            if (room is not null) presence.TouchRoom(playerId);
+        }
         return Ok(new PresenceDto
         {
             PlayerId = playerId,
@@ -273,6 +278,7 @@ public class MatchPlayerController(
                     "[player-heartbeat] synthesised dorm fallback player={PlayerId} room={RoomId} dataBlob={DataBlob} (presence cache miss)",
                     playerId, fallback.RoomId, fallback.DataBlob);
                 presence.SetRoom(playerId, fallback);
+                presence.MarkActive(playerId);
                 return fallback;
             }
             log.LogInformation("[player-heartbeat] player={PlayerId} room=null", playerId);
@@ -291,6 +297,8 @@ public class MatchPlayerController(
                 presence.SetRoom(playerId, room);
             }
         }
+        presence.MarkActive(playerId);
+        presence.TouchRoom(playerId);
 
         log.LogInformation(
             "[player-heartbeat] player={PlayerId} room={RoomId} instance={InstanceId} subRoom={SubRoomId} location={Location} photon={PhotonRoomId} dataBlob={DataBlob}",

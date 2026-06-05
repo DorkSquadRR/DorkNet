@@ -26,7 +26,9 @@ public class MessageEntity
     /// GameInvite[V2], 3/7 = PartyActivitySwitch[V2], 10 =
     /// RequestGameInvite (the "ask to join" flow), 1 =
     /// GameInviteDeclined, 11 = RequestGameInviteDeclined, 20 =
-    /// FriendStatusOnline.</summary>
+    /// FriendStatusOnline. Negative invite types are tombstones kept
+    /// only so the parallel accept/delete flow can still resolve
+    /// <c>/goto/invite/{id}</c>.</summary>
     public int Type { get; set; } = 30;
 
     /// <summary>Optional RecNet room id carried by invite and party

@@ -56,6 +56,7 @@ public class MatchController(
             if (completed.HasValue)
             {
                 presence.SetRoom(pid, completed.Value.TargetRoom);
+                presence.MarkActive(pid);
                 logger.LogInformation(
                     "[joinresult] committed presence player={Player} room={RoomId}/{RoomName} instance={Instance} deferred={Deferred}",
                     pid,
@@ -63,6 +64,11 @@ public class MatchController(
                     completed.Value.TargetRoom.Name,
                     completed.Value.TargetRoom.RoomInstanceId,
                     completed.Value.DeferPresenceCommit);
+            }
+            else
+            {
+                presence.MarkActive(pid);
+                presence.TouchRoom(pid);
             }
             logger.LogInformation(
                 "[joinresult] player={Player} instance={Instance} OK ({Label})",

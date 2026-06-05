@@ -10,7 +10,8 @@ namespace DorkNet.Server.Services;
 /// Cross-replica tracker for which RoomInstance each authenticated
 /// player most recently went to via /goto. The presence heartbeat
 /// reads this back so the client's local state matches what the
-/// server says.
+/// server says, and is the only passive path that extends the room
+/// TTL.
 ///
 /// Why this exists: every ~5s the client POSTs /player/heartbeat,
 /// expecting a PlayerPresence response that mirrors its own cached
@@ -26,8 +27,11 @@ namespace DorkNet.Server.Services;
 /// (JSON-serialised <see cref="RoomInstanceDto"/>). EXPIRE is set to
 /// <see cref="PresenceTtl"/> so a player who silently drops
 /// (uninstall, kill -9) ages out automatically; their next /goto
-/// refreshes the value AND the TTL. When no Redis is configured,
-/// falls back to a process-local <see cref="ConcurrentDictionary"/>
+/// refreshes the value and heartbeat refreshes the TTL. Read-only
+/// presence queries intentionally do not refresh it, otherwise admin
+/// pages and friends-list polls keep stale rooms alive forever. When
+/// no Redis is configured, falls back to a process-local
+/// <see cref="ConcurrentDictionary"/>
 /// — identical to pre-PR-2 behaviour and fine for single-instance
 /// dev workflows.
 ///
@@ -41,6 +45,8 @@ namespace DorkNet.Server.Services;
 public class PlayerPresenceService
 {
     private readonly ConcurrentDictionary<long, RoomInstanceDto> _local = new();
+    private readonly ConcurrentDictionary<long, DateTimeOffset> _localRoomExpires = new();
+    private readonly ConcurrentDictionary<long, DateTimeOffset> _localActiveExpires = new();
     private readonly IConnectionMultiplexer? _redis;
     private readonly ILogger<PlayerPresenceService>? _log;
 
@@ -54,6 +60,13 @@ public class PlayerPresenceService
     /// room loads or temporary network stalls.
     /// </summary>
     public static TimeSpan PresenceTtl { get; } = TimeSpan.FromMinutes(10);
+
+    /// <summary>
+    /// Short online-status marker refreshed by heartbeat/join activity.
+    /// This smooths over flaky SignalR notify sockets without letting a
+    /// stale room presence make someone look online for the full room TTL.
+    /// </summary>
+    public static TimeSpan ActivityTtl { get; } = TimeSpan.FromSeconds(90);
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -93,9 +106,122 @@ public class PlayerPresenceService
         else
         {
             _local[playerId] = room;
+            _localRoomExpires[playerId] = DateTimeOffset.UtcNow.Add(PresenceTtl);
             _log?.LogDebug("[presence] set local player={PlayerId} room={Room}",
                 playerId, room?.Name ?? "<null>");
         }
+    }
+
+    public void TouchRoom(long playerId)
+    {
+        if (_redis is { } mux)
+        {
+            try
+            {
+                mux.GetDatabase().KeyExpire(Key(playerId), PresenceTtl);
+            }
+            catch (Exception ex)
+            {
+                _log?.LogWarning(ex, "[presence] redis EXPIRE failed for player={PlayerId}", playerId);
+            }
+            return;
+        }
+
+        if (_local.ContainsKey(playerId))
+            _localRoomExpires[playerId] = DateTimeOffset.UtcNow.Add(PresenceTtl);
+    }
+
+    public void MarkActive(long playerId)
+    {
+        if (_redis is { } mux)
+        {
+            try
+            {
+                mux.GetDatabase().StringSet(ActiveKey(playerId), "1", ActivityTtl);
+                mux.GetDatabase().SetAdd(ActiveSetKey, playerId);
+            }
+            catch (Exception ex)
+            {
+                _log?.LogWarning(ex, "[presence] redis active SET failed for player={PlayerId}", playerId);
+            }
+            return;
+        }
+
+        _localActiveExpires[playerId] = DateTimeOffset.UtcNow.Add(ActivityTtl);
+    }
+
+    public IReadOnlyCollection<long> RecentlyActivePlayerIds()
+    {
+        if (_redis is { } mux)
+        {
+            try
+            {
+                var db = mux.GetDatabase();
+                var members = db.SetMembers(ActiveSetKey);
+                if (members.Length == 0) return Array.Empty<long>();
+
+                var activeIds = new List<long>(members.Length);
+                var stale = new List<RedisValue>();
+                foreach (var member in members)
+                {
+                    if (!long.TryParse(member.ToString(), out var playerId))
+                    {
+                        stale.Add(member);
+                        continue;
+                    }
+
+                    if (db.KeyExists(ActiveKey(playerId)))
+                        activeIds.Add(playerId);
+                    else
+                        stale.Add(member);
+                }
+
+                if (stale.Count > 0)
+                    db.SetRemove(ActiveSetKey, stale.ToArray());
+                return activeIds;
+            }
+            catch (Exception ex)
+            {
+                _log?.LogWarning(ex, "[presence] redis active scan failed");
+                return Array.Empty<long>();
+            }
+        }
+
+        var now = DateTimeOffset.UtcNow;
+        var active = new List<long>();
+        foreach (var kv in _localActiveExpires)
+        {
+            if (kv.Value > now)
+            {
+                active.Add(kv.Key);
+            }
+            else
+            {
+                _localActiveExpires.TryRemove(kv.Key, out _);
+            }
+        }
+        return active;
+    }
+
+    public bool IsRecentlyActive(long playerId)
+    {
+        if (_redis is { } mux)
+        {
+            try
+            {
+                return mux.GetDatabase().KeyExists(ActiveKey(playerId));
+            }
+            catch (Exception ex)
+            {
+                _log?.LogWarning(ex, "[presence] redis active GET failed for player={PlayerId}", playerId);
+                return false;
+            }
+        }
+
+        if (!_localActiveExpires.TryGetValue(playerId, out var expires)) return false;
+        if (expires > DateTimeOffset.UtcNow) return true;
+        _localActiveExpires.TryRemove(playerId, out _);
+        return false;
     }
 
     public RoomInstanceDto? GetRoom(long playerId)
@@ -112,7 +238,6 @@ public class PlayerPresenceService
                     _log?.LogDebug("[presence] miss redis player={PlayerId}", playerId);
                     return null;
                 }
-                db.KeyExpire(key, PresenceTtl);
                 return JsonSerializer.Deserialize<RoomInstanceDto>(v.ToString(), JsonOpts);
             }
             catch (Exception ex)
@@ -121,13 +246,33 @@ public class PlayerPresenceService
                 return null;
             }
         }
-        return _local.TryGetValue(playerId, out var room) ? room : null;
+        if (!_local.TryGetValue(playerId, out var room)) return null;
+        if (_localRoomExpires.TryGetValue(playerId, out var expires)
+            && expires <= DateTimeOffset.UtcNow)
+        {
+            _local.TryRemove(playerId, out _);
+            _localRoomExpires.TryRemove(playerId, out _);
+            _localActiveExpires.TryRemove(playerId, out _);
+            return null;
+        }
+        return room;
     }
 
     public void Clear(long playerId)
     {
-        if (_redis is { } mux) mux.GetDatabase().KeyDelete(Key(playerId));
-        else _local.TryRemove(playerId, out _);
+        if (_redis is { } mux)
+        {
+            var db = mux.GetDatabase();
+            db.KeyDelete(Key(playerId));
+            db.KeyDelete(ActiveKey(playerId));
+            db.SetRemove(ActiveSetKey, playerId);
+        }
+        else
+        {
+            _local.TryRemove(playerId, out _);
+            _localRoomExpires.TryRemove(playerId, out _);
+            _localActiveExpires.TryRemove(playerId, out _);
+        }
     }
 
     /// <summary>List the currently-active instances of a given room,
@@ -170,6 +315,8 @@ public class PlayerPresenceService
     }
 
     private static string Key(long playerId) => $"presence:{playerId}";
+    private static string ActiveKey(long playerId) => $"presence-active:{playerId}";
+    private const string ActiveSetKey = "presence-active";
 
     // ── LoginLock single-session enforcement ─────────────────────────
     // The 2020 watch generates a fresh GUID per session and sends it

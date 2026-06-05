@@ -402,7 +402,7 @@ public class GoToController(
         var invite = await db.Messages.FirstOrDefaultAsync(m =>
             m.Id == inviteId
             && m.RecipientPlayerId == callerId.Value
-            && (m.Type == 6 || m.Type == 7));
+            && (m.Type == 6 || m.Type == 7 || m.Type == -6 || m.Type == -7));
 
         long? roomInstanceId = null;
         if (invite is not null && TryParseRoomInstanceId(invite.Body, out var parsed))
@@ -413,12 +413,12 @@ public class GoToController(
         // parallel — verified in the live server log:
         //   09:53:47.161Z DELETE messageIds=[60]
         //   09:53:47.245Z /goto/invite/60 → [goto-invite] invite 60 not found
-        // DELETE usually wins the race, so the message row is gone
-        // by the time we run FirstOrDefaultAsync. The
-        // (instance, player) → LatestInviteMessageId mapping that
-        // SendInvite writes onto the PrivateInstanceInviteeEntity
-        // survives the message deletion and lets us recover
-        // roomInstanceId here.
+        // Current deletes tombstone invite rows so this should only
+        // be needed for invite rows that were hard-deleted by older
+        // builds. The (instance, player) → LatestInviteMessageId
+        // mapping that SendInvite writes onto the
+        // PrivateInstanceInviteeEntity survives those old deletions
+        // and lets us recover roomInstanceId here.
         if (roomInstanceId is null)
         {
             var inviteeRoomInstance = await db.PrivateInstanceInvitees
@@ -741,6 +741,7 @@ public class GoToController(
         }
 
         presence.SetRoom(playerId, targetRoom);
+        presence.MarkActive(playerId);
 
         // Real visit tracking: upsert the per-(room, player) row so
         // we get distinct VisitorCount (unique players ever) AND the

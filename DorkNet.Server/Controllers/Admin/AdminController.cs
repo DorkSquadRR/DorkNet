@@ -75,7 +75,6 @@ public class AdminController(
             q = q.Where(p => p.Username.Contains(query) || p.DisplayName.Contains(query));
 
         var page = await q.Skip(skip).Take(take).ToListAsync();
-        var onlineSet = onlinePresence.OnlinePlayerIds().ToHashSet();
         return Ok(page.Select(p => new
         {
             p.Id,
@@ -94,7 +93,7 @@ public class AdminController(
             p.Level,
             p.XP,
             p.ProfileImageName,
-            Online = onlineSet.Contains(p.Id),
+            Online = playerPresence.IsRecentlyActive(p.Id),
         }));
     }
 
@@ -133,7 +132,7 @@ public class AdminController(
             p.Level,
             p.XP,
             p.ProfileImageName,
-            Online = onlinePresence.OnlinePlayerIds().Contains(p.Id),
+            Online = playerPresence.IsRecentlyActive(p.Id),
             Balances = balances,
             Avatar = avatar,
         });
@@ -1169,7 +1168,7 @@ public class AdminController(
             .Select(r => new { r.Id, r.CreatorPlayerId, r.IsDormRoom })
             .FirstOrDefaultAsync();
 
-        var onlinePids = onlinePresence.OnlinePlayerIds().ToList();
+        var onlinePids = playerPresence.RecentlyActivePlayerIds().ToList();
         var byInstance = new Dictionary<long, (long roomInstanceId, long roomId, long subRoomId, string roomName, string photonRoomId, string photonRegionId, string location, int maxCapacity, bool isPrivate, List<long> pids)>();
         foreach (var pid in onlinePids)
         {
@@ -1235,7 +1234,7 @@ public class AdminController(
         // route the pulled player into. If nobody's online in the
         // instance anymore the instance has effectively died; reject.
         DorkNet.Server.Controllers.Match.RoomInstanceDto? sample = null;
-        foreach (var pid in onlinePresence.OnlinePlayerIds())
+        foreach (var pid in playerPresence.RecentlyActivePlayerIds())
         {
             var r = playerPresence.GetRoom(pid);
             if (r is not null && r.RoomId == id && r.RoomInstanceId == instanceId)
@@ -1271,7 +1270,7 @@ public class AdminController(
     {
         var reason = body?.Reason ?? "Instance closed by admin";
         var kicked = new List<long>();
-        foreach (var pid in onlinePresence.OnlinePlayerIds().ToList())
+        foreach (var pid in playerPresence.RecentlyActivePlayerIds().ToList())
         {
             var r = playerPresence.GetRoom(pid);
             if (r is null || r.RoomId != id || r.RoomInstanceId != instanceId) continue;
@@ -1787,7 +1786,7 @@ public class AdminController(
         var activeIpBans = await db.IpBans.CountAsync(b =>
             b.Until == null || b.Until > now);
 
-        var online = onlinePresence.OnlinePlayerIds().ToArray();
+        var online = playerPresence.RecentlyActivePlayerIds().ToArray();
         var onlineSet = online.ToHashSet();
 
         var currentRoomsByPlayer = online
@@ -2569,7 +2568,7 @@ public class AdminController(
     [HttpGet("instances")]
     public async Task<ActionResult> ListInstances()
     {
-        var onlineIds = onlinePresence.OnlinePlayerIds().ToHashSet();
+        var onlineIds = playerPresence.RecentlyActivePlayerIds().ToHashSet();
         if (onlineIds.Count == 0) return Ok(Array.Empty<object>());
 
         // Bulk-pull names so we can render usernames per participant.

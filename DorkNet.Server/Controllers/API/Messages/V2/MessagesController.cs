@@ -22,7 +22,6 @@ public class MessagesController(
     DorkNetDbContext db,
     NotificationService notifications,
     PrivateInstanceService privateInstances,
-    OnlinePresenceService onlinePresence,
     PlayerPresenceService presence,
     ServerSettingsService serverSettings,
     ILogger<MessagesController> logger) : ControllerBase
@@ -42,6 +41,7 @@ public class MessagesController(
         take = Math.Clamp(take, 1, 200);
         var rows = await db.Messages
             .Where(m => m.RecipientPlayerId == Me || m.SenderPlayerId == Me)
+            .Where(m => m.Type >= 0)
             // Defensive filter for the empty-body ghost rows that
             // accumulated before SendFormMessage rejected them. The
             // watch's MessagesScreenItem renders TextMessage (type 30)
@@ -65,7 +65,7 @@ public class MessagesController(
     public async Task<ActionResult<List<MessageDto>>> Unread()
     {
         var rows = await db.Messages
-            .Where(m => m.RecipientPlayerId == Me && m.ReadAt == null)
+            .Where(m => m.RecipientPlayerId == Me && m.ReadAt == null && m.Type >= 0)
             // Same ghost-row filter as GetMessages above — keep the
             // unread badge count honest by hiding empty TextMessages.
             .Where(m => m.Type != 30 || (m.Body != null && m.Body != ""))
@@ -82,7 +82,7 @@ public class MessagesController(
         public List<long>? MessageIds { get; set; }
     }
 
-    /// <summary>POST <c>api/messages/v3/delete</c> — hard-delete one or
+    /// <summary>POST <c>api/messages/v3/delete</c> — delete one or
     /// more messages addressed to the caller. The 2020 watch's inbox
     /// "delete" action posts JSON <c>{"MessageIds":[8]}</c> (plural
     /// array, verified from the live trace where the body was
@@ -90,7 +90,9 @@ public class MessagesController(
     /// some older / SPA call sites still post <c>id</c> or
     /// <c>messageId</c> as a form/query. Accept all three shapes and
     /// scope every delete to <c>RecipientPlayerId == Me</c> so the
-    /// sender can't unsend.</summary>
+    /// sender can't unsend. Game invites are tombstoned instead of
+    /// hard-deleted because the watch accepts an invite by firing this
+    /// delete request and <c>/goto/invite/{id}</c> in parallel.</summary>
     [HttpPost("/api/messages/v3/delete")]
     [HttpPost("/api/messages/v1/delete")]
     [Consumes("application/json")]
@@ -128,10 +130,27 @@ public class MessagesController(
     {
         ids = ids.Distinct().ToList();
         if (ids.Count == 0) return BadRequest(new { error = "missing_id" });
-        var deleted = await db.Messages
+
+        var inviteRows = await db.Messages
+            .Where(m => ids.Contains(m.Id)
+                        && m.RecipientPlayerId == Me
+                        && (m.Type == 6 || m.Type == 7))
+            .ToListAsync();
+        var now = DateTime.UtcNow;
+        foreach (var invite in inviteRows)
+        {
+            invite.Type = -invite.Type;
+            invite.ReadAt ??= now;
+        }
+
+        var hardDeleted = await db.Messages
             .Where(m => ids.Contains(m.Id) && m.RecipientPlayerId == Me)
+            .Where(m => m.Type != 6 && m.Type != 7 && m.Type != -6 && m.Type != -7)
             .ExecuteDeleteAsync();
-        return Ok(new { success = true, error = "", deleted });
+        if (inviteRows.Count > 0)
+            await db.SaveChangesAsync();
+
+        return Ok(new { success = true, error = "", deleted = hardDeleted + inviteRows.Count });
     }
 
     /// <summary>POST <c>api/messages/v3/markRead</c> — bulk
@@ -537,11 +556,10 @@ public class MessagesController(
     {
         // Honors the global-friends toggle (everyone is a friend when on).
         var friendIds = await RelationshipQueries.EffectiveFriendIdsAsync(db, serverSettings, Me);
-        var online = onlinePresence.OnlinePlayerIds().ToHashSet();
         return Ok(friendIds.Select(id => new
         {
             AccountId = id,
-            Online = online.Contains(id),
+            Online = presence.IsRecentlyActive(id),
         }));
     }
 
