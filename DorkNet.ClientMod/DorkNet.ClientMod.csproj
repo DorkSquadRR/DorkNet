@@ -64,4 +64,29 @@
     </Reference>
   </ItemGroup>
 
+  <!--
+    Dev-tools only: typed references to the per-install Il2Cpp interop
+    assemblies MelonLoader generates (Assembly-CSharp / UnityEngine.* /
+    TextMeshPro). Used by the native watch "Dev Console" injection
+    (DevWatchButton.cs), which needs real types (Button3D.OnClick,
+    Object.Instantiate, TextMeshProUGUI, UnityAction) that pure reflection
+    couldn't drive in this build. These DLLs are game-derived and are NOT
+    redistributed — they're only referenced at build time and resolved at
+    runtime from the player's own install. Private=false so they're never
+    copied into the mod output. Override the dir with -p:Il2CppAsmDir=… .
+  -->
+  <PropertyGroup>
+    <Il2CppAsmDir Condition="'$(Il2CppAsmDir)' == ''">C:\Users\Alexa\Downloads\DorkRoom-2020.12\MelonLoader\Il2CppAssemblies</Il2CppAsmDir>
+  </PropertyGroup>
+  <ItemGroup Condition="Exists('$(Il2CppAsmDir)')">
+    <Reference Include="Assembly-CSharp"><HintPath>$(Il2CppAsmDir)\Assembly-CSharp.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Il2Cppmscorlib"><HintPath>$(Il2CppAsmDir)\Il2Cppmscorlib.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.CoreModule"><HintPath>$(Il2CppAsmDir)\UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.UI"><HintPath>$(Il2CppAsmDir)\UnityEngine.UI.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.InputLegacyModule"><HintPath>$(Il2CppAsmDir)\UnityEngine.InputLegacyModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.TextMeshPro"><HintPath>$(Il2CppAsmDir)\Unity.TextMeshPro.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Il2CppRecRoom.Promises.Runtime"><HintPath>$(Il2CppAsmDir)\Il2CppRecRoom.Promises.Runtime.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Il2CppRecRoom.Datastructures.Runtime"><HintPath>$(Il2CppAsmDir)\Il2CppRecRoom.Datastructures.Runtime.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+
 </Project>
