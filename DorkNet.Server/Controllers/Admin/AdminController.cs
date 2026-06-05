@@ -699,28 +699,31 @@ public class AdminController(
     public async Task<ActionResult> ListChannels()
     {
         var rows = await db.LeaderboardStats
-            .GroupBy(s => s.StatChannel)
+            .GroupBy(s => new { s.RoomId, s.StatChannel })
             .Select(g => new
             {
-                Channel = g.Key,
+                g.Key.RoomId,
+                Channel = g.Key.StatChannel,
                 EntryCount = g.Count(),
                 MinValue = g.Min(x => x.Value),
                 MaxValue = g.Max(x => x.Value),
             })
-            .OrderBy(r => r.Channel)
+            .OrderBy(r => r.RoomId)
+            .ThenBy(r => r.Channel)
             .ToListAsync();
         // DB-defined meta beats hardcoded KnownStatChannels so admins
         // can rename / reassign channels live without a code change.
-        var dbMeta = await db.LeaderboardChannelMeta.ToDictionaryAsync(c => c.Channel);
+        var dbMeta = await db.LeaderboardChannelMeta
+            .ToDictionaryAsync(c => new { c.RoomId, c.Channel });
         var labelled = rows.Select(r =>
         {
-            dbMeta.TryGetValue(r.Channel, out var live);
+            dbMeta.TryGetValue(new { r.RoomId, r.Channel }, out var live);
             KnownStatChannels.TryGetValue(r.Channel, out var fallback);
             return new
             {
                 r.Channel,
                 Name = live?.Name is { Length: > 0 } n ? n : (fallback?.Name ?? $"Channel {r.Channel}"),
-                RoomId = live?.RoomId ?? 0,
+                RoomId = r.RoomId,
                 LowerIsBetter = live?.LowerIsBetter ?? fallback?.LowerIsBetter ?? false,
                 ValueFormat = live?.ValueFormat ?? fallback?.ValueFormat ?? "count",
                 Verified = live is not null || fallback is not null,
@@ -750,16 +753,16 @@ public class AdminController(
     /// the channel's natural direction (lower-is-better channels
     /// sorted ascending, everything else descending).</summary>
     [HttpGet("leaderboards/{channel:int}")]
-    public async Task<ActionResult> ChannelDetail(int channel, [FromQuery] int take = 100)
+    public async Task<ActionResult> ChannelDetail(int channel, [FromQuery] long roomId = 0, [FromQuery] int take = 100)
     {
         take = Math.Clamp(take, 1, 1000);
-        var liveMeta = await db.LeaderboardChannelMeta.FirstOrDefaultAsync(c => c.Channel == channel);
+        var liveMeta = await db.LeaderboardChannelMeta.FirstOrDefaultAsync(c => c.RoomId == roomId && c.Channel == channel);
         KnownStatChannels.TryGetValue(channel, out var fallback);
         var name = liveMeta?.Name is { Length: > 0 } ln ? ln : (fallback?.Name ?? $"Channel {channel}");
         var lowerIsBetter = liveMeta?.LowerIsBetter ?? fallback?.LowerIsBetter ?? false;
         var valueFormat = liveMeta?.ValueFormat ?? fallback?.ValueFormat ?? "count";
         var query = db.LeaderboardStats
-            .Where(s => s.StatChannel == channel);
+            .Where(s => s.RoomId == roomId && s.StatChannel == channel);
         query = lowerIsBetter
             ? query.OrderBy(s => s.Value)
             : query.OrderByDescending(s => s.Value);
@@ -780,7 +783,7 @@ public class AdminController(
         {
             Channel = channel,
             Name = name,
-            RoomId = liveMeta?.RoomId ?? 0,
+            RoomId = roomId,
             LowerIsBetter = lowerIsBetter,
             ValueFormat = valueFormat,
             Verified = liveMeta is not null || fallback is not null,
@@ -797,7 +800,7 @@ public class AdminController(
         });
     }
 
-    public sealed record SetLeaderboardScoreRequest(long PlayerId, int Value);
+    public sealed record SetLeaderboardScoreRequest(long PlayerId, int Value, long RoomId = 0);
 
     /// <summary>POST <c>api/admin/v1/leaderboards/{channel}/score</c>
     /// — upsert a single player's score in a channel.</summary>
@@ -805,12 +808,13 @@ public class AdminController(
     public async Task<ActionResult> SetScore(int channel, [FromBody] SetLeaderboardScoreRequest body)
     {
         var row = await db.LeaderboardStats.FirstOrDefaultAsync(s =>
-            s.PlayerId == body.PlayerId && s.StatChannel == channel);
+            s.RoomId == body.RoomId && s.PlayerId == body.PlayerId && s.StatChannel == channel);
         if (row is null)
         {
             row = new LeaderboardStatEntity
             {
                 PlayerId = body.PlayerId,
+                RoomId = body.RoomId,
                 StatChannel = channel,
                 Value = body.Value,
             };
@@ -821,35 +825,37 @@ public class AdminController(
             row.Value = body.Value;
             row.UpdatedAt = DateTime.UtcNow;
         }
-        await LogAsync("set_leaderboard_score", "player", body.PlayerId, $"channel={channel} value={body.Value}");
+        await LogAsync("set_leaderboard_score", "player", body.PlayerId, $"room={body.RoomId} channel={channel} value={body.Value}");
         await db.SaveChangesAsync();
-        return Ok(new { row.PlayerId, row.StatChannel, row.Value });
+        return Ok(new { row.PlayerId, row.RoomId, row.StatChannel, row.Value });
     }
 
     [HttpDelete("leaderboards/{channel:int}/score/{playerId:long}")]
-    public async Task<ActionResult> DeleteScore(int channel, long playerId)
+    public async Task<ActionResult> DeleteScore(int channel, long playerId, [FromQuery] long roomId = 0)
     {
         var row = await db.LeaderboardStats.FirstOrDefaultAsync(s =>
-            s.PlayerId == playerId && s.StatChannel == channel);
+            s.RoomId == roomId && s.PlayerId == playerId && s.StatChannel == channel);
         if (row is null) return NotFound();
         db.LeaderboardStats.Remove(row);
-        await LogAsync("delete_leaderboard_score", "player", playerId, $"channel={channel}");
+        await LogAsync("delete_leaderboard_score", "player", playerId, $"room={roomId} channel={channel}");
         await db.SaveChangesAsync();
-        return Ok(new { deleted = playerId, channel });
+        return Ok(new { deleted = playerId, roomId, channel });
     }
 
     /// <summary>DELETE <c>api/admin/v1/leaderboards/{channel}</c> —
     /// wipe every entry in a stat channel. Used for season resets or
     /// to clear test data.</summary>
     [HttpDelete("leaderboards/{channel:int}")]
-    public async Task<ActionResult> WipeChannel(int channel)
+    public async Task<ActionResult> WipeChannel(int channel, [FromQuery] long roomId = 0)
     {
-        var rows = await db.LeaderboardStats.Where(s => s.StatChannel == channel).ToListAsync();
-        if (rows.Count == 0) return Ok(new { wiped = 0, channel });
+        var rows = await db.LeaderboardStats
+            .Where(s => s.RoomId == roomId && s.StatChannel == channel)
+            .ToListAsync();
+        if (rows.Count == 0) return Ok(new { wiped = 0, roomId, channel });
         db.LeaderboardStats.RemoveRange(rows);
-        await LogAsync("wipe_leaderboard_channel", "system", channel, $"entries={rows.Count}");
+        await LogAsync("wipe_leaderboard_channel", "system", channel, $"room={roomId} entries={rows.Count}");
         await db.SaveChangesAsync();
-        return Ok(new { wiped = rows.Count, channel });
+        return Ok(new { wiped = rows.Count, roomId, channel });
     }
 
     // ── Rec Room Originals (RROs) ────────────────────────────────────────
@@ -1298,7 +1304,7 @@ public class AdminController(
 
         var channels = metas.Select(m => m.Channel).ToList();
         var counts = await db.LeaderboardStats
-            .Where(s => channels.Contains(s.StatChannel))
+            .Where(s => s.RoomId == id && channels.Contains(s.StatChannel))
             .GroupBy(s => s.StatChannel)
             .Select(g => new { Channel = g.Key, Count = g.Count(), Best = g.Max(x => x.Value), Worst = g.Min(x => x.Value) })
             .ToListAsync();
@@ -1329,10 +1335,11 @@ public class AdminController(
     public async Task<ActionResult> UpsertChannelMeta([FromBody] UpsertChannelMetaRequest body)
     {
         if (body is null) return BadRequest("missing body");
-        var row = await db.LeaderboardChannelMeta.FirstOrDefaultAsync(c => c.Channel == body.Channel);
+        var row = await db.LeaderboardChannelMeta
+            .FirstOrDefaultAsync(c => c.RoomId == body.RoomId && c.Channel == body.Channel);
         if (row is null)
         {
-            row = new LeaderboardChannelMetaEntity { Channel = body.Channel };
+            row = new LeaderboardChannelMetaEntity { RoomId = body.RoomId, Channel = body.Channel };
             db.LeaderboardChannelMeta.Add(row);
         }
         row.RoomId = body.RoomId;
@@ -1349,12 +1356,13 @@ public class AdminController(
     /// remove the metadata row. The channel goes back to showing as
     /// "Channel N" / unscoped. Existing score rows are kept.</summary>
     [HttpDelete("leaderboards/meta/{channel:int}")]
-    public async Task<ActionResult> DeleteChannelMeta(int channel)
+    public async Task<ActionResult> DeleteChannelMeta(int channel, [FromQuery] long roomId = 0)
     {
-        var row = await db.LeaderboardChannelMeta.FirstOrDefaultAsync(c => c.Channel == channel);
+        var row = await db.LeaderboardChannelMeta
+            .FirstOrDefaultAsync(c => c.RoomId == roomId && c.Channel == channel);
         if (row is null) return Ok(new { ok = true, deleted = 0 });
         db.LeaderboardChannelMeta.Remove(row);
-        await LogAsync("leaderboard_meta_remove", "channel", channel, "");
+        await LogAsync("leaderboard_meta_remove", "channel", channel, $"room={roomId}");
         await db.SaveChangesAsync();
         return Ok(new { ok = true, deleted = 1 });
     }
@@ -1367,15 +1375,21 @@ public class AdminController(
     /// actually use: load a course, drive it, then orphans surfaces
     /// the channel id the game just reported.</summary>
     [HttpGet("leaderboards/orphans")]
-    public async Task<ActionResult> LeaderboardOrphans()
+    public async Task<ActionResult> LeaderboardOrphans([FromQuery] long? roomId = null)
     {
-        var mapped = await db.LeaderboardChannelMeta.Select(c => c.Channel).ToListAsync();
-        var rows = await db.LeaderboardStats
-            .Where(s => !mapped.Contains(s.StatChannel))
-            .GroupBy(s => s.StatChannel)
-            .Select(g => new { Channel = g.Key, EntryCount = g.Count(), LastSeen = g.Max(s => s.UpdatedAt) })
+        var mapped = await db.LeaderboardChannelMeta
+            .Select(c => new { c.RoomId, c.Channel })
+            .ToListAsync();
+        var query = db.LeaderboardStats.AsQueryable();
+        if (roomId is long rid) query = query.Where(s => s.RoomId == rid);
+        var rows = await query
+            .GroupBy(s => new { s.RoomId, s.StatChannel })
+            .Select(g => new { g.Key.RoomId, Channel = g.Key.StatChannel, EntryCount = g.Count(), LastSeen = g.Max(s => s.UpdatedAt) })
             .OrderByDescending(r => r.LastSeen)
             .ToListAsync();
+        rows = rows
+            .Where(r => !mapped.Any(m => m.RoomId == r.RoomId && m.Channel == r.Channel))
+            .ToList();
         return Ok(rows);
     }
 

@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 namespace DorkNet.Server.Data.Entities;
 
 /// <summary>
-/// One leaderboard stat row per (player, statChannel). Backs
+/// One leaderboard stat row per (room, player, statChannel). Backs
 /// <c>api/Leaderboard/v1/SetStats</c> + <c>api/Leaderboard/v2/getPlayerRank</c>.
 ///
 /// The 2020 watch's <c>RecNet.Leaderboards</c> uses an int channel
@@ -16,6 +16,11 @@ public class LeaderboardStatEntity
 {
     public long Id { get; set; }
     public long PlayerId { get; set; }
+
+    /// <summary>Room the score was reported from. The same stat channel
+    /// id is reused by different rooms, so room scope is part of the
+    /// leaderboard identity. 0 means legacy/global/unscoped.</summary>
+    public long RoomId { get; set; }
 
     /// <summary>RecNet stat channel id (small int per game mode +
     /// stat type — e.g. paintball-CTF-wins, dodgeball-hits).</summary>

@@ -629,12 +629,14 @@ interface RoomLeaderboardRow {
 }
 
 interface OrphanRow {
+  roomId: number;
   channel: number;
   entryCount: number;
   lastSeen: string;
 }
 
 interface ChannelEntries {
+  roomId: number;
   channel: number;
   name: string;
   lowerIsBetter: boolean;
@@ -665,7 +667,7 @@ function formatChannelValue(v: number | null | undefined, fmt: string) {
 function LeaderboardsTab({ roomId }: { roomId: number }) {
   const toast = useToast();
   const lb = useApi<RoomLeaderboardRow[]>(`/rooms/${roomId}/leaderboards`);
-  const orphans = useApi<OrphanRow[]>(`/leaderboards/orphans`);
+  const orphans = useApi<OrphanRow[]>(`/leaderboards/orphans?roomId=${roomId}`);
   const [addOpen, setAddOpen] = useState(false);
   const [adoptChannel, setAdoptChannel] = useState<number | null>(null);
   const [expanded, setExpanded] = useState<number | null>(null);
@@ -709,7 +711,7 @@ function LeaderboardsTab({ roomId }: { roomId: number }) {
                       onClick={async () => {
                         if (!confirm(`Unregister channel #${c.channel}? Scores stay, but it stops appearing under this room.`)) return;
                         try {
-                          await api(`/leaderboards/meta/${c.channel}`, { method: 'DELETE' });
+                          await api(`/leaderboards/meta/${c.channel}?roomId=${roomId}`, { method: 'DELETE' });
                           toast.push('Unregistered', 'success');
                           refresh();
                         } catch (e) { toast.push((e as Error).message, 'error'); }
@@ -721,7 +723,7 @@ function LeaderboardsTab({ roomId }: { roomId: number }) {
                   </div>
                 </div>
                 {expanded === c.channel && (
-                  <ChannelEntriesPanel channel={c.channel} />
+                  <ChannelEntriesPanel roomId={roomId} channel={c.channel} />
                 )}
               </li>
             ))}
@@ -768,8 +770,8 @@ function LeaderboardsTab({ roomId }: { roomId: number }) {
   );
 }
 
-function ChannelEntriesPanel({ channel }: { channel: number }) {
-  const { data, loading, error } = useApi<ChannelEntries>(`/leaderboards/${channel}?take=25`);
+function ChannelEntriesPanel({ roomId, channel }: { roomId: number; channel: number }) {
+  const { data, loading, error } = useApi<ChannelEntries>(`/leaderboards/${channel}?roomId=${roomId}&take=25`);
   if (loading && !data) return <div className="px-6 py-3 text-xs text-ink-400 bg-ink-900/40">Loading…</div>;
   if (error) return <div className="px-6 py-3 text-xs text-danger bg-ink-900/40">{error}</div>;
   if (!data) return null;

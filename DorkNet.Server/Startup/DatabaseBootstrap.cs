@@ -101,6 +101,7 @@ public static class DatabaseBootstrap
         // IF NOT EXISTS no-ops when EnsureCreated already built them).
         await EnsureSignupCodeTablesAsync(db);
         await EnsureServerSettingsColumnsAsync(db);
+        await EnsureLeaderboardSchemaAsync(db);
 
         // Coach system account at Player.Id=1. The RR-Original room seeder
         // below assigns CreatorPlayerId=1 to every canonical room
@@ -300,6 +301,117 @@ public static class DatabaseBootstrap
             // ignore the duplicate-column error; any other schema problem
             // will surface when EF reads ServerSettings.
         }
+    }
+
+    private static async Task EnsureLeaderboardSchemaAsync(DorkNetDbContext db)
+    {
+        var provider = db.Database.ProviderName ?? string.Empty;
+        if (provider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""LeaderboardStats"" ADD COLUMN IF NOT EXISTS ""RoomId"" bigint NOT NULL DEFAULT 0;");
+            await db.Database.ExecuteSqlRawAsync(
+                """
+                UPDATE "LeaderboardStats"
+                SET "RoomId" = COALESCE((
+                    SELECT "RoomId"
+                    FROM "LeaderboardChannelMeta"
+                    WHERE "LeaderboardChannelMeta"."Channel" = "LeaderboardStats"."StatChannel"
+                    LIMIT 1
+                ), 0)
+                WHERE "RoomId" = 0;
+                """);
+            await db.Database.ExecuteSqlRawAsync(
+                @"DROP INDEX IF EXISTS ""IX_LeaderboardStats_PlayerId_StatChannel"";");
+            await db.Database.ExecuteSqlRawAsync(
+                @"DROP INDEX IF EXISTS ""IX_LeaderboardStats_StatChannel_Value"";");
+            await db.Database.ExecuteSqlRawAsync(
+                @"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_LeaderboardStats_RoomId_PlayerId_StatChannel""
+                  ON ""LeaderboardStats"" (""RoomId"", ""PlayerId"", ""StatChannel"");");
+            await db.Database.ExecuteSqlRawAsync(
+                @"CREATE INDEX IF NOT EXISTS ""IX_LeaderboardStats_RoomId_StatChannel_Value""
+                  ON ""LeaderboardStats"" (""RoomId"", ""StatChannel"", ""Value"");");
+
+            await db.Database.ExecuteSqlRawAsync(
+                """
+                DO $$
+                DECLARE
+                    pk_cols text[];
+                BEGIN
+                    SELECT array_agg(a.attname ORDER BY x.ordinality)
+                    INTO pk_cols
+                    FROM pg_constraint c
+                    JOIN unnest(c.conkey) WITH ORDINALITY AS x(attnum, ordinality) ON true
+                    JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = x.attnum
+                    WHERE c.conrelid = '"LeaderboardChannelMeta"'::regclass
+                      AND c.contype = 'p';
+
+                    IF pk_cols IS DISTINCT FROM ARRAY['RoomId', 'Channel'] THEN
+                        ALTER TABLE "LeaderboardChannelMeta" DROP CONSTRAINT IF EXISTS "PK_LeaderboardChannelMeta";
+                        ALTER TABLE "LeaderboardChannelMeta"
+                        ADD CONSTRAINT "PK_LeaderboardChannelMeta" PRIMARY KEY ("RoomId", "Channel");
+                    END IF;
+                END $$;
+                """);
+            return;
+        }
+
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""LeaderboardStats"" ADD COLUMN ""RoomId"" INTEGER NOT NULL DEFAULT 0;");
+        }
+        catch
+        {
+            // SQLite has no ADD COLUMN IF NOT EXISTS. Ignore duplicate
+            // column errors; later queries verify the resulting shape.
+        }
+
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            UPDATE "LeaderboardStats"
+            SET "RoomId" = COALESCE((
+                SELECT "RoomId"
+                FROM "LeaderboardChannelMeta"
+                WHERE "LeaderboardChannelMeta"."Channel" = "LeaderboardStats"."StatChannel"
+                LIMIT 1
+            ), 0)
+            WHERE "RoomId" = 0;
+            """);
+        await db.Database.ExecuteSqlRawAsync(
+            @"DROP INDEX IF EXISTS ""IX_LeaderboardStats_PlayerId_StatChannel"";");
+        await db.Database.ExecuteSqlRawAsync(
+            @"DROP INDEX IF EXISTS ""IX_LeaderboardStats_StatChannel_Value"";");
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            CREATE TABLE IF NOT EXISTS "__LeaderboardChannelMeta_new" (
+                "RoomId" INTEGER NOT NULL,
+                "Channel" INTEGER NOT NULL,
+                "Name" TEXT NOT NULL,
+                "LowerIsBetter" INTEGER NOT NULL,
+                "ValueFormat" TEXT NOT NULL,
+                "CreatedAt" TEXT NOT NULL,
+                "UpdatedAt" TEXT NOT NULL,
+                CONSTRAINT "PK_LeaderboardChannelMeta" PRIMARY KEY ("RoomId", "Channel")
+            );
+            """);
+        await db.Database.ExecuteSqlRawAsync(@"DELETE FROM ""__LeaderboardChannelMeta_new"";");
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            INSERT OR REPLACE INTO "__LeaderboardChannelMeta_new"
+                ("RoomId", "Channel", "Name", "LowerIsBetter", "ValueFormat", "CreatedAt", "UpdatedAt")
+            SELECT "RoomId", "Channel", "Name", "LowerIsBetter", "ValueFormat", "CreatedAt", "UpdatedAt"
+            FROM "LeaderboardChannelMeta";
+            """);
+        await db.Database.ExecuteSqlRawAsync(@"DROP TABLE ""LeaderboardChannelMeta"";");
+        await db.Database.ExecuteSqlRawAsync(
+            @"ALTER TABLE ""__LeaderboardChannelMeta_new"" RENAME TO ""LeaderboardChannelMeta"";");
+        await db.Database.ExecuteSqlRawAsync(
+            @"CREATE INDEX IF NOT EXISTS ""IX_LeaderboardChannelMeta_RoomId"" ON ""LeaderboardChannelMeta"" (""RoomId"");");
+        await db.Database.ExecuteSqlRawAsync(
+            @"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_LeaderboardStats_RoomId_PlayerId_StatChannel"" ON ""LeaderboardStats"" (""RoomId"", ""PlayerId"", ""StatChannel"");");
+        await db.Database.ExecuteSqlRawAsync(
+            @"CREATE INDEX IF NOT EXISTS ""IX_LeaderboardStats_RoomId_StatChannel_Value"" ON ""LeaderboardStats"" (""RoomId"", ""StatChannel"", ""Value"");");
     }
 
     /// <summary>SQLite migration-history reconciliation. Handles two

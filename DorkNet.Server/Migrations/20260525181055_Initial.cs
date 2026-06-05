@@ -516,7 +516,7 @@ namespace DorkNet.Server.Migrations
                 },
                 constraints: table =>
                 {
-                    table.PrimaryKey("PK_LeaderboardChannelMeta", x => x.Channel);
+                    table.PrimaryKey("PK_LeaderboardChannelMeta", x => new { x.RoomId, x.Channel });
                 });
 
             migrationBuilder.CreateTable(
@@ -526,6 +526,7 @@ namespace DorkNet.Server.Migrations
                     Id = table.Column<long>(type: "INTEGER", nullable: false)
                         .Annotation("Sqlite:Autoincrement", true),
                     PlayerId = table.Column<long>(type: "INTEGER", nullable: false),
+                    RoomId = table.Column<long>(type: "INTEGER", nullable: false),
                     StatChannel = table.Column<int>(type: "INTEGER", nullable: false),
                     Value = table.Column<long>(type: "INTEGER", nullable: false),
                     UpdatedAt = table.Column<DateTime>(type: "TEXT", nullable: false)
@@ -1550,15 +1551,15 @@ namespace DorkNet.Server.Migrations
                 column: "RoomId");
 
             migrationBuilder.CreateIndex(
-                name: "IX_LeaderboardStats_PlayerId_StatChannel",
+                name: "IX_LeaderboardStats_RoomId_PlayerId_StatChannel",
                 table: "LeaderboardStats",
-                columns: new[] { "PlayerId", "StatChannel" },
+                columns: new[] { "RoomId", "PlayerId", "StatChannel" },
                 unique: true);
 
             migrationBuilder.CreateIndex(
-                name: "IX_LeaderboardStats_StatChannel_Value",
+                name: "IX_LeaderboardStats_RoomId_StatChannel_Value",
                 table: "LeaderboardStats",
-                columns: new[] { "StatChannel", "Value" });
+                columns: new[] { "RoomId", "StatChannel", "Value" });
 
             migrationBuilder.CreateIndex(
                 name: "IX_Messages_RecipientPlayerId_SentAt",

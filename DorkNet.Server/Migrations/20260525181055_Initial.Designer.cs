@@ -1122,7 +1122,7 @@ namespace DorkNet.Server.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
-                    b.HasKey("Channel");
+                    b.HasKey("RoomId", "Channel");
 
                     b.HasIndex("RoomId");
 
@@ -1138,6 +1138,9 @@ namespace DorkNet.Server.Migrations
                     b.Property<long>("PlayerId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long>("RoomId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("StatChannel")
                         .HasColumnType("INTEGER");
 
@@ -1149,10 +1152,10 @@ namespace DorkNet.Server.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("PlayerId", "StatChannel")
+                    b.HasIndex("RoomId", "PlayerId", "StatChannel")
                         .IsUnique();
 
-                    b.HasIndex("StatChannel", "Value");
+                    b.HasIndex("RoomId", "StatChannel", "Value");
 
                     b.ToTable("LeaderboardStats");
                 });

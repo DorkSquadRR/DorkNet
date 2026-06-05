@@ -78,13 +78,15 @@ public class LeaderboardController(
     public async Task<IActionResult> SetStat([FromBody] SetStatRequest req)
     {
         var pid = this.RequireCurrentPlayerId();
+        var roomId = ResolveRoomId(req.RoomId, pid);
         var row = await db.LeaderboardStats.FirstOrDefaultAsync(s =>
-            s.PlayerId == pid && s.StatChannel == req.StatChannel);
+            s.RoomId == roomId && s.PlayerId == pid && s.StatChannel == req.StatChannel);
         if (row is null)
         {
             row = new LeaderboardStatEntity
             {
                 PlayerId = pid,
+                RoomId = roomId,
                 StatChannel = req.StatChannel,
                 Value = req.StatValue,
             };
@@ -103,11 +105,10 @@ public class LeaderboardController(
         // when it's zero (rare — direct stat report outside a room
         // context) fall back to the player's current presence so a
         // stray score still gets bucketed somewhere visible.
-        var roomId = req.RoomId > 0 ? req.RoomId : (playerPresence.GetRoom(pid)?.RoomId ?? 0);
         if (roomId > 0)
         {
             var meta = await db.LeaderboardChannelMeta
-                .FirstOrDefaultAsync(c => c.Channel == req.StatChannel);
+                .FirstOrDefaultAsync(c => c.RoomId == roomId && c.Channel == req.StatChannel);
             if (meta is null)
             {
                 // First time this channel reports. Stamp a meta row so
@@ -123,17 +124,6 @@ public class LeaderboardController(
                     LowerIsBetter = false,
                     ValueFormat = "count",
                 });
-            }
-            else if (meta.RoomId == 0)
-            {
-                // Channel registered globally (e.g. from the hardcoded
-                // KnownStatChannels fallback or an unscoped admin
-                // entry). Bind it to this room now that we know which
-                // room it came from. Don't re-bind if it already
-                // points at a different room — the admin must be the
-                // one to reassign once a channel has a home.
-                meta.RoomId = roomId;
-                meta.UpdatedAt = DateTime.UtcNow;
             }
         }
 
@@ -161,18 +151,22 @@ public class LeaderboardController(
         if (pid == 0)
             return Ok(new { playerId = 0, score = 0L, rank = 0 });
 
+        var roomId = ResolveRoomId(req.RoomId, pid);
         var row = await db.LeaderboardStats.FirstOrDefaultAsync(s =>
-            s.PlayerId == pid && s.StatChannel == req.StatChannel);
+            s.RoomId == roomId && s.PlayerId == pid && s.StatChannel == req.StatChannel);
         if (row is null)
             return Ok(new { playerId = (int)pid, score = 0L, rank = 0 });
 
-        var higherCount = await db.LeaderboardStats
-            .CountAsync(s => s.StatChannel == req.StatChannel && s.Value > row.Value);
+        var lowerIsBetter = await IsLowerIsBetterAsync(roomId, req.StatChannel);
+        var betterCount = await db.LeaderboardStats
+            .CountAsync(s => s.RoomId == roomId
+                && s.StatChannel == req.StatChannel
+                && (lowerIsBetter ? s.Value < row.Value : s.Value > row.Value));
         return Ok(new
         {
             playerId = (int)pid,
             score = row.Value,
-            rank = higherCount + 1,
+            rank = betterCount + 1,
         });
     }
 
@@ -194,12 +188,13 @@ public class LeaderboardController(
     {
         var pid = req.PlayerId > 0 ? (long)req.PlayerId : this.CurrentPlayerId() ?? 0;
         var window = Math.Clamp(req.WindowSize, 1, 50);
+        var roomId = ResolveRoomId(req.RoomId, pid);
+        var lowerIsBetter = await IsLowerIsBetterAsync(roomId, req.StatChannel);
 
-        var all = await db.LeaderboardStats
-            .Where(s => s.StatChannel == req.StatChannel)
-            .OrderByDescending(s => s.Value)
-            .Select(s => new { s.PlayerId, s.Value })
-            .ToListAsync();
+        var query = db.LeaderboardStats
+            .Where(s => s.RoomId == roomId && s.StatChannel == req.StatChannel);
+        query = lowerIsBetter ? query.OrderBy(s => s.Value) : query.OrderByDescending(s => s.Value);
+        var all = await query.Select(s => new { s.PlayerId, s.Value }).ToListAsync();
         if (all.Count == 0)
         {
             // Empty case must still come back as a SingleLeaderboard
@@ -251,12 +246,14 @@ public class LeaderboardController(
         var end = Math.Max(start, req.RankEnd);
         var skip = start - 1;
         var take = Math.Clamp(end - skip, 1, 200);
+        var pid = req.PlayerId > 0 ? (long)req.PlayerId : this.CurrentPlayerId() ?? 0;
+        var roomId = ResolveRoomId(req.RoomId, pid);
+        var lowerIsBetter = await IsLowerIsBetterAsync(roomId, req.StatChannel);
 
-        var rows = await db.LeaderboardStats
-            .Where(s => s.StatChannel == req.StatChannel)
-            .OrderByDescending(s => s.Value)
-            .Skip(skip).Take(take)
-            .ToListAsync();
+        var query = db.LeaderboardStats
+            .Where(s => s.RoomId == roomId && s.StatChannel == req.StatChannel);
+        query = lowerIsBetter ? query.OrderBy(s => s.Value) : query.OrderByDescending(s => s.Value);
+        var rows = await query.Skip(skip).Take(take).ToListAsync();
         var entries = rows.Select((s, i) => new
         {
             playerId = (int)s.PlayerId,
@@ -271,14 +268,15 @@ public class LeaderboardController(
     /// by the watch's full-leaderboard scoreboard view.</summary>
     [HttpGet("/leaderboard/Top")]
     [HttpGet("/api/leaderboard/Top")]
-    public async Task<IActionResult> Top([FromQuery] int channel, [FromQuery] int take = 50)
+    public async Task<IActionResult> Top([FromQuery] int channel, [FromQuery] long roomId = 0, [FromQuery] int take = 50)
     {
         take = Math.Clamp(take, 1, 200);
-        var rows = await db.LeaderboardStats
-            .Where(s => s.StatChannel == channel)
-            .OrderByDescending(s => s.Value)
-            .Take(take)
-            .ToListAsync();
+        var resolvedRoomId = ResolveRoomId(roomId, this.CurrentPlayerId() ?? 0);
+        var lowerIsBetter = await IsLowerIsBetterAsync(resolvedRoomId, channel);
+        var query = db.LeaderboardStats
+            .Where(s => s.RoomId == resolvedRoomId && s.StatChannel == channel);
+        query = lowerIsBetter ? query.OrderBy(s => s.Value) : query.OrderByDescending(s => s.Value);
+        var rows = await query.Take(take).ToListAsync();
         // FullLeaderboard wire shape: GlobalOverall / GlobalPeriodic /
         // FriendsOverall / FriendsPeriodic + NextResetUTC. Use the
         // same Entry list for all four buckets — friends-vs-global
@@ -297,5 +295,21 @@ public class LeaderboardController(
             FriendsPeriodic = Array.Empty<object>(),
             NextResetUTC = DateTime.UtcNow.AddDays(7),
         });
+    }
+
+    private long ResolveRoomId(long requestedRoomId, long playerId)
+    {
+        if (requestedRoomId > 0) return requestedRoomId;
+        if (playerId > 0) return playerPresence.GetRoom(playerId)?.RoomId ?? 0;
+        return 0;
+    }
+
+    private async Task<bool> IsLowerIsBetterAsync(long roomId, int channel)
+    {
+        var live = await db.LeaderboardChannelMeta
+            .Where(c => c.RoomId == roomId && c.Channel == channel)
+            .Select(c => (bool?)c.LowerIsBetter)
+            .FirstOrDefaultAsync();
+        return live ?? false;
     }
 }

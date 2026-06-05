@@ -497,11 +497,12 @@ public class DorkNetDbContext(DbContextOptions<DorkNetDbContext> options) : DbCo
         modelBuilder.Entity<LeaderboardStatEntity>(e =>
         {
             e.HasKey(s => s.Id);
-            // One row per (player, channel) — enforced unique so
+            // One row per (room, player, channel) — enforced unique so
             // SetStats can upsert without race conditions.
-            e.HasIndex(s => new { s.PlayerId, s.StatChannel }).IsUnique();
-            // Rank computation: ORDER BY Value DESC over a channel.
-            e.HasIndex(s => new { s.StatChannel, s.Value });
+            e.HasIndex(s => new { s.RoomId, s.PlayerId, s.StatChannel }).IsUnique();
+            // Rank computation: ORDER BY Value over a room/channel
+            // (direction is chosen by leaderboard metadata).
+            e.HasIndex(s => new { s.RoomId, s.StatChannel, s.Value });
         });
 
         modelBuilder.Entity<PlayerEloEntity>(e =>
@@ -672,11 +673,9 @@ public class DorkNetDbContext(DbContextOptions<DorkNetDbContext> options) : DbCo
 
         modelBuilder.Entity<LeaderboardChannelMetaEntity>(e =>
         {
-            // Channel int IS the primary key — there's only one
-            // metadata row per stat-channel id, and the channel id
-            // is what the watch reports on POST /SetStats.
-            e.HasKey(c => c.Channel);
-            e.Property(c => c.Channel).ValueGeneratedNever();
+            // Channel ids are reused between rooms; a leaderboard is
+            // identified by (RoomId, Channel), not the channel alone.
+            e.HasKey(c => new { c.RoomId, c.Channel });
             e.HasIndex(c => c.RoomId);
         });
     }
