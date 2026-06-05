@@ -134,14 +134,18 @@ public class PublicSiteController(
     {
         var clamped = Math.Clamp(take, 1, 50);
         var qq = (q ?? string.Empty).Trim();
-        // Public rooms list: hide dorms (per-player private space), and
-        // hide rooms that have only ever been visited by their creator
-        // (VisitorCount < 2). This keeps "^dwadwad" style throwaway
-        // builds off the public-facing site without an explicit
-        // "publish" toggle. Admins can still see them via the Rooms
-        // admin page and delete them from there if they want.
+        // Public rooms list: hide archived, private/friends-only,
+        // dorm, and admin-hidden rows. Also hide rooms that have only
+        // ever been visited by their creator (VisitorCount < 2). This
+        // keeps throwaway builds off the public-facing site without an
+        // explicit "publish" toggle. Admins can still see them via the
+        // Rooms admin page and delete them from there if they want.
         var rows = await db.Rooms
-            .Where(r => !r.IsDormRoom && r.VisitorCount >= 2 &&
+            .Where(r => r.State == 0 &&
+                        r.Accessibility == 1 &&
+                        !r.IsDormRoom &&
+                        !r.HiddenFromBrowse &&
+                        r.VisitorCount >= 2 &&
                         (qq == "" || r.Name.Contains(qq) || r.Description.Contains(qq)))
             .OrderByDescending(r => r.HotScore)
             .Take(clamped)
@@ -171,7 +175,11 @@ public class PublicSiteController(
     public async Task<IActionResult> Stats()
     {
         var playerCount = await db.Players.CountAsync();
-        var roomCount = await db.Rooms.CountAsync(r => !r.IsDormRoom);
+        var roomCount = await db.Rooms.CountAsync(r =>
+            r.State == 0 &&
+            r.Accessibility == 1 &&
+            !r.IsDormRoom &&
+            !r.HiddenFromBrowse);
         var photoCount = await db.Photos.CountAsync(p => p.IsPublic && p.DeletedAt == null);
         var inventionCount = await db.Inventions.CountAsync(i => !i.IsDeleted);
         return Ok(new { playerCount, roomCount, photoCount, inventionCount });
@@ -212,7 +220,11 @@ public class PublicSiteController(
             .Select(p => new { p.Id, p.Username, p.DisplayName, p.ProfileImageName })
             .ToListAsync();
         var rooms = await db.Rooms
-            .Where(r => roomIds.Contains(r.Id))
+            .Where(r => roomIds.Contains(r.Id) &&
+                        r.State == 0 &&
+                        r.Accessibility == 1 &&
+                        !r.IsDormRoom &&
+                        !r.HiddenFromBrowse)
             .Select(r => new { r.Id, r.Name })
             .ToListAsync();
 

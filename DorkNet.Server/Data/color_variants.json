@@ -2044,15 +2044,6 @@
       "mask_guid": ""
     },
     {
-      "swatch_name": "CheerDress_Blue_Swatch",
-      "swatch_guid": "faedf215-289b-40f7-90cc-f5b98517d133",
-      "color": "Blue",
-      "item_name": "(FemaleCheerTorso)",
-      "item_guid": "657efe89-620a-46a2-8b58-cafd855c7cd5",
-      "item_outfit_type": 101,
-      "mask_guid": "93987d32-7a6e-45df-af56-76f912969ce7"
-    },
-    {
       "swatch_name": "PirateCaptain_Hat_SRank_Swatch",
       "swatch_guid": "jQwNBXyoU0Gk4FyNw6jFxg",
       "color": "Hat_SRank",
@@ -2384,15 +2375,6 @@
       "item_guid": "03f8c394-28fa-4087-978b-8d108f0bd969",
       "item_outfit_type": 0,
       "mask_guid": "efeb07ab-6253-436d-bb66-991ddad72e58"
-    },
-    {
-      "swatch_name": "CheerDress_Red_Swatch",
-      "swatch_guid": "1773d5d8-4714-4721-b30c-97e25d6f2a5a",
-      "color": "Red",
-      "item_name": "(FemaleCheerTorso)",
-      "item_guid": "657efe89-620a-46a2-8b58-cafd855c7cd5",
-      "item_outfit_type": 101,
-      "mask_guid": "93987d32-7a6e-45df-af56-76f912969ce7"
     },
     {
       "swatch_name": "Golfer_Glove_Blue_Swatch",
@@ -3837,6 +3819,7 @@
     "Cyber_Junk_City_Swatch",
     "BicycleJacket_DarkBlue_Swatch",
     "Torso_SeaCaptainBlueWhite_Swatch",
+    "CheerDress_Blue_Swatch",
     "Denim_Swatch",
     "RoyalLady_Contest_White_Swatch",
     "Neck_VampiteHunter_Diamond_Swatch",
@@ -3852,6 +3835,7 @@
     "GoldYellow_Swatch",
     "Happy_Tree_Purple_Swatch",
     "Barber_Torso_Green_Swatch",
+    "CheerDress_Red_Swatch",
     "TShirt_RECS_Logo_Blue_Swatch",
     "Scout_Shirt_Blue_Swatch",
     "Windbreaker_Wrist_Red_Swatch",

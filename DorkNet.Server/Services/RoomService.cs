@@ -558,11 +558,18 @@ public class RoomService(DorkNetDbContext db)
         // and have no business appearing in the watch's public room
         // browser (Trending / Search / BaseRooms all reach this query).
         // Same filter applied below to SearchAsync and CreatedByAsync.
+        // Accessibility=1 is Public. Private/Friends-only rooms should
+        // still be reachable by direct goto/invite/owned-room APIs, but
+        // must not leak into public discovery.
         // HiddenFromBrowse keeps admin-utility rooms (MakerRoom,
         // EventRoom) and rooms-folded-into-others (Paintball maps,
         // LaserTag Hangar) out of every public discovery surface.
         // /goto-by-name and admin tools still find them via GetByNameAsync.
-        IQueryable<RoomEntity> q = db.Rooms.Where(r => r.State == 0 && !r.IsDormRoom && !r.HiddenFromBrowse);
+        IQueryable<RoomEntity> q = db.Rooms.Where(r =>
+            r.State == 0 &&
+            r.Accessibility == 1 &&
+            !r.IsDormRoom &&
+            !r.HiddenFromBrowse);
         if (!string.IsNullOrWhiteSpace(tag))
         {
             var bareTag = tag.TrimStart('#').Trim();
@@ -621,7 +628,11 @@ public class RoomService(DorkNetDbContext db)
             if (accountId is long aid)
             {
                 return await db.Rooms
-                    .Where(r => r.CreatorPlayerId == aid && !r.IsDormRoom && r.State == 0)
+                    .Where(r => r.CreatorPlayerId == aid &&
+                                r.State == 0 &&
+                                r.Accessibility == 1 &&
+                                !r.IsDormRoom &&
+                                !r.HiddenFromBrowse)
                     .OrderByDescending(r => r.UpdatedAt)
                     .Take(take)
                     .ToListAsync();
@@ -634,7 +645,10 @@ public class RoomService(DorkNetDbContext db)
 
         var needle = $"%{query}%";
         return await db.Rooms
-            .Where(r => r.State == 0 && !r.IsDormRoom && !r.HiddenFromBrowse && (
+            .Where(r => r.State == 0 &&
+                        r.Accessibility == 1 &&
+                        !r.IsDormRoom &&
+                        !r.HiddenFromBrowse && (
                 EF.Functions.Like(r.Name, needle) ||
                 EF.Functions.Like(r.Description, needle) ||
                 EF.Functions.Like(r.TagsCsv, needle)))
