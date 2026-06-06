@@ -473,6 +473,17 @@ function GrantsTab({ data, onChanged }: { data: PlayerDetail; onChanged: () => v
       </div>
 
       <div className="card !p-4 md:col-span-2">
+        <h3 className="text-sm font-semibold text-ink-50 mb-1">Unlock all items</h3>
+        <p className="text-xs text-ink-400 mb-3">
+          Grants the player the entire catalog: every avatar cosmetic, every permanent hair dye, and every store equipment/consumable. Idempotent — only adds what's missing. The watch's wardrobe only displays up to ~120 owned cosmetics at once (hard client cap), but all are granted and store items show as owned.
+        </p>
+        <button
+          onClick={() => run('Unlock all', () => api(`/players/${data.id}/inventory/unlock-all`, { method: 'POST' }))}
+          className="btn-primary text-xs"
+        >Unlock everything</button>
+      </div>
+
+      <div className="card !p-4 md:col-span-2">
         <h3 className="text-sm font-semibold text-ink-50 mb-1">Grant inventory item</h3>
         <p className="text-xs text-ink-400 mb-3">Appends an item GUID to the player's inventory JSON. Use the Store catalog to find slugs / GUIDs.</p>
         <div className="grid grid-cols-1 sm:grid-cols-[1fr,120px,auto] gap-2">

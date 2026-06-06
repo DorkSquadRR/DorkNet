@@ -2067,6 +2067,106 @@ public class AdminController(
         return Ok(new { granted = body.ItemId, quantity = qty });
     }
 
+    /// <summary>POST <c>api/admin/v1/players/{id}/inventory/unlock-all</c>
+    /// — grant the player the ENTIRE catalog: every avatar cosmetic GUID
+    /// (merged into <see cref="AvatarEntity.InventoryJson"/>), every
+    /// permanent hair dye, and every store equipment/consumable slug (as
+    /// <see cref="PlayerInventoryEntity"/> rows). Idempotent — only adds
+    /// what's missing. Pushes SubscriptionUpdateProfile so the watch
+    /// re-fetches without a relog.
+    ///
+    /// Cosmetics use the canonical InventoryJson shape — a plain JSON array
+    /// of GUID strings (what the buy/gift flow writes and
+    /// AvatarItemsController.ParseInventoryEntries reads). Only BARE GUIDs
+    /// from the authoritative safe-list catalog are added, so every
+    /// unlocked item is one this build actually ships (no missing-bundle
+    /// crashes). NOTE: the 2020 watch's wardrobe only renders up to
+    /// Avatar:MaxUnlockedItems (hard cap 120) owned cosmetics at once, so
+    /// the player won't see thousands of tiles even though all are granted.</summary>
+    [HttpPost("players/{id:long}/inventory/unlock-all")]
+    public async Task<ActionResult> UnlockAllItems(long id)
+    {
+        var player = await db.Players.FirstOrDefaultAsync(x => x.Id == id);
+        if (player is null) return NotFound();
+
+        // 1) Avatar cosmetics → InventoryJson (JSON array of GUID strings).
+        var avatar = await db.Avatars.FirstOrDefaultAsync(a => a.PlayerId == id);
+        if (avatar is null) { avatar = new AvatarEntity { PlayerId = id }; db.Avatars.Add(avatar); }
+
+        var owned = ParseOwnedDescs(avatar.InventoryJson);
+        var ownedSet = new HashSet<string>(owned, StringComparer.OrdinalIgnoreCase);
+        var catalog = DorkNet.Server.Controllers.API.Avatar.V4.AvatarItemsController.Catalog;
+        var addedCosmetics = 0;
+        foreach (var guid in catalog.Keys)
+            if (ownedSet.Add(guid)) { owned.Add(guid); addedCosmetics++; }
+        avatar.InventoryJson = System.Text.Json.JsonSerializer.Serialize(owned);
+        avatar.UpdatedAt = DateTime.UtcNow;
+
+        // 2) Hair dyes + store equipment/consumables → PlayerInventory (by slug).
+        var existingSlugs = await db.PlayerInventory
+            .Where(pi => pi.PlayerId == id)
+            .Select(pi => pi.ItemSlug)
+            .ToListAsync();
+        var slugSet = new HashSet<string>(existingSlugs, StringComparer.OrdinalIgnoreCase);
+        var allSlugs = StoreService.AllHairDyeSlugs
+            .Concat(await db.StoreItems.Select(s => s.Slug).ToListAsync());
+        var addedSlugs = 0;
+        foreach (var slug in allSlugs)
+        {
+            if (string.IsNullOrWhiteSpace(slug) || !slugSet.Add(slug)) continue;
+            db.PlayerInventory.Add(new PlayerInventoryEntity { PlayerId = id, ItemSlug = slug, Quantity = 1 });
+            addedSlugs++;
+        }
+
+        await LogAsync("unlock_all_items", "player", id,
+            $"cosmetics+{addedCosmetics} (catalog={catalog.Count}) slugs+{addedSlugs}");
+        await db.SaveChangesAsync();
+
+        await notifications.NotifyAsync(id,
+            PushNotificationId.SubscriptionUpdateProfile,
+            new { Reason = "AdminUnlockAll" });
+
+        return Ok(new
+        {
+            id,
+            addedCosmetics,
+            totalCosmetics = catalog.Count,
+            addedSlugs,
+            ownedCosmetics = owned.Count,
+        });
+    }
+
+    // Tolerant parse of InventoryJson into a flat list of owned item descs.
+    // Canonical shape is a JSON string array; also accepts the legacy
+    // [{itemId,...}] object shape so existing data is never clobbered.
+    private static List<string> ParseOwnedDescs(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json) || json == "[]") return new();
+        try
+        {
+            var strings = System.Text.Json.JsonSerializer.Deserialize<List<string>>(json);
+            if (strings is not null && strings.Count > 0) return strings;
+        }
+        catch { }
+        var result = new List<string>();
+        try
+        {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind == System.Text.Json.JsonValueKind.Array)
+                foreach (var el in doc.RootElement.EnumerateArray())
+                {
+                    if (el.ValueKind == System.Text.Json.JsonValueKind.String)
+                        result.Add(el.GetString() ?? string.Empty);
+                    else if (el.ValueKind == System.Text.Json.JsonValueKind.Object &&
+                             el.TryGetProperty("itemId", out var iid) &&
+                             iid.ValueKind == System.Text.Json.JsonValueKind.String)
+                        result.Add(iid.GetString() ?? string.Empty);
+                }
+        }
+        catch { }
+        return result;
+    }
+
     public sealed record CurrencyRequest(int CurrencyType, long Amount, string? Reason);
 
     /// <summary>Adjust a player's currency wallet. Positive amounts

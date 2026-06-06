@@ -340,27 +340,41 @@ public class RelationshipsController(DorkNetDbContext db, NotificationService no
     // Watch URLs: "api/relationships/v1/favorite?id={N}" and
     // "api/relationships/v1/unfavorite?id={N}". These return a
     // boolean-ish RecNetResult per the FavoritePlayer/UnfavoritePlayer
-    // disassembly (Core.Post … ExpectHttpStatusSuccess), not a
-    // Relationship. The flag is persisted on the caller's directional row
-    // and surfaced back through v2/get + personaldetails (see BuildMerged).
+    // disassembly, not a Relationship. The flag is persisted on the caller's
+    // directional row and surfaced back through v2/get + personaldetails
+    // (see BuildMerged).
+    //
+    // VERB: the 2020 watch sends these as GET (RecNet.Relationships
+    // FavoritePlayer/UnfavoritePlayer/etc. call Core.Get — verified in the
+    // readable March dump at Relationships.txt:1675/1834, and the December
+    // build hits the same obfuscated Core-GET wrapper). The endpoints were
+    // POST-only, so the watch's GET returned HTTP 405 ("Error favoriting
+    // player: HTTP Error 405"). Accept GET (real verb) + POST (cross-build
+    // safety), mirroring the friend endpoints above.
+    [HttpGet("api/relationships/v1/favorite")]
     [HttpPost("api/relationships/v1/favorite")]
     public Task<IActionResult> Favorite([FromQuery] long id) => SetPreference(id, favorited: true);
 
+    [HttpGet("api/relationships/v1/unfavorite")]
     [HttpPost("api/relationships/v1/unfavorite")]
     public Task<IActionResult> Unfavorite([FromQuery] long id) => SetPreference(id, favorited: false);
 
+    [HttpGet("api/relationships/v1/mute")]
     [HttpPost("api/relationships/v1/mute")]
     public Task<IActionResult> Mute([FromQuery] long id, [FromForm(Name = "PlayerId")] long? formId)
         => SetPreference(id != 0 ? id : formId ?? 0, muted: true);
 
+    [HttpGet("api/relationships/v1/unmute")]
     [HttpPost("api/relationships/v1/unmute")]
     public Task<IActionResult> Unmute([FromQuery] long id, [FromForm(Name = "PlayerId")] long? formId)
         => SetPreference(id != 0 ? id : formId ?? 0, muted: false);
 
+    [HttpGet("api/relationships/v1/ignore")]
     [HttpPost("api/relationships/v1/ignore")]
     public Task<IActionResult> Ignore([FromQuery] long id, [FromForm(Name = "PlayerId")] long? formId)
         => SetPreference(id != 0 ? id : formId ?? 0, ignored: true);
 
+    [HttpGet("api/relationships/v1/unignore")]
     [HttpPost("api/relationships/v1/unignore")]
     public Task<IActionResult> Unignore([FromQuery] long id, [FromForm(Name = "PlayerId")] long? formId)
         => SetPreference(id != 0 ? id : formId ?? 0, ignored: false);

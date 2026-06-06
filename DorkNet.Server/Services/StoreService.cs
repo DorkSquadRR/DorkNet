@@ -94,6 +94,13 @@ public class StoreService(DorkNetDbContext db, LevelService level, IConfiguratio
         ("hairdye-pastel-pink", "Permanent Maker Mauve Hair Dye", "[hairdyepotionconsumable_pastelpink]", "G129V_kVXkSLN2OG8EjSqQ"),
     };
 
+    /// <summary>Every permanent hair-dye store slug — used by the admin
+    /// "unlock all items" action to drop the whole hair-dye set into a
+    /// player's <see cref="PlayerInventoryEntity"/> (hair dyes are owned as
+    /// consumable slugs, not avatar GUIDs).</summary>
+    public static IEnumerable<string> AllHairDyeSlugs =>
+        PermanentHairDyes.Select(d => d.Slug);
+
     private bool EnableWatchGiftDrops =>
         config.GetValue("Store:EnableWatchGiftDrops", true);
 
