@@ -73,6 +73,7 @@ function subdomainUrl(subdomain: string, path: string | null | undefined, query?
 export interface Room {
   id: number;
   name: string;
+  imageName: string | null;
   isAGRoom: boolean;
   isDormRoom: boolean;
   creatorPlayerId: number;

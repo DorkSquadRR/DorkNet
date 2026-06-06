@@ -350,6 +350,7 @@ public class AdminController(
             {
                 r.Id,
                 r.Name,
+                r.ImageName,
                 r.IsAGRoom,
                 r.IsDormRoom,
                 r.CreatorPlayerId,
@@ -1031,6 +1032,12 @@ public class AdminController(
         if (room is null) return NotFound();
         if (body.PlayerId <= 0) return BadRequest("missing player");
         if (body.Role is < 0 or > 2) return BadRequest("invalid role");
+
+        var oldRoles = await db.RoomRoles
+            .Where(r => r.RoomId == id && r.PlayerId == body.PlayerId && r.Role != body.Role)
+            .ToListAsync();
+        if (oldRoles.Count > 0)
+            db.RoomRoles.RemoveRange(oldRoles);
 
         var existing = await db.RoomRoles.FirstOrDefaultAsync(r =>
             r.RoomId == id && r.PlayerId == body.PlayerId && r.Role == body.Role);

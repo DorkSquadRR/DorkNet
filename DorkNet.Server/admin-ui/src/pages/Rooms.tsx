@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../lib/api';
-import type { Room } from '../lib/types';
+import { imageCdnUrl, type Room } from '../lib/types';
 import { useApi } from '../lib/useApi';
 import { PageHeader } from '../components/PageHeader';
 import { Empty } from '../components/Empty';
@@ -129,9 +129,10 @@ export function Rooms() {
         {error && <div className="px-4 py-3 text-sm text-danger">{error}</div>}
         {data && filtered.length === 0 && <Empty title="No rooms match" />}
         {filtered.length > 0 && (
-          <div className="table-scroll"><table className="w-full text-sm min-w-[640px]">
+          <div className="table-scroll"><table className="w-full text-sm min-w-[760px]">
             <thead className="text-[11px] uppercase tracking-wider text-ink-400 bg-ink-900/50 border-b border-ink-800">
               <tr>
+                <th className="text-left font-medium px-4 py-2.5">Image</th>
                 <th className="text-left font-medium px-4 py-2.5">#</th>
                 <th className="text-left font-medium px-4 py-2.5">Name</th>
                 <th className="text-left font-medium px-4 py-2.5">Type</th>
@@ -143,6 +144,9 @@ export function Rooms() {
             <tbody className="divide-y divide-ink-800">
               {filtered.map(r => (
                 <tr key={r.id} className="table-row-hover">
+                  <td className="px-4 py-2.5">
+                    <RoomThumb room={r} />
+                  </td>
                   <td className="px-4 py-2.5 text-ink-400 tabular-nums">{r.id}</td>
                   <td className="px-4 py-2.5 font-medium">
                     {/* Whole row's primary action is "open detail view"
@@ -196,6 +200,35 @@ export function Rooms() {
         />
       )}
     </div>
+  );
+}
+
+function RoomThumb({ room }: { room: Room }) {
+  const [errored, setErrored] = useState(false);
+  const url = room.imageName && !errored
+    ? imageCdnUrl(room.imageName, 'width=180&sig=p1')
+    : null;
+
+  return (
+    <Link
+      to={`/rooms/${room.id}`}
+      className="block h-12 w-20 overflow-hidden rounded-md border border-ink-800 bg-ink-950"
+      title={room.name}
+    >
+      {url ? (
+        <img
+          src={url}
+          alt={`${room.name} thumbnail`}
+          className="h-full w-full object-cover"
+          loading="lazy"
+          onError={() => setErrored(true)}
+        />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center bg-ink-900 text-[10px] uppercase tracking-wide text-ink-500">
+          No image
+        </div>
+      )}
+    </Link>
   );
 }
 

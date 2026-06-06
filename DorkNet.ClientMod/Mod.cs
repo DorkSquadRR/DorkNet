@@ -1142,6 +1142,95 @@ internal static class DevMenuProbe
         if (pn.Count > 0) Mod.Log.Msg($"  [propnames] {string.Join(", ", pn.GetRange(0, Math.Min(40, pn.Count)))}");
         DumpWatchButtons(t, inst);
         DumpCollections(t, inst, "HomeScreenFlow");
+        DumpStackedUi(t, inst);
+    }
+
+    // Walk HomeScreenFlow -> UIBase (StackedUIBase) and dump the data we need
+    // to build a CUSTOM watch page by cloning a real flow:
+    //   * flowResources catalog  — the TypeName of every PUSHABLE flow; these
+    //     are our clone-target candidates (pick a simple self-contained one).
+    //   * the Type->flow cache    — what's already instantiated (do NOT mutate
+    //     these cached singletons; clone an independent copy instead).
+    //   * ScreenHeader presence   — proves a cloned flow brings its own title
+    //     bar + back button for free.
+    // Names are obfuscated, so we match by SHAPE (array-of-prefab-ref,
+    // Dictionary<Type,flow>) rather than by field name.
+    private static void DumpStackedUi(Type homeType, object homeInst)
+    {
+        var ui = GetMemberValue(homeType, homeInst, "UIBase", "get_UIBase");
+        if (ui is null) { Mod.Log.Msg("  [stackedui] UIBase: null (could not reach StackedUIBase)"); return; }
+        var uiType = ui.GetType();
+        Mod.Log.Msg($"  [stackedui] UIBase type={uiType.FullName}");
+
+        var hdr = GetMemberValue(homeType, homeInst, "ScreenHeader", "get_ScreenHeader");
+        if (hdr != null)
+        {
+            var ht = hdr.GetType();
+            var hp = new List<string>(); foreach (var p in ht.GetProperties()) hp.Add(p.Name);
+            Mod.Log.Msg($"  [stackedui] home ScreenHeader={ht.Name}; props={string.Join(",", hp.GetRange(0, Math.Min(30, hp.Count)))}");
+        }
+        else Mod.Log.Msg("  [stackedui] home ScreenHeader: null");
+
+        foreach (var f in uiType.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+        {
+            object? v; try { v = f.GetValue(ui); } catch { continue; }
+            if (v is null) continue;
+            int n = ArrLen(v);
+            // Flow-prefab catalog: a non-empty array whose elements expose a
+            // TypeName string (FlowPrefabResourceReference).
+            if (n > 0 && n <= 300 && (v is Array || v.GetType().Name.IndexOf("Array", StringComparison.OrdinalIgnoreCase) >= 0))
+            {
+                var first = ArrItem(v, 0);
+                var et = first?.GetType().Name ?? "?";
+                if (et.IndexOf("Flow", StringComparison.OrdinalIgnoreCase) < 0 &&
+                    et.IndexOf("Prefab", StringComparison.OrdinalIgnoreCase) < 0 &&
+                    et.IndexOf("Resource", StringComparison.OrdinalIgnoreCase) < 0 &&
+                    et.IndexOf("Reference", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                Mod.Log.Msg($"  [stackedui] flow catalog '{f.Name}': {et}[{n}]");
+                for (int i = 0; i < n; i++)
+                {
+                    var e = ArrItem(v, i); if (e is null) continue;
+                    Mod.Log.Msg($"      [{i}] {ReadStringMember(e)}");
+                }
+                continue;
+            }
+            // Flow cache: Dictionary<Type, StackedUIFlowBase>.
+            var vt = v.GetType();
+            if (vt.IsGenericType && vt.Name.StartsWith("Dictionary"))
+            {
+                var ga = vt.GetGenericArguments();
+                if (ga.Length == 2 && ga[1].Name.IndexOf("Flow", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    var cp = vt.GetProperty("Count");
+                    Mod.Log.Msg($"  [stackedui] flow cache '{f.Name}': Dictionary<{ga[0].Name},{ga[1].Name}> count={(cp?.GetValue(v) as int? ?? -1)}");
+                }
+            }
+        }
+    }
+
+    // Property by name, else parameterless getter method, else null.
+    private static object? GetMemberValue(Type t, object inst, string prop, string getter)
+    {
+        var (found, _, v) = GetMember(t, inst, prop);
+        if (found && v != null) return v;
+        var m = t.GetMethod(getter, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance,
+                            null, Type.EmptyTypes, null);
+        if (m != null) { try { return m.Invoke(inst, null); } catch { } }
+        return v;
+    }
+
+    // First non-empty string field/property on an object — for obfuscated
+    // wrappers, that's the TypeName of a FlowPrefabResourceReference.
+    private static string ReadStringMember(object o)
+    {
+        var t = o.GetType();
+        foreach (var p in t.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+            if (p.PropertyType == typeof(string) && p.GetIndexParameters().Length == 0)
+                { try { if (p.GetValue(o) is string s && s.Length > 0) return s; } catch { } }
+        foreach (var f in t.GetFields(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+            if (f.FieldType == typeof(string))
+                { try { if (f.GetValue(o) is string s && s.Length > 0) return s; } catch { } }
+        return "(no string member)";
     }
 
     // Enumerate Button3D components under the HomeScreenFlow via Unity's

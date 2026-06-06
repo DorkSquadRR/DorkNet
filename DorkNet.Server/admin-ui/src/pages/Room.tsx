@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
-import type { RoomDetail, RoomInstance, RoomRoleGrant } from '../lib/types';
+import type { Player, RoomDetail, RoomInstance, RoomRoleGrant } from '../lib/types';
 import { profileImageUrl } from '../lib/types';
 import { useApi } from '../lib/useApi';
 import { PageHeader } from '../components/PageHeader';
 import { Empty } from '../components/Empty';
 import { Modal } from '../components/Modal';
 import { Confirm } from '../components/Confirm';
+import { PlayerAvatar } from '../components/PlayerAvatar';
 import { useToast } from '../components/Toast';
 import { ArrowLeft, RefreshCw, Trash } from '../components/Icons';
 
@@ -367,15 +368,40 @@ function PlayerRow({ player }: { player: { id: number; username: string; display
 function AddRoleModal({ roomId, role, onClose, onAdded }: {
   roomId: number; role: 0 | 1 | 2; onClose: () => void; onAdded: () => void;
 }) {
-  const [playerIdStr, setPlayerIdStr] = useState('');
+  const { data: players, loading: playersLoading, error: playersError } = useApi<Player[]>('/players?take=500');
+  const [playerQuery, setPlayerQuery] = useState('');
+  const [selectedPlayerId, setSelectedPlayerId] = useState('');
   const [accepted, setAccepted] = useState(true);
   const [busy, setBusy] = useState(false);
   const toast = useToast();
 
+  const matchingPlayers = useMemo(() => {
+    const q = playerQuery.trim().toLowerCase();
+    const source = players ?? [];
+    if (!q) return source;
+    return source.filter(p =>
+      p.id.toString().includes(q) ||
+      p.username.toLowerCase().includes(q) ||
+      (p.displayName ?? '').toLowerCase().includes(q)
+    );
+  }, [playerQuery, players]);
+
+  const selectedPlayer = useMemo(
+    () => (players ?? []).find(p => p.id === Number(selectedPlayerId)) ?? null,
+    [players, selectedPlayerId]
+  );
+
+  const playerLabel = (p: Player) => {
+    const handle = p.username ? `@${p.username}` : `#${p.id}`;
+    return p.displayName && p.displayName !== p.username
+      ? `${handle} - ${p.displayName} - #${p.id}`
+      : `${handle} - #${p.id}`;
+  };
+
   const submit = async () => {
-    const pid = Number(playerIdStr);
+    const pid = Number(selectedPlayerId);
     if (!Number.isFinite(pid) || pid <= 0) {
-      toast.push('Enter a numeric player id', 'error');
+      toast.push('Select a player', 'error');
       return;
     }
     setBusy(true);
@@ -384,7 +410,7 @@ function AddRoleModal({ roomId, role, onClose, onAdded }: {
         method: 'POST',
         body: { PlayerId: pid, Role: role, Accepted: accepted },
       });
-      toast.push(`Granted ${ROLE_LABEL[role]} to #${pid}`, 'success');
+      toast.push(`Granted ${ROLE_LABEL[role]} to ${selectedPlayer ? playerLabel(selectedPlayer) : `#${pid}`}`, 'success');
       onAdded();
     } catch (e) {
       toast.push((e as Error).message, 'error');
@@ -400,22 +426,50 @@ function AddRoleModal({ roomId, role, onClose, onAdded }: {
       title={`Add ${ROLE_LABEL[role].toLowerCase()}`}
       footer={<>
         <button onClick={onClose} className="btn-ghost text-xs" disabled={busy}>Cancel</button>
-        <button onClick={submit} className="btn-primary text-xs" disabled={busy}>
+        <button onClick={submit} className="btn-primary text-xs" disabled={busy || !selectedPlayerId}>
           {busy ? 'Adding…' : 'Add'}
         </button>
       </>}
     >
       <div className="space-y-3 text-sm">
         <label className="flex flex-col gap-1">
-          <span className="label">Player id</span>
+          <span className="label">Search players</span>
           <input
-            value={playerIdStr}
-            onChange={e => setPlayerIdStr(e.target.value)}
-            className="input font-mono"
-            placeholder="1362428"
+            value={playerQuery}
+            onChange={e => setPlayerQuery(e.target.value)}
+            className="input"
+            placeholder="Username, display name, or id"
             autoFocus
           />
         </label>
+        <label className="flex flex-col gap-1">
+          <span className="label">Player</span>
+          <select
+            value={selectedPlayerId}
+            onChange={e => setSelectedPlayerId(e.target.value)}
+            className="input"
+            disabled={playersLoading}
+          >
+            <option value="">{playersLoading ? 'Loading players…' : 'Select a player'}</option>
+            {matchingPlayers.map(p => (
+              <option key={p.id} value={p.id}>{playerLabel(p)}</option>
+            ))}
+          </select>
+        </label>
+        {playersError && <div className="text-xs text-danger">{playersError}</div>}
+        {selectedPlayer && (
+          <div className="flex items-center gap-2 rounded-md border border-ink-800 bg-ink-900/50 px-2.5 py-2">
+            <PlayerAvatar
+              name={selectedPlayer.profileImageName}
+              displayName={selectedPlayer.displayName || selectedPlayer.username}
+              size={32}
+            />
+            <div className="min-w-0">
+              <div className="truncate text-ink-100">{selectedPlayer.username ? `@${selectedPlayer.username}` : `#${selectedPlayer.id}`}</div>
+              <div className="truncate text-xs text-ink-400">{selectedPlayer.displayName || `Player #${selectedPlayer.id}`}</div>
+            </div>
+          </div>
+        )}
         <label className="flex items-center gap-2 text-xs">
           <input type="checkbox" checked={accepted} onChange={e => setAccepted(e.target.checked)} />
           <span>Mark as accepted (otherwise shows as pending invite)</span>

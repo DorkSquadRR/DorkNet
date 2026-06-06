@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using DorkNet.Models.Notification;
 using DorkNet.Server.Auth;
 using DorkNet.Server.Controllers.Match;
@@ -2476,22 +2477,35 @@ public class RoomsController(
 
     /// <summary>POST <c>rooms/{id}/roles/{playerId}</c> — owner grants
     /// a role to a player. Auto-accepted (no invite step).</summary>
+    [HttpPut("rooms/{roomId:long}/roles/{playerId:long}")]
     [HttpPost("rooms/{roomId:long}/roles/{playerId:long}")]
+    [HttpPut("/api/rooms/v1/rooms/{roomId:long}/roles/{playerId:long}")]
+    [HttpPost("/api/rooms/v1/rooms/{roomId:long}/roles/{playerId:long}")]
+    [HttpPut("/api/rooms/v2/rooms/{roomId:long}/roles/{playerId:long}")]
+    [HttpPost("/api/rooms/v2/rooms/{roomId:long}/roles/{playerId:long}")]
     [Authorize]
-    public async Task<IActionResult> GrantRole(long roomId, long playerId, [FromBody] GrantRoleRequest req)
+    public async Task<IActionResult> GrantRole(long roomId, long playerId)
     {
         var me = this.RequireCurrentPlayerId();
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
         if (room is null) return NotFound();
-        if (room.CreatorPlayerId != me) return Forbid();
-        var role = req.Role ?? 0;
+        if (!await CanManageRoomRolesAsync(room, me)) return Forbid();
+        var role = await ReadClientRoomRoleAsync();
+        if (role is null) return BadRequest(new { error = "missing_role" });
+        if (role.Value == 0)
+            return await ClearRoomAccountRoleAsync(room, playerId);
+
+        if (!TryMapClientRoleToRoomRole(role.Value, out var roomRole))
+            return BadRequest(new { error = "invalid_role", role });
+
         var existing = await db.RoomRoles
-            .FirstOrDefaultAsync(r => r.RoomId == roomId && r.PlayerId == playerId && r.Role == role);
+            .FirstOrDefaultAsync(r => r.RoomId == roomId && r.PlayerId == playerId && r.Role == roomRole);
         if (existing is null)
         {
+            await RemoveOtherRoomRolesAsync(roomId, playerId, roomRole);
             db.RoomRoles.Add(new RoomRoleEntity
             {
-                RoomId = roomId, PlayerId = playerId, Role = role,
+                RoomId = roomId, PlayerId = playerId, Role = roomRole,
                 Accepted = true, GrantedByPlayerId = me,
             });
         }
@@ -2500,29 +2514,42 @@ public class RoomsController(
             existing.Accepted = true;
         }
         await db.SaveChangesAsync();
-        return Ok(new { RoomId = roomId, PlayerId = (int)playerId, Role = role, Accepted = true });
+        return Ok(await BuildRoomServerDetailsWithRolesAsync(roomId));
     }
 
     /// <summary>POST <c>rooms/{id}/roles/{playerId}/invite</c> — same
     /// as grant but Accepted=false; the target's accept-invite flow
     /// flips the flag (separate endpoint, not yet exposed). For now
     /// invited rows surface in RoomDetails.InvitedCoOwners etc.</summary>
+    [HttpPut("rooms/{roomId:long}/roles/{playerId:long}/invite")]
     [HttpPost("rooms/{roomId:long}/roles/{playerId:long}/invite")]
+    [HttpPut("/api/rooms/v1/rooms/{roomId:long}/roles/{playerId:long}/invite")]
+    [HttpPost("/api/rooms/v1/rooms/{roomId:long}/roles/{playerId:long}/invite")]
+    [HttpPut("/api/rooms/v2/rooms/{roomId:long}/roles/{playerId:long}/invite")]
+    [HttpPost("/api/rooms/v2/rooms/{roomId:long}/roles/{playerId:long}/invite")]
     [Authorize]
-    public async Task<IActionResult> InviteRole(long roomId, long playerId, [FromBody] GrantRoleRequest req)
+    public async Task<IActionResult> InviteRole(long roomId, long playerId)
     {
         var me = this.RequireCurrentPlayerId();
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
         if (room is null) return NotFound();
-        if (room.CreatorPlayerId != me) return Forbid();
-        var role = req.Role ?? 0;
+        if (!await CanManageRoomRolesAsync(room, me)) return Forbid();
+        var role = await ReadClientRoomRoleAsync();
+        if (role is null) return BadRequest(new { error = "missing_role" });
+        if (role.Value == 0)
+            return await ClearRoomAccountRoleAsync(room, playerId);
+
+        if (!TryMapClientRoleToRoomRole(role.Value, out var roomRole))
+            return BadRequest(new { error = "invalid_role", role });
+
         var existing = await db.RoomRoles
-            .FirstOrDefaultAsync(r => r.RoomId == roomId && r.PlayerId == playerId && r.Role == role);
+            .FirstOrDefaultAsync(r => r.RoomId == roomId && r.PlayerId == playerId && r.Role == roomRole);
         if (existing is null)
         {
+            await RemoveOtherRoomRolesAsync(roomId, playerId, roomRole);
             db.RoomRoles.Add(new RoomRoleEntity
             {
-                RoomId = roomId, PlayerId = playerId, Role = role,
+                RoomId = roomId, PlayerId = playerId, Role = roomRole,
                 Accepted = false, GrantedByPlayerId = me,
             });
         }
@@ -2531,7 +2558,97 @@ public class RoomsController(
             existing.Accepted = false;
         }
         await db.SaveChangesAsync();
-        return Ok(new { RoomId = roomId, PlayerId = (int)playerId, Role = role, Accepted = false });
+        return Ok(await BuildRoomServerDetailsWithRolesAsync(roomId));
+    }
+
+    private async Task<IActionResult> ClearRoomAccountRoleAsync(RoomEntity room, long playerId)
+    {
+        if (room.CreatorPlayerId == playerId)
+            return BadRequest(new { error = "cannot_change_creator_role" });
+
+        var rows = await db.RoomRoles
+            .Where(r => r.RoomId == room.Id && r.PlayerId == playerId)
+            .ToListAsync();
+        if (rows.Count > 0)
+            db.RoomRoles.RemoveRange(rows);
+
+        await db.SaveChangesAsync();
+        return Ok(await BuildRoomServerDetailsWithRolesAsync(room.Id));
+    }
+
+    private async Task<bool> CanManageRoomRolesAsync(RoomEntity room, long playerId)
+    {
+        if (room.CreatorPlayerId == playerId) return true;
+        return await db.RoomRoles.AnyAsync(r =>
+            r.RoomId == room.Id
+            && r.PlayerId == playerId
+            && r.Accepted
+            && r.Role == 0);
+    }
+
+    private async Task<int?> ReadClientRoomRoleAsync()
+    {
+        int parsed;
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync();
+            if (int.TryParse(form["role"].FirstOrDefault(), out parsed)) return parsed;
+            if (int.TryParse(form["Role"].FirstOrDefault(), out parsed)) return parsed;
+        }
+
+        if (int.TryParse(Request.Query["role"].FirstOrDefault(), out parsed)) return parsed;
+        if (int.TryParse(Request.Query["Role"].FirstOrDefault(), out parsed)) return parsed;
+
+        if (Request.ContentType?.Contains("json", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            try
+            {
+                var body = await JsonSerializer.DeserializeAsync<GrantRoleRequest>(
+                    Request.Body,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                if (body?.Role is int bodyRole) return bodyRole;
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+        }
+
+        return null;
+    }
+
+    private async Task RemoveOtherRoomRolesAsync(long roomId, long playerId, int keepRole)
+    {
+        var rows = await db.RoomRoles
+            .Where(r => r.RoomId == roomId && r.PlayerId == playerId && r.Role != keepRole)
+            .ToListAsync();
+        if (rows.Count > 0)
+            db.RoomRoles.RemoveRange(rows);
+    }
+
+    private static bool TryMapClientRoleToRoomRole(int clientRole, out int roomRole)
+    {
+        roomRole = clientRole switch
+        {
+            30 => 0, // CoOwner
+            20 => 1, // Moderator
+            10 => 2, // Host
+            _ => -1,
+        };
+        return roomRole >= 0;
+    }
+
+    private async Task<object> BuildRoomServerDetailsWithRolesAsync(long roomId)
+    {
+        var room = await db.Rooms.FirstAsync(r => r.Id == roomId);
+        var scenes = await db.RoomScenes
+            .Where(s => s.RoomId == roomId)
+            .OrderBy(s => s.OrderIndex)
+            .ToListAsync();
+        var roles = await db.RoomRoles
+            .Where(r => r.RoomId == roomId)
+            .ToListAsync();
+        return BuildRoomServerDetails(room, scenes, roles: roles);
     }
 
     /// <summary>
