@@ -867,8 +867,11 @@ public class StoreService(DorkNetDbContext db, LevelService level, IConfiguratio
         {
             StorefrontType = storefrontType,
             StorefrontName = name,
-            NextUpdate = "9999-12-31T00:00:00Z",
-            NewUntil = "9999-12-31T00:00:00Z",
+            // NOT year 9999: that overflows the watch's local-timezone date
+            // parse in some DST timezones → "malformed RecNet response" and a
+            // broken store for that player only. See WireDates.
+            NextUpdate = WireDates.FarFutureIso,
+            NewUntil = WireDates.FarFutureIso,
             StoreItems = storeItems,
         };
     }

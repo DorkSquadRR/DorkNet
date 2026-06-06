@@ -174,13 +174,21 @@ public class PlayerService(DorkNetDbContext db, RoomService rooms, ILogger<Playe
             // Self-heal: if the row exists but the bookkeeping fields
             // drift (e.g. someone manually edited Username), restore them
             // so admin tools always show "Coach" as the owner.
-            if (existing.Username != SystemAccountUsername || existing.DisplayName != SystemAccountUsername)
+            var nameDrift = existing.Username != SystemAccountUsername
+                            || existing.DisplayName != SystemAccountUsername;
+            // Heal a legacy year-9999 BannedUntil written before WireDates:
+            // such a value corrupts the watch's local-timezone date parse if it
+            // ever reaches a client (e.g. via /api/playersbanned). See WireDates.
+            var banDrift = existing.BannedUntil.HasValue
+                           && existing.BannedUntil.Value > WireDates.FarFuture;
+            if (nameDrift || banDrift)
             {
                 await db.Players
                     .Where(p => p.Id == SystemAccountId)
                     .ExecuteUpdateAsync(s => s
                         .SetProperty(p => p.Username, SystemAccountUsername)
-                        .SetProperty(p => p.DisplayName, SystemAccountUsername));
+                        .SetProperty(p => p.DisplayName, SystemAccountUsername)
+                        .SetProperty(p => p.BannedUntil, WireDates.FarFuture));
             }
             return;
         }
@@ -204,7 +212,10 @@ public class PlayerService(DorkNetDbContext db, RoomService rooms, ILogger<Playe
             // Far-future ban as a hard authorization backstop in case a
             // forged JWT ever names player 1 as the subject. BanCheckMiddleware
             // refuses any authenticated request when BannedUntil > now.
-            BannedUntil = new DateTime(9999, 12, 31, 0, 0, 0, DateTimeKind.Utc),
+            // WireDates.FarFuture (2099), NOT year 9999 — a 9999 BannedUntil
+            // serialised to the watch overflows its local-timezone date parse
+            // in some DST timezones and corrupts the response. See WireDates.
+            BannedUntil = WireDates.FarFuture,
             PasswordHash = null,
             CreatedAt = new DateTime(2020, 3, 6, 0, 0, 0, DateTimeKind.Utc),
             LastSeenAt = new DateTime(2020, 3, 6, 0, 0, 0, DateTimeKind.Utc),
