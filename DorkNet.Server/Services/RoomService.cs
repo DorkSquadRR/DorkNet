@@ -455,10 +455,29 @@ public class RoomService(DorkNetDbContext db)
         // CurrentDataBlobName to fetch (empty string until the player
         // saves; CdnController.Serve treats empty as "return the
         // default dorm bytes").
+        const string DormLocationId = "76d98498-60a1-430c-ab76-b54a29b7a163";
+
         var existing = await db.Rooms
             .FirstOrDefaultAsync(r => r.IsDormRoom && r.CreatorPlayerId == playerId);
         var dormStateExists = await db.DormStates
             .AnyAsync(d => d.PlayerId == playerId);
+
+        // Self-heal a stale dorm scene location. Older/imported dorm rows
+        // stored a dorm-scene GUID the 2020.12 client doesn't have baked
+        // (observed: "1c92f780-baf1-4bd8-aa15-27cca0aa7396"), which the watch
+        // rejects with "RecNet game session/room scene contains unknown scene
+        // location ID" → the dorm scene never loads → the player is stuck
+        // infinite-reloading. Every dorm renders the same canonical scene, so
+        // force any non-canonical dorm row (and its saved RoomScene rows) back
+        // to it. Idempotent — runs on the next goto/heartbeat for that player.
+        if (existing is not null && existing.LocationReplicationId != DormLocationId)
+        {
+            existing.LocationReplicationId = DormLocationId;
+            await db.RoomScenes
+                .Where(s => s.RoomId == existing.Id && s.RoomSceneLocationId != DormLocationId)
+                .ExecuteUpdateAsync(u => u.SetProperty(s => s.RoomSceneLocationId, DormLocationId));
+            await db.SaveChangesAsync();
+        }
 
         if (existing is not null && dormStateExists)
             return existing;
