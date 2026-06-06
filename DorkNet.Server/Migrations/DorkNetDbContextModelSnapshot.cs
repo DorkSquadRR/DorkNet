@@ -1666,7 +1666,7 @@ namespace DorkNet.Server.Migrations
 
                     b.Property<string>("ItemSlug")
                         .IsRequired()
-                        .HasMaxLength(64)
+                        .HasMaxLength(128)
                         .HasColumnType("TEXT");
 
                     b.Property<long>("PlayerId")

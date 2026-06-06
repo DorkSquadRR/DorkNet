@@ -103,7 +103,7 @@ public class StorefrontsBuyController(
         StoreService.TryGetAvatarItemPayload(item.Slug, out var avatarItemType, out avatarItemDesc);
         var inventoryAvatarDesc = StoreService.InventoryAvatarItemDesc(avatarItemDesc);
         StoreService.TryGetConsumableItemDesc(item.Slug, out var consumableItemDesc);
-        StoreService.TryGetEquipmentPayload(item.Slug, out var equipmentPrefabName, out var equipmentModificationGuid);
+        StoreService.TryGetGiftBoxEquipmentPayload(item.Slug, out var equipmentPrefabName, out var equipmentModificationGuid);
         if (StoreService.TryGetHairDyePayload(item.Slug, out var hairDyeConsumableDesc, out var hairDyeColorGuid))
         {
             avatarItemType = 1;
@@ -352,7 +352,7 @@ public class StorefrontsBuyController(
         {
             StoreService.TryGetAvatarItemPayload(grantedSlug, out avatarItemType, out avatarItemDesc);
             StoreService.TryGetConsumableItemDesc(grantedSlug, out consumableItemDesc);
-            StoreService.TryGetEquipmentPayload(grantedSlug, out equipmentPrefabName, out equipmentModificationGuid);
+            StoreService.TryGetGiftBoxEquipmentPayload(grantedSlug, out equipmentPrefabName, out equipmentModificationGuid);
             if (StoreService.TryGetHairDyePayload(grantedSlug, out var hairDyeConsumableDesc, out var hairDyeColorGuid))
             {
                 avatarItemType = 1;

@@ -115,4 +115,18 @@ public class SanitizeController(ILogger<SanitizeController> logger) : Controller
             ?? textForm ?? textQuery ?? string.Empty;
         return Ok(ProfanityFilter.IsClean(input));
     }
+
+    /// <summary>POST <c>api/sanitize/isPure</c> — December 2020 route
+    /// used by room/settings forms. Its importer reads an <c>IsPure</c>
+    /// object field, unlike the newer bare-bool route above.</summary>
+    [HttpPost("api/sanitize/isPure")]
+    public IActionResult IsPure(
+        [FromBody] SanitizeBody? body,
+        [FromForm(Name = "Text")] string? textForm,
+        [FromQuery(Name = "text")] string? textQuery)
+    {
+        var input = body?.Text ?? body?.Input ?? body?.Value
+            ?? textForm ?? textQuery ?? string.Empty;
+        return Ok(new { IsPure = ProfanityFilter.IsClean(input) });
+    }
 }

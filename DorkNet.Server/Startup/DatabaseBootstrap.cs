@@ -101,6 +101,7 @@ public static class DatabaseBootstrap
         // IF NOT EXISTS no-ops when EnsureCreated already built them).
         await EnsureSignupCodeTablesAsync(db);
         await EnsureServerSettingsColumnsAsync(db);
+        await EnsureInventorySchemaAsync(db);
         await EnsureLeaderboardSchemaAsync(db);
 
         // Coach system account at Player.Id=1. The RR-Original room seeder
@@ -300,6 +301,16 @@ public static class DatabaseBootstrap
             // SQLite has no ADD COLUMN IF NOT EXISTS. If it already exists,
             // ignore the duplicate-column error; any other schema problem
             // will surface when EF reads ServerSettings.
+        }
+    }
+
+    private static async Task EnsureInventorySchemaAsync(DorkNetDbContext db)
+    {
+        var provider = db.Database.ProviderName ?? string.Empty;
+        if (provider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""PlayerInventory"" ALTER COLUMN ""ItemSlug"" TYPE character varying(128);");
         }
     }
 

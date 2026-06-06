@@ -338,6 +338,7 @@ public class DorkNetDbContext(DbContextOptions<DorkNetDbContext> options) : DbCo
         modelBuilder.Entity<PlayerInventoryEntity>(e =>
         {
             e.HasKey(p => p.Id);
+            e.Property(p => p.ItemSlug).HasMaxLength(128);
             // One row per (player, item) pair.
             e.HasIndex(p => new { p.PlayerId, p.ItemSlug }).IsUnique();
             e.HasIndex(p => p.PlayerId);

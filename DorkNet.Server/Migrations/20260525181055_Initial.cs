@@ -732,7 +732,7 @@ namespace DorkNet.Server.Migrations
                     Id = table.Column<long>(type: "INTEGER", nullable: false)
                         .Annotation("Sqlite:Autoincrement", true),
                     PlayerId = table.Column<long>(type: "INTEGER", nullable: false),
-                    ItemSlug = table.Column<string>(type: "TEXT", maxLength: 64, nullable: false),
+                    ItemSlug = table.Column<string>(type: "TEXT", maxLength: 128, nullable: false),
                     Quantity = table.Column<int>(type: "INTEGER", nullable: false),
                     IsActive = table.Column<bool>(type: "INTEGER", nullable: false),
                     AcquiredAt = table.Column<DateTime>(type: "TEXT", nullable: false)

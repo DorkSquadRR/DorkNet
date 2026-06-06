@@ -23,7 +23,7 @@ public class PlayerInventoryEntity
     /// Stored as a string rather than an int FK because a player can
     /// be granted items that aren't in the live store (admin-gifted,
     /// legacy retired items, etc.).</summary>
-    [MaxLength(64)]
+    [MaxLength(128)]
     public string ItemSlug { get; set; } = string.Empty;
 
     public int Quantity { get; set; } = 1;
