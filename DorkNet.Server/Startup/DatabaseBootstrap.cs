@@ -340,7 +340,7 @@ public static class DatabaseBootstrap
                     pk record;
                 BEGIN
                     FOR pk IN
-                        SELECT c.conname, array_agg(a.attname ORDER BY x.ordinality) AS cols
+                        SELECT c.conname, array_agg(a.attname::text ORDER BY x.ordinality) AS cols
                         FROM pg_constraint c
                         JOIN unnest(c.conkey) WITH ORDINALITY AS x(attnum, ordinality) ON true
                         JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = x.attnum
@@ -353,7 +353,7 @@ public static class DatabaseBootstrap
                         END IF;
                     END LOOP;
 
-                    SELECT array_agg(a.attname ORDER BY x.ordinality)
+                    SELECT array_agg(a.attname::text ORDER BY x.ordinality)
                     INTO pk_cols
                     FROM pg_constraint c
                     JOIN unnest(c.conkey) WITH ORDINALITY AS x(attnum, ordinality) ON true
