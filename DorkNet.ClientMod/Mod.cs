@@ -1071,23 +1071,54 @@ internal static class DevMenuProbe
         _frame++;
         if (_frame < 120) return;        // ~2s — let MelonLoader/game boot
         if ((_frame % 60) != 0) return;  // then check ~once per second
-        // Wait until the watch's HomeScreenFlow is actually instantiated
-        // (only happens once you're in-game with the watch up), so the
-        // devMenuPanel/devButtonPrefab fields are meaningful. Give up and
-        // dump whatever exists after ~60s so we still get a report.
+        // Only fire once a REAL, in-scene HomeScreenFlow exists with its
+        // UIBase wired (it gets assigned when the watch StackedUI initialises
+        // in the dorm). The earlier version fired during boot on the loaded
+        // PREFAB (Resources.FindObjectsOfTypeAll returns prefabs/inactive,
+        // whose runtime UIBase is null) and, being one-shot, captured nothing
+        // and never retried. NO timeout now — we wait until the watch is up.
         var homeType = Mod.ResolveType("AGUI.StackedUI.HomeScreenFlow") ?? Mod.ResolveType("HomeScreenFlow");
-        var homeLive = homeType != null && FindOne(homeType) != null;
-        if (!homeLive && _frame < 3600) return;
+        var home = homeType != null ? FindLiveHome(homeType) : null;
+        if (home == null)
+        {
+            if ((_frame % 600) == 0)
+                Mod.Log.Msg("[devmenu-probe] waiting for an in-scene HomeScreenFlow — enter your dorm / open the watch…");
+            return;
+        }
         _done = true;
-        try { Run(); }
+        try { Run(homeType!, home); }
         catch (Exception ex) { Mod.Log.Warning($"[devmenu-probe] failed: {ex}"); }
     }
 
-    private static void Run()
+    // The live HomeScreenFlow (UIBase wired), skipping the prefab/inactive
+    // copies FindObjectsOfTypeAll also returns.
+    private static object? FindLiveHome(Type homeType)
+    {
+        try
+        {
+            var il2 = ToIl2CppType(homeType);
+            if (il2 is null) return null;
+            var resources = Mod.ResolveType("UnityEngine.Resources");
+            var all = OneArgMethod(resources, "FindObjectsOfTypeAll", il2)?.Invoke(null, new[] { il2 });
+            int n = ArrLen(all);
+            for (int i = 0; i < n; i++)
+            {
+                var o = ArrItem(all, i);
+                if (o is null) continue;
+                if (GetMemberValue(homeType, o, "UIBase", "get_UIBase") != null) return o;
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    private static void Run(Type homeType, object homeInst)
     {
         Mod.Log.Msg("=== [devmenu-probe] runtime dev-UI state ===");
         ProbeType("RecRoom.Core.WatchUI",            "WatchUI",        DumpWatchUi);
-        ProbeType("AGUI.StackedUI.HomeScreenFlow",   "HomeScreenFlow", DumpHomeScreen);
+        Mod.Log.Msg($"[devmenu-probe] HomeScreenFlow: type={homeType.FullName}, liveInstance=FOUND (UIBase wired)");
+        try { DumpHomeScreen(homeType, homeInst); }
+        catch (Exception ex) { Mod.Log.Warning($"[devmenu-probe] HomeScreenFlow dump failed: {ex.Message}"); }
         ProbeType("RecRoom.Debugging.DebugConsole",  "DebugConsole",   DumpDebugConsole);
         Mod.Log.Msg("=== [devmenu-probe] done ===");
     }

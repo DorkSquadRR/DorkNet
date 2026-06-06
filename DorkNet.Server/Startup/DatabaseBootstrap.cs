@@ -337,7 +337,22 @@ public static class DatabaseBootstrap
                 DO $$
                 DECLARE
                     pk_cols text[];
+                    pk record;
                 BEGIN
+                    FOR pk IN
+                        SELECT c.conname, array_agg(a.attname ORDER BY x.ordinality) AS cols
+                        FROM pg_constraint c
+                        JOIN unnest(c.conkey) WITH ORDINALITY AS x(attnum, ordinality) ON true
+                        JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = x.attnum
+                        WHERE c.conrelid = '"LeaderboardChannelMeta"'::regclass
+                          AND c.contype = 'p'
+                        GROUP BY c.conname
+                    LOOP
+                        IF pk.cols IS DISTINCT FROM ARRAY['RoomId', 'Channel'] THEN
+                            EXECUTE format('ALTER TABLE %I DROP CONSTRAINT %I', 'LeaderboardChannelMeta', pk.conname);
+                        END IF;
+                    END LOOP;
+
                     SELECT array_agg(a.attname ORDER BY x.ordinality)
                     INTO pk_cols
                     FROM pg_constraint c
@@ -347,7 +362,6 @@ public static class DatabaseBootstrap
                       AND c.contype = 'p';
 
                     IF pk_cols IS DISTINCT FROM ARRAY['RoomId', 'Channel'] THEN
-                        ALTER TABLE "LeaderboardChannelMeta" DROP CONSTRAINT IF EXISTS "PK_LeaderboardChannelMeta";
                         ALTER TABLE "LeaderboardChannelMeta"
                         ADD CONSTRAINT "PK_LeaderboardChannelMeta" PRIMARY KEY ("RoomId", "Channel");
                     END IF;
