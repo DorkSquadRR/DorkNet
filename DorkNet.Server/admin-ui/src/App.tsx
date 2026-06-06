@@ -4,25 +4,16 @@ import { RequireAuth } from './components/RequireAuth';
 import { ToastProvider } from './components/Toast';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
-import { Players } from './pages/Players';
-import { Bans } from './pages/Bans';
-import { Reports } from './pages/Reports';
-import { Audit } from './pages/Audit';
-import { PlayerLogs } from './pages/PlayerLogs';
+import { Moderation } from './pages/Moderation';
+import { Activity } from './pages/Activity';
 import { Rooms } from './pages/Rooms';
 import { Room } from './pages/Room';
 import { ImportRoom } from './pages/ImportRoom';
 import { LegacyImportRoom } from './pages/LegacyImportRoom';
-import { Store } from './pages/Store';
 import { Broadcast } from './pages/Broadcast';
-import { CommunityBoard } from './pages/CommunityBoard';
-import { LoadingTips } from './pages/LoadingTips';
-import { Gift } from './pages/Gift';
-import { Passwords } from './pages/Passwords';
-import { Grants } from './pages/Grants';
+import { Content } from './pages/Content';
 import { Storage } from './pages/Storage';
-import { Settings } from './pages/Settings';
-import { SignupCodes } from './pages/SignupCodes';
+import { SettingsHome } from './pages/SettingsHome';
 
 export default function App() {
   return (
@@ -31,11 +22,23 @@ export default function App() {
         <Route path="/login" element={<Login />} />
         <Route element={<RequireAuth><Layout /></RequireAuth>}>
           <Route index             element={<Dashboard />} />
-          <Route path="players"    element={<Players />} />
-          <Route path="bans"       element={<Bans />} />
-          <Route path="reports"    element={<Reports />} />
-          <Route path="audit"      element={<Audit />} />
-          <Route path="logs"       element={<PlayerLogs />} />
+
+          {/* Players hub — directory + bans + reports as tabs. The old
+              standalone routes redirect in with the matching sub-tab
+              preselected. Per-player ban / grant / gift / password
+              actions all live in the row's detail modal. */}
+          <Route path="players"    element={<Moderation />} />
+          <Route path="bans"       element={<Navigate to="/players?tab=bans" replace />} />
+          <Route path="reports"    element={<Navigate to="/players?tab=reports" replace />} />
+          <Route path="gift"       element={<Navigate to="/players" replace />} />
+          <Route path="passwords"  element={<Navigate to="/players" replace />} />
+          <Route path="grants"     element={<Navigate to="/players" replace />} />
+
+          {/* Activity hub — audit trail + per-player request logs. */}
+          <Route path="activity"   element={<Activity />} />
+          <Route path="audit"      element={<Navigate to="/activity?tab=audit" replace />} />
+          <Route path="logs"       element={<Navigate to="/activity?tab=logs" replace />} />
+
           <Route path="rooms"      element={<Rooms />} />
           <Route path="rooms/:id"  element={<Room />} />
           {/* Back-compat: the merge left RR-Originals / Instances /
@@ -48,16 +51,18 @@ export default function App() {
           <Route path="leaderboards" element={<Navigate to="/rooms" replace />} />
           <Route path="import-room"        element={<ImportRoom />} />
           <Route path="import-room-legacy" element={<LegacyImportRoom />} />
-          <Route path="store"      element={<Store />} />
-          <Route path="community"  element={<CommunityBoard />} />
-          <Route path="loading-tips" element={<LoadingTips />} />
+
+          {/* Content hub — community board + loading-screen tips. */}
+          <Route path="content"      element={<Content />} />
+          <Route path="community"    element={<Navigate to="/content?tab=community" replace />} />
+          <Route path="loading-tips" element={<Navigate to="/content?tab=tips" replace />} />
+
           <Route path="broadcast"  element={<Broadcast />} />
-          <Route path="gift"       element={<Gift />} />
-          <Route path="passwords"  element={<Passwords />} />
-          <Route path="grants"     element={<Grants />} />
           <Route path="storage"    element={<Storage />} />
-          <Route path="settings"     element={<Settings />} />
-          <Route path="signup-codes" element={<SignupCodes />} />
+
+          {/* Settings hub — server toggles + signup codes. */}
+          <Route path="settings"     element={<SettingsHome />} />
+          <Route path="signup-codes" element={<Navigate to="/settings?tab=signup" replace />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

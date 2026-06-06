@@ -1168,12 +1168,41 @@ public class AdminController(
         return Ok(new
         {
             row.SignupsDisabled,
+            row.GlobalFriendsEnabled,
             row.WeeklyChallengesCompletedRequired,
             row.UpdatedAt,
         });
     }
 
     public sealed record SignupsToggleRequest(bool Disabled);
+    public sealed record GlobalFriendsToggleRequest(bool Enabled);
+
+    /// <summary>POST <c>api/admin/v1/settings/global-friends</c> — flip the
+    /// "everyone is friends" toggle. No relationship rows are written; the
+    /// friend graph is synthesized at read time (see
+    /// <see cref="RelationshipQueries"/>). After flipping, broadcast
+    /// <c>RelationshipsInvalid</c> to every connected watch so it re-fetches
+    /// <c>api/relationships/v2/get</c> and shows the new state live — no
+    /// relog (the 2020 watch handles that push via
+    /// <c>Relationships.RefreshList</c>).</summary>
+    [HttpPost("settings/global-friends")]
+    public async Task<ActionResult> SetGlobalFriends([FromBody] GlobalFriendsToggleRequest body)
+    {
+        var row = await serverSettings.SetGlobalFriendsEnabledAsync(body.Enabled);
+        await LogAsync(body.Enabled ? "global_friends_enabled" : "global_friends_disabled", "system", 0, "");
+        await db.SaveChangesAsync();
+
+        // Live refresh: every connected watch re-pulls its relationship list.
+        await notifications.BroadcastAsync(DorkNet.Models.Notification.PushNotificationId.RelationshipsInvalid);
+
+        return Ok(new
+        {
+            row.SignupsDisabled,
+            row.GlobalFriendsEnabled,
+            row.WeeklyChallengesCompletedRequired,
+            row.UpdatedAt,
+        });
+    }
 
     /// <summary>POST <c>api/admin/v1/settings/signups</c> — flip the
     /// server-wide account-creation kill switch. While disabled, both
@@ -1190,6 +1219,7 @@ public class AdminController(
         return Ok(new
         {
             row.SignupsDisabled,
+            row.GlobalFriendsEnabled,
             row.WeeklyChallengesCompletedRequired,
             row.UpdatedAt,
         });
@@ -1777,32 +1807,59 @@ public class AdminController(
 
     // ── Avatar catalog (gifting picker source) ───────────────────────────
 
-    /// <summary>GET <c>api/admin/v1/avatar-items</c> — flat list of every
-    /// renderable avatar item, keyed by the GUID the inventory grant
-    /// endpoint expects. Backs the Gift page's item picker so admins can
-    /// browse by friendly name instead of pasting GUIDs by hand. Read-only.
-    /// Catalog source is <c>data/avatar_item_lookup.json</c>, parsed once
-    /// at startup by <see cref="DorkNet.Server.Controllers.API.Avatar.V4.AvatarItemsController"/>.</summary>
+    /// <summary>One giftable avatar item for the Gift picker. <c>Desc</c> is
+    /// the exact RecNet item string to gift — a bare base GUID for the
+    /// default colour, or a <c>{guid},{swatch},{mask},</c> string for a
+    /// colour variant. <c>Slot</c> is the real OutfitType (head/torso/…),
+    /// not the always-Outfit AvatarItemType.</summary>
+    private sealed record GiftItemRow(
+        string Desc, string Guid, int Slot, string FriendlyName, string? Color, bool IsVariant);
+
+    /// <summary>GET <c>api/admin/v1/avatar-items</c> — every giftable avatar
+    /// item: each base item (default colour) PLUS every colour variant the
+    /// store seeds from <c>data/color_variants.json</c>. Backs the Gift
+    /// page's item picker so admins can browse by friendly name + colour
+    /// instead of pasting descs by hand. Read-only. Base catalog source is
+    /// <c>data/avatar_item_lookup.json</c>, parsed once at startup by
+    /// <see cref="DorkNet.Server.Controllers.API.Avatar.V4.AvatarItemsController"/>;
+    /// variants come from <see cref="DorkNet.Server.Services.StoreService.ColorVariantCatalog"/>.</summary>
     [HttpGet("avatar-items")]
     public ActionResult ListAvatarItems()
     {
         var catalog = DorkNet.Server.Controllers.API.Avatar.V4.AvatarItemsController.Catalog;
         var safe = DorkNet.Server.Controllers.API.Avatar.V4.AvatarItemsController.SafeGuids;
-        var rows = catalog
-            .Select(kv => new
-            {
-                Guid = kv.Key,
-                Slot = kv.Value.AvatarItemType,
-                FriendlyName = kv.Value.FriendlyName,
-                Tooltip = kv.Value.Tooltip,
-                Rarity = kv.Value.Rarity,
-                Safe = safe.Contains(kv.Key),
-            })
-            .Where(r => r.Safe) // hide GUIDs that would crash the watch's parser
+        var rows = new List<GiftItemRow>(catalog.Count + DorkNet.Server.Services.StoreService.ColorVariantCatalog.Count);
+
+        // Base items (default colour). Real slot from the bundled lookup —
+        // the DTO's AvatarItemType is always Outfit, which is useless as a
+        // slot filter, so resolve the actual OutfitType per GUID.
+        foreach (var kv in catalog)
+        {
+            if (!safe.Contains(kv.Key)) continue; // GUIDs the watch can't render
+            var slot = DorkNet.Server.Controllers.API.Avatar.V4.AvatarItemsController
+                .TryGetOutfitType(kv.Key, out var s) ? s : 0;
+            rows.Add(new GiftItemRow(kv.Key, kv.Key, slot, kv.Value.FriendlyName, null, false));
+        }
+
+        // Colour variants — the "dozens of headphones" the admin sees in the
+        // store but not here. Each gifts as "{item},{swatch},{mask}," so the
+        // recipient gets the exact swatch, not the default colour.
+        foreach (var v in DorkNet.Server.Services.StoreService.ColorVariantCatalog.Values)
+        {
+            if (string.IsNullOrEmpty(v.item_guid) || string.IsNullOrEmpty(v.swatch_guid)) continue;
+            if (!safe.Contains(v.item_guid)) continue; // base must be renderable
+            var baseName = catalog.TryGetValue(v.item_guid, out var bd) && !string.IsNullOrEmpty(bd.FriendlyName)
+                ? bd.FriendlyName
+                : v.item_name;
+            var desc = $"{v.item_guid},{v.swatch_guid},{v.mask_guid},";
+            rows.Add(new GiftItemRow(desc, v.item_guid,
+                v.item_outfit_type ?? 0, $"{baseName} — {v.color}", v.color, true));
+        }
+
+        return Ok(rows
             .OrderBy(r => r.Slot)
-            .ThenBy(r => r.FriendlyName)
-            .ToList();
-        return Ok(rows);
+            .ThenBy(r => r.FriendlyName, StringComparer.OrdinalIgnoreCase)
+            .ToList());
     }
 
     // ── Send gift package (in-game gift box popup) ────────────────────────

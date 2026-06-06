@@ -33,7 +33,7 @@ Subsystems **NOT** present on this branch (these landed in December):
 - Late-2020 store catalog additions
 
 Weekly challenges **are** present on this branch: the admin SPA's
-**Server settings** page edits the weekly slate, the `CompletedRequired`
+**Settings → Server** tab edits the weekly slate, the `CompletedRequired`
 flag, and the gift (XP + tokens, plus an optional store skin/consumable
 that's granted straight to the player's inventory when the week's
 challenges complete).
@@ -104,6 +104,17 @@ AppIds, and bypasses TLS verification on the client's HTTPS calls so
 self-signed certs work. (First run prints "launch the game once"; do
 that, then re-run with `-ResumeBuild`.)
 
+### Debug console (opt-in)
+
+The 2020 client ships a built-in dev console
+(`RecRoom.Debugging.DebugConsole`) with commands like `SetTimeScale`,
+`Fly`, `Teleport`, `GoToRoom`, and `KillAllEnemies` — normally locked to
+developer accounts. Set `"EnableDebugConsole": true` in
+`dorknet-clientmod.json` and relaunch: the mod force-toggles the console
+UI on a hotkey (`"DebugConsoleToggleKey"`, default `BackQuote` = the `~`
+key) and silences `CheatManager` so the movement/time commands don't drop
+you to the dorm. Both default off.
+
 If MelonLoader isn't installable on the user's machine, the legacy
 `tools/install-legacy-client.ps1` does the same patches via direct
 byte-edits of `resources.assets` + `GameAssembly.dll`. Slower setup,
@@ -127,15 +138,32 @@ and the multi-step migrations haven't been consolidated.
 
 ### Signup codes
 
-When account creation is disabled (admin **Server settings**), the only
+When account creation is disabled (admin **Settings → Server**), the only
 way in is an admin-issued single-use **signup code**: generate one in the
-admin panel's **Signup codes** page (with a descriptor + optional expiry),
+admin panel's **Settings → Signup codes** tab (with a descriptor + optional expiry),
 hand it to the player, and they redeem it on the site's **`/join`** page —
 which creates their account bound to the device their game client
 reported, so the next launch logs straight in. The `SignupCodes` /
 `PendingDevices` tables post-date the migration chain and are created by
 an idempotent `CREATE TABLE IF NOT EXISTS` step at boot (Program.cs), so
 existing SQLite/Postgres DBs pick them up without a new migration.
+
+### Everyone-is-friends toggle
+
+For small servers where searching + friend-requesting each other is
+friction, admin **Settings → Server → "Everyone is friends"** makes every
+account a friend of every other account. It writes **no** relationship
+rows — the friend graph is synthesized at read time
+(`RelationshipQueries.EffectiveFriendIdsAsync`, gated on
+`ServerSettings.GlobalFriendsEnabled`), so flipping it off reverts
+instantly. Blocks are still honored and the system/coach account is
+excluded, as are auto-generated `Player_NNN` placeholder accounts that
+never set a real username (they only appear if there's a genuine friend
+row). Flipping it broadcasts `RelationshipsInvalid` to every connected
+watch, which calls `Relationships.RefreshList` and re-pulls
+`api/relationships/v2/get` — so players see everyone appear (or disappear)
+**without relogging**. It covers the friends list, the friends-online HUD,
+and room-move presence fan-out.
 
 ---
 

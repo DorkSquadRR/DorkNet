@@ -10,99 +10,9 @@
       "mask_guid": ""
     },
     {
-      "swatch_name": "Windbreaker_Blue_Swatch",
-      "swatch_guid": "EbVDqEJQOk6j0UvX3t-8rQ",
-      "color": "Blue",
-      "item_name": "(Wrist_80sWindbreaker)",
-      "item_guid": "52VsI_lKlkSUAOJlfDnyrQ",
-      "item_outfit_type": 200,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Windbreaker_Yellow_Swatch",
-      "swatch_guid": "C3ll7uPfUkeZ1QLX80_BpQ",
-      "color": "Yellow",
-      "item_name": "(Wrist_80sWindbreaker)",
-      "item_guid": "52VsI_lKlkSUAOJlfDnyrQ",
-      "item_outfit_type": 200,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Windbreaker_Salmon_Swatch",
-      "swatch_guid": "JS7aa4QSUUOpUYPqRZEb5g",
-      "color": "Salmon",
-      "item_name": "(Wrist_80sWindbreaker)",
-      "item_guid": "52VsI_lKlkSUAOJlfDnyrQ",
-      "item_outfit_type": 200,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Knight_SRank_Swatch",
-      "swatch_guid": "ITH2OpzjP022vZ5JgxV_iQ",
-      "color": "SRank",
-      "item_name": "(Shirt_KnightTorso)",
-      "item_guid": "739fd42a-8a8c-44a5-afa3-e0974802c6ae",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Knight_Blue_Swatch",
-      "swatch_guid": "ed134bee-d199-43eb-98bd-206571603f40",
-      "color": "Blue",
-      "item_name": "(Shirt_KnightTorso)",
-      "item_guid": "739fd42a-8a8c-44a5-afa3-e0974802c6ae",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Knight_Red_Swatch",
-      "swatch_guid": "59866578-d4e0-417b-9483-233ab108b1ac",
-      "color": "Red",
-      "item_name": "(Shirt_KnightTorso)",
-      "item_guid": "739fd42a-8a8c-44a5-afa3-e0974802c6ae",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Knight_Black_Swatch",
-      "swatch_guid": "e1f49b74-b071-4bd1-9c4b-af36d24d45c5",
-      "color": "Black",
-      "item_name": "(Shirt_KnightTorso)",
-      "item_guid": "739fd42a-8a8c-44a5-afa3-e0974802c6ae",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Knight_Green_Swatch",
-      "swatch_guid": "PMa9370LPEig_7pKwCceEQ",
-      "color": "Green",
-      "item_name": "(Shirt_KnightTorso)",
-      "item_guid": "739fd42a-8a8c-44a5-afa3-e0974802c6ae",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Knight_White_Swatch",
-      "swatch_guid": "22dc463a-a89b-46ad-9a0d-557c742b4a80",
-      "color": "White",
-      "item_name": "(Shirt_KnightTorso)",
-      "item_guid": "739fd42a-8a8c-44a5-afa3-e0974802c6ae",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
       "swatch_name": "LumberJack_Blue_Swatch",
       "swatch_guid": "cKHAetNcgUOxFfDkAPPF9w",
       "color": "Blue",
-      "item_name": "(Shirt_Lumberjack)",
-      "item_guid": "350c5c1e-318b-4233-a7e5-1f49909d8e65",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "LumberJack_Green_Swatch",
-      "swatch_guid": "7amHTgEv-UOJSGl0ofo4mw",
-      "color": "Green",
       "item_name": "(Shirt_Lumberjack)",
       "item_guid": "350c5c1e-318b-4233-a7e5-1f49909d8e65",
       "item_outfit_type": 101,
@@ -115,66 +25,12 @@
       "item_name": "(Shirt_SpaceMarine)",
       "item_guid": "4ce7a70f-15a0-4cad-98ee-5cbb40827338",
       "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "SpaceMarine_Pink_Swatch",
-      "swatch_guid": "a36d252b-16ac-4a82-bece-de145147e7d9",
-      "color": "Pink",
-      "item_name": "(Shirt_SpaceMarine)",
-      "item_guid": "4ce7a70f-15a0-4cad-98ee-5cbb40827338",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "SpaceMarine_Cyan_Swatch",
-      "swatch_guid": "c8cc9589-4831-4e73-a865-ef8c139a2ba7",
-      "color": "Cyan",
-      "item_name": "(Shirt_SpaceMarine)",
-      "item_guid": "4ce7a70f-15a0-4cad-98ee-5cbb40827338",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "SpaceMarine_Light_Swatch",
-      "swatch_guid": "68273c9e-96d6-4ddb-aaab-d99229e864d5",
-      "color": "Light",
-      "item_name": "(Shirt_SpaceMarine)",
-      "item_guid": "4ce7a70f-15a0-4cad-98ee-5cbb40827338",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "SpaceMarine_Dark_Swatch",
-      "swatch_guid": "a089bcc6-798d-4777-98e2-7afd290dc6b6",
-      "color": "Dark",
-      "item_name": "(Shirt_SpaceMarine)",
-      "item_guid": "4ce7a70f-15a0-4cad-98ee-5cbb40827338",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "SpaceMarine_SRank_Swatch",
-      "swatch_guid": "4ElTihrMA0ipcgeb9UG01Q",
-      "color": "SRank",
-      "item_name": "(Shirt_SpaceMarine)",
-      "item_guid": "4ce7a70f-15a0-4cad-98ee-5cbb40827338",
-      "item_outfit_type": 101,
-      "mask_guid": ""
+      "mask_guid": "7ac81d60-05b8-4a85-982c-f69213a93818"
     },
     {
       "swatch_name": "Hibiscus_Yellow_Swatch",
       "swatch_guid": "596097a8-d545-4256-959d-1d3cd96fc64c",
       "color": "Yellow",
-      "item_name": "(Hat_Hibiscus)",
-      "item_guid": "a61e86cd-f7e7-4ac7-a6e8-df269bc5cb01",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Hibiscus_White_Swatch",
-      "swatch_guid": "ce465d53-3807-423f-baa0-bdba2a75ceb3",
-      "color": "White",
       "item_name": "(Hat_Hibiscus)",
       "item_guid": "a61e86cd-f7e7-4ac7-a6e8-df269bc5cb01",
       "item_outfit_type": 0,
@@ -190,18 +46,9 @@
       "mask_guid": "be2b9293-1d3c-4b1c-b4c5-fad3ab16cf54"
     },
     {
-      "swatch_name": "Blazer_Shamrock_Swatch",
-      "swatch_guid": "7WrSbK4Ml0K2z-ig5HIUCw",
-      "color": "Shamrock",
-      "item_name": "(Blazer)",
-      "item_guid": "de0ac50d-2adb-4114-bd2e-68953b13d706",
-      "item_outfit_type": 101,
-      "mask_guid": "be2b9293-1d3c-4b1c-b4c5-fad3ab16cf54"
-    },
-    {
       "swatch_name": "Raincoat_Shirt_Blue_Swatch",
       "swatch_guid": "GH9q8_0O9EqjGdz7lGWD2g",
-      "color": "Blue",
+      "color": "Shirt_Blue",
       "item_name": "(Shirt_Raincoat)",
       "item_guid": "9e6397dd-b7b0-4d32-8c86-1910106a8478",
       "item_outfit_type": 101,
@@ -226,135 +73,27 @@
       "mask_guid": ""
     },
     {
+      "swatch_name": "Winter_Gloves_Tree_Green_Swatch",
+      "swatch_guid": "tyzdtSkR9k-YCnjNvPAT6w",
+      "color": "Gloves_Tree_Green",
+      "item_name": "(Hat_Winter)",
+      "item_guid": "24c4404a-839f-46bd-98b6-6848d747a98b",
+      "item_outfit_type": 0,
+      "mask_guid": ""
+    },
+    {
       "swatch_name": "Headphones_Red_Swatch",
       "swatch_guid": "viL4CPch2ECwG-RNaWcyZw",
       "color": "Red",
       "item_name": "(Hat_Headphones)",
       "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
       "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Headphones_EmissiveBlack_Swatch",
-      "swatch_guid": "Uz2hrptCa0erjqyPoiZxew",
-      "color": "EmissiveBlack",
-      "item_name": "(Hat_Headphones)",
-      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Headphones_EmissiveRed_Swatch",
-      "swatch_guid": "I1J-xY4YNU2dB_od4P_7Dg",
-      "color": "EmissiveRed",
-      "item_name": "(Hat_Headphones)",
-      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Headphones_TwoRed_Swatch",
-      "swatch_guid": "hf0gkFVS8ESvceRsC3LAXQ",
-      "color": "TwoRed",
-      "item_name": "(Hat_Headphones)",
-      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Headphones_EmissiveBlue_Swatch",
-      "swatch_guid": "2sf-FU4WckGBDWUkVz4z1g",
-      "color": "EmissiveBlue",
-      "item_name": "(Hat_Headphones)",
-      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Headphones_Purple_Swatch",
-      "swatch_guid": "a5nUvJZgTEGBUvdHx0Y6Ng",
-      "color": "Purple",
-      "item_name": "(Hat_Headphones)",
-      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Headphones_EmissiveOrange_Swatch",
-      "swatch_guid": "d9mwowRelE2lDKEA0UQMZQ",
-      "color": "EmissiveOrange",
-      "item_name": "(Hat_Headphones)",
-      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Headphones_Orange_Swatch",
-      "swatch_guid": "JWBK5v78Y0uRVEXlD-Qk6Q",
-      "color": "Orange",
-      "item_name": "(Hat_Headphones)",
-      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Headphones_Blue_Swatch",
-      "swatch_guid": "8ANbOhNnO0yLQOCIBsDwfg",
-      "color": "Blue",
-      "item_name": "(Hat_Headphones)",
-      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Headphones_TwoBlue_Swatch",
-      "swatch_guid": "4scG_UBlzE-5DWRhSrtm6g",
-      "color": "TwoBlue",
-      "item_name": "(Hat_Headphones)",
-      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Headphones_TwoOrange_Swatch",
-      "swatch_guid": "nX7krD8e2km_ZlOLWcoxdQ",
-      "color": "TwoOrange",
-      "item_name": "(Hat_Headphones)",
-      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Headphones_TwoPurple_Swatch",
-      "swatch_guid": "OqsbZ8Xls0i8uA6ha7H3qQ",
-      "color": "TwoPurple",
-      "item_name": "(Hat_Headphones)",
-      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Headphones_EmissivePurple_Swatch",
-      "swatch_guid": "3PfP661Fg0CruzRxis9EiA",
-      "color": "EmissivePurple",
-      "item_name": "(Hat_Headphones)",
-      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Headphones_TwoBlack_Swatch",
-      "swatch_guid": "ns5tIRishUOp-nYqLedcwA",
-      "color": "TwoBlack",
-      "item_name": "(Hat_Headphones)",
-      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
-      "item_outfit_type": 0,
-      "mask_guid": ""
+      "mask_guid": "_Yq00H-NWUyQNvGxRunHbg"
     },
     {
       "swatch_name": "JackfrostHair_Hat_Lilac_Swatch",
       "swatch_guid": "KwhdQ1deNE6Y6jzO9vaAnQ",
-      "color": "Lilac",
+      "color": "Hat_Lilac",
       "item_name": "(Hat_JackfrostHair)",
       "item_guid": "e6216087-fb37-46f1-bda4-a88c4640f339",
       "item_outfit_type": 0,
@@ -370,15 +109,6 @@
       "mask_guid": ""
     },
     {
-      "swatch_name": "Baseball_Green_Swatch",
-      "swatch_guid": "e5de2e45-207c-46af-9a5e-eb01a0c621fe",
-      "color": "Green",
-      "item_name": "(Hat_Baseball)",
-      "item_guid": "14ef6b00-debf-4a85-9755-b4d37df496d3",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
       "swatch_name": "ButtonTop_Orange_Swatch",
       "swatch_guid": "e0397982-c2c2-4733-9a40-46e18675b5af",
       "color": "Orange",
@@ -388,45 +118,27 @@
       "mask_guid": ""
     },
     {
-      "swatch_name": "ButtonTop_Tan_Swatch",
-      "swatch_guid": "49f5864f-9d40-497c-88c8-e87f64d41d74",
-      "color": "Tan",
-      "item_name": "(ButtonTop)",
-      "item_guid": "9c8fc7f0-8f99-4aad-a34f-8d979f6ae352",
-      "item_outfit_type": 101,
+      "swatch_name": "CowboyCherry_Swatch",
+      "swatch_guid": "624c85e5-095a-48b6-85fb-c9bbade19a8d",
+      "color": "Cherry",
+      "item_name": "(Hat_Cowboy)",
+      "item_guid": "ad0bdec5-f767-42e7-99e0-221473464a85",
+      "item_outfit_type": 0,
+      "mask_guid": "54778d93-2cff-48db-b25b-65c08b0e5be8"
+    },
+    {
+      "swatch_name": "Mobster_HerringBone_Tan_Swatch",
+      "swatch_guid": "531b4297-b38b-4362-9854-4f2139ea43be",
+      "color": "HerringBone_Tan",
+      "item_name": "(Wrist_Mobster)",
+      "item_guid": "08d56627-4500-4724-8692-a23c96ddb3ec",
+      "item_outfit_type": 200,
       "mask_guid": ""
     },
     {
       "swatch_name": "MagicalGirl_Blue_Swatch",
       "swatch_guid": "VQjkyb5aoEKHKo_eZsq9ug",
       "color": "Blue",
-      "item_name": "(Wrist_MagicalGirl)",
-      "item_guid": "eS_or4AnMka9M_bD7YN28g",
-      "item_outfit_type": 200,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "MagicalGirl_Red_Swatch",
-      "swatch_guid": "FE7_gQNBt0CXzMN6di5HWA",
-      "color": "Red",
-      "item_name": "(Wrist_MagicalGirl)",
-      "item_guid": "eS_or4AnMka9M_bD7YN28g",
-      "item_outfit_type": 200,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "MagicalGirl_Green_Swatch",
-      "swatch_guid": "kTP3xKhzBkuQF3SqvmYFKA",
-      "color": "Green",
-      "item_name": "(Wrist_MagicalGirl)",
-      "item_guid": "eS_or4AnMka9M_bD7YN28g",
-      "item_outfit_type": 200,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "MagicalGirl_Orange_Swatch",
-      "swatch_guid": "hYu9itGe1Ee5Neanhj9VtQ",
-      "color": "Orange",
       "item_name": "(Wrist_MagicalGirl)",
       "item_guid": "eS_or4AnMka9M_bD7YN28g",
       "item_outfit_type": 200,
@@ -442,94 +154,22 @@
       "mask_guid": ""
     },
     {
-      "swatch_name": "Wizard_Purple_Swatch",
-      "swatch_guid": "d3KmqVuMQkCYK6sVTMOTOA",
-      "color": "Purple",
-      "item_name": "(Hat_Wizard)",
-      "item_guid": "01689baf-405e-4b38-9f09-b624e03865b8",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Wizard_White_Swatch",
-      "swatch_guid": "d3a9b576-5433-4305-bd96-b08820c09212",
-      "color": "White",
-      "item_name": "(Hat_Wizard)",
-      "item_guid": "01689baf-405e-4b38-9f09-b624e03865b8",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Wizard_Green_Swatch",
-      "swatch_guid": "357eb160-360b-4a63-840d-65d11cc8ffc2",
-      "color": "Green",
-      "item_name": "(Hat_Wizard)",
-      "item_guid": "01689baf-405e-4b38-9f09-b624e03865b8",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Wizard_Black_Swatch",
-      "swatch_guid": "7afe1bb0-5ca9-4263-8f85-49d3a18353c7",
-      "color": "Black",
-      "item_name": "(Hat_Wizard)",
-      "item_guid": "01689baf-405e-4b38-9f09-b624e03865b8",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Wizard_Red_Swatch",
-      "swatch_guid": "a38254c0-00e3-429b-9d5d-b9e6a9812e69",
-      "color": "Red",
-      "item_name": "(Hat_Wizard)",
-      "item_guid": "01689baf-405e-4b38-9f09-b624e03865b8",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
       "swatch_name": "Punk_Pink_Swatch",
       "swatch_guid": "4169bfed-8403-4590-a29d-4941275ac0b6",
       "color": "Pink",
       "item_name": "(Wrist_Punk)",
       "item_guid": "28374ebc-4050-4ea0-b3b6-41ebe75cedf7",
       "item_outfit_type": 200,
-      "mask_guid": ""
+      "mask_guid": "dd7472ed-bdcb-4811-81ba-5ed682fb7675"
     },
     {
-      "swatch_name": "Punk_WristPink_Swatch",
-      "swatch_guid": "f3b2330a-b981-4c7e-902f-1f57382f2388",
-      "color": "WristPink",
-      "item_name": "(Wrist_Punk)",
-      "item_guid": "28374ebc-4050-4ea0-b3b6-41ebe75cedf7",
-      "item_outfit_type": 200,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Punk_WristRed_Swatch",
-      "swatch_guid": "baffdefe-de21-4551-9330-b50873965bdd",
-      "color": "WristRed",
-      "item_name": "(Wrist_Punk)",
-      "item_guid": "28374ebc-4050-4ea0-b3b6-41ebe75cedf7",
-      "item_outfit_type": 200,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Punk_Green_Swatch",
-      "swatch_guid": "0724b166-9ace-46ff-a191-b13f135b00a8",
-      "color": "Green",
-      "item_name": "(Wrist_Punk)",
-      "item_guid": "28374ebc-4050-4ea0-b3b6-41ebe75cedf7",
-      "item_outfit_type": 200,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Punk_WristGreen_Swatch",
-      "swatch_guid": "a6796264-9c7e-4605-830c-06db8d0dc780",
-      "color": "WristGreen",
-      "item_name": "(Wrist_Punk)",
-      "item_guid": "28374ebc-4050-4ea0-b3b6-41ebe75cedf7",
-      "item_outfit_type": 200,
-      "mask_guid": ""
+      "swatch_name": "Countess_Wrist_Purple_Swatch",
+      "swatch_guid": "jwEB6LyEaEekqtPNRc6TVA",
+      "color": "Wrist_Purple",
+      "item_name": "(Shirt_Countess)",
+      "item_guid": "QCtqxbvYOkan79YFugH_Cw",
+      "item_outfit_type": 101,
+      "mask_guid": "8kdJkmwNM0WQmMVrb8fK8A"
     },
     {
       "swatch_name": "Hat_GraduationCap_Green_Swatch",
@@ -547,16 +187,16 @@
       "item_name": "(EquestrianJacket)",
       "item_guid": "896c2491-2f96-4986-9cbd-b3b31ef5d8c5",
       "item_outfit_type": 101,
-      "mask_guid": ""
+      "mask_guid": "d344b8cc-85a8-4ace-9f92-38c84f396e99"
     },
     {
-      "swatch_name": "EquestrianJacket_Gray_Swatch",
-      "swatch_guid": "4828b50c-95b6-466a-bb25-514891d78202",
-      "color": "Gray",
-      "item_name": "(EquestrianJacket)",
-      "item_guid": "896c2491-2f96-4986-9cbd-b3b31ef5d8c5",
-      "item_outfit_type": 101,
-      "mask_guid": ""
+      "swatch_name": "Headphones_EmissiveBlack_Swatch",
+      "swatch_guid": "Uz2hrptCa0erjqyPoiZxew",
+      "color": "EmissiveBlack",
+      "item_name": "(Hat_Headphones)",
+      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
+      "item_outfit_type": 0,
+      "mask_guid": "_Yq00H-NWUyQNvGxRunHbg"
     },
     {
       "swatch_name": "Shirt_VampireHunter_White_Swatch",
@@ -568,22 +208,76 @@
       "mask_guid": "x10FeRBsQU2DIIpG8XIlwg"
     },
     {
-      "swatch_name": "Shirt_VampireHunter_Midnight_Swatch",
-      "swatch_guid": "CavRDqIlmUeTZBtCLn1hZQ",
-      "color": "Midnight",
-      "item_name": "(Shirt_VampireHunter)",
-      "item_guid": "JWfs9IiQs0Weu8MmyGpqLQ",
-      "item_outfit_type": 101,
-      "mask_guid": "x10FeRBsQU2DIIpG8XIlwg"
+      "swatch_name": "FighterPilot_Gloves_Orange_Swatch",
+      "swatch_guid": "18b52db5-0261-46a0-9214-ff510d455ed9",
+      "color": "Gloves_Orange",
+      "item_name": "(Wrist_FighterPilot)",
+      "item_guid": "5800d2b5-75b8-442f-8b10-63bd3d73a1b8",
+      "item_outfit_type": 200,
+      "mask_guid": ""
     },
     {
-      "swatch_name": "Shirt_VampireHunter_Leather_Swatch",
-      "swatch_guid": "Z8Bfk0MTb0evZehvvgzuBA",
-      "color": "Leather",
-      "item_name": "(Shirt_VampireHunter)",
-      "item_guid": "JWfs9IiQs0Weu8MmyGpqLQ",
+      "swatch_name": "Aviator_Gloves_Tan_Swatch",
+      "swatch_guid": "7fb8496f-0e6c-4e48-b8fa-5709ebbf4820",
+      "color": "Gloves_Tan",
+      "item_name": "(Wrist_Aviator)",
+      "item_guid": "125a3a62-1005-47dc-9fd8-ee09ea803e9f",
+      "item_outfit_type": 200,
+      "mask_guid": "5659ce2c-9cb0-49da-8c39-4b7df0f8deec"
+    },
+    {
+      "swatch_name": "Astronaut_Glove_Orange_Swatch",
+      "swatch_guid": "y_gTbnuYS0GKJmnCs2retw",
+      "color": "e_Orange",
+      "item_name": "(Wrist_AstronautGlove)",
+      "item_guid": "88739d79-aeb9-471a-b25b-776f46bba9f6",
+      "item_outfit_type": 200,
+      "mask_guid": "hjk9OO8CW0KNGR7A6_p84A"
+    },
+    {
+      "swatch_name": "Winter_Hat_Tree_Swatch",
+      "swatch_guid": "xVwzV9-m6E-8PVpkg4D-AQ",
+      "color": "Hat_Tree",
+      "item_name": "(Hat_Winter)",
+      "item_guid": "24c4404a-839f-46bd-98b6-6848d747a98b",
+      "item_outfit_type": 0,
+      "mask_guid": "nalaCGqtL0SFA4Itwqmp8g"
+    },
+    {
+      "swatch_name": "Harness_Hat_Teal_Swatch",
+      "swatch_guid": "lsyYlxY9o0a3TbUrHkxeyQ",
+      "color": "Hat_Teal",
+      "item_name": "(Shirt_Harness)",
+      "item_guid": "ca7a3ccb-2bc9-4c93-a6a8-6f22b38526af",
       "item_outfit_type": 101,
-      "mask_guid": "x10FeRBsQU2DIIpG8XIlwg"
+      "mask_guid": "PZHohDVX0U2frX13N4KYDQ"
+    },
+    {
+      "swatch_name": "Sherlock_Torso_Gray_Swatch",
+      "swatch_guid": "msOFHoFN9UORkeXXtdqBsw",
+      "color": "Torso_Gray",
+      "item_name": "(Hat_Sherlock)",
+      "item_guid": "5bde836f-9343-4934-b01a-606f707020ef",
+      "item_outfit_type": 0,
+      "mask_guid": "9ZP617DQk0mZ10J3d5q9oA"
+    },
+    {
+      "swatch_name": "BowlingShirt_CenterStripe_Burgandy_Swatch",
+      "swatch_guid": "ghM-uFq5-0Ci38AOHa9zZA",
+      "color": "Shirt_CenterStripe_Burgandy",
+      "item_name": "(Shirt_Bowling)",
+      "item_guid": "CQuKKNpan0O7rhR1fr14-Q",
+      "item_outfit_type": 101,
+      "mask_guid": "IWg9wuda4kaCilJk8JQpTQ"
+    },
+    {
+      "swatch_name": "Scuba_Neck_Blue_Swatch",
+      "swatch_guid": "V_duN2oWaUmmao1xHhzCJA",
+      "color": "Neck_Blue",
+      "item_name": "(Shirt_Scuba)",
+      "item_guid": "57552652-d902-43b7-a68e-5c7da87582bc",
+      "item_outfit_type": 101,
+      "mask_guid": ""
     },
     {
       "swatch_name": "Scallywag_Bracelet_SRank_Swatch",
@@ -595,45 +289,36 @@
       "mask_guid": ""
     },
     {
-      "swatch_name": "Scallywag_Bracelet_Red_Swatch",
-      "swatch_guid": "62bd5dda-08da-4528-83c1-f0ca3812dc6e",
-      "color": "Red",
-      "item_name": "(Wrist_Scallywag_Bracelet)",
-      "item_guid": "b9e0f03b-2609-4911-82e9-1e324dbbe8be",
-      "item_outfit_type": 200,
+      "swatch_name": "ArtistHat_Red_Swatch",
+      "swatch_guid": "5c8f36c5-07da-49f4-af02-d23207a43216",
+      "color": "Hat_Red",
+      "item_name": "(Shirt_Artist)",
+      "item_guid": "02077915-57d3-4e26-b4fe-8e0399cbb293",
+      "item_outfit_type": 101,
+      "mask_guid": "3485a30d-27f8-450b-b5aa-1ff3cd227d19"
+    },
+    {
+      "swatch_name": "ArcherBlack_Quiver_Swatch",
+      "swatch_guid": "74b009f4-e128-4c59-8a6a-4c0ba6119bde",
+      "color": "Black_Quiver",
+      "item_name": "(Shirt_Archer)",
+      "item_guid": "c0e59f27-a13d-4bd9-b3b8-a38a360f649b",
+      "item_outfit_type": 101,
       "mask_guid": ""
     },
     {
-      "swatch_name": "Scallywag_Bracelet_Blue_Swatch",
-      "swatch_guid": "cdca593a-8840-4140-9145-fe962732040c",
-      "color": "Blue",
-      "item_name": "(Wrist_Scallywag_Bracelet)",
-      "item_guid": "b9e0f03b-2609-4911-82e9-1e324dbbe8be",
-      "item_outfit_type": 200,
+      "swatch_name": "ArcherYellow_Swatch",
+      "swatch_guid": "6e152cc7-e93a-4408-8092-236db420b680",
+      "color": "Yellow",
+      "item_name": "(Shirt_Archer)",
+      "item_guid": "c0e59f27-a13d-4bd9-b3b8-a38a360f649b",
+      "item_outfit_type": 101,
       "mask_guid": ""
     },
     {
       "swatch_name": "PurpleJacket_Red_Swatch",
       "swatch_guid": "657f28d5-672a-4f27-86c6-3cb00f25bb84",
       "color": "Red",
-      "item_name": "(PurpleJacket)",
-      "item_guid": "745c5110-104e-4b37-aabf-7c690fd54811",
-      "item_outfit_type": 101,
-      "mask_guid": "3ba69a39-a4e7-4505-bae7-8db31360ec1c"
-    },
-    {
-      "swatch_name": "PurpleJacket_Blue_Swatch",
-      "swatch_guid": "b42d903b-b393-4f49-af5e-38d0fb6c42b0",
-      "color": "Blue",
-      "item_name": "(PurpleJacket)",
-      "item_guid": "745c5110-104e-4b37-aabf-7c690fd54811",
-      "item_outfit_type": 101,
-      "mask_guid": "3ba69a39-a4e7-4505-bae7-8db31360ec1c"
-    },
-    {
-      "swatch_name": "PurpleJacket_Black_Swatch",
-      "swatch_guid": "8cab8cc6-9a2d-434c-8b72-e66edbdd223c",
-      "color": "Black",
       "item_name": "(PurpleJacket)",
       "item_guid": "745c5110-104e-4b37-aabf-7c690fd54811",
       "item_outfit_type": 101,
@@ -649,36 +334,9 @@
       "mask_guid": "435eba0d-d8f9-43cc-91aa-2959d63c6fa7"
     },
     {
-      "swatch_name": "FighterPilot_Black_Swatch",
-      "swatch_guid": "8c74ee27-3d56-401b-8a8c-7868a80770e8",
-      "color": "Black",
-      "item_name": "(Wrist_FighterPilot)",
-      "item_guid": "5800d2b5-75b8-442f-8b10-63bd3d73a1b8",
-      "item_outfit_type": 200,
-      "mask_guid": "435eba0d-d8f9-43cc-91aa-2959d63c6fa7"
-    },
-    {
-      "swatch_name": "FighterPilot_Blue_Swatch",
-      "swatch_guid": "e37b07d1-6b9d-49b9-94ca-1c728e228cfe",
-      "color": "Blue",
-      "item_name": "(Wrist_FighterPilot)",
-      "item_guid": "5800d2b5-75b8-442f-8b10-63bd3d73a1b8",
-      "item_outfit_type": 200,
-      "mask_guid": "435eba0d-d8f9-43cc-91aa-2959d63c6fa7"
-    },
-    {
       "swatch_name": "Neck_Grillmaster_Denim_Swatch",
       "swatch_guid": "eV3Nv6SWS0yl3f-fgjPb-w",
       "color": "Denim",
-      "item_name": "(Neck_Grillmaster)",
-      "item_guid": "tTKv7eRODka2KC_hsY2O3Q",
-      "item_outfit_type": 100,
-      "mask_guid": "t-ZEWJCgFEyGP2PjNblQMA"
-    },
-    {
-      "swatch_name": "Neck_Grillmaster_White_Swatch",
-      "swatch_guid": "Lxx3q6JRnUW_cPG_kGG4ag",
-      "color": "White",
       "item_name": "(Neck_Grillmaster)",
       "item_guid": "tTKv7eRODka2KC_hsY2O3Q",
       "item_outfit_type": 100,
@@ -694,22 +352,22 @@
       "mask_guid": ""
     },
     {
-      "swatch_name": "BabydollDress_Black_Swatch",
-      "swatch_guid": "e13cf33d-7588-4e2e-955e-f0a29d6380b7",
-      "color": "Black",
-      "item_name": "(BabydollDress)",
-      "item_guid": "da55bfc3-47b7-46f6-b548-7fb2c2a5e0bf",
-      "item_outfit_type": 101,
-      "mask_guid": ""
+      "swatch_name": "Hat_SeaCaptainDarkDarkGold_Swatch",
+      "swatch_guid": "70112887-dc8d-49d5-96ed-0845204e0b58",
+      "color": "DarkDarkGold",
+      "item_name": "(Hat_SeaCaptain)",
+      "item_guid": "f5c9743f-e77c-42f2-ba63-9843342cbf8e",
+      "item_outfit_type": 0,
+      "mask_guid": "a4e51b6b-fdfd-47dc-9d0e-f26f383e03e9"
     },
     {
-      "swatch_name": "BabydollDress_Pink_Swatch",
-      "swatch_guid": "da6d0ced-3d43-4878-a868-925f2ed6fd5b",
-      "color": "Pink",
-      "item_name": "(BabydollDress)",
-      "item_guid": "da55bfc3-47b7-46f6-b548-7fb2c2a5e0bf",
-      "item_outfit_type": 101,
-      "mask_guid": ""
+      "swatch_name": "Letterman_Wrist_Red_Swatch",
+      "swatch_guid": "HWc25-d8dUmNN2F3n8mV5A",
+      "color": "Wrist_Red",
+      "item_name": "(Wrist_Letterman)",
+      "item_guid": "2dFMy4zc7ky_Fd5fzfgInw",
+      "item_outfit_type": 200,
+      "mask_guid": "4EHIyZkOOEqnM-PuD_a5xw"
     },
     {
       "swatch_name": "WitchHunter_Purple_Swatch",
@@ -721,49 +379,13 @@
       "mask_guid": ""
     },
     {
-      "swatch_name": "WitchHunter_Green_Swatch",
-      "swatch_guid": "64545dcc-a8eb-4c69-a539-78ee73a2d327",
-      "color": "Green",
-      "item_name": "(Shirt_WitchHunter)",
-      "item_guid": "418db0e0-c7af-40c2-9cac-d461ce41e210",
+      "swatch_name": "Beekeeper_Shirt_Teal_Swatch",
+      "swatch_guid": "oZ8k0Qv3SkG-DkY0_dP7UA",
+      "color": "Shirt_Teal",
+      "item_name": "(Shirt_Beekeeper)",
+      "item_guid": "1ebbfdfc-f72b-4d70-99d4-4d527f896aa7",
       "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "WitchHunter_Blue_Swatch",
-      "swatch_guid": "aBQ3R9boek-mYeSYSNvDbQ",
-      "color": "Blue",
-      "item_name": "(Shirt_WitchHunter)",
-      "item_guid": "418db0e0-c7af-40c2-9cac-d461ce41e210",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "WitchHunter_SRank_Swatch",
-      "swatch_guid": "Tbrc2MlSlE6mKua8qSoluQ",
-      "color": "SRank",
-      "item_name": "(Shirt_WitchHunter)",
-      "item_guid": "418db0e0-c7af-40c2-9cac-d461ce41e210",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "WitchHunter_White_Swatch",
-      "swatch_guid": "e02838f8-4029-455a-b35c-dd40f972b05b",
-      "color": "White",
-      "item_name": "(Shirt_WitchHunter)",
-      "item_guid": "418db0e0-c7af-40c2-9cac-d461ce41e210",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "WitchHunter_Red_Swatch",
-      "swatch_guid": "909ed249-ce09-4304-8b02-56794fa7567d",
-      "color": "Red",
-      "item_name": "(Shirt_WitchHunter)",
-      "item_guid": "418db0e0-c7af-40c2-9cac-d461ce41e210",
-      "item_outfit_type": 101,
-      "mask_guid": ""
+      "mask_guid": "afd88a79-7f03-40f6-bcb4-c247dd86edc4"
     },
     {
       "swatch_name": "Smuggler_Green_Swatch",
@@ -772,52 +394,7 @@
       "item_name": "(Shirt_Smuggler)",
       "item_guid": "25d4c652-1730-4925-925e-31a290a2272a",
       "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Smuggler_SRank_Swatch",
-      "swatch_guid": "bzYdPb8GWUS-CgT4wrziIA",
-      "color": "SRank",
-      "item_name": "(Shirt_Smuggler)",
-      "item_guid": "25d4c652-1730-4925-925e-31a290a2272a",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Smuggler_Grey_Swatch",
-      "swatch_guid": "90869e86-cbc5-4024-9d08-fcdc41c64eb5",
-      "color": "Grey",
-      "item_name": "(Shirt_Smuggler)",
-      "item_guid": "25d4c652-1730-4925-925e-31a290a2272a",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Smuggler_Dark_Swatch",
-      "swatch_guid": "e821aa74-2d47-4388-bcfb-1893b8a83a52",
-      "color": "Dark",
-      "item_name": "(Shirt_Smuggler)",
-      "item_guid": "25d4c652-1730-4925-925e-31a290a2272a",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Smuggler_Cherry_Swatch",
-      "swatch_guid": "fed760b2-15e2-46b2-b1e3-cc3c8d780d5d",
-      "color": "Cherry",
-      "item_name": "(Shirt_Smuggler)",
-      "item_guid": "25d4c652-1730-4925-925e-31a290a2272a",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Smuggler_Yellow_Swatch",
-      "swatch_guid": "002b07bb-4256-44ce-8ca4-25510e70b6b5",
-      "color": "Yellow",
-      "item_name": "(Shirt_Smuggler)",
-      "item_guid": "25d4c652-1730-4925-925e-31a290a2272a",
-      "item_outfit_type": 101,
-      "mask_guid": ""
+      "mask_guid": "970a8c7e-d091-4719-bb9c-e3be8d46ee68"
     },
     {
       "swatch_name": "SodaJerk_Green_Swatch",
@@ -829,22 +406,13 @@
       "mask_guid": ""
     },
     {
-      "swatch_name": "SodaJerk_Mustard_Swatch",
-      "swatch_guid": "MxnAq_XOw0uTzQ8IIxqb_Q",
-      "color": "Mustard",
-      "item_name": "(Shirt_SodaJerk)",
-      "item_guid": "iai6P7dDTUq8S4hqQmY1YA",
+      "swatch_name": "Scarecrow_Hat_Contest_Swatch",
+      "swatch_guid": "TZ3oQBp_3kWY4Vzscgv5Wg",
+      "color": "Hat_Contest",
+      "item_name": "(Shirt_Scarecrow)",
+      "item_guid": "1fcaf4fd-9012-407e-b691-fbc3ccf22421",
       "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "SodaJerk_Blue_Swatch",
-      "swatch_guid": "XFCpIdeDXUqeYCIgh4fGtg",
-      "color": "Blue",
-      "item_name": "(Shirt_SodaJerk)",
-      "item_guid": "iai6P7dDTUq8S4hqQmY1YA",
-      "item_outfit_type": 101,
-      "mask_guid": ""
+      "mask_guid": "xCpdHx1iM06Gg0tYoGv0DA"
     },
     {
       "swatch_name": "Hat_TutorialCap_2_Swatch",
@@ -856,13 +424,31 @@
       "mask_guid": "GV8z2dlqGEqIAYaGrF1ZYQ"
     },
     {
-      "swatch_name": "Hat_TutorialCap_3_Swatch",
-      "swatch_guid": "wHJnbDOo8ESmUbQDr0k31w",
-      "color": "3",
-      "item_name": "(Hat_TutorialCap)",
-      "item_guid": "M9weaekvIUimiJSVJqZl-w",
+      "swatch_name": "Hat_Baseball_ThreeColor_BlueRed_Swatch",
+      "swatch_guid": "nZor-clxlkm8EO9Gco0Otg",
+      "color": "ThreeColor_BlueRed",
+      "item_name": "(Hat_Baseball)",
+      "item_guid": "14ef6b00-debf-4a85-9755-b4d37df496d3",
       "item_outfit_type": 0,
-      "mask_guid": "GV8z2dlqGEqIAYaGrF1ZYQ"
+      "mask_guid": "r_GLekt6mkWxXw8zPPR8Mg"
+    },
+    {
+      "swatch_name": "PirateCaptain_Hat_Black_Swatch",
+      "swatch_guid": "f9aaa7c5-59bc-486c-9a6e-27a8ac618f84",
+      "color": "Hat_Black",
+      "item_name": "(Neck_PirateCaptain)",
+      "item_guid": "38b38e24-d636-41c6-b80e-a285ae3106dc",
+      "item_outfit_type": 102,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Wizard_Purple_Swatch",
+      "swatch_guid": "d3KmqVuMQkCYK6sVTMOTOA",
+      "color": "Purple",
+      "item_name": "(Hat_Wizard)",
+      "item_guid": "01689baf-405e-4b38-9f09-b624e03865b8",
+      "item_outfit_type": 0,
+      "mask_guid": ""
     },
     {
       "swatch_name": "BaseballHelmet_Red_Swatch",
@@ -871,39 +457,12 @@
       "item_name": "(Hat_BaseballHelmet)",
       "item_guid": "293e7ad3-01c9-43af-96e3-06c34145ff12",
       "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "BaseballHelmet_Green_Swatch",
-      "swatch_guid": "9967ce54-c2b7-437a-946e-11f8ee6d6fdd",
-      "color": "Green",
-      "item_name": "(Hat_BaseballHelmet)",
-      "item_guid": "293e7ad3-01c9-43af-96e3-06c34145ff12",
-      "item_outfit_type": 0,
-      "mask_guid": ""
+      "mask_guid": "FVdDQFOMQ06teQm2ANDPng"
     },
     {
       "swatch_name": "TruckerOveralls_Mustard_Swatch",
       "swatch_guid": "nKauYAyWhkm2AMHFyC-fLg",
       "color": "Mustard",
-      "item_name": "(Shirt_TruckerOveralls)",
-      "item_guid": "b080e2f4-c699-4cca-bb9e-7cfc4bafcbfc",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "TruckerOveralls_Red_Swatch",
-      "swatch_guid": "iokdlBfjuEuAwqIMOQwxdA",
-      "color": "Red",
-      "item_name": "(Shirt_TruckerOveralls)",
-      "item_guid": "b080e2f4-c699-4cca-bb9e-7cfc4bafcbfc",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "TruckerOveralls_Green_Swatch",
-      "swatch_guid": "EiGgN7uVukqoRE7UJcMLTw",
-      "color": "Green",
       "item_name": "(Shirt_TruckerOveralls)",
       "item_guid": "b080e2f4-c699-4cca-bb9e-7cfc4bafcbfc",
       "item_outfit_type": 101,
@@ -919,21 +478,48 @@
       "mask_guid": ""
     },
     {
-      "swatch_name": "PirateCaptain_SRank_Swatch",
-      "swatch_guid": "xGmnUGF-Ck-jP43r8tVVjg",
-      "color": "SRank",
-      "item_name": "(Neck_PirateCaptain)",
-      "item_guid": "38b38e24-d636-41c6-b80e-a285ae3106dc",
-      "item_outfit_type": 102,
-      "mask_guid": ""
+      "swatch_name": "BlazerGreyDark_Swatch",
+      "swatch_guid": "9374bf66-2ee5-493b-8439-efce4b201904",
+      "color": "GreyDark",
+      "item_name": "(Blazer)",
+      "item_guid": "de0ac50d-2adb-4114-bd2e-68953b13d706",
+      "item_outfit_type": 101,
+      "mask_guid": "be2b9293-1d3c-4b1c-b4c5-fad3ab16cf54"
     },
     {
-      "swatch_name": "PirateCaptain_Red_Swatch",
-      "swatch_guid": "556141f7-6fbc-4065-9faa-8d8240a93d7f",
-      "color": "Red",
+      "swatch_name": "MagicalGirl_Wrist_Red_Swatch",
+      "swatch_guid": "N9CBuYaMtUOrCks5UcOycg",
+      "color": "Wrist_Red",
+      "item_name": "(Wrist_MagicalGirl)",
+      "item_guid": "eS_or4AnMka9M_bD7YN28g",
+      "item_outfit_type": 200,
+      "mask_guid": "ZtCqMnFTQUWv2h0MfZ4m6A"
+    },
+    {
+      "swatch_name": "PirateCaptain_Belt_Black_Swatch",
+      "swatch_guid": "f4ad4b9e-dd42-4711-9437-5beae51966f6",
+      "color": "Belt_Black",
       "item_name": "(Neck_PirateCaptain)",
       "item_guid": "38b38e24-d636-41c6-b80e-a285ae3106dc",
       "item_outfit_type": 102,
+      "mask_guid": "9b2102f0-e16b-464f-9f1c-f068de52bb89"
+    },
+    {
+      "swatch_name": "BowlingShirt_Flames_Red_Swatch",
+      "swatch_guid": "8xjU4GQ4OkaqGyad-ypwtw",
+      "color": "Shirt_Flames_Red",
+      "item_name": "(Shirt_Bowling)",
+      "item_guid": "CQuKKNpan0O7rhR1fr14-Q",
+      "item_outfit_type": 101,
+      "mask_guid": "5RUG6i2Mx0-55IO-IlhUdQ"
+    },
+    {
+      "swatch_name": "BabydollDress_Black_Swatch",
+      "swatch_guid": "e13cf33d-7588-4e2e-955e-f0a29d6380b7",
+      "color": "Black",
+      "item_name": "(BabydollDress)",
+      "item_guid": "da55bfc3-47b7-46f6-b548-7fb2c2a5e0bf",
+      "item_outfit_type": 101,
       "mask_guid": ""
     },
     {
@@ -952,16 +538,52 @@
       "item_name": "(Wrist_FlapperGlove)",
       "item_guid": "473c672d-2b79-48a2-a49d-fd68160c5bde",
       "item_outfit_type": 200,
+      "mask_guid": "0e42108e-3b08-49b4-86c0-7984719e8380"
+    },
+    {
+      "swatch_name": "ButtonTop_Tan_Swatch",
+      "swatch_guid": "49f5864f-9d40-497c-88c8-e87f64d41d74",
+      "color": "Tan",
+      "item_name": "(ButtonTop)",
+      "item_guid": "9c8fc7f0-8f99-4aad-a34f-8d979f6ae352",
+      "item_outfit_type": 101,
       "mask_guid": ""
     },
     {
-      "swatch_name": "FlapperGlove_Gold_Swatch",
-      "swatch_guid": "2cf2b644-3fa6-449c-9fe8-d0ab917f3106",
-      "color": "Gold",
-      "item_name": "(Wrist_FlapperGlove)",
-      "item_guid": "473c672d-2b79-48a2-a49d-fd68160c5bde",
+      "swatch_name": "Windbreaker_Blue_Swatch",
+      "swatch_guid": "EbVDqEJQOk6j0UvX3t-8rQ",
+      "color": "Blue",
+      "item_name": "(Wrist_80sWindbreaker)",
+      "item_guid": "52VsI_lKlkSUAOJlfDnyrQ",
       "item_outfit_type": 200,
       "mask_guid": ""
+    },
+    {
+      "swatch_name": "Aviator_Goggles_Gray_Swatch",
+      "swatch_guid": "23428ca9-be75-4146-b400-df01d1dadac9",
+      "color": "s_Gray",
+      "item_name": "(Eye_AviatorGoggles)",
+      "item_guid": "47629ed1-5378-427c-ad61-4b44d2fe90cc",
+      "item_outfit_type": 10,
+      "mask_guid": "556f876a-70da-4104-b792-fca8ad67be0c"
+    },
+    {
+      "swatch_name": "SafariTorso_Green_Swatch",
+      "swatch_guid": "49bbd11a-e5c9-47ff-b04d-72eb321e8a57",
+      "color": "Torso_Green",
+      "item_name": "(Shirt_Safari)",
+      "item_guid": "1041d745-c5e9-4218-a3e1-198f5c9c418c",
+      "item_outfit_type": 101,
+      "mask_guid": "84c016ad-133f-45e3-a412-cac35612540b"
+    },
+    {
+      "swatch_name": "Scallywag_Hat_Blue_Swatch",
+      "swatch_guid": "53dd9e44-7096-438e-a7c3-11d7c307426f",
+      "color": "Hat_Blue",
+      "item_name": "(Shirt_Scallywag)",
+      "item_guid": "664485e9-a159-4fcb-b32c-2b114b4a1218",
+      "item_outfit_type": 101,
+      "mask_guid": "a4903da3-249d-4f0a-a746-b547fda371ff"
     },
     {
       "swatch_name": "BusinessTie_Valentine_Swatch",
@@ -973,12 +595,21 @@
       "mask_guid": ""
     },
     {
-      "swatch_name": "BusinessTie_CandyCane_Swatch",
-      "swatch_guid": "W4a144so90eRzCojUnDowA",
-      "color": "CandyCane",
-      "item_name": "(BusinessTie)",
-      "item_guid": "c6c08eb5-381a-4193-9722-80da95d62abe",
-      "item_outfit_type": 100,
+      "swatch_name": "Astronaut_Helmet_Orange_Swatch",
+      "swatch_guid": "JFalLDUvm0aMm3wh1UVfVg",
+      "color": "t_Orange",
+      "item_name": "(Hat_AstronautHelmet)",
+      "item_guid": "f218e2de-46fd-45b9-9e0e-670b6bb905e7",
+      "item_outfit_type": 0,
+      "mask_guid": "iQjkS1xYP0S63ltvKpkz5g"
+    },
+    {
+      "swatch_name": "ArcherGray_Quiver_Swatch",
+      "swatch_guid": "imDGL6dhrka-KliYlfpdgw",
+      "color": "Gray_Quiver",
+      "item_name": "(Shirt_Archer)",
+      "item_guid": "c0e59f27-a13d-4bd9-b3b8-a38a360f649b",
+      "item_outfit_type": 101,
       "mask_guid": ""
     },
     {
@@ -997,61 +628,43 @@
       "item_name": "(Hat_HeadBackBow)",
       "item_guid": "JTrfBXhIT02o2-ssP94zew",
       "item_outfit_type": 0,
+      "mask_guid": "3DdSzSqV1UG5AtPr8ro3Kg"
+    },
+    {
+      "swatch_name": "Headphones_EmissiveRed_Swatch",
+      "swatch_guid": "I1J-xY4YNU2dB_od4P_7Dg",
+      "color": "EmissiveRed",
+      "item_name": "(Hat_Headphones)",
+      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
+      "item_outfit_type": 0,
+      "mask_guid": "_Yq00H-NWUyQNvGxRunHbg"
+    },
+    {
+      "swatch_name": "EquestrianJacket_Gray_Swatch",
+      "swatch_guid": "4828b50c-95b6-466a-bb25-514891d78202",
+      "color": "Gray",
+      "item_name": "(EquestrianJacket)",
+      "item_guid": "896c2491-2f96-4986-9cbd-b3b31ef5d8c5",
+      "item_outfit_type": 101,
+      "mask_guid": "d344b8cc-85a8-4ace-9f92-38c84f396e99"
+    },
+    {
+      "swatch_name": "Hoodie_Skeleton_NoGlow_Swatch",
+      "swatch_guid": "s6DQxJ3gY0CG8L7JmcmRTQ",
+      "color": "Skeleton_NoGlow",
+      "item_name": "(Shirt_Hoodie)",
+      "item_guid": "b6rLwzD4NkKV7xKn9ZYVkA",
+      "item_outfit_type": 101,
       "mask_guid": ""
     },
     {
-      "swatch_name": "HeadBackBow_Red_Swatch",
-      "swatch_guid": "ZNKGkou_gU-1cxBFy7pDKw",
-      "color": "Red",
-      "item_name": "(Hat_HeadBackBow)",
-      "item_guid": "JTrfBXhIT02o2-ssP94zew",
+      "swatch_name": "AnglerHat_Blue_Swatch",
+      "swatch_guid": "d7f0ffd3-ccf9-465e-8afe-4d7efb78dd2c",
+      "color": "Hat_Blue",
+      "item_name": "(Hat_Angler)",
+      "item_guid": "03f8c394-28fa-4087-978b-8d108f0bd969",
       "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "HeadBackBow_White_Swatch",
-      "swatch_guid": "-Iqmonry4EKoqAULCKzRPA",
-      "color": "White",
-      "item_name": "(Hat_HeadBackBow)",
-      "item_guid": "JTrfBXhIT02o2-ssP94zew",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "HeadBackBow_SolidBlack_Swatch",
-      "swatch_guid": "f_c50saStkaGJuhLjJ9lfA",
-      "color": "SolidBlack",
-      "item_name": "(Hat_HeadBackBow)",
-      "item_guid": "JTrfBXhIT02o2-ssP94zew",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "HeadBackBow_Hearts_Swatch",
-      "swatch_guid": "D-SngK7hhkOpoZ2aMWv9EA",
-      "color": "Hearts",
-      "item_name": "(Hat_HeadBackBow)",
-      "item_guid": "JTrfBXhIT02o2-ssP94zew",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "HeadBackBow_SolidBlue_Swatch",
-      "swatch_guid": "8iZO162KNUiMC8l_z3OC_A",
-      "color": "SolidBlue",
-      "item_name": "(Hat_HeadBackBow)",
-      "item_guid": "JTrfBXhIT02o2-ssP94zew",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "HeadBackBow_SolidPink_Swatch",
-      "swatch_guid": "FUP4iRnoc0ikNmjrFD06lg",
-      "color": "SolidPink",
-      "item_name": "(Hat_HeadBackBow)",
-      "item_guid": "JTrfBXhIT02o2-ssP94zew",
-      "item_outfit_type": 0,
-      "mask_guid": ""
+      "mask_guid": "efeb07ab-6253-436d-bb66-991ddad72e58"
     },
     {
       "swatch_name": "FurCoat_Black_Swatch",
@@ -1063,13 +676,22 @@
       "mask_guid": "2c0d912d-c184-4eab-8ee4-73b90ba7b0a6"
     },
     {
-      "swatch_name": "FurCoat_White_Swatch",
-      "swatch_guid": "643b5f2d-0666-4869-b699-03742de34d16",
-      "color": "White",
-      "item_name": "(FurCoat)",
-      "item_guid": "77c37481-a185-47ff-af55-65f9fdfcf9e5",
+      "swatch_name": "Scuba_eye_Contest_Swatch",
+      "swatch_guid": "ZSOuWuKVCkqaIKc5d23G8Q",
+      "color": "eye_Contest",
+      "item_name": "(Shirt_Scuba)",
+      "item_guid": "57552652-d902-43b7-a68e-5c7da87582bc",
       "item_outfit_type": 101,
-      "mask_guid": "2c0d912d-c184-4eab-8ee4-73b90ba7b0a6"
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "BowlingShirt_OneStripe_Green_Swatch",
+      "swatch_guid": "kLyM-6otSUy2ql5SEmnF9Q",
+      "color": "Shirt_OneStripe_Green",
+      "item_name": "(Shirt_Bowling)",
+      "item_guid": "CQuKKNpan0O7rhR1fr14-Q",
+      "item_outfit_type": 101,
+      "mask_guid": "b-IM3eYMJUa40395O5XeLg"
     },
     {
       "swatch_name": "FlapperHeadband_Gold_Swatch",
@@ -1078,16 +700,16 @@
       "item_name": "(Hat_FlapperHeadband)",
       "item_guid": "18feb3c2-049f-4f91-9f4e-6b5fcb4ab70c",
       "item_outfit_type": 0,
-      "mask_guid": ""
+      "mask_guid": "d9be3a98-9da9-419e-9dce-fe58a3ad9c4e"
     },
     {
-      "swatch_name": "FlapperHeadband_Black_Swatch",
-      "swatch_guid": "565c17e0-496d-45bd-a2c3-564e118c06cc",
-      "color": "Black",
-      "item_name": "(Hat_FlapperHeadband)",
-      "item_guid": "18feb3c2-049f-4f91-9f4e-6b5fcb4ab70c",
+      "swatch_name": "Golfer_Shirt_Blue_Swatch",
+      "swatch_guid": "96e2b29e-e553-40f1-9eb6-8a9f7e64da39",
+      "color": "Shirt_Blue",
+      "item_name": "(Hat_Golfer)",
+      "item_guid": "2faa26b6-f7c3-4b0d-8f70-1f9454e64a54",
       "item_outfit_type": 0,
-      "mask_guid": ""
+      "mask_guid": "6ce21c65-f4e9-41ac-be94-8eb1a08d5c76"
     },
     {
       "swatch_name": "Wrist_VampireHunter_Red_Swatch",
@@ -1099,22 +721,31 @@
       "mask_guid": "N5wN1l0tYEau5np-9PoIiA"
     },
     {
-      "swatch_name": "Wrist_VampireHunter_Black_Swatch",
-      "swatch_guid": "Vxq6v55a_kGPODzwB5MC1g",
-      "color": "Black",
-      "item_name": "(Wrist_VampireHunter)",
-      "item_guid": "_OWVy3z6iU-M3-zbQgSLig",
-      "item_outfit_type": 200,
-      "mask_guid": "N5wN1l0tYEau5np-9PoIiA"
+      "swatch_name": "Hibiscus_White_Swatch",
+      "swatch_guid": "ce465d53-3807-423f-baa0-bdba2a75ceb3",
+      "color": "White",
+      "item_name": "(Hat_Hibiscus)",
+      "item_guid": "a61e86cd-f7e7-4ac7-a6e8-df269bc5cb01",
+      "item_outfit_type": 0,
+      "mask_guid": ""
     },
     {
-      "swatch_name": "Wrist_VampireHunter_Leather_Swatch",
-      "swatch_guid": "D0tP58wC30mJ00vNxw8hqA",
-      "color": "Leather",
-      "item_name": "(Wrist_VampireHunter)",
-      "item_guid": "_OWVy3z6iU-M3-zbQgSLig",
-      "item_outfit_type": 200,
-      "mask_guid": "N5wN1l0tYEau5np-9PoIiA"
+      "swatch_name": "FlapperHeadband_Black_Swatch",
+      "swatch_guid": "565c17e0-496d-45bd-a2c3-564e118c06cc",
+      "color": "Black",
+      "item_name": "(Hat_FlapperHeadband)",
+      "item_guid": "18feb3c2-049f-4f91-9f4e-6b5fcb4ab70c",
+      "item_outfit_type": 0,
+      "mask_guid": "d9be3a98-9da9-419e-9dce-fe58a3ad9c4e"
+    },
+    {
+      "swatch_name": "Shirt_TutorialGown3_Black_Swatch",
+      "swatch_guid": "GK3yolCNlEm3B_5DtHkE8w",
+      "color": "Black",
+      "item_name": "(Shirt_TutorialGown_3)",
+      "item_guid": "0yFzgVESokC3gFd3hrS8bg",
+      "item_outfit_type": 101,
+      "mask_guid": "yKb2A8M_m0GQDhFWCRUHTQ"
     },
     {
       "swatch_name": "PeaCoat_Purple_Swatch",
@@ -1123,32 +754,86 @@
       "item_name": "(Shirt_Peacoat)",
       "item_guid": "ab15ef15-a97c-4ab1-896b-bd4d7e1cd9f5",
       "item_outfit_type": 101,
+      "mask_guid": "AZnPWCN41kmNwFwDqWGFWQ"
+    },
+    {
+      "swatch_name": "Winter_Scarf_Tree_Green_Swatch",
+      "swatch_guid": "-tDd0gdxQkuvL2id10AweQ",
+      "color": "Scarf_Tree_Green",
+      "item_name": "(Hat_Winter)",
+      "item_guid": "24c4404a-839f-46bd-98b6-6848d747a98b",
+      "item_outfit_type": 0,
       "mask_guid": ""
     },
     {
-      "swatch_name": "PeaCoat_Navy_Swatch",
-      "swatch_guid": "fvoaMN4M10WS6jiA6XlOJQ",
-      "color": "Navy",
-      "item_name": "(Shirt_Peacoat)",
-      "item_guid": "ab15ef15-a97c-4ab1-896b-bd4d7e1cd9f5",
+      "swatch_name": "Headphones_TwoRed_Swatch",
+      "swatch_guid": "hf0gkFVS8ESvceRsC3LAXQ",
+      "color": "TwoRed",
+      "item_name": "(Hat_Headphones)",
+      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
+      "item_outfit_type": 0,
+      "mask_guid": "_Yq00H-NWUyQNvGxRunHbg"
+    },
+    {
+      "swatch_name": "Vest_HoundsTooth_Black_Swatch",
+      "swatch_guid": "m4W5D0Oa9kaWa-8I96YYzA",
+      "color": "HoundsTooth_Black",
+      "item_name": "(Shirt_Vest)",
+      "item_guid": "3d9d52cb-6a3d-436b-90e7-e76f238329ee",
       "item_outfit_type": 101,
       "mask_guid": ""
     },
     {
-      "swatch_name": "PeaCoat_Tan_Swatch",
-      "swatch_guid": "PwsLxCnzOkSW-RGz3tNb1w",
-      "color": "Tan",
-      "item_name": "(Shirt_Peacoat)",
-      "item_guid": "ab15ef15-a97c-4ab1-896b-bd4d7e1cd9f5",
+      "swatch_name": "Headphones_EmissiveBlue_Swatch",
+      "swatch_guid": "2sf-FU4WckGBDWUkVz4z1g",
+      "color": "EmissiveBlue",
+      "item_name": "(Hat_Headphones)",
+      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
+      "item_outfit_type": 0,
+      "mask_guid": "_Yq00H-NWUyQNvGxRunHbg"
+    },
+    {
+      "swatch_name": "Headphones_Purple_Swatch",
+      "swatch_guid": "a5nUvJZgTEGBUvdHx0Y6Ng",
+      "color": "Purple",
+      "item_name": "(Hat_Headphones)",
+      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
+      "item_outfit_type": 0,
+      "mask_guid": "_Yq00H-NWUyQNvGxRunHbg"
+    },
+    {
+      "swatch_name": "Winter_Scarf_Red_Swatch",
+      "swatch_guid": "2lD-mjl3pk2wWv24RY2tbA",
+      "color": "Scarf_Red",
+      "item_name": "(Hat_Winter)",
+      "item_guid": "24c4404a-839f-46bd-98b6-6848d747a98b",
+      "item_outfit_type": 0,
+      "mask_guid": "dUu7b-JFOky9c2lIVCNmcg"
+    },
+    {
+      "swatch_name": "Headphones_EmissiveOrange_Swatch",
+      "swatch_guid": "d9mwowRelE2lDKEA0UQMZQ",
+      "color": "EmissiveOrange",
+      "item_name": "(Hat_Headphones)",
+      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
+      "item_outfit_type": 0,
+      "mask_guid": "_Yq00H-NWUyQNvGxRunHbg"
+    },
+    {
+      "swatch_name": "Scuba_eye_Blue_Swatch",
+      "swatch_guid": "DRS8xu3AqUOy2L0RKF3f7g",
+      "color": "eye_Blue",
+      "item_name": "(Shirt_Scuba)",
+      "item_guid": "57552652-d902-43b7-a68e-5c7da87582bc",
       "item_outfit_type": 101,
       "mask_guid": ""
     },
     {
-      "swatch_name": "PeaCoat_Red_Swatch",
-      "swatch_guid": "jXBi28cRV0CEQgKIrpD0_A",
-      "color": "Red",
-      "item_name": "(Shirt_Peacoat)",
-      "item_guid": "ab15ef15-a97c-4ab1-896b-bd4d7e1cd9f5",
+      "swatch_name": "ArcherGray_Swatch",
+      "swatch_guid": "61VZkFjB402brzWm4UsftA",
+      "color": "Gray",
+      "item_name": "(Shirt_Archer)",
+      "item_guid": "c0e59f27-a13d-4bd9-b3b8-a38a360f649b",
       "item_outfit_type": 101,
       "mask_guid": ""
     },
@@ -1171,63 +856,36 @@
       "mask_guid": "1e3195ab-f7f6-41f4-a5ec-378d09ecdf69"
     },
     {
-      "swatch_name": "Hat_CatEars_White_Swatch",
-      "swatch_guid": "c1e430c5-fd8d-4032-9e3f-8d87cc8784da",
-      "color": "White",
-      "item_name": "(Hat_CatEars)",
-      "item_guid": "3d5184e1-0201-4476-bf4b-4eb28190de62",
+      "swatch_name": "Rainhat_Hat_Red_Swatch",
+      "swatch_guid": "v3af60p1Q02NpdCqIRO9lw",
+      "color": "Hat_Red",
+      "item_name": "(Hat_Rainhat)",
+      "item_guid": "2bd53190-46f8-4956-9388-87c5a04efc4f",
       "item_outfit_type": 0,
-      "mask_guid": "1e3195ab-f7f6-41f4-a5ec-378d09ecdf69"
+      "mask_guid": "1hVOI7IuY0mKvtr2PZXLww"
     },
     {
-      "swatch_name": "Hat_CatEars_Gold_Swatch",
-      "swatch_guid": "37f8378b-b98c-477a-b8c9-9340772800b5",
-      "color": "Gold",
-      "item_name": "(Hat_CatEars)",
-      "item_guid": "3d5184e1-0201-4476-bf4b-4eb28190de62",
+      "swatch_name": "WitchHunter_Green_Swatch",
+      "swatch_guid": "64545dcc-a8eb-4c69-a539-78ee73a2d327",
+      "color": "Green",
+      "item_name": "(Shirt_WitchHunter)",
+      "item_guid": "418db0e0-c7af-40c2-9cac-d461ce41e210",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Winter_Gloves_Red_Swatch",
+      "swatch_guid": "SWvJWvMDpE-it5PFoPgERg",
+      "color": "Gloves_Red",
+      "item_name": "(Hat_Winter)",
+      "item_guid": "24c4404a-839f-46bd-98b6-6848d747a98b",
       "item_outfit_type": 0,
-      "mask_guid": "1e3195ab-f7f6-41f4-a5ec-378d09ecdf69"
+      "mask_guid": ""
     },
     {
       "swatch_name": "TruckerJacket_White_Swatch",
       "swatch_guid": "yA0KhVg19kWqG1UkyxQogQ",
       "color": "White",
-      "item_name": "(Shirt_TruckerJacket)",
-      "item_guid": "8b065e2a-b106-4f11-b415-4c47ce87993e",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "TruckerJacket_Tan_Swatch",
-      "swatch_guid": "o2WfRyjJy0CKoUg8YIxNjQ",
-      "color": "Tan",
-      "item_name": "(Shirt_TruckerJacket)",
-      "item_guid": "8b065e2a-b106-4f11-b415-4c47ce87993e",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "TruckerJacket_RebelRose_Swatch",
-      "swatch_guid": "4Eck_dNL1UKlIZWsA1YppQ",
-      "color": "RebelRose",
-      "item_name": "(Shirt_TruckerJacket)",
-      "item_guid": "8b065e2a-b106-4f11-b415-4c47ce87993e",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "TruckerJacket_Black_Swatch",
-      "swatch_guid": "P9bBSL0YLEyjN8PxMfgbKQ",
-      "color": "Black",
-      "item_name": "(Shirt_TruckerJacket)",
-      "item_guid": "8b065e2a-b106-4f11-b415-4c47ce87993e",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "TruckerJacket_Olive_Swatch",
-      "swatch_guid": "bgRKH1wfqkWVHcuSnFYnlQ",
-      "color": "Olive",
       "item_name": "(Shirt_TruckerJacket)",
       "item_guid": "8b065e2a-b106-4f11-b415-4c47ce87993e",
       "item_outfit_type": 101,
@@ -1240,43 +898,16 @@
       "item_name": "(Shirt_80sSpandex)",
       "item_guid": "17236d76-e3b6-42f6-9179-6fcf0479436f",
       "item_outfit_type": 101,
-      "mask_guid": ""
+      "mask_guid": "B-sIpWNOfEigMeQF-WVR1g"
     },
     {
-      "swatch_name": "80sSpandex_Red_Swatch",
-      "swatch_guid": "6t2rCb6WWEW6pJbcjsAFCw",
-      "color": "Red",
-      "item_name": "(Shirt_80sSpandex)",
-      "item_guid": "17236d76-e3b6-42f6-9179-6fcf0479436f",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "80sSpandex_Green_Swatch",
-      "swatch_guid": "3frH6KxZ9kGUYkjeCDpylQ",
-      "color": "Green",
-      "item_name": "(Shirt_80sSpandex)",
-      "item_guid": "17236d76-e3b6-42f6-9179-6fcf0479436f",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "80sSpandex_Blue_Swatch",
-      "swatch_guid": "Lf4FjROSAEqXedFxpXFQfg",
-      "color": "Blue",
-      "item_name": "(Shirt_80sSpandex)",
-      "item_guid": "17236d76-e3b6-42f6-9179-6fcf0479436f",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "80sSpandex_Yellow_Swatch",
-      "swatch_guid": "i1XbjBqTu0CILIuJClWimA",
-      "color": "Yellow",
-      "item_name": "(Shirt_80sSpandex)",
-      "item_guid": "17236d76-e3b6-42f6-9179-6fcf0479436f",
-      "item_outfit_type": 101,
-      "mask_guid": ""
+      "swatch_name": "Scout_Sash_Blue_Swatch",
+      "swatch_guid": "67490e3b-0f9d-4bf8-84fb-54957b981c8c",
+      "color": "h_Blue",
+      "item_name": "(Neck_ScoutSash)",
+      "item_guid": "bf9dc196-5727-4752-8126-7ad5fcd96d55",
+      "item_outfit_type": 100,
+      "mask_guid": "66cc536d-8cb5-4262-b7f0-49a33b97ea10"
     },
     {
       "swatch_name": "WaitressApron_Red_Swatch",
@@ -1288,22 +919,31 @@
       "mask_guid": ""
     },
     {
-      "swatch_name": "WaitressApron_Mustard_Swatch",
-      "swatch_guid": "b7oobDcDtE-69fhM-5g5AQ",
-      "color": "Mustard",
-      "item_name": "(Belt_WaitressApron)",
-      "item_guid": "204bc384-e6d2-41b8-8ce9-0b26be5d85b7",
-      "item_outfit_type": 102,
-      "mask_guid": ""
+      "swatch_name": "SpaceMarine_Pink_Swatch",
+      "swatch_guid": "a36d252b-16ac-4a82-bece-de145147e7d9",
+      "color": "Pink",
+      "item_name": "(Shirt_SpaceMarine)",
+      "item_guid": "4ce7a70f-15a0-4cad-98ee-5cbb40827338",
+      "item_outfit_type": 101,
+      "mask_guid": "7ac81d60-05b8-4a85-982c-f69213a93818"
     },
     {
-      "swatch_name": "WaitressApron_Green_Swatch",
-      "swatch_guid": "Blev_VFjRUysY_nymGWAVg",
-      "color": "Green",
-      "item_name": "(Belt_WaitressApron)",
-      "item_guid": "204bc384-e6d2-41b8-8ce9-0b26be5d85b7",
-      "item_outfit_type": 102,
-      "mask_guid": ""
+      "swatch_name": "Mobster_Hat_Brown_Swatch",
+      "swatch_guid": "1421caa9-9a0d-42c2-b847-1500ba2e483a",
+      "color": "Hat_Brown",
+      "item_name": "(Wrist_Mobster)",
+      "item_guid": "08d56627-4500-4724-8692-a23c96ddb3ec",
+      "item_outfit_type": 200,
+      "mask_guid": "d759c88d-a159-4c26-86dd-b054bb05b3ed"
+    },
+    {
+      "swatch_name": "ElectricianTorso_Gray_Swatch",
+      "swatch_guid": "b995b419-1897-4c1d-98be-83d551f7ba71",
+      "color": "Torso_Gray",
+      "item_name": "(Hat_Electrician)",
+      "item_guid": "34654303-9760-447f-8614-1c26506db994",
+      "item_outfit_type": 0,
+      "mask_guid": "daa38a31-fb7b-4e26-a2f5-728d6dcec81a"
     },
     {
       "swatch_name": "Shirt_MartyRecFly_Hipster_Swatch",
@@ -1315,6 +955,15 @@
       "mask_guid": ""
     },
     {
+      "swatch_name": "Smuggler_SRank_Swatch",
+      "swatch_guid": "bzYdPb8GWUS-CgT4wrziIA",
+      "color": "SRank",
+      "item_name": "(Shirt_Smuggler)",
+      "item_guid": "25d4c652-1730-4925-925e-31a290a2272a",
+      "item_outfit_type": 101,
+      "mask_guid": "970a8c7e-d091-4719-bb9c-e3be8d46ee68"
+    },
+    {
       "swatch_name": "Hat_SkiBuddy_White_Swatch",
       "swatch_guid": "KwCEye0nsESFs-yj4h9sjQ",
       "color": "White",
@@ -1322,6 +971,15 @@
       "item_guid": "6QT99hx6DE6t9cKAs61i3w",
       "item_outfit_type": 0,
       "mask_guid": "c_t9XDbn-Eqml1O-wC5zJQ"
+    },
+    {
+      "swatch_name": "PeaCoat_Navy_Swatch",
+      "swatch_guid": "fvoaMN4M10WS6jiA6XlOJQ",
+      "color": "Navy",
+      "item_name": "(Shirt_Peacoat)",
+      "item_guid": "ab15ef15-a97c-4ab1-896b-bd4d7e1cd9f5",
+      "item_outfit_type": 101,
+      "mask_guid": "AZnPWCN41kmNwFwDqWGFWQ"
     },
     {
       "swatch_name": "Wrist_Grillmaster_Blue_Swatch",
@@ -1333,13 +991,22 @@
       "mask_guid": ""
     },
     {
-      "swatch_name": "Wrist_Grillmaster_Black_Swatch",
-      "swatch_guid": "hZKPr4sg10SRj9DLuEgOrw",
-      "color": "Black",
-      "item_name": "(Wrist_Grillmaster)",
-      "item_guid": "q7pSsRMNHkqEJmYHuhhG6g",
-      "item_outfit_type": 200,
-      "mask_guid": ""
+      "swatch_name": "FootballHelmet_Orange_Swatch",
+      "swatch_guid": "d8d490aa-7088-4163-9305-1441367f490c",
+      "color": "Helmet_Orange",
+      "item_name": "(Hat_FootBall)",
+      "item_guid": "5a38f864-7d1c-4989-8558-40b9668f78ef",
+      "item_outfit_type": 0,
+      "mask_guid": "7660e11a-7ef0-43d3-bc02-76b3a4aab064"
+    },
+    {
+      "swatch_name": "HeadBackBow_Red_Swatch",
+      "swatch_guid": "ZNKGkou_gU-1cxBFy7pDKw",
+      "color": "Red",
+      "item_name": "(Hat_HeadBackBow)",
+      "item_guid": "JTrfBXhIT02o2-ssP94zew",
+      "item_outfit_type": 0,
+      "mask_guid": "3DdSzSqV1UG5AtPr8ro3Kg"
     },
     {
       "swatch_name": "Scientist_Blue_Swatch",
@@ -1360,13 +1027,112 @@
       "mask_guid": "2d7361d2-31a2-404b-90da-10e89114e1f2"
     },
     {
-      "swatch_name": "RedFlowerDress_Yellow_Swatch",
-      "swatch_guid": "e98c3f98-7844-4d6e-a21c-05027033c18c",
-      "color": "Yellow",
-      "item_name": "(RedFlowerDress)",
-      "item_guid": "515dfc36-7f7b-47bc-abee-380d68f41be6",
+      "swatch_name": "Aviator_Jacket_Tan_Swatch",
+      "swatch_guid": "bea795cc-aabd-4229-84dd-49ab4f91a445",
+      "color": "Jacket_Tan",
+      "item_name": "(Wrist_Aviator)",
+      "item_guid": "125a3a62-1005-47dc-9fd8-ee09ea803e9f",
+      "item_outfit_type": 200,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Mobster_Hat_Purple_Swatch",
+      "swatch_guid": "PZx7Iae0pkiDaxT9t3-vgg",
+      "color": "Hat_Purple",
+      "item_name": "(Wrist_Mobster)",
+      "item_guid": "08d56627-4500-4724-8692-a23c96ddb3ec",
+      "item_outfit_type": 200,
+      "mask_guid": "d759c88d-a159-4c26-86dd-b054bb05b3ed"
+    },
+    {
+      "swatch_name": "LumberJack_Green_Swatch",
+      "swatch_guid": "7amHTgEv-UOJSGl0ofo4mw",
+      "color": "Green",
+      "item_name": "(Shirt_Lumberjack)",
+      "item_guid": "350c5c1e-318b-4233-a7e5-1f49909d8e65",
       "item_outfit_type": 101,
-      "mask_guid": "2d7361d2-31a2-404b-90da-10e89114e1f2"
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Harness_Hat_Yellow_Swatch",
+      "swatch_guid": "L2iFQcL170OajqfW7t6sVw",
+      "color": "Hat_Yellow",
+      "item_name": "(Shirt_Harness)",
+      "item_guid": "ca7a3ccb-2bc9-4c93-a6a8-6f22b38526af",
+      "item_outfit_type": 101,
+      "mask_guid": "PZHohDVX0U2frX13N4KYDQ"
+    },
+    {
+      "swatch_name": "BowlingShirt_CenterStripe_Black_Swatch",
+      "swatch_guid": "Gtq8yRlt1UeFW8U-sc7FiA",
+      "color": "Shirt_CenterStripe_Black",
+      "item_name": "(Shirt_Bowling)",
+      "item_guid": "CQuKKNpan0O7rhR1fr14-Q",
+      "item_outfit_type": 101,
+      "mask_guid": "IWg9wuda4kaCilJk8JQpTQ"
+    },
+    {
+      "swatch_name": "Punk_WristPink_Swatch",
+      "swatch_guid": "f3b2330a-b981-4c7e-902f-1f57382f2388",
+      "color": "WristPink",
+      "item_name": "(Wrist_Punk)",
+      "item_guid": "28374ebc-4050-4ea0-b3b6-41ebe75cedf7",
+      "item_outfit_type": 200,
+      "mask_guid": "dd7472ed-bdcb-4811-81ba-5ed682fb7675"
+    },
+    {
+      "swatch_name": "MagicalGirl_Wrist_Orange_Swatch",
+      "swatch_guid": "xpkEQ6yjhU-WfFPSjvPdHg",
+      "color": "Wrist_Orange",
+      "item_name": "(Wrist_MagicalGirl)",
+      "item_guid": "eS_or4AnMka9M_bD7YN28g",
+      "item_outfit_type": 200,
+      "mask_guid": "ZtCqMnFTQUWv2h0MfZ4m6A"
+    },
+    {
+      "swatch_name": "FighterPilot_Black_Swatch",
+      "swatch_guid": "8c74ee27-3d56-401b-8a8c-7868a80770e8",
+      "color": "Black",
+      "item_name": "(Wrist_FighterPilot)",
+      "item_guid": "5800d2b5-75b8-442f-8b10-63bd3d73a1b8",
+      "item_outfit_type": 200,
+      "mask_guid": "435eba0d-d8f9-43cc-91aa-2959d63c6fa7"
+    },
+    {
+      "swatch_name": "MagicalGirl_Hat_Blue_Swatch",
+      "swatch_guid": "lhfOKGDAgEKWucerCmH7Fg",
+      "color": "Hat_Blue",
+      "item_name": "(Wrist_MagicalGirl)",
+      "item_guid": "eS_or4AnMka9M_bD7YN28g",
+      "item_outfit_type": 200,
+      "mask_guid": "mG60EPIQIkaJNgOkonVmZg"
+    },
+    {
+      "swatch_name": "Windbreaker_Yellow_Swatch",
+      "swatch_guid": "C3ll7uPfUkeZ1QLX80_BpQ",
+      "color": "Yellow",
+      "item_name": "(Wrist_80sWindbreaker)",
+      "item_guid": "52VsI_lKlkSUAOJlfDnyrQ",
+      "item_outfit_type": 200,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "80sSpandex_Red_Swatch",
+      "swatch_guid": "6t2rCb6WWEW6pJbcjsAFCw",
+      "color": "Red",
+      "item_name": "(Shirt_80sSpandex)",
+      "item_guid": "17236d76-e3b6-42f6-9179-6fcf0479436f",
+      "item_outfit_type": 101,
+      "mask_guid": "B-sIpWNOfEigMeQF-WVR1g"
+    },
+    {
+      "swatch_name": "Hat_Baseball_Logo_Ramen_Swatch",
+      "swatch_guid": "cpTKHXjj0kulivZCKVQqiA",
+      "color": "Logo_Ramen",
+      "item_name": "(Hat_Baseball)",
+      "item_guid": "14ef6b00-debf-4a85-9755-b4d37df496d3",
+      "item_outfit_type": 0,
+      "mask_guid": ""
     },
     {
       "swatch_name": "YellowBlueDress_White_Swatch",
@@ -1378,13 +1144,13 @@
       "mask_guid": ""
     },
     {
-      "swatch_name": "YellowBlueDress_Purple_Swatch",
-      "swatch_guid": "830be2fa-60a5-48cc-931f-34b670eae4bd",
-      "color": "Purple",
-      "item_name": "(YellowBlueDress)",
-      "item_guid": "2296ed0d-df56-4d46-b33a-aae9230a47fc",
-      "item_outfit_type": 101,
-      "mask_guid": ""
+      "swatch_name": "Headphones_Orange_Swatch",
+      "swatch_guid": "JWBK5v78Y0uRVEXlD-Qk6Q",
+      "color": "Orange",
+      "item_name": "(Hat_Headphones)",
+      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
+      "item_outfit_type": 0,
+      "mask_guid": "_Yq00H-NWUyQNvGxRunHbg"
     },
     {
       "swatch_name": "TennisSkirt_Yellow_Swatch",
@@ -1396,13 +1162,40 @@
       "mask_guid": "b75ef67d-00c3-4ac1-9b72-212032460294"
     },
     {
-      "swatch_name": "TennisSkirt_Red_Swatch",
-      "swatch_guid": "758752bd-db2f-43d2-b580-55b3e1efffd5",
+      "swatch_name": "MagicalGirl_Red_Swatch",
+      "swatch_guid": "FE7_gQNBt0CXzMN6di5HWA",
       "color": "Red",
-      "item_name": "(TennisSkirt)",
-      "item_guid": "21caa68e-c3fa-474c-af5e-af1e742b7a60",
+      "item_name": "(Wrist_MagicalGirl)",
+      "item_guid": "eS_or4AnMka9M_bD7YN28g",
+      "item_outfit_type": 200,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "BowlingShirt_Flames_Green_Swatch",
+      "swatch_guid": "M4765UHzsUeNTwH-Pcxp1g",
+      "color": "Shirt_Flames_Green",
+      "item_name": "(Shirt_Bowling)",
+      "item_guid": "CQuKKNpan0O7rhR1fr14-Q",
       "item_outfit_type": 101,
-      "mask_guid": "b75ef67d-00c3-4ac1-9b72-212032460294"
+      "mask_guid": "5RUG6i2Mx0-55IO-IlhUdQ"
+    },
+    {
+      "swatch_name": "Smuggler_Grey_Swatch",
+      "swatch_guid": "90869e86-cbc5-4024-9d08-fcdc41c64eb5",
+      "color": "Grey",
+      "item_name": "(Shirt_Smuggler)",
+      "item_guid": "25d4c652-1730-4925-925e-31a290a2272a",
+      "item_outfit_type": 101,
+      "mask_guid": "970a8c7e-d091-4719-bb9c-e3be8d46ee68"
+    },
+    {
+      "swatch_name": "ArcherBlack_Swatch",
+      "swatch_guid": "9ad37173-e640-4b9e-a474-716d482b73d2",
+      "color": "Black",
+      "item_name": "(Shirt_Archer)",
+      "item_guid": "c0e59f27-a13d-4bd9-b3b8-a38a360f649b",
+      "item_outfit_type": 101,
+      "mask_guid": ""
     },
     {
       "swatch_name": "LaserTag_Cyan_Swatch",
@@ -1414,54 +1207,27 @@
       "mask_guid": ""
     },
     {
-      "swatch_name": "LaserTag_Green_Swatch",
-      "swatch_guid": "2Z_FxSPiyUODtlFZWF9DFQ",
-      "color": "Green",
-      "item_name": "(Hat_LaserTag)",
-      "item_guid": "123de433-a005-4994-8a11-d2d84ad66b11",
-      "item_outfit_type": 0,
-      "mask_guid": ""
+      "swatch_name": "BlazerDark_Swatch",
+      "swatch_guid": "05ac07e1-67f0-486c-abf5-a62866475abb",
+      "color": "Dark",
+      "item_name": "(Blazer)",
+      "item_guid": "de0ac50d-2adb-4114-bd2e-68953b13d706",
+      "item_outfit_type": 101,
+      "mask_guid": "be2b9293-1d3c-4b1c-b4c5-fad3ab16cf54"
     },
     {
-      "swatch_name": "LaserTag_Orange_Swatch",
-      "swatch_guid": "jkuw9EhCpEKn-2lKJXWd3Q",
-      "color": "Orange",
-      "item_name": "(Hat_LaserTag)",
-      "item_guid": "123de433-a005-4994-8a11-d2d84ad66b11",
-      "item_outfit_type": 0,
-      "mask_guid": ""
+      "swatch_name": "Letterman_Wrist_Purple_Swatch",
+      "swatch_guid": "MS7EPNLJEEyMLC6_yHQYtA",
+      "color": "Wrist_Purple",
+      "item_name": "(Wrist_Letterman)",
+      "item_guid": "2dFMy4zc7ky_Fd5fzfgInw",
+      "item_outfit_type": 200,
+      "mask_guid": "4EHIyZkOOEqnM-PuD_a5xw"
     },
     {
       "swatch_name": "Letterman_Red_Swatch",
       "swatch_guid": "VpqHNpPiY0CfRJEjRRM-mw",
       "color": "Red",
-      "item_name": "(Wrist_Letterman)",
-      "item_guid": "2dFMy4zc7ky_Fd5fzfgInw",
-      "item_outfit_type": 200,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Letterman_Purple_Swatch",
-      "swatch_guid": "iufpnteVCEiiZu_m-yPovQ",
-      "color": "Purple",
-      "item_name": "(Wrist_Letterman)",
-      "item_guid": "2dFMy4zc7ky_Fd5fzfgInw",
-      "item_outfit_type": 200,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Letterman_Black_Swatch",
-      "swatch_guid": "Z1F9rjKqCE-Hd2-Ip5g3gA",
-      "color": "Black",
-      "item_name": "(Wrist_Letterman)",
-      "item_guid": "2dFMy4zc7ky_Fd5fzfgInw",
-      "item_outfit_type": 200,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Letterman_Green_Swatch",
-      "swatch_guid": "apSQiQ1eO0mEzRsbugeu9w",
-      "color": "Green",
       "item_name": "(Wrist_Letterman)",
       "item_guid": "2dFMy4zc7ky_Fd5fzfgInw",
       "item_outfit_type": 200,
@@ -1477,6 +1243,15 @@
       "mask_guid": "adae82eb-a4b9-4541-acf2-76cea839a593"
     },
     {
+      "swatch_name": "Witch_Contest_Hat_Swatch",
+      "swatch_guid": "PcUZrdKXhk2XHa5Gy0YnnA",
+      "color": "Contest_Hat",
+      "item_name": "(Shirt_Witch)",
+      "item_guid": "7LSm-xCYakmgcAr--Fn-JA",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
       "swatch_name": "QuiltedCoat_Orange_Swatch",
       "swatch_guid": "-HYrY2A5Tk2UWMi4_hmYbg",
       "color": "Orange",
@@ -1486,21 +1261,48 @@
       "mask_guid": ""
     },
     {
-      "swatch_name": "QuiltedCoat_Green_Swatch",
-      "swatch_guid": "QBglgj80zkuvUkk55Y5Feg",
-      "color": "Green",
-      "item_name": "(Shirt_Quiltedcoat)",
-      "item_guid": "0ab5790f-a537-4306-ba66-5eb87c02ec7d",
-      "item_outfit_type": 101,
-      "mask_guid": ""
+      "swatch_name": "CowboyWhite_Swatch",
+      "swatch_guid": "teVKVbVEsEyqOSuRdqHQzA",
+      "color": "White",
+      "item_name": "(Hat_Cowboy)",
+      "item_guid": "ad0bdec5-f767-42e7-99e0-221473464a85",
+      "item_outfit_type": 0,
+      "mask_guid": "54778d93-2cff-48db-b25b-65c08b0e5be8"
     },
     {
-      "swatch_name": "QuiltedCoat_Plum_Swatch",
-      "swatch_guid": "IjRMopsYlUqSE6327I9TIQ",
-      "color": "Plum",
-      "item_name": "(Shirt_Quiltedcoat)",
-      "item_guid": "0ab5790f-a537-4306-ba66-5eb87c02ec7d",
+      "swatch_name": "Aviator_Hat_Tan_Swatch",
+      "swatch_guid": "c6cf096c-f0cb-4500-80a0-bc2916b5a426",
+      "color": "Hat_Tan",
+      "item_name": "(Wrist_Aviator)",
+      "item_guid": "125a3a62-1005-47dc-9fd8-ee09ea803e9f",
+      "item_outfit_type": 200,
+      "mask_guid": "ff5ae41e-e446-4a96-8c11-49d85556fa81"
+    },
+    {
+      "swatch_name": "Beekeeper_Shirt_Lavender_Swatch",
+      "swatch_guid": "lBe3yxuE40eBmTrnEHBqQQ",
+      "color": "Shirt_Lavender",
+      "item_name": "(Shirt_Beekeeper)",
+      "item_guid": "1ebbfdfc-f72b-4d70-99d4-4d527f896aa7",
       "item_outfit_type": 101,
+      "mask_guid": "afd88a79-7f03-40f6-bcb4-c247dd86edc4"
+    },
+    {
+      "swatch_name": "PeaCoat_Tan_Swatch",
+      "swatch_guid": "PwsLxCnzOkSW-RGz3tNb1w",
+      "color": "Tan",
+      "item_name": "(Shirt_Peacoat)",
+      "item_guid": "ab15ef15-a97c-4ab1-896b-bd4d7e1cd9f5",
+      "item_outfit_type": 101,
+      "mask_guid": "AZnPWCN41kmNwFwDqWGFWQ"
+    },
+    {
+      "swatch_name": "Baseball_Green_Swatch",
+      "swatch_guid": "e5de2e45-207c-46af-9a5e-eb01a0c621fe",
+      "color": "Green",
+      "item_name": "(Hat_Baseball)",
+      "item_guid": "14ef6b00-debf-4a85-9755-b4d37df496d3",
+      "item_outfit_type": 0,
       "mask_guid": ""
     },
     {
@@ -1513,6 +1315,15 @@
       "mask_guid": "HQQWccdyakaEmntPhvC6CQ"
     },
     {
+      "swatch_name": "BowlingShirt_Diamonds_Purple_Swatch",
+      "swatch_guid": "yrQCLXiqRUSwnuQRYX2Rsw",
+      "color": "Shirt_Diamonds_Purple",
+      "item_name": "(Shirt_Bowling)",
+      "item_guid": "CQuKKNpan0O7rhR1fr14-Q",
+      "item_outfit_type": 101,
+      "mask_guid": "VO_3cgqQqUOTz30TVUxrFA"
+    },
+    {
       "swatch_name": "Dodgeball_Gray_Swatch",
       "swatch_guid": "0ba92db2-690a-44ce-92f4-130e9503b6c1",
       "color": "Gray",
@@ -1522,13 +1333,13 @@
       "mask_guid": "944d934d-5e21-42d7-8196-fff9a81ee469"
     },
     {
-      "swatch_name": "Dodgeball_Black_Swatch",
-      "swatch_guid": "4a85c181-92fe-47a5-925e-05f0ccb25006",
-      "color": "Black",
-      "item_name": "(Shirt_Dodgeball)",
-      "item_guid": "d3d69bee-60bc-44a3-ad7c-65b3b69d1e59",
-      "item_outfit_type": 101,
-      "mask_guid": "944d934d-5e21-42d7-8196-fff9a81ee469"
+      "swatch_name": "Aviator_Gloves_Black_Swatch",
+      "swatch_guid": "97bbb384-b37e-4ea1-902c-88fbd6854ab5",
+      "color": "Gloves_Black",
+      "item_name": "(Wrist_Aviator)",
+      "item_guid": "125a3a62-1005-47dc-9fd8-ee09ea803e9f",
+      "item_outfit_type": 200,
+      "mask_guid": "5659ce2c-9cb0-49da-8c39-4b7df0f8deec"
     },
     {
       "swatch_name": "Hoodie_Gray_Swatch",
@@ -1537,6 +1348,60 @@
       "item_name": "(Shirt_Hoodie)",
       "item_guid": "b6rLwzD4NkKV7xKn9ZYVkA",
       "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Headphones_Blue_Swatch",
+      "swatch_guid": "8ANbOhNnO0yLQOCIBsDwfg",
+      "color": "Blue",
+      "item_name": "(Hat_Headphones)",
+      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
+      "item_outfit_type": 0,
+      "mask_guid": "_Yq00H-NWUyQNvGxRunHbg"
+    },
+    {
+      "swatch_name": "Scallywag_Eye_SRank_Swatch",
+      "swatch_guid": "clFrpYWFQEmDkE14f3o_Ig",
+      "color": "Eye_SRank",
+      "item_name": "(Shirt_Scallywag)",
+      "item_guid": "664485e9-a159-4fcb-b32c-2b114b4a1218",
+      "item_outfit_type": 101,
+      "mask_guid": "DE1C-RJkuEWIvpR0q1i42g"
+    },
+    {
+      "swatch_name": "Winter_Hat_Red_Swatch",
+      "swatch_guid": "6vjA_vHq70Gclypll_GS_A",
+      "color": "Hat_Red",
+      "item_name": "(Hat_Winter)",
+      "item_guid": "24c4404a-839f-46bd-98b6-6848d747a98b",
+      "item_outfit_type": 0,
+      "mask_guid": "nalaCGqtL0SFA4Itwqmp8g"
+    },
+    {
+      "swatch_name": "DeepSeaDiver_Black_Swatch",
+      "swatch_guid": "CahBzgN3D0y46AQsvGC14A",
+      "color": "Black",
+      "item_name": "(Hat_DeepSeaDiver)",
+      "item_guid": "4fcb5b84-13a9-43e6-9680-72b17874ae53",
+      "item_outfit_type": 0,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Wizard_White_Swatch",
+      "swatch_guid": "d3a9b576-5433-4305-bd96-b08820c09212",
+      "color": "White",
+      "item_name": "(Hat_Wizard)",
+      "item_guid": "01689baf-405e-4b38-9f09-b624e03865b8",
+      "item_outfit_type": 0,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Wrist_Grillmaster_Black_Swatch",
+      "swatch_guid": "hZKPr4sg10SRj9DLuEgOrw",
+      "color": "Black",
+      "item_name": "(Wrist_Grillmaster)",
+      "item_guid": "q7pSsRMNHkqEJmYHuhhG6g",
+      "item_outfit_type": 200,
       "mask_guid": ""
     },
     {
@@ -1549,6 +1414,15 @@
       "mask_guid": ""
     },
     {
+      "swatch_name": "Harness_Hat_White_Swatch",
+      "swatch_guid": "zlqLrGEa8E2WW9ey_szREA",
+      "color": "Hat_White",
+      "item_name": "(Shirt_Harness)",
+      "item_guid": "ca7a3ccb-2bc9-4c93-a6a8-6f22b38526af",
+      "item_outfit_type": 101,
+      "mask_guid": "PZHohDVX0U2frX13N4KYDQ"
+    },
+    {
       "swatch_name": "Hoodie_Blue_Swatch",
       "swatch_guid": "u_Gzj9Nro0WS48xKnH9few",
       "color": "Blue",
@@ -1558,67 +1432,31 @@
       "mask_guid": ""
     },
     {
-      "swatch_name": "Hoodie_Pink_Swatch",
-      "swatch_guid": "TEgugZRs80iJbhL87RdYwg",
-      "color": "Pink",
-      "item_name": "(Shirt_Hoodie)",
-      "item_guid": "b6rLwzD4NkKV7xKn9ZYVkA",
-      "item_outfit_type": 101,
+      "swatch_name": "Ranger_Shirt_Green_Swatch",
+      "swatch_guid": "b415fe60-3e9d-4f4d-a53a-ca15eac6af7d",
+      "color": "Shirt_Green",
+      "item_name": "(Hat_Ranger)",
+      "item_guid": "f277af6a-0807-4716-8948-1bee236ffb74",
+      "item_outfit_type": 0,
       "mask_guid": ""
     },
     {
-      "swatch_name": "Hoodie_Orange_Swatch",
-      "swatch_guid": "rNhOQoP3XkOBHV28ze2NpA",
+      "swatch_name": "Shirt_TutorialGown2_Orange_Swatch",
+      "swatch_guid": "L333w3dfIEWDbtt1Yn1gBg",
       "color": "Orange",
-      "item_name": "(Shirt_Hoodie)",
-      "item_guid": "b6rLwzD4NkKV7xKn9ZYVkA",
+      "item_name": "(Shirt_TutorialGown_2)",
+      "item_guid": "MJQiQ3LATEOymxCC8wfSjw",
       "item_outfit_type": 101,
-      "mask_guid": ""
+      "mask_guid": "lSDrKR69rkSFULy9GA__1w"
     },
     {
-      "swatch_name": "Hoodie_Purple_Swatch",
-      "swatch_guid": "mvMeyStxGUGlNLSYNeSubQ",
-      "color": "Purple",
-      "item_name": "(Shirt_Hoodie)",
-      "item_guid": "b6rLwzD4NkKV7xKn9ZYVkA",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Hoodie_Red_Swatch",
-      "swatch_guid": "yM5xRrd9OkmDGyQddwOP6g",
-      "color": "Red",
-      "item_name": "(Shirt_Hoodie)",
-      "item_guid": "b6rLwzD4NkKV7xKn9ZYVkA",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Hoodie_White_Swatch",
-      "swatch_guid": "-Nf7WM2TeEKujB637h3tRA",
-      "color": "White",
-      "item_name": "(Shirt_Hoodie)",
-      "item_guid": "b6rLwzD4NkKV7xKn9ZYVkA",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "DeepSeaDiver_Black_Swatch",
-      "swatch_guid": "CahBzgN3D0y46AQsvGC14A",
-      "color": "Black",
-      "item_name": "(Hat_DeepSeaDiver)",
-      "item_guid": "4fcb5b84-13a9-43e6-9680-72b17874ae53",
+      "swatch_name": "ElectricianTorso_Yellow_Swatch",
+      "swatch_guid": "b539777f-48b2-44a2-9d63-17ac703e4d57",
+      "color": "Torso_Yellow",
+      "item_name": "(Hat_Electrician)",
+      "item_guid": "34654303-9760-447f-8614-1c26506db994",
       "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "DeepSeaDiver_Beige_Swatch",
-      "swatch_guid": "Su7kiW24d0KapNns96JoFQ",
-      "color": "Beige",
-      "item_name": "(Hat_DeepSeaDiver)",
-      "item_guid": "4fcb5b84-13a9-43e6-9680-72b17874ae53",
-      "item_outfit_type": 0,
-      "mask_guid": ""
+      "mask_guid": "daa38a31-fb7b-4e26-a2f5-728d6dcec81a"
     },
     {
       "swatch_name": "QueenCrown_Black_Swatch",
@@ -1627,30 +1465,21 @@
       "item_name": "(Hat_QueenCrown)",
       "item_guid": "9d395a84-4342-4b1c-940c-213ec2eb56f9",
       "item_outfit_type": 0,
-      "mask_guid": ""
+      "mask_guid": "XFuSiGupZ02Fut1Dxum_Iw"
     },
     {
-      "swatch_name": "QueenCrown_White_Swatch",
-      "swatch_guid": "Zljmtj5WqUaRvB3XQTgJXg",
-      "color": "White",
-      "item_name": "(Hat_QueenCrown)",
-      "item_guid": "9d395a84-4342-4b1c-940c-213ec2eb56f9",
-      "item_outfit_type": 0,
-      "mask_guid": ""
+      "swatch_name": "Shirt_VampireHunter_Midnight_Swatch",
+      "swatch_guid": "CavRDqIlmUeTZBtCLn1hZQ",
+      "color": "Midnight",
+      "item_name": "(Shirt_VampireHunter)",
+      "item_guid": "JWfs9IiQs0Weu8MmyGpqLQ",
+      "item_outfit_type": 101,
+      "mask_guid": "x10FeRBsQU2DIIpG8XIlwg"
     },
     {
       "swatch_name": "Jazzercise_Black_Swatch",
       "swatch_guid": "3b2cfc85-4e2a-4e0d-b738-c296ae8692f8",
       "color": "Black",
-      "item_name": "(Hair_Jazzercise)",
-      "item_guid": "49397e16-1027-4286-9bc4-b59eae565ff0",
-      "item_outfit_type": 2,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Jazzercise_Yellow_Swatch",
-      "swatch_guid": "78eb0969-f246-4cac-acd6-295df7c092e4",
-      "color": "Yellow",
       "item_name": "(Hair_Jazzercise)",
       "item_guid": "49397e16-1027-4286-9bc4-b59eae565ff0",
       "item_outfit_type": 2,
@@ -1666,6 +1495,15 @@
       "mask_guid": "1fede91a-434e-49a5-882e-e6db107112a8"
     },
     {
+      "swatch_name": "ArcherTan_Glove_Swatch",
+      "swatch_guid": "d5987fee-e3cc-4336-853a-5df57f73df05",
+      "color": "Tan_Glove",
+      "item_name": "(Shirt_Archer)",
+      "item_guid": "c0e59f27-a13d-4bd9-b3b8-a38a360f649b",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
       "swatch_name": "FlowerSwimsuit_Green_Swatch",
       "swatch_guid": "cf515c87-3c0a-4443-9f63-5ea1bdbaa61a",
       "color": "Green",
@@ -1675,22 +1513,22 @@
       "mask_guid": "3248a3ec-50d1-4c0a-96ae-25eb9d8ed622"
     },
     {
-      "swatch_name": "FlowerSwimsuit_Pink_Swatch",
-      "swatch_guid": "27680277-aec1-41be-a476-9f51cf775580",
-      "color": "Pink",
-      "item_name": "(FlowerSwimsuit)",
-      "item_guid": "f41653f9-ae02-443c-aaf4-1c6f4e49035d",
-      "item_outfit_type": 101,
-      "mask_guid": "3248a3ec-50d1-4c0a-96ae-25eb9d8ed622"
+      "swatch_name": "Letterman_Purple_Swatch",
+      "swatch_guid": "iufpnteVCEiiZu_m-yPovQ",
+      "color": "Purple",
+      "item_name": "(Wrist_Letterman)",
+      "item_guid": "2dFMy4zc7ky_Fd5fzfgInw",
+      "item_outfit_type": 200,
+      "mask_guid": ""
     },
     {
-      "swatch_name": "FlowerSwimsuit_Gray_Swatch",
-      "swatch_guid": "5a96ac4d-03c3-4214-9dcb-c2044ff28f2e",
-      "color": "Gray",
-      "item_name": "(FlowerSwimsuit)",
-      "item_guid": "f41653f9-ae02-443c-aaf4-1c6f4e49035d",
+      "swatch_name": "Beekeeper_Shirt_Gold_Swatch",
+      "swatch_guid": "1919d319-6cce-4500-8766-15fed6a13fa8",
+      "color": "Shirt_Gold",
+      "item_name": "(Shirt_Beekeeper)",
+      "item_guid": "1ebbfdfc-f72b-4d70-99d4-4d527f896aa7",
       "item_outfit_type": 101,
-      "mask_guid": "3248a3ec-50d1-4c0a-96ae-25eb9d8ed622"
+      "mask_guid": "afd88a79-7f03-40f6-bcb4-c247dd86edc4"
     },
     {
       "swatch_name": "Angler_Blue_Swatch",
@@ -1702,22 +1540,31 @@
       "mask_guid": ""
     },
     {
-      "swatch_name": "Angler_Tan_Swatch",
-      "swatch_guid": "cac27853-e2df-4d77-b3fd-af3bc0813f01",
-      "color": "Tan",
-      "item_name": "(Hat_Angler)",
-      "item_guid": "03f8c394-28fa-4087-978b-8d108f0bd969",
+      "swatch_name": "Hat_CatEars_White_Swatch",
+      "swatch_guid": "c1e430c5-fd8d-4032-9e3f-8d87cc8784da",
+      "color": "White",
+      "item_name": "(Hat_CatEars)",
+      "item_guid": "3d5184e1-0201-4476-bf4b-4eb28190de62",
       "item_outfit_type": 0,
-      "mask_guid": ""
+      "mask_guid": "1e3195ab-f7f6-41f4-a5ec-378d09ecdf69"
     },
     {
-      "swatch_name": "Angler_Gray_Swatch",
-      "swatch_guid": "97938f4c-52b8-4c85-8575-856654666316",
-      "color": "Gray",
-      "item_name": "(Hat_Angler)",
-      "item_guid": "03f8c394-28fa-4087-978b-8d108f0bd969",
-      "item_outfit_type": 0,
-      "mask_guid": ""
+      "swatch_name": "Smuggler_Dark_Swatch",
+      "swatch_guid": "e821aa74-2d47-4388-bcfb-1893b8a83a52",
+      "color": "Dark",
+      "item_name": "(Shirt_Smuggler)",
+      "item_guid": "25d4c652-1730-4925-925e-31a290a2272a",
+      "item_outfit_type": 101,
+      "mask_guid": "970a8c7e-d091-4719-bb9c-e3be8d46ee68"
+    },
+    {
+      "swatch_name": "ScoutSkirt_Shirt_Red_Swatch",
+      "swatch_guid": "2bb65868-ee12-4871-b50d-64bbc9066f0b",
+      "color": "Shirt_Red",
+      "item_name": "(Shirt_ScoutSkirt)",
+      "item_guid": "35f60d27-22cf-4e17-8f39-c9e3a9fa2291",
+      "item_outfit_type": 101,
+      "mask_guid": "e65530f7-543c-43e9-bf12-b6cda2bc755c"
     },
     {
       "swatch_name": "Artist_Blue_Swatch",
@@ -1729,11 +1576,74 @@
       "mask_guid": ""
     },
     {
-      "swatch_name": "Artist_Red_Swatch",
-      "swatch_guid": "17b16982-871c-476a-860f-f6953c89ee8c",
-      "color": "Red",
-      "item_name": "(Shirt_Artist)",
-      "item_guid": "02077915-57d3-4e26-b4fe-8e0399cbb293",
+      "swatch_name": "Hat_CatEars_Gold_Swatch",
+      "swatch_guid": "37f8378b-b98c-477a-b8c9-9340772800b5",
+      "color": "Gold",
+      "item_name": "(Hat_CatEars)",
+      "item_guid": "3d5184e1-0201-4476-bf4b-4eb28190de62",
+      "item_outfit_type": 0,
+      "mask_guid": "1e3195ab-f7f6-41f4-a5ec-378d09ecdf69"
+    },
+    {
+      "swatch_name": "LaserTagVisor_Green_Swatch",
+      "swatch_guid": "-e6bmXnwZU2EVwZ8RupKbg",
+      "color": "Visor_Green",
+      "item_name": "(Hat_LaserTag)",
+      "item_guid": "123de433-a005-4994-8a11-d2d84ad66b11",
+      "item_outfit_type": 0,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Headphones_TwoBlue_Swatch",
+      "swatch_guid": "4scG_UBlzE-5DWRhSrtm6g",
+      "color": "TwoBlue",
+      "item_name": "(Hat_Headphones)",
+      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
+      "item_outfit_type": 0,
+      "mask_guid": "_Yq00H-NWUyQNvGxRunHbg"
+    },
+    {
+      "swatch_name": "CollarShirt_Torso_Red_Swatch",
+      "swatch_guid": "FAviMCQ_EE2Mpt6QPo5OEw",
+      "color": "Torso_Red",
+      "item_name": "(CollarShirt)",
+      "item_guid": "2e59d8d0-91a0-4449-bfdc-a5d663fd9343",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Pearls_Neck_Black_Swatch",
+      "swatch_guid": "sqPMH0LhLkeG-4XkxpU-sw",
+      "color": "Neck_Black",
+      "item_name": "(Neck_Pearls)",
+      "item_guid": "7be2eafc-21ea-4266-ae64-8888c06798d6",
+      "item_outfit_type": 103,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "ArcherYellow_Glove_Swatch",
+      "swatch_guid": "47da86b9-4e6e-423c-b8c4-ea6bf8472509",
+      "color": "Yellow_Glove",
+      "item_name": "(Shirt_Archer)",
+      "item_guid": "c0e59f27-a13d-4bd9-b3b8-a38a360f649b",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "MagicalGirl_Neck_Orange_Swatch",
+      "swatch_guid": "S9uymuvraUCOM8gmB7bnEA",
+      "color": "Neck_Orange",
+      "item_name": "(Wrist_MagicalGirl)",
+      "item_guid": "eS_or4AnMka9M_bD7YN28g",
+      "item_outfit_type": 200,
+      "mask_guid": "M5z2wk-GDkOAjvZzqsfcNQ"
+    },
+    {
+      "swatch_name": "TruckerJacket_Tan_Swatch",
+      "swatch_guid": "o2WfRyjJy0CKoUg8YIxNjQ",
+      "color": "Tan",
+      "item_name": "(Shirt_TruckerJacket)",
+      "item_guid": "8b065e2a-b106-4f11-b415-4c47ce87993e",
       "item_outfit_type": 101,
       "mask_guid": ""
     },
@@ -1741,24 +1651,6 @@
       "swatch_name": "HockeyShirt_Red_Swatch",
       "swatch_guid": "b1ea158d-1663-4db1-bb09-9847f6e9d1e6",
       "color": "Red",
-      "item_name": "(HockeyShirt)",
-      "item_guid": "d6b0a1e7-e918-43e5-8191-3a8d9d01df7c",
-      "item_outfit_type": 101,
-      "mask_guid": "e5635772-4e84-4b30-b77f-4a1196cb599b"
-    },
-    {
-      "swatch_name": "HockeyShirt_Teal_Swatch",
-      "swatch_guid": "fcbdfbfd-254a-4538-b119-43e23404b8b5",
-      "color": "Teal",
-      "item_name": "(HockeyShirt)",
-      "item_guid": "d6b0a1e7-e918-43e5-8191-3a8d9d01df7c",
-      "item_outfit_type": 101,
-      "mask_guid": "e5635772-4e84-4b30-b77f-4a1196cb599b"
-    },
-    {
-      "swatch_name": "HockeyShirt_Purple_Swatch",
-      "swatch_guid": "d5efaf80-7f34-4c9a-bc3a-b80b1ac70ace",
-      "color": "Purple",
       "item_name": "(HockeyShirt)",
       "item_guid": "d6b0a1e7-e918-43e5-8191-3a8d9d01df7c",
       "item_outfit_type": 101,
@@ -1774,18 +1666,45 @@
       "mask_guid": "a4e51b6b-fdfd-47dc-9d0e-f26f383e03e9"
     },
     {
-      "swatch_name": "LaserTagGlove_Orange_Swatch",
-      "swatch_guid": "EC0ttvk6eU2HEMacLAx2Iw",
-      "color": "Orange",
-      "item_name": "(Wrist_LaserTagGlove)",
-      "item_guid": "3044adce-90c0-4f66-81f5-39c4fca86fdf",
-      "item_outfit_type": 200,
+      "swatch_name": "YellowBlueDress_Purple_Swatch",
+      "swatch_guid": "830be2fa-60a5-48cc-931f-34b670eae4bd",
+      "color": "Purple",
+      "item_name": "(YellowBlueDress)",
+      "item_guid": "2296ed0d-df56-4d46-b33a-aae9230a47fc",
+      "item_outfit_type": 101,
       "mask_guid": ""
     },
     {
-      "swatch_name": "LaserTagGlove_Green_Swatch",
-      "swatch_guid": "mhsglVEtREmElF5wuLw3NQ",
+      "swatch_name": "80sSpandex_Green_Swatch",
+      "swatch_guid": "3frH6KxZ9kGUYkjeCDpylQ",
       "color": "Green",
+      "item_name": "(Shirt_80sSpandex)",
+      "item_guid": "17236d76-e3b6-42f6-9179-6fcf0479436f",
+      "item_outfit_type": 101,
+      "mask_guid": "B-sIpWNOfEigMeQF-WVR1g"
+    },
+    {
+      "swatch_name": "Hat_Baseball_Logo_Bucketeers_Swatch",
+      "swatch_guid": "5iCrYb8MBkqN6IBEe3IipQ",
+      "color": "Logo_Bucketeers",
+      "item_name": "(Hat_Baseball)",
+      "item_guid": "14ef6b00-debf-4a85-9755-b4d37df496d3",
+      "item_outfit_type": 0,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "BowlingShirt_OneStripe_Pink_Swatch",
+      "swatch_guid": "-k9_-2onrEG407or8t1RFw",
+      "color": "Shirt_OneStripe_Pink",
+      "item_name": "(Shirt_Bowling)",
+      "item_guid": "CQuKKNpan0O7rhR1fr14-Q",
+      "item_outfit_type": 101,
+      "mask_guid": "b-IM3eYMJUa40395O5XeLg"
+    },
+    {
+      "swatch_name": "LaserTagGlove_Orange_Swatch",
+      "swatch_guid": "EC0ttvk6eU2HEMacLAx2Iw",
+      "color": "Orange",
       "item_name": "(Wrist_LaserTagGlove)",
       "item_guid": "3044adce-90c0-4f66-81f5-39c4fca86fdf",
       "item_outfit_type": 200,
@@ -1798,61 +1717,16 @@
       "item_name": "(Shirt_50sDress)",
       "item_guid": "439d1e24-d67f-4b8a-8fb3-8bf589d5a8ee",
       "item_outfit_type": 101,
-      "mask_guid": ""
+      "mask_guid": "Rk18_7icF0Srgh7M1_G-hA"
     },
     {
-      "swatch_name": "50sDress_Pink_Swatch",
-      "swatch_guid": "eb3SmJTIh0628LrZUkI4KQ",
-      "color": "Pink",
-      "item_name": "(Shirt_50sDress)",
-      "item_guid": "439d1e24-d67f-4b8a-8fb3-8bf589d5a8ee",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "50sDress_Teal_Swatch",
-      "swatch_guid": "QzjakcO8tUaPeiI5KBLKtg",
-      "color": "Teal",
-      "item_name": "(Shirt_50sDress)",
-      "item_guid": "439d1e24-d67f-4b8a-8fb3-8bf589d5a8ee",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "50sDress_White_Swatch",
-      "swatch_guid": "BLgkgLeS-EyazgPQxGcavg",
-      "color": "White",
-      "item_name": "(Shirt_50sDress)",
-      "item_guid": "439d1e24-d67f-4b8a-8fb3-8bf589d5a8ee",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "50sDress_CandyCane_Swatch",
-      "swatch_guid": "PEGqjoxP6E2yRx_A-HphrQ",
-      "color": "CandyCane",
-      "item_name": "(Shirt_50sDress)",
-      "item_guid": "439d1e24-d67f-4b8a-8fb3-8bf589d5a8ee",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "50sDress_Halloween_Swatch",
-      "swatch_guid": "ZvPidQ57rUS50Qz89ERmLw",
-      "color": "Halloween",
-      "item_name": "(Shirt_50sDress)",
-      "item_guid": "439d1e24-d67f-4b8a-8fb3-8bf589d5a8ee",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "50sDress_Shamrock_Swatch",
-      "swatch_guid": "K17dIz_TRUq5D50NBfLjyw",
-      "color": "Shamrock",
-      "item_name": "(Shirt_50sDress)",
-      "item_guid": "439d1e24-d67f-4b8a-8fb3-8bf589d5a8ee",
-      "item_outfit_type": 101,
-      "mask_guid": ""
+      "swatch_name": "Firefighter_Hat_Yellow_Swatch",
+      "swatch_guid": "4c26d1e7-2382-4478-b9c4-a068ed01a607",
+      "color": "Hat_Yellow",
+      "item_name": "(Hat_Firefighter)",
+      "item_guid": "bb54e0e9-5d90-41f3-94c0-8e82f1791af1",
+      "item_outfit_type": 0,
+      "mask_guid": "c8ccb85e-52cd-4b3b-aadf-289819067125"
     },
     {
       "swatch_name": "TopHat_White_Swatch",
@@ -1861,7 +1735,43 @@
       "item_name": "(Hat_TopHat)",
       "item_guid": "102c625b-b988-4bf8-a2aa-a31ad7029cdc",
       "item_outfit_type": 0,
+      "mask_guid": "ccf1ccc1-e229-4157-bb74-f2cdef01e547"
+    },
+    {
+      "swatch_name": "DeepSeaDiver_Beige_Swatch",
+      "swatch_guid": "Su7kiW24d0KapNns96JoFQ",
+      "color": "Beige",
+      "item_name": "(Hat_DeepSeaDiver)",
+      "item_guid": "4fcb5b84-13a9-43e6-9680-72b17874ae53",
+      "item_outfit_type": 0,
       "mask_guid": ""
+    },
+    {
+      "swatch_name": "Scallywag_Bracelet_Red_Swatch",
+      "swatch_guid": "62bd5dda-08da-4528-83c1-f0ca3812dc6e",
+      "color": "Red",
+      "item_name": "(Wrist_Scallywag_Bracelet)",
+      "item_guid": "b9e0f03b-2609-4911-82e9-1e324dbbe8be",
+      "item_outfit_type": 200,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "QuiltedCoat_Green_Swatch",
+      "swatch_guid": "QBglgj80zkuvUkk55Y5Feg",
+      "color": "Green",
+      "item_name": "(Shirt_Quiltedcoat)",
+      "item_guid": "0ab5790f-a537-4306-ba66-5eb87c02ec7d",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Scout_RaccoonHat_Gray_Swatch",
+      "swatch_guid": "926ae943-76cb-46dd-9c66-a6ee44ea9194",
+      "color": "nHat_Gray",
+      "item_name": "(Hat_ScoutRaccoon)",
+      "item_guid": "7c1552a6-bc36-46e6-884c-1de6b8111a92",
+      "item_outfit_type": 0,
+      "mask_guid": "f1cd10fb-3d0b-436f-a173-65bc0d88d8bf"
     },
     {
       "swatch_name": "Shirt_GraduationGown_Green_Swatch",
@@ -1873,6 +1783,15 @@
       "mask_guid": "ica0LZyM_kOox8gxW7CaMw"
     },
     {
+      "swatch_name": "WaitressApron_Mustard_Swatch",
+      "swatch_guid": "b7oobDcDtE-69fhM-5g5AQ",
+      "color": "Mustard",
+      "item_name": "(Belt_WaitressApron)",
+      "item_guid": "204bc384-e6d2-41b8-8ce9-0b26be5d85b7",
+      "item_outfit_type": 102,
+      "mask_guid": ""
+    },
+    {
       "swatch_name": "DrumMajor_Orange_Swatch",
       "swatch_guid": "82de1ca3-67d6-454d-84fb-0eeece71fcbc",
       "color": "Orange",
@@ -1882,22 +1801,31 @@
       "mask_guid": ""
     },
     {
-      "swatch_name": "DrumMajor_Green_Swatch",
-      "swatch_guid": "fe5288bc-0e02-4ea3-b17d-dee0e576979d",
-      "color": "Green",
-      "item_name": "(Hat_DrumMajor)",
-      "item_guid": "1a028850-64ee-40ab-b547-ebbcfa1b04b3",
-      "item_outfit_type": 0,
+      "swatch_name": "JackfrostWings_Neck_Lilac_Swatch",
+      "swatch_guid": "H6fcuLxeBUSY3oERFc-plA",
+      "color": "Neck_Lilac",
+      "item_name": "(Neck_JackFrostWings)",
+      "item_guid": "022ce375-ed02-479d-b87d-9d72d126bbd4",
+      "item_outfit_type": 100,
       "mask_guid": ""
     },
     {
-      "swatch_name": "DrumMajor_Purple_Swatch",
-      "swatch_guid": "54d3c589-30ba-44c1-a77c-8f9e16eb0b20",
-      "color": "Purple",
-      "item_name": "(Hat_DrumMajor)",
-      "item_guid": "1a028850-64ee-40ab-b547-ebbcfa1b04b3",
+      "swatch_name": "PurpleJacket_Blue_Swatch",
+      "swatch_guid": "b42d903b-b393-4f49-af5e-38d0fb6c42b0",
+      "color": "Blue",
+      "item_name": "(PurpleJacket)",
+      "item_guid": "745c5110-104e-4b37-aabf-7c690fd54811",
+      "item_outfit_type": 101,
+      "mask_guid": "3ba69a39-a4e7-4505-bae7-8db31360ec1c"
+    },
+    {
+      "swatch_name": "CowboyBlack_Swatch",
+      "swatch_guid": "K5vPqD3BrEuODRDzFdC6Hw",
+      "color": "Black",
+      "item_name": "(Hat_Cowboy)",
+      "item_guid": "ad0bdec5-f767-42e7-99e0-221473464a85",
       "item_outfit_type": 0,
-      "mask_guid": ""
+      "mask_guid": "54778d93-2cff-48db-b25b-65c08b0e5be8"
     },
     {
       "swatch_name": "Harness_Teal_Swatch",
@@ -1909,11 +1837,272 @@
       "mask_guid": ""
     },
     {
+      "swatch_name": "Angler_Tan_Swatch",
+      "swatch_guid": "cac27853-e2df-4d77-b3fd-af3bc0813f01",
+      "color": "Tan",
+      "item_name": "(Hat_Angler)",
+      "item_guid": "03f8c394-28fa-4087-978b-8d108f0bd969",
+      "item_outfit_type": 0,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "50sDress_Pink_Swatch",
+      "swatch_guid": "eb3SmJTIh0628LrZUkI4KQ",
+      "color": "Pink",
+      "item_name": "(Shirt_50sDress)",
+      "item_guid": "439d1e24-d67f-4b8a-8fb3-8bf589d5a8ee",
+      "item_outfit_type": 101,
+      "mask_guid": "Rk18_7icF0Srgh7M1_G-hA"
+    },
+    {
+      "swatch_name": "Scout_Sash_Brown_Swatch",
+      "swatch_guid": "639f5e2c-6fbd-4ab4-aa10-7772e0932798",
+      "color": "h_Brown",
+      "item_name": "(Neck_ScoutSash)",
+      "item_guid": "bf9dc196-5727-4752-8126-7ad5fcd96d55",
+      "item_outfit_type": 100,
+      "mask_guid": "66cc536d-8cb5-4262-b7f0-49a33b97ea10"
+    },
+    {
+      "swatch_name": "Unicorn_Pastel_Swatch",
+      "swatch_guid": "FNe9LkWJMUeC3frYJMyEaQ",
+      "color": "Pastel",
+      "item_name": "(Hat_Unicorn)",
+      "item_guid": "2caHvVQ1vECrPv-YcdxdyA",
+      "item_outfit_type": 0,
+      "mask_guid": "nW_fBsuZA0OfIjTMXm6ZCA"
+    },
+    {
+      "swatch_name": "Countess_Black_Swatch",
+      "swatch_guid": "i5RKLo-RbEqisnGII1wpaQ",
+      "color": "Black",
+      "item_name": "(Shirt_Countess)",
+      "item_guid": "QCtqxbvYOkan79YFugH_Cw",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Smuggler_Cherry_Swatch",
+      "swatch_guid": "fed760b2-15e2-46b2-b1e3-cc3c8d780d5d",
+      "color": "Cherry",
+      "item_name": "(Shirt_Smuggler)",
+      "item_guid": "25d4c652-1730-4925-925e-31a290a2272a",
+      "item_outfit_type": 101,
+      "mask_guid": "970a8c7e-d091-4719-bb9c-e3be8d46ee68"
+    },
+    {
+      "swatch_name": "Astronaut_Torso_Orange_Swatch",
+      "swatch_guid": "9GhnX4Pj4E-wxbPlD8GB-g",
+      "color": "o_Orange",
+      "item_name": "(AstronautTorso)",
+      "item_guid": "ec5255d5-edaf-4888-9fe1-e89ac0e0d300",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "AnglerHat_Gray_Swatch",
+      "swatch_guid": "225209dc-3afc-40cf-858e-89f7afa00c0d",
+      "color": "Hat_Gray",
+      "item_name": "(Hat_Angler)",
+      "item_guid": "03f8c394-28fa-4087-978b-8d108f0bd969",
+      "item_outfit_type": 0,
+      "mask_guid": "efeb07ab-6253-436d-bb66-991ddad72e58"
+    },
+    {
+      "swatch_name": "BaseballHelmet_Green_Swatch",
+      "swatch_guid": "9967ce54-c2b7-437a-946e-11f8ee6d6fdd",
+      "color": "Green",
+      "item_name": "(Hat_BaseballHelmet)",
+      "item_guid": "293e7ad3-01c9-43af-96e3-06c34145ff12",
+      "item_outfit_type": 0,
+      "mask_guid": "FVdDQFOMQ06teQm2ANDPng"
+    },
+    {
+      "swatch_name": "Neck_Grillmaster_White_Swatch",
+      "swatch_guid": "Lxx3q6JRnUW_cPG_kGG4ag",
+      "color": "White",
+      "item_name": "(Neck_Grillmaster)",
+      "item_guid": "tTKv7eRODka2KC_hsY2O3Q",
+      "item_outfit_type": 100,
+      "mask_guid": "t-ZEWJCgFEyGP2PjNblQMA"
+    },
+    {
+      "swatch_name": "50sDress_Teal_Swatch",
+      "swatch_guid": "QzjakcO8tUaPeiI5KBLKtg",
+      "color": "Teal",
+      "item_name": "(Shirt_50sDress)",
+      "item_guid": "439d1e24-d67f-4b8a-8fb3-8bf589d5a8ee",
+      "item_outfit_type": 101,
+      "mask_guid": "Rk18_7icF0Srgh7M1_G-hA"
+    },
+    {
+      "swatch_name": "BowlingShirt_Diamonds_Teal_Swatch",
+      "swatch_guid": "yZR5aX3gQ0WpRUT6cfK1cA",
+      "color": "Shirt_Diamonds_Teal",
+      "item_name": "(Shirt_Bowling)",
+      "item_guid": "CQuKKNpan0O7rhR1fr14-Q",
+      "item_outfit_type": 101,
+      "mask_guid": "VO_3cgqQqUOTz30TVUxrFA"
+    },
+    {
+      "swatch_name": "Scallywag_Bracelet_Blue_Swatch",
+      "swatch_guid": "cdca593a-8840-4140-9145-fe962732040c",
+      "color": "Blue",
+      "item_name": "(Wrist_Scallywag_Bracelet)",
+      "item_guid": "b9e0f03b-2609-4911-82e9-1e324dbbe8be",
+      "item_outfit_type": 200,
+      "mask_guid": ""
+    },
+    {
       "swatch_name": "Harness_Black_Swatch",
       "swatch_guid": "AC3zfm38JEyBZWuXDh4Ukg",
       "color": "Black",
       "item_name": "(Shirt_Harness)",
       "item_guid": "ca7a3ccb-2bc9-4c93-a6a8-6f22b38526af",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "CowboyDark_Swatch",
+      "swatch_guid": "192ba73d-6990-42da-8fe0-914c2a7181eb",
+      "color": "Dark",
+      "item_name": "(Hat_Cowboy)",
+      "item_guid": "ad0bdec5-f767-42e7-99e0-221473464a85",
+      "item_outfit_type": 0,
+      "mask_guid": "54778d93-2cff-48db-b25b-65c08b0e5be8"
+    },
+    {
+      "swatch_name": "SodaJerk_Mustard_Swatch",
+      "swatch_guid": "MxnAq_XOw0uTzQ8IIxqb_Q",
+      "color": "Mustard",
+      "item_name": "(Shirt_SodaJerk)",
+      "item_guid": "iai6P7dDTUq8S4hqQmY1YA",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "FlowerSwimsuit_Pink_Swatch",
+      "swatch_guid": "27680277-aec1-41be-a476-9f51cf775580",
+      "color": "Pink",
+      "item_name": "(FlowerSwimsuit)",
+      "item_guid": "f41653f9-ae02-443c-aaf4-1c6f4e49035d",
+      "item_outfit_type": 101,
+      "mask_guid": "3248a3ec-50d1-4c0a-96ae-25eb9d8ed622"
+    },
+    {
+      "swatch_name": "Artist_Red_Swatch",
+      "swatch_guid": "17b16982-871c-476a-860f-f6953c89ee8c",
+      "color": "Red",
+      "item_name": "(Shirt_Artist)",
+      "item_guid": "02077915-57d3-4e26-b4fe-8e0399cbb293",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Hoodie_Pink_Swatch",
+      "swatch_guid": "TEgugZRs80iJbhL87RdYwg",
+      "color": "Pink",
+      "item_name": "(Shirt_Hoodie)",
+      "item_guid": "b6rLwzD4NkKV7xKn9ZYVkA",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "50sDress_White_Swatch",
+      "swatch_guid": "BLgkgLeS-EyazgPQxGcavg",
+      "color": "White",
+      "item_name": "(Shirt_50sDress)",
+      "item_guid": "439d1e24-d67f-4b8a-8fb3-8bf589d5a8ee",
+      "item_outfit_type": 101,
+      "mask_guid": "Rk18_7icF0Srgh7M1_G-hA"
+    },
+    {
+      "swatch_name": "Hat_TutorialCap_3_Swatch",
+      "swatch_guid": "wHJnbDOo8ESmUbQDr0k31w",
+      "color": "3",
+      "item_name": "(Hat_TutorialCap)",
+      "item_guid": "M9weaekvIUimiJSVJqZl-w",
+      "item_outfit_type": 0,
+      "mask_guid": "GV8z2dlqGEqIAYaGrF1ZYQ"
+    },
+    {
+      "swatch_name": "Scout_Sash_Red_Swatch",
+      "swatch_guid": "b520f3bc-599a-498c-8a4f-97cc25aa741f",
+      "color": "h_Red",
+      "item_name": "(Neck_ScoutSash)",
+      "item_guid": "bf9dc196-5727-4752-8126-7ad5fcd96d55",
+      "item_outfit_type": 100,
+      "mask_guid": "66cc536d-8cb5-4262-b7f0-49a33b97ea10"
+    },
+    {
+      "swatch_name": "DrumMajor_Green_Swatch",
+      "swatch_guid": "fe5288bc-0e02-4ea3-b17d-dee0e576979d",
+      "color": "Green",
+      "item_name": "(Hat_DrumMajor)",
+      "item_guid": "1a028850-64ee-40ab-b547-ebbcfa1b04b3",
+      "item_outfit_type": 0,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "PirateCaptain_Hat_SRank_Swatch",
+      "swatch_guid": "jQwNBXyoU0Gk4FyNw6jFxg",
+      "color": "Hat_SRank",
+      "item_name": "(Neck_PirateCaptain)",
+      "item_guid": "38b38e24-d636-41c6-b80e-a285ae3106dc",
+      "item_outfit_type": 102,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "50sDress_CandyCane_Swatch",
+      "swatch_guid": "PEGqjoxP6E2yRx_A-HphrQ",
+      "color": "CandyCane",
+      "item_name": "(Shirt_50sDress)",
+      "item_guid": "439d1e24-d67f-4b8a-8fb3-8bf589d5a8ee",
+      "item_outfit_type": 101,
+      "mask_guid": "Rk18_7icF0Srgh7M1_G-hA"
+    },
+    {
+      "swatch_name": "SpaceMarine_Cyan_Swatch",
+      "swatch_guid": "c8cc9589-4831-4e73-a865-ef8c139a2ba7",
+      "color": "Cyan",
+      "item_name": "(Shirt_SpaceMarine)",
+      "item_guid": "4ce7a70f-15a0-4cad-98ee-5cbb40827338",
+      "item_outfit_type": 101,
+      "mask_guid": "7ac81d60-05b8-4a85-982c-f69213a93818"
+    },
+    {
+      "swatch_name": "MagicalGirl_Green_Swatch",
+      "swatch_guid": "kTP3xKhzBkuQF3SqvmYFKA",
+      "color": "Green",
+      "item_name": "(Wrist_MagicalGirl)",
+      "item_guid": "eS_or4AnMka9M_bD7YN28g",
+      "item_outfit_type": 200,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "FootballPads_Orange_Swatch",
+      "swatch_guid": "32dde6dc-e3dc-43ee-9b7c-987bc6778c17",
+      "color": "Pads_Orange",
+      "item_name": "(Hat_FootBall)",
+      "item_guid": "5a38f864-7d1c-4989-8558-40b9668f78ef",
+      "item_outfit_type": 0,
+      "mask_guid": "e17481fc-b2b6-47a5-91e5-7205f45a3247"
+    },
+    {
+      "swatch_name": "HeadBackBow_White_Swatch",
+      "swatch_guid": "-Iqmonry4EKoqAULCKzRPA",
+      "color": "White",
+      "item_name": "(Hat_HeadBackBow)",
+      "item_guid": "JTrfBXhIT02o2-ssP94zew",
+      "item_outfit_type": 0,
+      "mask_guid": "3DdSzSqV1UG5AtPr8ro3Kg"
+    },
+    {
+      "swatch_name": "Hoodie_Orange_Swatch",
+      "swatch_guid": "rNhOQoP3XkOBHV28ze2NpA",
+      "color": "Orange",
+      "item_name": "(Shirt_Hoodie)",
+      "item_guid": "b6rLwzD4NkKV7xKn9ZYVkA",
       "item_outfit_type": 101,
       "mask_guid": ""
     },
@@ -1927,85 +2116,31 @@
       "mask_guid": ""
     },
     {
-      "swatch_name": "Harness_Blue_Swatch",
-      "swatch_guid": "RfZNDPUok0WyQEa3Ko08ow",
+      "swatch_name": "PirateCaptain_Hat_Red_Swatch",
+      "swatch_guid": "17040a88-87f1-4613-b439-3316e33dbd48",
+      "color": "Hat_Red",
+      "item_name": "(Neck_PirateCaptain)",
+      "item_guid": "38b38e24-d636-41c6-b80e-a285ae3106dc",
+      "item_outfit_type": 102,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "80sSpandex_Blue_Swatch",
+      "swatch_guid": "Lf4FjROSAEqXedFxpXFQfg",
       "color": "Blue",
-      "item_name": "(Shirt_Harness)",
-      "item_guid": "ca7a3ccb-2bc9-4c93-a6a8-6f22b38526af",
+      "item_name": "(Shirt_80sSpandex)",
+      "item_guid": "17236d76-e3b6-42f6-9179-6fcf0479436f",
       "item_outfit_type": 101,
-      "mask_guid": ""
+      "mask_guid": "B-sIpWNOfEigMeQF-WVR1g"
     },
     {
-      "swatch_name": "Harness_Orange_Swatch",
-      "swatch_guid": "sX0ZZDcCUkyFSJISfvq0vg",
-      "color": "Orange",
-      "item_name": "(Shirt_Harness)",
-      "item_guid": "ca7a3ccb-2bc9-4c93-a6a8-6f22b38526af",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Unicorn_Pastel_Swatch",
-      "swatch_guid": "FNe9LkWJMUeC3frYJMyEaQ",
-      "color": "Pastel",
-      "item_name": "(Hat_Unicorn)",
-      "item_guid": "2caHvVQ1vECrPv-YcdxdyA",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Unicorn_Glowing_Swatch",
-      "swatch_guid": "mudt-Z5-5USdnIq-xaDgOw",
-      "color": "Glowing",
-      "item_name": "(Hat_Unicorn)",
-      "item_guid": "2caHvVQ1vECrPv-YcdxdyA",
-      "item_outfit_type": 0,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Countess_Black_Swatch",
-      "swatch_guid": "i5RKLo-RbEqisnGII1wpaQ",
+      "swatch_name": "PurpleJacket_Black_Swatch",
+      "swatch_guid": "8cab8cc6-9a2d-434c-8b72-e66edbdd223c",
       "color": "Black",
-      "item_name": "(Shirt_Countess)",
-      "item_guid": "QCtqxbvYOkan79YFugH_Cw",
+      "item_name": "(PurpleJacket)",
+      "item_guid": "745c5110-104e-4b37-aabf-7c690fd54811",
       "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Countess_Purple_Swatch",
-      "swatch_guid": "IzkFARlv6EenmrfcNkcOuw",
-      "color": "Purple",
-      "item_name": "(Shirt_Countess)",
-      "item_guid": "QCtqxbvYOkan79YFugH_Cw",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "Countess_Green_Swatch",
-      "swatch_guid": "LyVf9lnzdku1F4iPBGqk-g",
-      "color": "Green",
-      "item_name": "(Shirt_Countess)",
-      "item_guid": "QCtqxbvYOkan79YFugH_Cw",
-      "item_outfit_type": 101,
-      "mask_guid": ""
-    },
-    {
-      "swatch_name": "CheerDress_Blue_Swatch",
-      "swatch_guid": "faedf215-289b-40f7-90cc-f5b98517d133",
-      "color": "Blue",
-      "item_name": "(FemaleCheerTorso)",
-      "item_guid": "657efe89-620a-46a2-8b58-cafd855c7cd5",
-      "item_outfit_type": 101,
-      "mask_guid": "93987d32-7a6e-45df-af56-76f912969ce7"
-    },
-    {
-      "swatch_name": "CheerDress_Red_Swatch",
-      "swatch_guid": "1773d5d8-4714-4721-b30c-97e25d6f2a5a",
-      "color": "Red",
-      "item_name": "Cheerful Dress",
-      "item_guid": "b02053b3-013f-42b0-8881-85f5be2b8cda",
-      "item_outfit_type": 101,
-      "mask_guid": "93987d32-7a6e-45df-af56-76f912969ce7"
+      "mask_guid": "3ba69a39-a4e7-4505-bae7-8db31360ec1c"
     },
     {
       "swatch_name": "Mobster_Valentine_Swatch",
@@ -2017,13 +2152,13 @@
       "mask_guid": ""
     },
     {
-      "swatch_name": "Mobster_WhiteHatHacker_Swatch",
-      "swatch_guid": "40283127-2ffc-4989-82f6-29c3381bf9e2",
-      "color": "WhiteHatHacker",
-      "item_name": "(Wrist_Mobster)",
-      "item_guid": "08d56627-4500-4724-8692-a23c96ddb3ec",
-      "item_outfit_type": 200,
-      "mask_guid": ""
+      "swatch_name": "Hat_SeaCaptainFushia_Swatch",
+      "swatch_guid": "2738ab5f-8c94-46b3-bac6-4a8111c41c21",
+      "color": "Fushia",
+      "item_name": "(Hat_SeaCaptain)",
+      "item_guid": "f5c9743f-e77c-42f2-ba63-9843342cbf8e",
+      "item_outfit_type": 0,
+      "mask_guid": "a4e51b6b-fdfd-47dc-9d0e-f26f383e03e9"
     },
     {
       "swatch_name": "Luchador_Red_Swatch",
@@ -2035,13 +2170,22 @@
       "mask_guid": ""
     },
     {
-      "swatch_name": "Luchador_Blue_Swatch",
-      "swatch_guid": "0217fd2e-ff9d-49f7-9bc8-8d0d6b8bf250",
-      "color": "Blue",
-      "item_name": "(Hat_Luchador)",
-      "item_guid": "1596c113-aa3a-4f5c-b398-e5c3575548e7",
-      "item_outfit_type": 0,
-      "mask_guid": ""
+      "swatch_name": "Scarecrow_Wrist_Contest_Swatch",
+      "swatch_guid": "dro7VLV8BkGjqpPAbJheYA",
+      "color": "Wrist_Contest",
+      "item_name": "(Shirt_Scarecrow)",
+      "item_guid": "1fcaf4fd-9012-407e-b691-fbc3ccf22421",
+      "item_outfit_type": 101,
+      "mask_guid": "bNA44H2wzUy-FkWgyOq1Kw"
+    },
+    {
+      "swatch_name": "FlapperGlove_Gold_Swatch",
+      "swatch_guid": "2cf2b644-3fa6-449c-9fe8-d0ab917f3106",
+      "color": "Gold",
+      "item_name": "(Wrist_FlapperGlove)",
+      "item_guid": "473c672d-2b79-48a2-a49d-fd68160c5bde",
+      "item_outfit_type": 200,
+      "mask_guid": "0e42108e-3b08-49b4-86c0-7984719e8380"
     },
     {
       "swatch_name": "BlueJacket_Mint_Swatch",
@@ -2053,6 +2197,150 @@
       "mask_guid": ""
     },
     {
+      "swatch_name": "HeadBackBow_SolidBlack_Swatch",
+      "swatch_guid": "f_c50saStkaGJuhLjJ9lfA",
+      "color": "SolidBlack",
+      "item_name": "(Hat_HeadBackBow)",
+      "item_guid": "JTrfBXhIT02o2-ssP94zew",
+      "item_outfit_type": 0,
+      "mask_guid": "3DdSzSqV1UG5AtPr8ro3Kg"
+    },
+    {
+      "swatch_name": "FootballPads_Dark_Swatch",
+      "swatch_guid": "88c3ed05-ce41-4a9d-a4a7-8a428d240b3f",
+      "color": "Pads_Dark",
+      "item_name": "(Hat_FootBall)",
+      "item_guid": "5a38f864-7d1c-4989-8558-40b9668f78ef",
+      "item_outfit_type": 0,
+      "mask_guid": "e17481fc-b2b6-47a5-91e5-7205f45a3247"
+    },
+    {
+      "swatch_name": "MagicalGirl_Neck_Red_Swatch",
+      "swatch_guid": "_uh3kj6hKUyBKOSR3R8dog",
+      "color": "Neck_Red",
+      "item_name": "(Wrist_MagicalGirl)",
+      "item_guid": "eS_or4AnMka9M_bD7YN28g",
+      "item_outfit_type": 200,
+      "mask_guid": "M5z2wk-GDkOAjvZzqsfcNQ"
+    },
+    {
+      "swatch_name": "Aviator_Hat_Black_Swatch",
+      "swatch_guid": "a8de80d3-286a-4fdc-bed2-75d52f8c0964",
+      "color": "Hat_Black",
+      "item_name": "(Wrist_Aviator)",
+      "item_guid": "125a3a62-1005-47dc-9fd8-ee09ea803e9f",
+      "item_outfit_type": 200,
+      "mask_guid": "ff5ae41e-e446-4a96-8c11-49d85556fa81"
+    },
+    {
+      "swatch_name": "Aviator_Goggles_Black_Swatch",
+      "swatch_guid": "7b82c3c5-fd1f-45ec-b83f-e32668aa8dce",
+      "color": "s_Black",
+      "item_name": "(Eye_AviatorGoggles)",
+      "item_guid": "47629ed1-5378-427c-ad61-4b44d2fe90cc",
+      "item_outfit_type": 10,
+      "mask_guid": "556f876a-70da-4104-b792-fca8ad67be0c"
+    },
+    {
+      "swatch_name": "Mobster_Fashion_Gold_Swatch",
+      "swatch_guid": "46970903-9799-4d25-b90a-7162c1f5dbef",
+      "color": "Fashion_Gold",
+      "item_name": "(Wrist_Mobster)",
+      "item_guid": "08d56627-4500-4724-8692-a23c96ddb3ec",
+      "item_outfit_type": 200,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "ArcherSRank_Glove_Swatch",
+      "swatch_guid": "1VGZ1QCvcU6rsKVkUDBNjQ",
+      "color": "SRank_Glove",
+      "item_name": "(Shirt_Archer)",
+      "item_guid": "c0e59f27-a13d-4bd9-b3b8-a38a360f649b",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Golfer_Shirt_Grey_Swatch",
+      "swatch_guid": "4c845dbb-26c3-48a1-b562-e28a7416b154",
+      "color": "Shirt_Grey",
+      "item_name": "(Hat_Golfer)",
+      "item_guid": "2faa26b6-f7c3-4b0d-8f70-1f9454e64a54",
+      "item_outfit_type": 0,
+      "mask_guid": "6ce21c65-f4e9-41ac-be94-8eb1a08d5c76"
+    },
+    {
+      "swatch_name": "Hat_SeaCaptainDarkGold_Swatch",
+      "swatch_guid": "f5403c89-9769-479b-8a05-c71607f9b189",
+      "color": "DarkGold",
+      "item_name": "(Hat_SeaCaptain)",
+      "item_guid": "f5c9743f-e77c-42f2-ba63-9843342cbf8e",
+      "item_outfit_type": 0,
+      "mask_guid": "a4e51b6b-fdfd-47dc-9d0e-f26f383e03e9"
+    },
+    {
+      "swatch_name": "CollarShirt_Torso_Blue_Swatch",
+      "swatch_guid": "0iSsaY-HgkmLaRHCn5vEdw",
+      "color": "Torso_Blue",
+      "item_name": "(CollarShirt)",
+      "item_guid": "2e59d8d0-91a0-4449-bfdc-a5d663fd9343",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Letterman_Black_Swatch",
+      "swatch_guid": "Z1F9rjKqCE-Hd2-Ip5g3gA",
+      "color": "Black",
+      "item_name": "(Wrist_Letterman)",
+      "item_guid": "2dFMy4zc7ky_Fd5fzfgInw",
+      "item_outfit_type": 200,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "DrumMajor_Purple_Swatch",
+      "swatch_guid": "54d3c589-30ba-44c1-a77c-8f9e16eb0b20",
+      "color": "Purple",
+      "item_name": "(Hat_DrumMajor)",
+      "item_guid": "1a028850-64ee-40ab-b547-ebbcfa1b04b3",
+      "item_outfit_type": 0,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "PirateCaptain_Belt_Red_Swatch",
+      "swatch_guid": "0f71b9a2-dd88-435c-a571-4503d12dcf2d",
+      "color": "Belt_Red",
+      "item_name": "(Neck_PirateCaptain)",
+      "item_guid": "38b38e24-d636-41c6-b80e-a285ae3106dc",
+      "item_outfit_type": 102,
+      "mask_guid": "9b2102f0-e16b-464f-9f1c-f068de52bb89"
+    },
+    {
+      "swatch_name": "ArcherBlack_Glove_Swatch",
+      "swatch_guid": "2be2f040-68e4-44dd-9099-29f11110f3a4",
+      "color": "Black_Glove",
+      "item_name": "(Shirt_Archer)",
+      "item_guid": "c0e59f27-a13d-4bd9-b3b8-a38a360f649b",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "WitchHunter_Blue_Swatch",
+      "swatch_guid": "aBQ3R9boek-mYeSYSNvDbQ",
+      "color": "Blue",
+      "item_name": "(Shirt_WitchHunter)",
+      "item_guid": "418db0e0-c7af-40c2-9cac-d461ce41e210",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Sherlock_Hat_Gray_Swatch",
+      "swatch_guid": "MQOxmUk-mUG-Ee9m9nX31Q",
+      "color": "Hat_Gray",
+      "item_name": "(Hat_Sherlock)",
+      "item_guid": "5bde836f-9343-4934-b01a-606f707020ef",
+      "item_outfit_type": 0,
+      "mask_guid": "axPBGoqorEe77Oqqjfzb5w"
+    },
+    {
       "swatch_name": "Steampunk_Contest_Swatch",
       "swatch_guid": "fD5vtKxBWECH54Jj4FbnUg",
       "color": "Contest",
@@ -2062,12 +2350,120 @@
       "mask_guid": ""
     },
     {
+      "swatch_name": "Hoodie_Purple_Swatch",
+      "swatch_guid": "mvMeyStxGUGlNLSYNeSubQ",
+      "color": "Purple",
+      "item_name": "(Shirt_Hoodie)",
+      "item_guid": "b6rLwzD4NkKV7xKn9ZYVkA",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "FighterPilot_Blue_Swatch",
+      "swatch_guid": "e37b07d1-6b9d-49b9-94ca-1c728e228cfe",
+      "color": "Blue",
+      "item_name": "(Wrist_FighterPilot)",
+      "item_guid": "5800d2b5-75b8-442f-8b10-63bd3d73a1b8",
+      "item_outfit_type": 200,
+      "mask_guid": "435eba0d-d8f9-43cc-91aa-2959d63c6fa7"
+    },
+    {
+      "swatch_name": "AnglerHat_Tan_Swatch",
+      "swatch_guid": "3f6c8bd2-2c1d-4c8c-a9de-16600fee9645",
+      "color": "Hat_Tan",
+      "item_name": "(Hat_Angler)",
+      "item_guid": "03f8c394-28fa-4087-978b-8d108f0bd969",
+      "item_outfit_type": 0,
+      "mask_guid": "efeb07ab-6253-436d-bb66-991ddad72e58"
+    },
+    {
+      "swatch_name": "Golfer_Glove_Blue_Swatch",
+      "swatch_guid": "32a5e42d-2b60-40b1-a145-ed96fc91af8e",
+      "color": "Glove_Blue",
+      "item_name": "(Hat_Golfer)",
+      "item_guid": "2faa26b6-f7c3-4b0d-8f70-1f9454e64a54",
+      "item_outfit_type": 0,
+      "mask_guid": "f4cea991-fc3d-4715-bf82-8a8fb60e8799"
+    },
+    {
+      "swatch_name": "Steampunk_Femme_Contest_Hat_Swatch",
+      "swatch_guid": "vuSwk04zykCe3ANKN838OA",
+      "color": "e_Contest_Hat",
+      "item_name": "(Hat_SteampunkFemme)",
+      "item_guid": "JWanxvOHyESg9F_HlmTOfA",
+      "item_outfit_type": 0,
+      "mask_guid": ""
+    },
+    {
       "swatch_name": "GoldMedal_Bronze_Swatch",
       "swatch_guid": "iaDL2im4lkCXUo0NWM-F3g",
       "color": "Bronze",
       "item_name": "(GoldMedal)",
       "item_guid": "bf13fa1c-f991-4aaa-9402-aac109be9562",
       "item_outfit_type": 100,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "DrumMajorGlove_Purple_Swatch",
+      "swatch_guid": "8053b5e5-0f67-4329-a45d-1ee9fc830820",
+      "color": "Purple",
+      "item_name": "(Wrist_DrumMajor_Glove)",
+      "item_guid": "4d533b3a-b5fa-446a-842d-92798ad5b493",
+      "item_outfit_type": 200,
+      "mask_guid": "6b38ab79-142b-446e-978c-ad829ade8823"
+    },
+    {
+      "swatch_name": "50sDress_Halloween_Swatch",
+      "swatch_guid": "ZvPidQ57rUS50Qz89ERmLw",
+      "color": "Halloween",
+      "item_name": "(Shirt_50sDress)",
+      "item_guid": "439d1e24-d67f-4b8a-8fb3-8bf589d5a8ee",
+      "item_outfit_type": 101,
+      "mask_guid": "Rk18_7icF0Srgh7M1_G-hA"
+    },
+    {
+      "swatch_name": "TruckerOveralls_Red_Swatch",
+      "swatch_guid": "iokdlBfjuEuAwqIMOQwxdA",
+      "color": "Red",
+      "item_name": "(Shirt_TruckerOveralls)",
+      "item_guid": "b080e2f4-c699-4cca-bb9e-7cfc4bafcbfc",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "ElectricianTorso_Green_Swatch",
+      "swatch_guid": "67fc9269-8dd8-4d6f-b594-c77e716f2482",
+      "color": "Torso_Green",
+      "item_name": "(Hat_Electrician)",
+      "item_guid": "34654303-9760-447f-8614-1c26506db994",
+      "item_outfit_type": 0,
+      "mask_guid": "daa38a31-fb7b-4e26-a2f5-728d6dcec81a"
+    },
+    {
+      "swatch_name": "QuiltedCoat_Plum_Swatch",
+      "swatch_guid": "IjRMopsYlUqSE6327I9TIQ",
+      "color": "Plum",
+      "item_name": "(Shirt_Quiltedcoat)",
+      "item_guid": "0ab5790f-a537-4306-ba66-5eb87c02ec7d",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "WitchHunter_SRank_Swatch",
+      "swatch_guid": "Tbrc2MlSlE6mKua8qSoluQ",
+      "color": "SRank",
+      "item_name": "(Shirt_WitchHunter)",
+      "item_guid": "418db0e0-c7af-40c2-9cac-d461ce41e210",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "TruckerJacket_RebelRose_Swatch",
+      "swatch_guid": "4Eck_dNL1UKlIZWsA1YppQ",
+      "color": "RebelRose",
+      "item_name": "(Shirt_TruckerJacket)",
+      "item_guid": "8b065e2a-b106-4f11-b415-4c47ce87993e",
+      "item_outfit_type": 101,
       "mask_guid": ""
     },
     {
@@ -2089,11 +2485,470 @@
       "mask_guid": ""
     },
     {
+      "swatch_name": "Sherlock_Torso_Black_Swatch",
+      "swatch_guid": "Z1Ib9r_fkUqgoZk0uid_Xw",
+      "color": "Torso_Black",
+      "item_name": "(Hat_Sherlock)",
+      "item_guid": "5bde836f-9343-4934-b01a-606f707020ef",
+      "item_outfit_type": 0,
+      "mask_guid": "9ZP617DQk0mZ10J3d5q9oA"
+    },
+    {
+      "swatch_name": "DrumMajorGlove_Orange_Swatch",
+      "swatch_guid": "b444ed0a-eab5-4bd6-af34-d080de74a149",
+      "color": "Orange",
+      "item_name": "(Wrist_DrumMajor_Glove)",
+      "item_guid": "4d533b3a-b5fa-446a-842d-92798ad5b493",
+      "item_outfit_type": 200,
+      "mask_guid": "6b38ab79-142b-446e-978c-ad829ade8823"
+    },
+    {
+      "swatch_name": "LaserTagVisor_Orange_Swatch",
+      "swatch_guid": "oT1vLrHW6UC2hWLIT3f_SQ",
+      "color": "Visor_Orange",
+      "item_name": "(Hat_LaserTag)",
+      "item_guid": "123de433-a005-4994-8a11-d2d84ad66b11",
+      "item_outfit_type": 0,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Punk_WristRed_Swatch",
+      "swatch_guid": "baffdefe-de21-4551-9330-b50873965bdd",
+      "color": "WristRed",
+      "item_name": "(Wrist_Punk)",
+      "item_guid": "28374ebc-4050-4ea0-b3b6-41ebe75cedf7",
+      "item_outfit_type": 200,
+      "mask_guid": "dd7472ed-bdcb-4811-81ba-5ed682fb7675"
+    },
+    {
+      "swatch_name": "Winter_Gloves_Tree_Swatch",
+      "swatch_guid": "afWY5VGiF0isGn6qpo4KeQ",
+      "color": "Gloves_Tree",
+      "item_name": "(Hat_Winter)",
+      "item_guid": "24c4404a-839f-46bd-98b6-6848d747a98b",
+      "item_outfit_type": 0,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Punk_Green_Swatch",
+      "swatch_guid": "0724b166-9ace-46ff-a191-b13f135b00a8",
+      "color": "Green",
+      "item_name": "(Wrist_Punk)",
+      "item_guid": "28374ebc-4050-4ea0-b3b6-41ebe75cedf7",
+      "item_outfit_type": 200,
+      "mask_guid": "dd7472ed-bdcb-4811-81ba-5ed682fb7675"
+    },
+    {
+      "swatch_name": "ArcherRed_Glove_Swatch",
+      "swatch_guid": "0c433086-9501-48c4-8d0e-4474eb420c61",
+      "color": "Red_Glove",
+      "item_name": "(Shirt_Archer)",
+      "item_guid": "c0e59f27-a13d-4bd9-b3b8-a38a360f649b",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Lacrosse_Stripe_Purple_Swatch",
+      "swatch_guid": "e3454bc7-c88d-4958-8b81-db3fe5472a1e",
+      "color": "Stripe_Purple",
+      "item_name": "(Shirt_Lacrosse)",
+      "item_guid": "39278302-b52a-48a8-a566-ed756a5fa1a9",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Hat_Baseball_Logo_Goblins_Swatch",
+      "swatch_guid": "pqLkLbri9Eu48eryQIFGMg",
+      "color": "Logo_Goblins",
+      "item_name": "(Hat_Baseball)",
+      "item_guid": "14ef6b00-debf-4a85-9755-b4d37df496d3",
+      "item_outfit_type": 0,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Letterman_Wrist_Green_Swatch",
+      "swatch_guid": "UUyjVU4mvECPhI9xTMYR1Q",
+      "color": "Wrist_Green",
+      "item_name": "(Wrist_Letterman)",
+      "item_guid": "2dFMy4zc7ky_Fd5fzfgInw",
+      "item_outfit_type": 200,
+      "mask_guid": "4EHIyZkOOEqnM-PuD_a5xw"
+    },
+    {
+      "swatch_name": "Winter_Torso_Tree_Swatch",
+      "swatch_guid": "XOBIPrKCr02xa4tKj8wN9g",
+      "color": "Torso_Tree",
+      "item_name": "(Hat_Winter)",
+      "item_guid": "24c4404a-839f-46bd-98b6-6848d747a98b",
+      "item_outfit_type": 0,
+      "mask_guid": "Too5jpb1w0iQenkjRRS-QA"
+    },
+    {
+      "swatch_name": "ArcherSRank_Quiver_Swatch",
+      "swatch_guid": "29EZ6r2SsUakWjzuevxeoA",
+      "color": "SRank_Quiver",
+      "item_name": "(Shirt_Archer)",
+      "item_guid": "c0e59f27-a13d-4bd9-b3b8-a38a360f649b",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Headphones_TwoOrange_Swatch",
+      "swatch_guid": "nX7krD8e2km_ZlOLWcoxdQ",
+      "color": "TwoOrange",
+      "item_name": "(Hat_Headphones)",
+      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
+      "item_outfit_type": 0,
+      "mask_guid": "_Yq00H-NWUyQNvGxRunHbg"
+    },
+    {
+      "swatch_name": "Headphones_TwoPurple_Swatch",
+      "swatch_guid": "OqsbZ8Xls0i8uA6ha7H3qQ",
+      "color": "TwoPurple",
+      "item_name": "(Hat_Headphones)",
+      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
+      "item_outfit_type": 0,
+      "mask_guid": "_Yq00H-NWUyQNvGxRunHbg"
+    },
+    {
+      "swatch_name": "Wizard_Green_Swatch",
+      "swatch_guid": "357eb160-360b-4a63-840d-65d11cc8ffc2",
+      "color": "Green",
+      "item_name": "(Hat_Wizard)",
+      "item_guid": "01689baf-405e-4b38-9f09-b624e03865b8",
+      "item_outfit_type": 0,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "MagicalGirl_Wrist_Green_Swatch",
+      "swatch_guid": "1FcyrVGyGEC9dmOq_51nFQ",
+      "color": "Wrist_Green",
+      "item_name": "(Wrist_MagicalGirl)",
+      "item_guid": "eS_or4AnMka9M_bD7YN28g",
+      "item_outfit_type": 200,
+      "mask_guid": "ZtCqMnFTQUWv2h0MfZ4m6A"
+    },
+    {
+      "swatch_name": "Scuba_Shirt_Contest_Swatch",
+      "swatch_guid": "J-K34UX_B0yObjQI9tn0vQ",
+      "color": "Shirt_Contest",
+      "item_name": "(Shirt_Scuba)",
+      "item_guid": "57552652-d902-43b7-a68e-5c7da87582bc",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "PeaCoat_Red_Swatch",
+      "swatch_guid": "jXBi28cRV0CEQgKIrpD0_A",
+      "color": "Red",
+      "item_name": "(Shirt_Peacoat)",
+      "item_guid": "ab15ef15-a97c-4ab1-896b-bd4d7e1cd9f5",
+      "item_outfit_type": 101,
+      "mask_guid": "AZnPWCN41kmNwFwDqWGFWQ"
+    },
+    {
+      "swatch_name": "Angler_Gray_Swatch",
+      "swatch_guid": "97938f4c-52b8-4c85-8575-856654666316",
+      "color": "Gray",
+      "item_name": "(Hat_Angler)",
+      "item_guid": "03f8c394-28fa-4087-978b-8d108f0bd969",
+      "item_outfit_type": 0,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "80sSpandex_Yellow_Swatch",
+      "swatch_guid": "i1XbjBqTu0CILIuJClWimA",
+      "color": "Yellow",
+      "item_name": "(Shirt_80sSpandex)",
+      "item_guid": "17236d76-e3b6-42f6-9179-6fcf0479436f",
+      "item_outfit_type": 101,
+      "mask_guid": "B-sIpWNOfEigMeQF-WVR1g"
+    },
+    {
+      "swatch_name": "FootballHelmet_Dark_Swatch",
+      "swatch_guid": "61ff7a02-50ff-49ea-b95e-c31b95a30c8e",
+      "color": "Helmet_Dark",
+      "item_name": "(Hat_FootBall)",
+      "item_guid": "5a38f864-7d1c-4989-8558-40b9668f78ef",
+      "item_outfit_type": 0,
+      "mask_guid": "7660e11a-7ef0-43d3-bc02-76b3a4aab064"
+    },
+    {
+      "swatch_name": "LaserTagVisor_Cyan_Swatch",
+      "swatch_guid": "426d0592-f8e4-4bc6-9fe1-a62b91fd57d5",
+      "color": "Visor_Cyan",
+      "item_name": "(Hat_LaserTag)",
+      "item_guid": "123de433-a005-4994-8a11-d2d84ad66b11",
+      "item_outfit_type": 0,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "TruckerOveralls_Green_Swatch",
+      "swatch_guid": "EiGgN7uVukqoRE7UJcMLTw",
+      "color": "Green",
+      "item_name": "(Shirt_TruckerOveralls)",
+      "item_guid": "b080e2f4-c699-4cca-bb9e-7cfc4bafcbfc",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Winter_Hat_Tree_Green_Swatch",
+      "swatch_guid": "mraJrTA4V0eARb_Kq7yYVw",
+      "color": "Hat_Tree_Green",
+      "item_name": "(Hat_Winter)",
+      "item_guid": "24c4404a-839f-46bd-98b6-6848d747a98b",
+      "item_outfit_type": 0,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Shirt_VampireHunter_Leather_Swatch",
+      "swatch_guid": "Z8Bfk0MTb0evZehvvgzuBA",
+      "color": "Leather",
+      "item_name": "(Shirt_VampireHunter)",
+      "item_guid": "JWfs9IiQs0Weu8MmyGpqLQ",
+      "item_outfit_type": 101,
+      "mask_guid": "x10FeRBsQU2DIIpG8XIlwg"
+    },
+    {
+      "swatch_name": "CowboyLight_Swatch",
+      "swatch_guid": "5e00a832-3f25-4dd3-84d2-b6ed6a4b4c37",
+      "color": "Light",
+      "item_name": "(Hat_Cowboy)",
+      "item_guid": "ad0bdec5-f767-42e7-99e0-221473464a85",
+      "item_outfit_type": 0,
+      "mask_guid": "54778d93-2cff-48db-b25b-65c08b0e5be8"
+    },
+    {
+      "swatch_name": "Hoodie_Red_Swatch",
+      "swatch_guid": "yM5xRrd9OkmDGyQddwOP6g",
+      "color": "Red",
+      "item_name": "(Shirt_Hoodie)",
+      "item_guid": "b6rLwzD4NkKV7xKn9ZYVkA",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Winter_Torso_Tree_Green_Swatch",
+      "swatch_guid": "i33RmJJCwUem-ADkOwMNQQ",
+      "color": "Torso_Tree_Green",
+      "item_name": "(Hat_Winter)",
+      "item_guid": "24c4404a-839f-46bd-98b6-6848d747a98b",
+      "item_outfit_type": 0,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Smuggler_Yellow_Swatch",
+      "swatch_guid": "002b07bb-4256-44ce-8ca4-25510e70b6b5",
+      "color": "Yellow",
+      "item_name": "(Shirt_Smuggler)",
+      "item_guid": "25d4c652-1730-4925-925e-31a290a2272a",
+      "item_outfit_type": 101,
+      "mask_guid": "970a8c7e-d091-4719-bb9c-e3be8d46ee68"
+    },
+    {
+      "swatch_name": "BlazerMidnightBlue_Swatch",
+      "swatch_guid": "6f2e74bf-1e95-463d-97db-d5d1a53b2c28",
+      "color": "MidnightBlue",
+      "item_name": "(Blazer)",
+      "item_guid": "de0ac50d-2adb-4114-bd2e-68953b13d706",
+      "item_outfit_type": 101,
+      "mask_guid": "be2b9293-1d3c-4b1c-b4c5-fad3ab16cf54"
+    },
+    {
+      "swatch_name": "MagicalGirl_Wrist_Blue_Swatch",
+      "swatch_guid": "zaSTWOUy_k6cnoVVYzypWg",
+      "color": "Wrist_Blue",
+      "item_name": "(Wrist_MagicalGirl)",
+      "item_guid": "eS_or4AnMka9M_bD7YN28g",
+      "item_outfit_type": 200,
+      "mask_guid": "ZtCqMnFTQUWv2h0MfZ4m6A"
+    },
+    {
+      "swatch_name": "Hoodie_White_Swatch",
+      "swatch_guid": "-Nf7WM2TeEKujB637h3tRA",
+      "color": "White",
+      "item_name": "(Shirt_Hoodie)",
+      "item_guid": "b6rLwzD4NkKV7xKn9ZYVkA",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
       "swatch_name": "Turtleneck_Yellow_Swatch",
       "swatch_guid": "G4HIPUjekUigiU0-Kr9mdA",
       "color": "Yellow",
       "item_name": "(Shirt_Turtleneck)",
       "item_guid": "7e22a4bd-3e87-4d50-8843-9e2e3cf45285",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Mobster_WhiteHatHacker_Swatch",
+      "swatch_guid": "40283127-2ffc-4989-82f6-29c3381bf9e2",
+      "color": "WhiteHatHacker",
+      "item_name": "(Wrist_Mobster)",
+      "item_guid": "08d56627-4500-4724-8692-a23c96ddb3ec",
+      "item_outfit_type": 200,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "QueenCrown_White_Swatch",
+      "swatch_guid": "Zljmtj5WqUaRvB3XQTgJXg",
+      "color": "White",
+      "item_name": "(Hat_QueenCrown)",
+      "item_guid": "9d395a84-4342-4b1c-940c-213ec2eb56f9",
+      "item_outfit_type": 0,
+      "mask_guid": "XFuSiGupZ02Fut1Dxum_Iw"
+    },
+    {
+      "swatch_name": "Mobster_Hat_Gray_Swatch",
+      "swatch_guid": "390a476a-5545-48eb-955c-1bf1a16012bf",
+      "color": "Hat_Gray",
+      "item_name": "(Wrist_Mobster)",
+      "item_guid": "08d56627-4500-4724-8692-a23c96ddb3ec",
+      "item_outfit_type": 200,
+      "mask_guid": "d759c88d-a159-4c26-86dd-b054bb05b3ed"
+    },
+    {
+      "swatch_name": "SpaceMarine_Light_Swatch",
+      "swatch_guid": "68273c9e-96d6-4ddb-aaab-d99229e864d5",
+      "color": "Light",
+      "item_name": "(Shirt_SpaceMarine)",
+      "item_guid": "4ce7a70f-15a0-4cad-98ee-5cbb40827338",
+      "item_outfit_type": 101,
+      "mask_guid": "7ac81d60-05b8-4a85-982c-f69213a93818"
+    },
+    {
+      "swatch_name": "50sDress_Shamrock_Swatch",
+      "swatch_guid": "K17dIz_TRUq5D50NBfLjyw",
+      "color": "Shamrock",
+      "item_name": "(Shirt_50sDress)",
+      "item_guid": "439d1e24-d67f-4b8a-8fb3-8bf589d5a8ee",
+      "item_outfit_type": 101,
+      "mask_guid": "Rk18_7icF0Srgh7M1_G-hA"
+    },
+    {
+      "swatch_name": "MagicalGirl_Hat_Green_Swatch",
+      "swatch_guid": "kLv_wsbbGUmlfIUO1QLYLw",
+      "color": "Hat_Green",
+      "item_name": "(Wrist_MagicalGirl)",
+      "item_guid": "eS_or4AnMka9M_bD7YN28g",
+      "item_outfit_type": 200,
+      "mask_guid": "mG60EPIQIkaJNgOkonVmZg"
+    },
+    {
+      "swatch_name": "Aviator_Jacket_Black_Swatch",
+      "swatch_guid": "da185fbb-ad2b-4f30-87a2-491f24b78ebb",
+      "color": "Jacket_Black",
+      "item_name": "(Wrist_Aviator)",
+      "item_guid": "125a3a62-1005-47dc-9fd8-ee09ea803e9f",
+      "item_outfit_type": 200,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "RedFlowerDress_Yellow_Swatch",
+      "swatch_guid": "e98c3f98-7844-4d6e-a21c-05027033c18c",
+      "color": "Yellow",
+      "item_name": "(RedFlowerDress)",
+      "item_guid": "515dfc36-7f7b-47bc-abee-380d68f41be6",
+      "item_outfit_type": 101,
+      "mask_guid": "2d7361d2-31a2-404b-90da-10e89114e1f2"
+    },
+    {
+      "swatch_name": "CollarShirt_Torso_Pink_Swatch",
+      "swatch_guid": "kmj5zOjcwku_WWKroCeiVQ",
+      "color": "Torso_Pink",
+      "item_name": "(CollarShirt)",
+      "item_guid": "2e59d8d0-91a0-4449-bfdc-a5d663fd9343",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "MagicalGirl_Neck_Green_Swatch",
+      "swatch_guid": "i3rD_hnQG0a-5f6Ve4AfWg",
+      "color": "Neck_Green",
+      "item_name": "(Wrist_MagicalGirl)",
+      "item_guid": "eS_or4AnMka9M_bD7YN28g",
+      "item_outfit_type": 200,
+      "mask_guid": "M5z2wk-GDkOAjvZzqsfcNQ"
+    },
+    {
+      "swatch_name": "Winter_Torso_Red_Swatch",
+      "swatch_guid": "LDqcPkvNXE2gFXxbpNkfhA",
+      "color": "Torso_Red",
+      "item_name": "(Hat_Winter)",
+      "item_guid": "24c4404a-839f-46bd-98b6-6848d747a98b",
+      "item_outfit_type": 0,
+      "mask_guid": "Too5jpb1w0iQenkjRRS-QA"
+    },
+    {
+      "swatch_name": "Wizard_Black_Swatch",
+      "swatch_guid": "7afe1bb0-5ca9-4263-8f85-49d3a18353c7",
+      "color": "Black",
+      "item_name": "(Hat_Wizard)",
+      "item_guid": "01689baf-405e-4b38-9f09-b624e03865b8",
+      "item_outfit_type": 0,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "TruckerJacket_Black_Swatch",
+      "swatch_guid": "P9bBSL0YLEyjN8PxMfgbKQ",
+      "color": "Black",
+      "item_name": "(Shirt_TruckerJacket)",
+      "item_guid": "8b065e2a-b106-4f11-b415-4c47ce87993e",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "FlowerSwimsuit_Gray_Swatch",
+      "swatch_guid": "5a96ac4d-03c3-4214-9dcb-c2044ff28f2e",
+      "color": "Gray",
+      "item_name": "(FlowerSwimsuit)",
+      "item_guid": "f41653f9-ae02-443c-aaf4-1c6f4e49035d",
+      "item_outfit_type": 101,
+      "mask_guid": "3248a3ec-50d1-4c0a-96ae-25eb9d8ed622"
+    },
+    {
+      "swatch_name": "PirateCaptain_SRank_Swatch",
+      "swatch_guid": "xGmnUGF-Ck-jP43r8tVVjg",
+      "color": "SRank",
+      "item_name": "(Neck_PirateCaptain)",
+      "item_guid": "38b38e24-d636-41c6-b80e-a285ae3106dc",
+      "item_outfit_type": 102,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Mobster_PinStripe_Purple_Swatch",
+      "swatch_guid": "newGzX_zA0eGUX3Iayq5Ag",
+      "color": "PinStripe_Purple",
+      "item_name": "(Wrist_Mobster)",
+      "item_guid": "08d56627-4500-4724-8692-a23c96ddb3ec",
+      "item_outfit_type": 200,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "BabydollDress_Pink_Swatch",
+      "swatch_guid": "da6d0ced-3d43-4878-a868-925f2ed6fd5b",
+      "color": "Pink",
+      "item_name": "(BabydollDress)",
+      "item_guid": "da55bfc3-47b7-46f6-b548-7fb2c2a5e0bf",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Soccer_Shirt_Blue_Swatch",
+      "swatch_guid": "OnQeVxdstkS2zGxLBAuM3Q",
+      "color": "Shirt_Blue",
+      "item_name": "(Wrist_Soccer)",
+      "item_guid": "94eb7ef3-528f-4f59-92a0-48b0ec287527",
+      "item_outfit_type": 200,
+      "mask_guid": "i8bvbGAKREmAEbjKO-geOQ"
+    },
+    {
+      "swatch_name": "CollarShirt_Torso_GoldYellow_Swatch",
+      "swatch_guid": "jGj28vhq8EGwP2RuM074aQ",
+      "color": "Torso_GoldYellow",
+      "item_name": "(CollarShirt)",
+      "item_guid": "2e59d8d0-91a0-4449-bfdc-a5d663fd9343",
       "item_outfit_type": 101,
       "mask_guid": ""
     },
@@ -2107,6 +2962,123 @@
       "mask_guid": ""
     },
     {
+      "swatch_name": "SodaJerk_Blue_Swatch",
+      "swatch_guid": "XFCpIdeDXUqeYCIgh4fGtg",
+      "color": "Blue",
+      "item_name": "(Shirt_SodaJerk)",
+      "item_guid": "iai6P7dDTUq8S4hqQmY1YA",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "PirateCaptain_Red_Swatch",
+      "swatch_guid": "556141f7-6fbc-4065-9faa-8d8240a93d7f",
+      "color": "Red",
+      "item_name": "(Neck_PirateCaptain)",
+      "item_guid": "38b38e24-d636-41c6-b80e-a285ae3106dc",
+      "item_outfit_type": 102,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Steampunk_Femme_Contest_Swatch",
+      "swatch_guid": "A6VnGtpY9Ey0atf3zaLo3g",
+      "color": "e_Contest",
+      "item_name": "(Hat_SteampunkFemme)",
+      "item_guid": "JWanxvOHyESg9F_HlmTOfA",
+      "item_outfit_type": 0,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "BowlingShirt_Flames_Pink_Swatch",
+      "swatch_guid": "FC8ZFBPt4EyTe7IYbv2Tpg",
+      "color": "Shirt_Flames_Pink",
+      "item_name": "(Shirt_Bowling)",
+      "item_guid": "CQuKKNpan0O7rhR1fr14-Q",
+      "item_outfit_type": 101,
+      "mask_guid": "5RUG6i2Mx0-55IO-IlhUdQ"
+    },
+    {
+      "swatch_name": "Luchador_Blue_Swatch",
+      "swatch_guid": "0217fd2e-ff9d-49f7-9bc8-8d0d6b8bf250",
+      "color": "Blue",
+      "item_name": "(Hat_Luchador)",
+      "item_guid": "1596c113-aa3a-4f5c-b398-e5c3575548e7",
+      "item_outfit_type": 0,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Jazzercise_Yellow_Swatch",
+      "swatch_guid": "78eb0969-f246-4cac-acd6-295df7c092e4",
+      "color": "Yellow",
+      "item_name": "(Hair_Jazzercise)",
+      "item_guid": "49397e16-1027-4286-9bc4-b59eae565ff0",
+      "item_outfit_type": 2,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Countess_Purple_Swatch",
+      "swatch_guid": "IzkFARlv6EenmrfcNkcOuw",
+      "color": "Purple",
+      "item_name": "(Shirt_Countess)",
+      "item_guid": "QCtqxbvYOkan79YFugH_Cw",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Harness_Hat_Orange_Swatch",
+      "swatch_guid": "Euf1h1qsZ02evDsyoHYbPQ",
+      "color": "Hat_Orange",
+      "item_name": "(Shirt_Harness)",
+      "item_guid": "ca7a3ccb-2bc9-4c93-a6a8-6f22b38526af",
+      "item_outfit_type": 101,
+      "mask_guid": "PZHohDVX0U2frX13N4KYDQ"
+    },
+    {
+      "swatch_name": "LaserTag_Green_Swatch",
+      "swatch_guid": "2Z_FxSPiyUODtlFZWF9DFQ",
+      "color": "Green",
+      "item_name": "(Hat_LaserTag)",
+      "item_guid": "123de433-a005-4994-8a11-d2d84ad66b11",
+      "item_outfit_type": 0,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Golfer_Glove_Grey_Swatch",
+      "swatch_guid": "72a010c0-bddd-4e5d-bca6-9821d82de9a6",
+      "color": "Glove_Grey",
+      "item_name": "(Hat_Golfer)",
+      "item_guid": "2faa26b6-f7c3-4b0d-8f70-1f9454e64a54",
+      "item_outfit_type": 0,
+      "mask_guid": "f4cea991-fc3d-4715-bf82-8a8fb60e8799"
+    },
+    {
+      "swatch_name": "HeadBackBow_Hearts_Swatch",
+      "swatch_guid": "D-SngK7hhkOpoZ2aMWv9EA",
+      "color": "Hearts",
+      "item_name": "(Hat_HeadBackBow)",
+      "item_guid": "JTrfBXhIT02o2-ssP94zew",
+      "item_outfit_type": 0,
+      "mask_guid": "3DdSzSqV1UG5AtPr8ro3Kg"
+    },
+    {
+      "swatch_name": "TruckerJacket_Olive_Swatch",
+      "swatch_guid": "bgRKH1wfqkWVHcuSnFYnlQ",
+      "color": "Olive",
+      "item_name": "(Shirt_TruckerJacket)",
+      "item_guid": "8b065e2a-b106-4f11-b415-4c47ce87993e",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "BlazerSeaDark_Swatch",
+      "swatch_guid": "0ffad843-d6c9-425a-8686-7217009c867e",
+      "color": "SeaDark",
+      "item_name": "(Blazer)",
+      "item_guid": "de0ac50d-2adb-4114-bd2e-68953b13d706",
+      "item_outfit_type": 101,
+      "mask_guid": "be2b9293-1d3c-4b1c-b4c5-fad3ab16cf54"
+    },
+    {
       "swatch_name": "Turtleneck_Red_Swatch",
       "swatch_guid": "lBePHNL9LkyaAjEFyFE8Sw",
       "color": "Red",
@@ -2116,21 +3088,273 @@
       "mask_guid": ""
     },
     {
-      "swatch_name": "Turtleneck_Orange_Swatch",
-      "swatch_guid": "9b9t8_aKH0-gQXMhZycaOA",
+      "swatch_name": "HockeyShirt_Teal_Swatch",
+      "swatch_guid": "fcbdfbfd-254a-4538-b119-43e23404b8b5",
+      "color": "Teal",
+      "item_name": "(HockeyShirt)",
+      "item_guid": "d6b0a1e7-e918-43e5-8191-3a8d9d01df7c",
+      "item_outfit_type": 101,
+      "mask_guid": "e5635772-4e84-4b30-b77f-4a1196cb599b"
+    },
+    {
+      "swatch_name": "Unicorn_Glowing_Swatch",
+      "swatch_guid": "mudt-Z5-5USdnIq-xaDgOw",
+      "color": "Glowing",
+      "item_name": "(Hat_Unicorn)",
+      "item_guid": "2caHvVQ1vECrPv-YcdxdyA",
+      "item_outfit_type": 0,
+      "mask_guid": "nW_fBsuZA0OfIjTMXm6ZCA"
+    },
+    {
+      "swatch_name": "MagicalGirl_Orange_Swatch",
+      "swatch_guid": "hYu9itGe1Ee5Neanhj9VtQ",
       "color": "Orange",
-      "item_name": "(Shirt_Turtleneck)",
-      "item_guid": "7e22a4bd-3e87-4d50-8843-9e2e3cf45285",
+      "item_name": "(Wrist_MagicalGirl)",
+      "item_guid": "eS_or4AnMka9M_bD7YN28g",
+      "item_outfit_type": 200,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "ArcherTan_Quiver_Swatch",
+      "swatch_guid": "d1eb3573-672c-4bb4-9ec5-7c81e6a38d3d",
+      "color": "Tan_Quiver",
+      "item_name": "(Shirt_Archer)",
+      "item_guid": "c0e59f27-a13d-4bd9-b3b8-a38a360f649b",
       "item_outfit_type": 101,
       "mask_guid": ""
     },
     {
-      "swatch_name": "PB_Trucker_Red_Swatch",
-      "swatch_guid": "lDXambcP60CeY2C8qeGDFw",
-      "color": "Red",
-      "item_name": "(Hat_PB_TruckerHat)",
-      "item_guid": "0c537a84-9095-406f-8c87-1464f3a774ba",
+      "swatch_name": "Punk_WristGreen_Swatch",
+      "swatch_guid": "a6796264-9c7e-4605-830c-06db8d0dc780",
+      "color": "WristGreen",
+      "item_name": "(Wrist_Punk)",
+      "item_guid": "28374ebc-4050-4ea0-b3b6-41ebe75cedf7",
+      "item_outfit_type": 200,
+      "mask_guid": "dd7472ed-bdcb-4811-81ba-5ed682fb7675"
+    },
+    {
+      "swatch_name": "Headphones_EmissivePurple_Swatch",
+      "swatch_guid": "3PfP661Fg0CruzRxis9EiA",
+      "color": "EmissivePurple",
+      "item_name": "(Hat_Headphones)",
+      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
       "item_outfit_type": 0,
+      "mask_guid": "_Yq00H-NWUyQNvGxRunHbg"
+    },
+    {
+      "swatch_name": "Harness_Hat_Black_Swatch",
+      "swatch_guid": "JVZHZm6nGEqE2zEEPoHbwA",
+      "color": "Hat_Black",
+      "item_name": "(Shirt_Harness)",
+      "item_guid": "ca7a3ccb-2bc9-4c93-a6a8-6f22b38526af",
+      "item_outfit_type": 101,
+      "mask_guid": "PZHohDVX0U2frX13N4KYDQ"
+    },
+    {
+      "swatch_name": "HeadBackBow_SolidBlue_Swatch",
+      "swatch_guid": "8iZO162KNUiMC8l_z3OC_A",
+      "color": "SolidBlue",
+      "item_name": "(Hat_HeadBackBow)",
+      "item_guid": "JTrfBXhIT02o2-ssP94zew",
+      "item_outfit_type": 0,
+      "mask_guid": "3DdSzSqV1UG5AtPr8ro3Kg"
+    },
+    {
+      "swatch_name": "Firefighter_Hat_White_Swatch",
+      "swatch_guid": "891d902e-3257-4a8c-9001-858046007997",
+      "color": "Hat_White",
+      "item_name": "(Hat_Firefighter)",
+      "item_guid": "bb54e0e9-5d90-41f3-94c0-8e82f1791af1",
+      "item_outfit_type": 0,
+      "mask_guid": "c8ccb85e-52cd-4b3b-aadf-289819067125"
+    },
+    {
+      "swatch_name": "Scallywag_Hat_Red_Swatch",
+      "swatch_guid": "c3c9f89c-580c-43c4-b38b-07394044e0e1",
+      "color": "Hat_Red",
+      "item_name": "(Shirt_Scallywag)",
+      "item_guid": "664485e9-a159-4fcb-b32c-2b114b4a1218",
+      "item_outfit_type": 101,
+      "mask_guid": "a4903da3-249d-4f0a-a746-b547fda371ff"
+    },
+    {
+      "swatch_name": "HeadBackBow_SolidPink_Swatch",
+      "swatch_guid": "FUP4iRnoc0ikNmjrFD06lg",
+      "color": "SolidPink",
+      "item_name": "(Hat_HeadBackBow)",
+      "item_guid": "JTrfBXhIT02o2-ssP94zew",
+      "item_outfit_type": 0,
+      "mask_guid": "3DdSzSqV1UG5AtPr8ro3Kg"
+    },
+    {
+      "swatch_name": "SpaceMarine_Dark_Swatch",
+      "swatch_guid": "a089bcc6-798d-4777-98e2-7afd290dc6b6",
+      "color": "Dark",
+      "item_name": "(Shirt_SpaceMarine)",
+      "item_guid": "4ce7a70f-15a0-4cad-98ee-5cbb40827338",
+      "item_outfit_type": 101,
+      "mask_guid": "7ac81d60-05b8-4a85-982c-f69213a93818"
+    },
+    {
+      "swatch_name": "Headphones_TwoBlack_Swatch",
+      "swatch_guid": "ns5tIRishUOp-nYqLedcwA",
+      "color": "TwoBlack",
+      "item_name": "(Hat_Headphones)",
+      "item_guid": "UcPo9SsF3EGTCBB2J-Efdw",
+      "item_outfit_type": 0,
+      "mask_guid": "_Yq00H-NWUyQNvGxRunHbg"
+    },
+    {
+      "swatch_name": "Wrist_VampireHunter_Black_Swatch",
+      "swatch_guid": "Vxq6v55a_kGPODzwB5MC1g",
+      "color": "Black",
+      "item_name": "(Wrist_VampireHunter)",
+      "item_guid": "_OWVy3z6iU-M3-zbQgSLig",
+      "item_outfit_type": 200,
+      "mask_guid": "N5wN1l0tYEau5np-9PoIiA"
+    },
+    {
+      "swatch_name": "Blazer_Shamrock_Swatch",
+      "swatch_guid": "7WrSbK4Ml0K2z-ig5HIUCw",
+      "color": "Shamrock",
+      "item_name": "(Blazer)",
+      "item_guid": "de0ac50d-2adb-4114-bd2e-68953b13d706",
+      "item_outfit_type": 101,
+      "mask_guid": "be2b9293-1d3c-4b1c-b4c5-fad3ab16cf54"
+    },
+    {
+      "swatch_name": "MagicalGirl_Hat_Red_Swatch",
+      "swatch_guid": "EDLxuGjEVEGdOPXDqyN-xA",
+      "color": "Hat_Red",
+      "item_name": "(Wrist_MagicalGirl)",
+      "item_guid": "eS_or4AnMka9M_bD7YN28g",
+      "item_outfit_type": 200,
+      "mask_guid": "mG60EPIQIkaJNgOkonVmZg"
+    },
+    {
+      "swatch_name": "DrumMajorHat_Green_Swatch",
+      "swatch_guid": "5a614f97-ef7f-4b70-afff-9ed837a86407",
+      "color": "Hat_Green",
+      "item_name": "(Hat_DrumMajor)",
+      "item_guid": "1a028850-64ee-40ab-b547-ebbcfa1b04b3",
+      "item_outfit_type": 0,
+      "mask_guid": "a8a91216-0fcc-461e-a682-95ee82509cce"
+    },
+    {
+      "swatch_name": "Golfer_Hat_Blue_Swatch",
+      "swatch_guid": "6584dada-499e-4d7c-958d-466955b20640",
+      "color": "Hat_Blue",
+      "item_name": "(Hat_Golfer)",
+      "item_guid": "2faa26b6-f7c3-4b0d-8f70-1f9454e64a54",
+      "item_outfit_type": 0,
+      "mask_guid": "ddf429fd-a883-48a5-869b-bc12e44d30bf"
+    },
+    {
+      "swatch_name": "Harness_Blue_Swatch",
+      "swatch_guid": "RfZNDPUok0WyQEa3Ko08ow",
+      "color": "Blue",
+      "item_name": "(Shirt_Harness)",
+      "item_guid": "ca7a3ccb-2bc9-4c93-a6a8-6f22b38526af",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "ArcherSRank_Swatch",
+      "swatch_guid": "lgqLGi01o02ZFC9Xs5Ofdg",
+      "color": "SRank",
+      "item_name": "(Shirt_Archer)",
+      "item_guid": "c0e59f27-a13d-4bd9-b3b8-a38a360f649b",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "ArcherRed_Swatch",
+      "swatch_guid": "5b5281c9-b795-4bb2-ba7b-ba52047ebe3f",
+      "color": "Red",
+      "item_name": "(Shirt_Archer)",
+      "item_guid": "c0e59f27-a13d-4bd9-b3b8-a38a360f649b",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Wrist_VampireHunter_Leather_Swatch",
+      "swatch_guid": "D0tP58wC30mJ00vNxw8hqA",
+      "color": "Leather",
+      "item_name": "(Wrist_VampireHunter)",
+      "item_guid": "_OWVy3z6iU-M3-zbQgSLig",
+      "item_outfit_type": 200,
+      "mask_guid": "N5wN1l0tYEau5np-9PoIiA"
+    },
+    {
+      "swatch_name": "SpaceMarine_SRank_Swatch",
+      "swatch_guid": "4ElTihrMA0ipcgeb9UG01Q",
+      "color": "SRank",
+      "item_name": "(Shirt_SpaceMarine)",
+      "item_guid": "4ce7a70f-15a0-4cad-98ee-5cbb40827338",
+      "item_outfit_type": 101,
+      "mask_guid": "7ac81d60-05b8-4a85-982c-f69213a93818"
+    },
+    {
+      "swatch_name": "Jackfrost_Shirt_Lilac_Swatch",
+      "swatch_guid": "prEZHWvOM0ysaNfAe06ywA",
+      "color": "Shirt_Lilac",
+      "item_name": "(Shirt_JackFrost)",
+      "item_guid": "105a5100-cb57-410f-a26b-1ee21002f067",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "BusinessTie_CandyCane_Swatch",
+      "swatch_guid": "W4a144so90eRzCojUnDowA",
+      "color": "CandyCane",
+      "item_name": "(BusinessTie)",
+      "item_guid": "c6c08eb5-381a-4193-9722-80da95d62abe",
+      "item_outfit_type": 100,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "MagicalGirl_Hat_Orange_Swatch",
+      "swatch_guid": "f0pjsV0XMUWoE_z2kqOlSA",
+      "color": "Hat_Orange",
+      "item_name": "(Wrist_MagicalGirl)",
+      "item_guid": "eS_or4AnMka9M_bD7YN28g",
+      "item_outfit_type": 200,
+      "mask_guid": "mG60EPIQIkaJNgOkonVmZg"
+    },
+    {
+      "swatch_name": "BowlingShirt_CenterStripe_Yellow_Swatch",
+      "swatch_guid": "XrSL-v2MbkK0md-FMOweOA",
+      "color": "Shirt_CenterStripe_Yellow",
+      "item_name": "(Shirt_Bowling)",
+      "item_guid": "CQuKKNpan0O7rhR1fr14-Q",
+      "item_outfit_type": 101,
+      "mask_guid": "IWg9wuda4kaCilJk8JQpTQ"
+    },
+    {
+      "swatch_name": "CollarShirt_Torso_Plaid_Red_Swatch",
+      "swatch_guid": "ojvIFCTpJkeegestF065wA",
+      "color": "Torso_Plaid_Red",
+      "item_name": "(CollarShirt)",
+      "item_guid": "2e59d8d0-91a0-4449-bfdc-a5d663fd9343",
+      "item_outfit_type": 101,
+      "mask_guid": "10fYSIBytk-yUjveDa407w"
+    },
+    {
+      "swatch_name": "Witch_Contest_Wrist_Swatch",
+      "swatch_guid": "Hk6svQ5Sr0GDKLxOyktk9w",
+      "color": "Contest_Wrist",
+      "item_name": "(Shirt_Witch)",
+      "item_guid": "7LSm-xCYakmgcAr--Fn-JA",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "WitchHunter_White_Swatch",
+      "swatch_guid": "e02838f8-4029-455a-b35c-dd40f972b05b",
+      "color": "White",
+      "item_name": "(Shirt_WitchHunter)",
+      "item_guid": "418db0e0-c7af-40c2-9cac-d461ce41e210",
+      "item_outfit_type": 101,
       "mask_guid": ""
     },
     {
@@ -2143,6 +3367,51 @@
       "mask_guid": ""
     },
     {
+      "swatch_name": "Countess_Green_Wrist_Swatch",
+      "swatch_guid": "Wj7I2YiVoE6zp8J_HYs8tw",
+      "color": "Green_Wrist",
+      "item_name": "(Shirt_Countess)",
+      "item_guid": "QCtqxbvYOkan79YFugH_Cw",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "CollarShirt_Torso_GreenFlower_Swatch",
+      "swatch_guid": "EfdMcnfHt0mr0PQ_maaYOg",
+      "color": "Torso_GreenFlower",
+      "item_name": "(CollarShirt)",
+      "item_guid": "2e59d8d0-91a0-4449-bfdc-a5d663fd9343",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "ArcherRed_Quiver_Swatch",
+      "swatch_guid": "7221132e-053a-4c58-b719-ed3c8558907d",
+      "color": "Red_Quiver",
+      "item_name": "(Shirt_Archer)",
+      "item_guid": "c0e59f27-a13d-4bd9-b3b8-a38a360f649b",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Winter_Scarf_Tree_Swatch",
+      "swatch_guid": "OrqqGMhK1UKGowFxpJi2mw",
+      "color": "Scarf_Tree",
+      "item_name": "(Hat_Winter)",
+      "item_guid": "24c4404a-839f-46bd-98b6-6848d747a98b",
+      "item_outfit_type": 0,
+      "mask_guid": "dUu7b-JFOky9c2lIVCNmcg"
+    },
+    {
+      "swatch_name": "ArcherGray_Glove_Swatch",
+      "swatch_guid": "8hUBfmq28EixYjv92Xcrgg",
+      "color": "Gray_Glove",
+      "item_name": "(Shirt_Archer)",
+      "item_guid": "c0e59f27-a13d-4bd9-b3b8-a38a360f649b",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
       "swatch_name": "Tennis_Pink_Swatch",
       "swatch_guid": "304e5cf1-5c94-481f-8e49-e6a943e6b300",
       "color": "Pink",
@@ -2150,497 +3419,475 @@
       "item_guid": "74b91f2b-d4d3-4e41-8946-b1296ab7a773",
       "item_outfit_type": 101,
       "mask_guid": "90e0da8b-1941-4ca8-b7e5-b4e31921873c"
+    },
+    {
+      "swatch_name": "BowlingShirt_Diamonds_Blue_Swatch",
+      "swatch_guid": "KqjQ1xRpokGLKp9GVN1EFA",
+      "color": "Shirt_Diamonds_Blue",
+      "item_name": "(Shirt_Bowling)",
+      "item_guid": "CQuKKNpan0O7rhR1fr14-Q",
+      "item_outfit_type": 101,
+      "mask_guid": "VO_3cgqQqUOTz30TVUxrFA"
+    },
+    {
+      "swatch_name": "Scarecrow_Shirt_Contest_Swatch",
+      "swatch_guid": "S0AKRB_m2k-I7snHnUigtw",
+      "color": "Shirt_Contest",
+      "item_name": "(Shirt_Scarecrow)",
+      "item_guid": "1fcaf4fd-9012-407e-b691-fbc3ccf22421",
+      "item_outfit_type": 101,
+      "mask_guid": "uTkbswCedUGyuZcaX0W6Ww"
+    },
+    {
+      "swatch_name": "Sherlock_Hat_Black_Swatch",
+      "swatch_guid": "fEPwvuJCWkGBe4IekXpmLw",
+      "color": "Hat_Black",
+      "item_name": "(Hat_Sherlock)",
+      "item_guid": "5bde836f-9343-4934-b01a-606f707020ef",
+      "item_outfit_type": 0,
+      "mask_guid": "axPBGoqorEe77Oqqjfzb5w"
+    },
+    {
+      "swatch_name": "ElectricianTorso_Beige_Swatch",
+      "swatch_guid": "5fb2e235-8c67-4335-b432-edb10db2b139",
+      "color": "Torso_Beige",
+      "item_name": "(Hat_Electrician)",
+      "item_guid": "34654303-9760-447f-8614-1c26506db994",
+      "item_outfit_type": 0,
+      "mask_guid": "daa38a31-fb7b-4e26-a2f5-728d6dcec81a"
+    },
+    {
+      "swatch_name": "Letterman_Wrist_Black_Swatch",
+      "swatch_guid": "Y0e7o0_BKUm7XJSLediN5w",
+      "color": "Wrist_Black",
+      "item_name": "(Wrist_Letterman)",
+      "item_guid": "2dFMy4zc7ky_Fd5fzfgInw",
+      "item_outfit_type": 200,
+      "mask_guid": "4EHIyZkOOEqnM-PuD_a5xw"
+    },
+    {
+      "swatch_name": "LaserTag_Orange_Swatch",
+      "swatch_guid": "jkuw9EhCpEKn-2lKJXWd3Q",
+      "color": "Orange",
+      "item_name": "(Hat_LaserTag)",
+      "item_guid": "123de433-a005-4994-8a11-d2d84ad66b11",
+      "item_outfit_type": 0,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Golfer_Hat_Grey_Swatch",
+      "swatch_guid": "48c18418-01dd-40ff-9dfe-c4cf5f4e1245",
+      "color": "Hat_Grey",
+      "item_name": "(Hat_Golfer)",
+      "item_guid": "2faa26b6-f7c3-4b0d-8f70-1f9454e64a54",
+      "item_outfit_type": 0,
+      "mask_guid": "ddf429fd-a883-48a5-869b-bc12e44d30bf"
+    },
+    {
+      "swatch_name": "Soccer_Glove_Blue_Swatch",
+      "swatch_guid": "whEHo6Rhr0CxsDBsBD32WA",
+      "color": "Glove_Blue",
+      "item_name": "(Wrist_Soccer)",
+      "item_guid": "94eb7ef3-528f-4f59-92a0-48b0ec287527",
+      "item_outfit_type": 200,
+      "mask_guid": "av4PwLz6YkmpBRImQZgn4Q"
+    },
+    {
+      "swatch_name": "FurCoat_White_Swatch",
+      "swatch_guid": "643b5f2d-0666-4869-b699-03742de34d16",
+      "color": "White",
+      "item_name": "(FurCoat)",
+      "item_guid": "77c37481-a185-47ff-af55-65f9fdfcf9e5",
+      "item_outfit_type": 101,
+      "mask_guid": "2c0d912d-c184-4eab-8ee4-73b90ba7b0a6"
+    },
+    {
+      "swatch_name": "Hat_SeaCaptainDarkSilver_Swatch",
+      "swatch_guid": "36e63797-5a42-4779-a5cc-ef5c2e7d17d4",
+      "color": "DarkSilver",
+      "item_name": "(Hat_SeaCaptain)",
+      "item_guid": "f5c9743f-e77c-42f2-ba63-9843342cbf8e",
+      "item_outfit_type": 0,
+      "mask_guid": "a4e51b6b-fdfd-47dc-9d0e-f26f383e03e9"
+    },
+    {
+      "swatch_name": "HockeyShirt_Purple_Swatch",
+      "swatch_guid": "d5efaf80-7f34-4c9a-bc3a-b80b1ac70ace",
+      "color": "Purple",
+      "item_name": "(HockeyShirt)",
+      "item_guid": "d6b0a1e7-e918-43e5-8191-3a8d9d01df7c",
+      "item_outfit_type": 101,
+      "mask_guid": "e5635772-4e84-4b30-b77f-4a1196cb599b"
+    },
+    {
+      "swatch_name": "Steampunk_Contest_Hat_Swatch",
+      "swatch_guid": "AAbGHOOitUu9enweOXbrkw",
+      "color": "Contest_Hat",
+      "item_name": "(Shirt_SteamPunk)",
+      "item_guid": "E9VTiIVFPEa-OuQRto0e_Q",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "ArcherYellow_Quiver_Swatch",
+      "swatch_guid": "e548124c-d7f3-45de-aaa0-f66130eca576",
+      "color": "Yellow_Quiver",
+      "item_name": "(Shirt_Archer)",
+      "item_guid": "c0e59f27-a13d-4bd9-b3b8-a38a360f649b",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "LaserTagGlove_Green_Swatch",
+      "swatch_guid": "mhsglVEtREmElF5wuLw3NQ",
+      "color": "Green",
+      "item_name": "(Wrist_LaserTagGlove)",
+      "item_guid": "3044adce-90c0-4f66-81f5-39c4fca86fdf",
+      "item_outfit_type": 200,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "ArcherTan_Swatch",
+      "swatch_guid": "9b35ae52-febe-486a-8557-ec7190a9756e",
+      "color": "Tan",
+      "item_name": "(Shirt_Archer)",
+      "item_guid": "c0e59f27-a13d-4bd9-b3b8-a38a360f649b",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "BowlingShirt_Flames_Blue_Swatch",
+      "swatch_guid": "032pE8s9Ik-2CImFVDrSqg",
+      "color": "Shirt_Flames_Blue",
+      "item_name": "(Shirt_Bowling)",
+      "item_guid": "CQuKKNpan0O7rhR1fr14-Q",
+      "item_outfit_type": 101,
+      "mask_guid": "5RUG6i2Mx0-55IO-IlhUdQ"
+    },
+    {
+      "swatch_name": "Turtleneck_Orange_Swatch",
+      "swatch_guid": "9b9t8_aKH0-gQXMhZycaOA",
+      "color": "Orange",
+      "item_name": "(Shirt_Turtleneck)",
+      "item_guid": "7e22a4bd-3e87-4d50-8843-9e2e3cf45285",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "MagicalGirl_Neck_Blue_Swatch",
+      "swatch_guid": "Ot9EG-FfKEauT0u6pSZuWg",
+      "color": "Neck_Blue",
+      "item_name": "(Wrist_MagicalGirl)",
+      "item_guid": "eS_or4AnMka9M_bD7YN28g",
+      "item_outfit_type": 200,
+      "mask_guid": "M5z2wk-GDkOAjvZzqsfcNQ"
+    },
+    {
+      "swatch_name": "WitchHunter_Red_Swatch",
+      "swatch_guid": "909ed249-ce09-4304-8b02-56794fa7567d",
+      "color": "Red",
+      "item_name": "(Shirt_WitchHunter)",
+      "item_guid": "418db0e0-c7af-40c2-9cac-d461ce41e210",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Countess_Green_Swatch",
+      "swatch_guid": "LyVf9lnzdku1F4iPBGqk-g",
+      "color": "Green",
+      "item_name": "(Shirt_Countess)",
+      "item_guid": "QCtqxbvYOkan79YFugH_Cw",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Shirt_TutorialGown1_Purple_Swatch",
+      "swatch_guid": "U2ZbHn8WJEySUXVpzAY6ig",
+      "color": "Purple",
+      "item_name": "(Shirt_TutorialGown_1)",
+      "item_guid": "ASHnWS0h9kOJhbOUwxWKFQ",
+      "item_outfit_type": 101,
+      "mask_guid": "6nmHu9zj8k-tEz0tBHblnQ"
+    },
+    {
+      "swatch_name": "BowlingShirt_OneStripe_Blue_Swatch",
+      "swatch_guid": "GDvaUU10-EKh3pKUQ9tnag",
+      "color": "Shirt_OneStripe_Blue",
+      "item_name": "(Shirt_Bowling)",
+      "item_guid": "CQuKKNpan0O7rhR1fr14-Q",
+      "item_outfit_type": 101,
+      "mask_guid": "b-IM3eYMJUa40395O5XeLg"
+    },
+    {
+      "swatch_name": "Scuba_Neck_Contest_Swatch",
+      "swatch_guid": "GWi1rEebqkCV_TS2WzQhcA",
+      "color": "Neck_Contest",
+      "item_name": "(Shirt_Scuba)",
+      "item_guid": "57552652-d902-43b7-a68e-5c7da87582bc",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Dodgeball_Black_Swatch",
+      "swatch_guid": "4a85c181-92fe-47a5-925e-05f0ccb25006",
+      "color": "Black",
+      "item_name": "(Shirt_Dodgeball)",
+      "item_guid": "d3d69bee-60bc-44a3-ad7c-65b3b69d1e59",
+      "item_outfit_type": 101,
+      "mask_guid": "944d934d-5e21-42d7-8196-fff9a81ee469"
+    },
+    {
+      "swatch_name": "BlazerGrey_Swatch",
+      "swatch_guid": "272fe8eb-5061-4729-a7a8-414ff667a82f",
+      "color": "Grey",
+      "item_name": "(Blazer)",
+      "item_guid": "de0ac50d-2adb-4114-bd2e-68953b13d706",
+      "item_outfit_type": 101,
+      "mask_guid": "be2b9293-1d3c-4b1c-b4c5-fad3ab16cf54"
+    },
+    {
+      "swatch_name": "TennisSkirt_Red_Swatch",
+      "swatch_guid": "758752bd-db2f-43d2-b580-55b3e1efffd5",
+      "color": "Red",
+      "item_name": "(TennisSkirt)",
+      "item_guid": "21caa68e-c3fa-474c-af5e-af1e742b7a60",
+      "item_outfit_type": 101,
+      "mask_guid": "b75ef67d-00c3-4ac1-9b72-212032460294"
+    },
+    {
+      "swatch_name": "Windbreaker_Salmon_Swatch",
+      "swatch_guid": "JS7aa4QSUUOpUYPqRZEb5g",
+      "color": "Salmon",
+      "item_name": "(Wrist_80sWindbreaker)",
+      "item_guid": "52VsI_lKlkSUAOJlfDnyrQ",
+      "item_outfit_type": 200,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Wizard_Red_Swatch",
+      "swatch_guid": "a38254c0-00e3-429b-9d5d-b9e6a9812e69",
+      "color": "Red",
+      "item_name": "(Hat_Wizard)",
+      "item_guid": "01689baf-405e-4b38-9f09-b624e03865b8",
+      "item_outfit_type": 0,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "FighterPilot_Gloves_Blue_Swatch",
+      "swatch_guid": "55b4e661-43e1-4708-82d5-2dd2bebd4f45",
+      "color": "Gloves_Blue",
+      "item_name": "(Wrist_FighterPilot)",
+      "item_guid": "5800d2b5-75b8-442f-8b10-63bd3d73a1b8",
+      "item_outfit_type": 200,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Letterman_Green_Swatch",
+      "swatch_guid": "apSQiQ1eO0mEzRsbugeu9w",
+      "color": "Green",
+      "item_name": "(Wrist_Letterman)",
+      "item_guid": "2dFMy4zc7ky_Fd5fzfgInw",
+      "item_outfit_type": 200,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "ArtistHat_Blue_Swatch",
+      "swatch_guid": "14b43bf9-5ba0-484e-ae5d-55cfeb09a70d",
+      "color": "Hat_Blue",
+      "item_name": "(Shirt_Artist)",
+      "item_guid": "02077915-57d3-4e26-b4fe-8e0399cbb293",
+      "item_outfit_type": 101,
+      "mask_guid": "3485a30d-27f8-450b-b5aa-1ff3cd227d19"
+    },
+    {
+      "swatch_name": "WaitressApron_Green_Swatch",
+      "swatch_guid": "Blev_VFjRUysY_nymGWAVg",
+      "color": "Green",
+      "item_name": "(Belt_WaitressApron)",
+      "item_guid": "204bc384-e6d2-41b8-8ce9-0b26be5d85b7",
+      "item_outfit_type": 102,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "CollarShirt_Torso_White_Swatch",
+      "swatch_guid": "MFrcSQ1DYUm8imvy4ypgvw",
+      "color": "Torso_White",
+      "item_name": "(CollarShirt)",
+      "item_guid": "2e59d8d0-91a0-4449-bfdc-a5d663fd9343",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Ranger_Hat_Green_Swatch",
+      "swatch_guid": "d0bb468c-b78f-4e80-916d-65fec3ec0010",
+      "color": "Hat_Green",
+      "item_name": "(Hat_Ranger)",
+      "item_guid": "f277af6a-0807-4716-8948-1bee236ffb74",
+      "item_outfit_type": 0,
+      "mask_guid": "0272eb19-fc0e-4ad6-8db9-cc0cda2528b0"
+    },
+    {
+      "swatch_name": "Scuba_Shirt_Blue_Swatch",
+      "swatch_guid": "VqtOYBiKRkaSW4xAlBxQgg",
+      "color": "Shirt_Blue",
+      "item_name": "(Shirt_Scuba)",
+      "item_guid": "57552652-d902-43b7-a68e-5c7da87582bc",
+      "item_outfit_type": 101,
+      "mask_guid": ""
+    },
+    {
+      "swatch_name": "Harness_Orange_Swatch",
+      "swatch_guid": "sX0ZZDcCUkyFSJISfvq0vg",
+      "color": "Orange",
+      "item_name": "(Shirt_Harness)",
+      "item_guid": "ca7a3ccb-2bc9-4c93-a6a8-6f22b38526af",
+      "item_outfit_type": 101,
+      "mask_guid": ""
     }
   ],
   "unmatched": [
+    "Knight_SRank_Swatch",
     "TShirt_SquadGoals_Swatch",
-    "TShirt_HangInThere_Swatch",
-    "TShirt_Orange_Swatch",
     "ZebraWhite_Swatch",
-    "Winter_Gloves_Tree_Green_Swatch",
     "Cyber_Trash_Yellow_Swatch",
-    "Cyber_Trash_Black_Swatch",
     "PoofyDress_Purple_Swatch",
-    "PoofyDress_Orange_Swatch",
-    "CowboyCherry_Swatch",
-    "Mobster_HerringBone_Tan_Swatch",
     "Laser_Graffiti_Swatch",
-    "Laser_Ham_Swatch",
     "Shuttershades_Salmon_Swatch",
-    "Shuttershades_Red_Swatch",
-    "Shuttershades_Blue_Swatch",
-    "Shuttershades_Yellow_Swatch",
-    "Countess_Wrist_Purple_Swatch",
     "Class_Of_2018_Swatch",
-    "FighterPilot_Gloves_Orange_Swatch",
-    "FighterPilot_Gloves_Blue_Swatch",
-    "Aviator_Gloves_Tan_Swatch",
-    "Aviator_Gloves_Black_Swatch",
     "Plaid_LightBlue_Swatch",
-    "Plaid_Red_Swatch",
-    "Astronaut_Glove_Orange_Swatch",
     "Fatigue_Swatch",
     "Wrist_CowboyWhite_Swatch",
-    "Wrist_CowboyCherry_Swatch",
-    "Wrist_CowboyBlack_Swatch",
-    "Wrist_CowboyLight_Swatch",
-    "Wrist_CowboyDark_Swatch",
-    "Winter_Hat_Tree_Swatch",
-    "Winter_Hat_Red_Swatch",
-    "Harness_Hat_Teal_Swatch",
-    "Harness_Hat_Yellow_Swatch",
-    "Harness_Hat_White_Swatch",
-    "Harness_Hat_Orange_Swatch",
-    "Harness_Hat_Black_Swatch",
-    "Sherlock_Torso_Gray_Swatch",
-    "Sherlock_Torso_Black_Swatch",
-    "BowlingShirt_CenterStripe_Burgandy_Swatch",
-    "BowlingShirt_CenterStripe_Black_Swatch",
-    "BowlingShirt_CenterStripe_Yellow_Swatch",
-    "Scuba_Neck_Blue_Swatch",
-    "Scuba_Neck_Contest_Swatch",
     "Cream_Swatch",
-    "ArtistHat_Red_Swatch",
-    "ArtistHat_Blue_Swatch",
-    "ArcherBlack_Quiver_Swatch",
-    "ArcherBlack_Swatch",
-    "ArcherBlack_Glove_Swatch",
-    "ArcherYellow_Swatch",
-    "ArcherYellow_Glove_Swatch",
-    "ArcherYellow_Quiver_Swatch",
-    "Hat_SeaCaptainDarkDarkGold_Swatch",
-    "Hat_SeaCaptainFushia_Swatch",
-    "Hat_SeaCaptainDarkGold_Swatch",
-    "Hat_SeaCaptainDarkSilver_Swatch",
+    "Shuttershades_Red_Swatch",
     "PolkaBlue_Swatch",
-    "Letterman_Wrist_Red_Swatch",
-    "Letterman_Wrist_Purple_Swatch",
-    "Letterman_Wrist_Green_Swatch",
-    "Letterman_Wrist_Black_Swatch",
+    "Wrist_CowboyCherry_Swatch",
     "Yellow_Swatch",
     "Windbreaker_Wrist_Yellow_Swatch",
-    "Windbreaker_Wrist_Red_Swatch",
-    "Windbreaker_Wrist_Blue_Swatch",
-    "Windbreaker_Wrist_Salmon_Swatch",
-    "Beekeeper_Shirt_Teal_Swatch",
-    "Beekeeper_Shirt_Lavender_Swatch",
-    "Beekeeper_Shirt_Gold_Swatch",
     "2D_Contest_Winner_Swatch",
-    "Scarecrow_Hat_Contest_Swatch",
     "Red_Swatch",
-    "Hat_Baseball_ThreeColor_BlueRed_Swatch",
-    "PirateCaptain_Hat_Black_Swatch",
-    "PirateCaptain_Hat_SRank_Swatch",
-    "PirateCaptain_Hat_Red_Swatch",
     "RoyalCape_Green_Swatch",
-    "RoyalCape_Blue_Swatch",
-    "RoyalCape_Purple_Swatch",
     "Grey_Swatch",
-    "BlazerGreyDark_Swatch",
-    "MagicalGirl_Wrist_Red_Swatch",
-    "MagicalGirl_Wrist_Orange_Swatch",
-    "MagicalGirl_Wrist_Green_Swatch",
-    "MagicalGirl_Wrist_Blue_Swatch",
-    "PirateCaptain_Belt_Black_Swatch",
-    "PirateCaptain_Belt_Red_Swatch",
-    "BowlingShirt_Flames_Red_Swatch",
-    "BowlingShirt_Flames_Green_Swatch",
-    "BowlingShirt_Flames_Pink_Swatch",
-    "BowlingShirt_Flames_Blue_Swatch",
     "RoyalCape_Contest_White_Swatch",
     "Barber_Torso_Formal_Swatch",
-    "Barber_Torso_Green_Swatch",
-    "Aviator_Goggles_Gray_Swatch",
-    "Aviator_Goggles_Black_Swatch",
+    "Knight_Blue_Swatch",
     "Neck_TutorialGown3_Black_Swatch",
-    "SafariTorso_Green_Swatch",
-    "Scallywag_Hat_Blue_Swatch",
-    "Scallywag_Hat_Red_Swatch",
     "TShirt_Laser_Unicorn_Purple_Swatch",
-    "Astronaut_Helmet_Orange_Swatch",
-    "ArcherGray_Quiver_Swatch",
-    "ArcherGray_Swatch",
-    "ArcherGray_Glove_Swatch",
-    "Hoodie_Skeleton_NoGlow_Swatch",
-    "AnglerHat_Blue_Swatch",
-    "AnglerHat_Gray_Swatch",
-    "AnglerHat_Tan_Swatch",
-    "Scuba_eye_Contest_Swatch",
-    "Scuba_eye_Blue_Swatch",
-    "BowlingShirt_OneStripe_Green_Swatch",
-    "BowlingShirt_OneStripe_Pink_Swatch",
-    "BowlingShirt_OneStripe_Blue_Swatch",
-    "Golfer_Shirt_Blue_Swatch",
-    "Golfer_Shirt_Grey_Swatch",
     "PaintBallHat_Red_Swatch",
-    "PaintBallHat_Green_Swatch",
-    "PaintBallHat_Mustard_Swatch",
-    "Shirt_TutorialGown3_Black_Swatch",
-    "Winter_Scarf_Tree_Green_Swatch",
     "Blue_Swatch",
     "Barber_Hat_Formal_Swatch",
-    "Barber_Hat_Green_Swatch",
-    "Vest_HoundsTooth_Black_Swatch",
+    "RoyalCape_Blue_Swatch",
     "Neck_VampiteHunter_Opal_Swatch",
-    "Neck_VampiteHunter_Ruby_Swatch",
-    "Neck_VampiteHunter_Amethyst_Swatch",
-    "Neck_VampiteHunter_Diamond_Swatch",
-    "Neck_VampiteHunter_Emerald_Swatch",
-    "Neck_VampiteHunter_Amber_Swatch",
-    "Neck_VampiteHunter_Topaz_Swatch",
-    "Winter_Scarf_Red_Swatch",
-    "Winter_Scarf_Tree_Swatch",
+    "TShirt_HangInThere_Swatch",
+    "Knight_Red_Swatch",
     "Floatie_Donut_Swatch",
-    "Floatie_Dinosaur_Swatch",
-    "Rainhat_Hat_Red_Swatch",
-    "Winter_Gloves_Red_Swatch",
-    "Winter_Gloves_Tree_Swatch",
-    "Scout_Sash_Blue_Swatch",
-    "Scout_Sash_Brown_Swatch",
-    "Scout_Sash_Red_Swatch",
     "RoyalLady_Green_Swatch",
-    "RoyalLady_Black_Swatch",
-    "RoyalLady_Burgandy_Swatch",
-    "Mobster_Hat_Brown_Swatch",
-    "Mobster_Hat_Purple_Swatch",
-    "Mobster_Hat_Gray_Swatch",
-    "ElectricianTorso_Gray_Swatch",
-    "ElectricianTorso_Yellow_Swatch",
-    "ElectricianTorso_Green_Swatch",
-    "ElectricianTorso_Beige_Swatch",
+    "TShirt_Orange_Swatch",
     "White_Swatch",
+    "RoyalCape_Purple_Swatch",
     "BeltDress_Green_Swatch",
-    "BeltDress_Black_Swatch",
-    "BeltDress_Yellow_Swatch",
-    "FootballHelmet_Orange_Swatch",
-    "FootballHelmet_Dark_Swatch",
-    "Aviator_Jacket_Tan_Swatch",
-    "Aviator_Jacket_Black_Swatch",
+    "Shuttershades_Blue_Swatch",
+    "Neck_VampiteHunter_Ruby_Swatch",
     "RoyalCrown_Contest_Swatch",
-    "RoyalCrown_White_Swatch",
-    "RoyalCrown_Black_Swatch",
-    "MagicalGirl_Hat_Blue_Swatch",
-    "MagicalGirl_Hat_Green_Swatch",
-    "MagicalGirl_Hat_Red_Swatch",
-    "MagicalGirl_Hat_Orange_Swatch",
+    "BeltDress_Black_Swatch",
+    "Wrist_CowboyBlack_Swatch",
     "TShirt_KO_Skull_Swatch",
     "RoyalLord_Black_Swatch",
-    "RoyalLord_Burgandy_Swatch",
-    "RoyalLord_Green_Swatch",
-    "Hat_Baseball_Logo_Ramen_Swatch",
-    "Hat_Baseball_Logo_Bucketeers_Swatch",
-    "Hat_Baseball_Logo_Goblins_Swatch",
     "TShirt_Orange_Video_Contest_Generic_Swatch",
     "TShirt_Scifi_Face_BLue_Swatch",
-    "TShirt_Scifi_Face_Pink_Swatch",
     "Green_Swatch",
-    "BlazerDark_Swatch",
-    "Witch_Contest_Hat_Swatch",
-    "Witch_Contest_Wrist_Swatch",
-    "CowboyWhite_Swatch",
-    "Aviator_Hat_Tan_Swatch",
-    "Aviator_Hat_Black_Swatch",
     "GreenFlower_Swatch",
-    "BowlingShirt_Diamonds_Purple_Swatch",
-    "BowlingShirt_Diamonds_Teal_Swatch",
-    "BowlingShirt_Diamonds_Blue_Swatch",
     "FormalDress_Black_Swatch",
     "Birthday01_Swatch",
-    "Scallywag_Eye_SRank_Swatch",
-    "Ranger_Shirt_Green_Swatch",
+    "Neck_VampiteHunter_Amethyst_Swatch",
+    "Cyber_Trash_Black_Swatch",
     "SciFiVisor_Peach_Swatch",
-    "SciFiVisor_Blue_Swatch",
-    "SciFiVisor_Orange_Swatch",
-    "Shirt_TutorialGown2_Orange_Swatch",
     "Scifi_Carpet_Swatch",
     "Teal_Swatch",
     "Charcoal_Swatch",
     "Paintball_Red_Swatch",
-    "Paintball_Blue_Swatch",
-    "ArcherTan_Glove_Swatch",
-    "ArcherTan_Quiver_Swatch",
-    "ArcherTan_Swatch",
     "BicycleJacket_Black_Swatch",
-    "BicycleJacket_DarkBlue_Swatch",
-    "BicycleJacket_Blue_Swatch",
+    "TShirt_Scifi_Face_Pink_Swatch",
     "Argyle_Brown_Swatch",
-    "Argyle_Red_Swatch",
+    "Paintball_Blue_Swatch",
     "BasketballShirt_Purple_Swatch",
-    "BasketballShirt_Blue_Swatch",
     "Purple_Swatch",
-    "ScoutSkirt_Shirt_Red_Swatch",
-    "LaserTagVisor_Green_Swatch",
-    "LaserTagVisor_Orange_Swatch",
-    "LaserTagVisor_Cyan_Swatch",
+    "Knight_Black_Swatch",
     "TShirt_KO_Skull_Pink_Swatch",
-    "CollarShirt_Torso_Red_Swatch",
-    "CollarShirt_Torso_Blue_Swatch",
-    "CollarShirt_Torso_Pink_Swatch",
-    "CollarShirt_Torso_GoldYellow_Swatch",
-    "CollarShirt_Torso_GreenFlower_Swatch",
-    "CollarShirt_Torso_White_Swatch",
-    "Pearls_Neck_Black_Swatch",
-    "MagicalGirl_Neck_Orange_Swatch",
-    "MagicalGirl_Neck_Red_Swatch",
-    "MagicalGirl_Neck_Green_Swatch",
-    "MagicalGirl_Neck_Blue_Swatch",
+    "BeltDress_Yellow_Swatch",
+    "Shuttershades_Yellow_Swatch",
+    "PaintBallHat_Green_Swatch",
     "Cyber_Junk_City_Swatch",
-    "Firefighter_Hat_Yellow_Swatch",
-    "Firefighter_Hat_White_Swatch",
-    "Scout_RaccoonHat_Gray_Swatch",
-    "JackfrostWings_Neck_Lilac_Swatch",
-    "CowboyBlack_Swatch",
+    "BicycleJacket_DarkBlue_Swatch",
     "Torso_SeaCaptainBlueWhite_Swatch",
-    "Torso_SeaCaptainBlueDark2_Swatch",
-    "Torso_SeaCaptainDark_Swatch",
-    "Torso_SeaCaptainWhiteDark_Swatch",
-    "Torso_SeaCaptainBlackDark_Swatch",
-    "Torso_SeaCaptainBlueDark_Swatch",
-    "Torso_SeaCaptainBlue_Swatch",
-    "Astronaut_Torso_Orange_Swatch",
-    "CowboyDark_Swatch",
+    "CheerDress_Blue_Swatch",
     "Denim_Swatch",
-    "FootballPads_Orange_Swatch",
-    "FootballPads_Dark_Swatch",
     "RoyalLady_Contest_White_Swatch",
+    "Neck_VampiteHunter_Diamond_Swatch",
+    "Floatie_Dinosaur_Swatch",
+    "Torso_SeaCaptainBlueDark2_Swatch",
     "WaitressDress_Mustard_Swatch",
-    "WaitressDress_Green_Swatch",
-    "WaitressDress_Red_Swatch",
     "CollarDress_Pink_Swatch",
-    "CollarDress_LightBlue_Swatch",
-    "Scarecrow_Wrist_Contest_Swatch",
+    "Torso_SeaCaptainDark_Swatch",
+    "SciFiVisor_Blue_Swatch",
+    "RoyalCrown_White_Swatch",
     "Pink_Swatch",
-    "Mobster_Fashion_Gold_Swatch",
-    "ArcherSRank_Glove_Swatch",
-    "ArcherSRank_Quiver_Swatch",
-    "ArcherSRank_Swatch",
     "Royal_Swatch",
     "GoldYellow_Swatch",
-    "Sherlock_Hat_Gray_Swatch",
-    "Sherlock_Hat_Black_Swatch",
     "Happy_Tree_Purple_Swatch",
-    "Golfer_Glove_Blue_Swatch",
-    "Golfer_Glove_Grey_Swatch",
-    "Steampunk_Femme_Contest_Hat_Swatch",
+    "Barber_Torso_Green_Swatch",
+    "CheerDress_Red_Swatch",
     "TShirt_RECS_Logo_Blue_Swatch",
-    "TShirt_RECS_Logo_Green_Swatch",
     "Scout_Shirt_Blue_Swatch",
-    "DrumMajorGlove_Purple_Swatch",
-    "DrumMajorGlove_Orange_Swatch",
-    "ArcherRed_Glove_Swatch",
-    "ArcherRed_Swatch",
-    "ArcherRed_Quiver_Swatch",
-    "Lacrosse_Stripe_Purple_Swatch",
-    "Winter_Torso_Tree_Swatch",
-    "Winter_Torso_Red_Swatch",
-    "Scuba_Shirt_Contest_Swatch",
-    "Scuba_Shirt_Blue_Swatch",
+    "Windbreaker_Wrist_Red_Swatch",
+    "Neck_VampiteHunter_Emerald_Swatch",
+    "TShirt_RECS_Logo_Green_Swatch",
+    "Neck_VampiteHunter_Amber_Swatch",
+    "RoyalCrown_Black_Swatch",
+    "RoyalLord_Burgandy_Swatch",
+    "Knight_Green_Swatch",
+    "Torso_SeaCaptainWhiteDark_Swatch",
     "LightBlue_Swatch",
-    "Winter_Hat_Tree_Green_Swatch",
-    "CowboyLight_Swatch",
     "Happy_Tree_Swatch",
-    "Winter_Torso_Tree_Green_Swatch",
-    "BlazerMidnightBlue_Swatch",
+    "BicycleJacket_Blue_Swatch",
+    "Torso_SeaCaptainBlackDark_Swatch",
+    "PaintBallHat_Mustard_Swatch",
     "Scifi_Carpet_TopHat_Swatch",
+    "Windbreaker_Wrist_Blue_Swatch",
+    "Neck_VampiteHunter_Topaz_Swatch",
+    "Plaid_Red_Swatch",
+    "Laser_Ham_Swatch",
     "Rebel_Rose_Swatch",
-    "Mobster_PinStripe_Purple_Swatch",
-    "Soccer_Shirt_Blue_Swatch",
+    "Wrist_CowboyLight_Swatch",
     "Barber_Wrist_Formal_Swatch",
-    "Steampunk_Femme_Contest_Swatch",
+    "SciFiVisor_Orange_Swatch",
+    "RoyalLady_Black_Swatch",
+    "WaitressDress_Green_Swatch",
     "StollDress_Green_Swatch",
-    "StollDress_Blue_Swatch",
-    "BlazerSeaDark_Swatch",
+    "Torso_SeaCaptainBlueDark_Swatch",
+    "Torso_SeaCaptainBlue_Swatch",
     "Orange_Swatch",
-    "DrumMajorHat_Green_Swatch",
-    "Golfer_Hat_Blue_Swatch",
-    "Golfer_Hat_Grey_Swatch",
+    "PB_Trucker_Red_Swatch",
+    "Barber_Hat_Green_Swatch",
     "RoyalLord_Contest_White_Swatch",
     "Black_Swatch",
-    "Jackfrost_Shirt_Lilac_Swatch",
-    "CollarShirt_Torso_Plaid_Red_Swatch",
+    "RoyalLord_Green_Swatch",
+    "CollarDress_LightBlue_Swatch",
+    "StollDress_Blue_Swatch",
+    "Argyle_Red_Swatch",
+    "RoyalLady_Burgandy_Swatch",
     "TShirt_LaserTag_Alpha_Swatch",
-    "Countess_Green_Wrist_Swatch",
     "Hyper_Noodle_Ramen_Swatch",
-    "Scarecrow_Shirt_Contest_Swatch",
+    "PoofyDress_Orange_Swatch",
+    "Knight_White_Swatch",
     "BicycleHelmet_Yellow_Swatch",
-    "Soccer_Glove_Blue_Swatch",
-    "Steampunk_Contest_Hat_Swatch",
+    "BasketballShirt_Blue_Swatch",
+    "Wrist_CowboyDark_Swatch",
+    "Windbreaker_Wrist_Salmon_Swatch",
     "Emerald_Syndicate_Swatch",
     "Neck_TutorialGown2_Orange_Swatch",
-    "Shirt_TutorialGown1_Purple_Swatch",
     "2D_Contest_Winner_Yellow_Swatch",
-    "BlazerGrey_Swatch",
-    "Stripe3_Swatch",
-    "Ranger_Hat_Green_Swatch"
+    "WaitressDress_Red_Swatch",
+    "Stripe3_Swatch"
   ],
-  "ambiguous": [
-    {
-      "prefix": "windbreaker",
-      "candidates": [
-        "52VsI_lKlkSUAOJlfDnyrQ",
-        "AIpF1QUeMUWytpHYBDBAkg"
-      ]
-    },
-    {
-      "prefix": "lumberjack",
-      "candidates": [
-        "350c5c1e-318b-4233-a7e5-1f49909d8e65",
-        "61ba3c90-c81e-4deb-bc79-50c0f1fe3e83",
-        "b537c30c-faef-4649-9a1f-be3985936f93"
-      ]
-    },
-    {
-      "prefix": "magicalgirl",
-      "candidates": [
-        "eS_or4AnMka9M_bD7YN28g",
-        "hT7nSD7Ts06F_1SNlOMLwg",
-        "MJkDYDH510izAab13ZfXQw",
-        "WuShlrJnHUKuscn8e6Rt2g"
-      ]
-    },
-    {
-      "prefix": "wizard",
-      "candidates": [
-        "01689baf-405e-4b38-9f09-b624e03865b8",
-        "22ef1089-d073-4fe8-b038-6f34adf0b85f",
-        "97eae086-cfea-45ff-9b77-1d184256d493"
-      ]
-    },
-    {
-      "prefix": "punk",
-      "candidates": [
-        "28374ebc-4050-4ea0-b3b6-41ebe75cedf7",
-        "ce250e13-8137-4f62-9e52-2b1cebe7d0ad",
-        "e4ba395e-f291-4e7b-8193-45f4422f41ce"
-      ]
-    },
-    {
-      "prefix": "fighterpilot",
-      "candidates": [
-        "5800d2b5-75b8-442f-8b10-63bd3d73a1b8",
-        "ec836d2a-b1b8-4566-b8eb-123ae2845956",
-        "ff7e6d41-5c27-4516-930c-ad0e9a23cce2"
-      ]
-    },
-    {
-      "prefix": "witchhunter",
-      "candidates": [
-        "418db0e0-c7af-40c2-9cac-d461ce41e210",
-        "6d36091e-7083-4e3d-8729-94612602c8cb"
-      ]
-    },
-    {
-      "prefix": "smuggler",
-      "candidates": [
-        "25d4c652-1730-4925-925e-31a290a2272a",
-        "3dec4865-cf23-4c19-a460-dd2db80ee851"
-      ]
-    },
-    {
-      "prefix": "sodajerk",
-      "candidates": [
-        "iai6P7dDTUq8S4hqQmY1YA",
-        "Wua43ED71UqL71ATtyS0iQ"
-      ]
-    },
-    {
-      "prefix": "piratecaptain",
-      "candidates": [
-        "38b38e24-d636-41c6-b80e-a285ae3106dc",
-        "3b00c71f-79c2-4a04-9fc0-a23b4c85562f",
-        "3df394de-9c3e-4141-aba4-12eac4742102",
-        "eceb7d49-be41-4228-86a9-2973d62e7135"
-      ]
-    },
-    {
-      "prefix": "truckerjacket",
-      "candidates": [
-        "8b065e2a-b106-4f11-b415-4c47ce87993e",
-        "973d84ee-5b88-475c-b579-a76c34a7c533"
-      ]
-    },
-    {
-      "prefix": "scientist",
-      "candidates": [
-        "f17a2f9e-1eab-44e8-b10a-1f53c5d0778c",
-        "fe34adaf-47d3-435b-b2fd-b2fee05fceae"
-      ]
-    },
-    {
-      "prefix": "lasertag",
-      "candidates": [
-        "123de433-a005-4994-8a11-d2d84ad66b11",
-        "24d94673-f394-42e6-a3c8-276f8b8aa722"
-      ]
-    },
-    {
-      "prefix": "letterman",
-      "candidates": [
-        "2dFMy4zc7ky_Fd5fzfgInw",
-        "C4uuztTiYUe20PACMARksA"
-      ]
-    },
-    {
-      "prefix": "deepseadiver",
-      "candidates": [
-        "4fcb5b84-13a9-43e6-9680-72b17874ae53",
-        "8d97303c-5138-4da1-a74d-378da19d11cb",
-        "b1c3ccc8-91d7-434e-b9cc-bd632fffc01b",
-        "c3745cee-d87e-4a23-b6e2-64ebf05c8b11"
-      ]
-    },
-    {
-      "prefix": "jazzercise",
-      "candidates": [
-        "49397e16-1027-4286-9bc4-b59eae565ff0",
-        "5f492f8f-ab61-484a-9587-747132b54309"
-      ]
-    },
-    {
-      "prefix": "angler",
-      "candidates": [
-        "03f8c394-28fa-4087-978b-8d108f0bd969",
-        "b1bfe0b4-1ff6-420f-acfc-2331d34246dc"
-      ]
-    },
-    {
-      "prefix": "drummajor",
-      "candidates": [
-        "1a028850-64ee-40ab-b547-ebbcfa1b04b3",
-        "a6f1825e-1647-4d06-85d7-ac2d139612c0"
-      ]
-    },
-    {
-      "prefix": "countess",
-      "candidates": [
-        "QCtqxbvYOkan79YFugH_Cw",
-        "t9co2516nkuJO4LIJA1bJA"
-      ]
-    },
-    {
-      "prefix": "mobster",
-      "candidates": [
-        "08d56627-4500-4724-8692-a23c96ddb3ec",
-        "4308da04-af84-40bb-845a-7a9e1a2726ec",
-        "76369aef-aeda-46d2-996a-cd00594d0543"
-      ]
-    },
-    {
-      "prefix": "steampunk",
-      "candidates": [
-        "E9VTiIVFPEa-OuQRto0e_Q",
-        "gwLiwmqBIk6glFxvaTzxeA",
-        "qxovV6Vym0ufL2cTCyKjOQ",
-        "sOREgAGs-06CeGGsG-WIkw"
-      ]
-    },
-    {
-      "prefix": "witch",
-      "candidates": [
-        "7LSm-xCYakmgcAr--Fn-JA",
-        "s6mUIqiPCk6e57UYCx3SZA",
-        "wy2cfgb8mUqjMrIOwHH2ew"
-      ]
-    }
-  ]
+  "ambiguous": []
 }

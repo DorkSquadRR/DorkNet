@@ -10,10 +10,8 @@ namespace DorkNet.Server.Services;
 /// Backs the admin-issued signup-code flow. While the server has signups
 /// disabled, the only path to a new account is redeeming one of these on
 /// the public <c>/join</c> page. Codes are single-use, carry an admin
-/// descriptor, and can have an optional expiry. Redemption mints an
-/// account bound to the device id the player's game client reported (see
-/// <see cref="PendingDeviceEntity"/>), so the next launch logs straight
-/// in via the watch's device-id login.
+/// descriptor, and can have an optional expiry. Redemption mints a normal
+/// username/password account.
 /// </summary>
 public class SignupCodeService(DorkNetDbContext db, PlayerService players)
 {
@@ -61,10 +59,10 @@ public class SignupCodeService(DorkNetDbContext db, PlayerService players)
 
     public sealed record RedeemResult(bool Ok, string? Error, long? PlayerId, string? Username);
 
-    /// <summary>Redeem a code: validate it, then mint an account bound to
-    /// <paramref name="deviceId"/> with the requested username. The code
-    /// is consumed atomically with account creation.</summary>
-    public async Task<RedeemResult> RedeemAsync(string? rawCode, string? rawUsername, string? deviceId)
+    /// <summary>Redeem a code: validate it, then mint a password account
+    /// with the requested username. The code is consumed atomically with
+    /// account creation.</summary>
+    public async Task<RedeemResult> RedeemAsync(string? rawCode, string? rawUsername, string? rawPassword)
     {
         var code = NormalizeCode(rawCode);
         if (string.IsNullOrEmpty(code)) return new(false, "missing_code", null, null);
@@ -72,7 +70,9 @@ public class SignupCodeService(DorkNetDbContext db, PlayerService players)
         var username = (rawUsername ?? string.Empty).Trim();
         if (!IsValidUsername(username)) return new(false, "invalid_username", null, null);
 
-        if (string.IsNullOrWhiteSpace(deviceId)) return new(false, "missing_device", null, null);
+        var password = rawPassword ?? string.Empty;
+        if (string.IsNullOrEmpty(password)) return new(false, "missing_password", null, null);
+        if (password.Length < 8) return new(false, "password_too_short", null, null);
 
         var entity = await db.SignupCodes.FirstOrDefaultAsync(c => c.Code == code);
         if (entity is null) return new(false, "invalid_code", null, null);
@@ -83,30 +83,16 @@ public class SignupCodeService(DorkNetDbContext db, PlayerService players)
         if (await db.Players.AnyAsync(p => p.Username == username))
             return new(false, "username_taken", null, null);
 
-        // The device must not already own an account (otherwise the
-        // player would launch into the existing one, not this fresh
-        // account). Guides them to a different device / to just log in.
-        if (await players.GetByDeviceAsync(deviceId) is not null)
-            return new(false, "device_in_use", null, null);
-
-        var player = await players.GetOrCreateByDeviceAsync(
-            deviceId: deviceId,
+        var player = await players.CreateNewAccountAsync(
+            deviceId: $"join-{Guid.NewGuid():N}",
             platform: 0,
             platformId: null,
             displayName: username);
+        player.PasswordHash = BCrypt.Net.BCrypt.HashPassword(password, workFactor: 11);
 
         entity.RedeemedByPlayerId = player.Id;
         entity.RedeemedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
-
-        // The device is now bound to a real account — drop any pending
-        // refusal row so it stops showing on the /join picker.
-        var pending = await db.PendingDevices.FirstOrDefaultAsync(d => d.DeviceId == deviceId);
-        if (pending is not null)
-        {
-            db.PendingDevices.Remove(pending);
-            await db.SaveChangesAsync();
-        }
 
         return new(true, null, player.Id, player.Username);
     }

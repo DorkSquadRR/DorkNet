@@ -9,21 +9,27 @@ import { useToast } from '../components/Toast';
 import { absoluteTime, relativeTime } from '../lib/format';
 import { RefreshCw } from '../components/Icons';
 
-export function Reports() {
+export function Reports({ embedded }: { embedded?: boolean } = {}) {
   const { data, loading, error, refresh } = useApi<Report[]>('/reports?take=100');
   const [resolving, setResolving] = useState<Report | null>(null);
 
+  const refreshBtn = (
+    <button onClick={refresh} className="btn-secondary text-xs" disabled={loading}>
+      <RefreshCw className={loading ? 'animate-spin' : ''} /> Refresh
+    </button>
+  );
+
   return (
     <div>
-      <PageHeader
-        title="Open reports"
-        blurb="Oldest first. Resolving a report only closes the ticket — issue the actual moderation action separately."
-        actions={
-          <button onClick={refresh} className="btn-secondary text-xs" disabled={loading}>
-            <RefreshCw className={loading ? 'animate-spin' : ''} /> Refresh
-          </button>
-        }
-      />
+      {embedded ? (
+        <div className="flex justify-end mb-3">{refreshBtn}</div>
+      ) : (
+        <PageHeader
+          title="Open reports"
+          blurb="Oldest first. Resolving a report only closes the ticket — issue the actual moderation action separately."
+          actions={refreshBtn}
+        />
+      )}
 
       {error && <div className="card border-danger/30 bg-danger/5 px-4 py-3 text-sm text-danger">{error}</div>}
 

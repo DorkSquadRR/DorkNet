@@ -36,6 +36,7 @@ public class GoToController(
     RoomService rooms,
     DorkNet.Server.Data.DorkNetDbContext db,
     NotificationService notifications,
+    ServerSettingsService serverSettings,
     ILogger<GoToController> logger) : ControllerBase
 {
     [HttpPost("/goto/room/{roomName}")]
@@ -634,11 +635,9 @@ public class GoToController(
 
     private async Task NotifyFriendsOfMoveAsync(long playerId, RoomInstanceDto room)
     {
-        var friendIds = await db.Relationships
-            .Where(r => r.Status == DorkNet.Server.Data.Entities.RelationshipStatus.Friend &&
-                        (r.RequesterId == playerId || r.TargetId == playerId))
-            .Select(r => r.RequesterId == playerId ? r.TargetId : r.RequesterId)
-            .ToListAsync();
+        // Honors the global-friends toggle: with it on, every other player is
+        // a "friend" and gets the presence ping.
+        var friendIds = await RelationshipQueries.EffectiveFriendIdsAsync(db, serverSettings, playerId);
         logger.LogInformation(
             "[goto-fanout] player={PlayerId} moved to room={RoomId}/{RoomName} → notifying {FriendCount} friend(s)",
             playerId, room.RoomId, room.Name, friendIds.Count);

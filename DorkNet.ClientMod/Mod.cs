@@ -70,6 +70,13 @@ public class Mod : MelonMod
         public static bool   EnableTlsTrustBypass = true;
         // Photon Custom Auth injector was parked 2026-05-28; see
         // attic/AuthValuesInjector.cs.attic for the code + restore notes.
+        // Force-enable the client's built-in RecRoom.Debugging.DebugConsole
+        // (normally dev-gated) and silence CheatManager's tamper detectors
+        // so movement/time commands (SetTimeScale, Fly, Teleport, …) don't
+        // drop you to the dorm. Default OFF — purely opt-in. The toggle key
+        // is a UnityEngine.KeyCode name; BackQuote is the `~` key.
+        public static bool   EnableDebugConsole = false;
+        public static string DebugConsoleToggleKey = "BackQuote";
     }
 
     public override void OnInitializeMelon()
@@ -183,6 +190,17 @@ public class Mod : MelonMod
                        "RpcChatEmote",
                        args: new[] { typeof(string) },
                        prefix: nameof(ChatPatches.RpcChatEmote_Prefix));
+        // Debug console: skip CheatManager's tamper detectors so the
+        // console's movement/time commands don't trip a dorm-drop. The
+        // console UI toggle itself is driven from OnUpdate (hotkey) and
+        // resolved lazily — only the anti-cheat skip needs a patch.
+        if (Cfg.EnableDebugConsole)
+        {
+            foreach (var m in new[] { "OnTimeCheatDetected", "OnObscuredTypeCheatDetected", "OnHeightCheatDetected", "OnAdvancedMovementCheatDetected" })
+                TryPatchByName("CheatManager", m, prefix: nameof(DebugConsolePatches.SuppressCheatDetected_Prefix));
+            Log.Msg($"[debugconsole] enabled — CheatManager detectors silenced; press '{Cfg.DebugConsoleToggleKey}' to toggle the console.");
+        }
+
         RegisterDiagnostics();
         Log.Msg("=== Client patches registered ===");
     }
@@ -252,6 +270,8 @@ public class Mod : MelonMod
         if (!PhotonPatches.OverrideApplied && (_photonOverridePollFrame++ % 6) == 0)
             PhotonPatches.TryApplyOverride(reason: "update-poll");
 
+        if (Cfg.EnableDebugConsole) DebugConsolePatches.PollToggleKey();
+
         if (_diagnosticGameComplete) return;
         if (_diagnosticRetryFrame++ > 3600) return;
         if ((_diagnosticRetryFrame % 60) != 0) return;
@@ -299,6 +319,8 @@ public class Mod : MelonMod
             if (r.TryGetProperty("PhotonVoiceAppId", out v))         Cfg.PhotonVoiceAppId = v.GetString() ?? Cfg.PhotonVoiceAppId;
             if (r.TryGetProperty("PhotonCloudRegion", out v))        Cfg.PhotonCloudRegion = v.GetString() ?? Cfg.PhotonCloudRegion;
             if (r.TryGetProperty("EnableTlsTrustBypass", out v))     Cfg.EnableTlsTrustBypass = v.GetBoolean();
+            if (r.TryGetProperty("EnableDebugConsole", out v))       Cfg.EnableDebugConsole = v.GetBoolean();
+            if (r.TryGetProperty("DebugConsoleToggleKey", out v))    Cfg.DebugConsoleToggleKey = v.GetString() ?? Cfg.DebugConsoleToggleKey;
             // "InjectAuthValues" key in the template is now ignored —
             // see attic/AuthValuesInjector.cs.attic.
             Log.Msg($"[config] loaded: ServerHost={Cfg.ServerHost}, SingleOrigin={(string.IsNullOrEmpty(Cfg.SingleOriginBaseUrl) ? "<off>" : Cfg.SingleOriginBaseUrl)}, PhotonAppId={(string.IsNullOrEmpty(Cfg.PhotonAppId) ? "<unset>" : "<set>")}, " +
@@ -443,7 +465,7 @@ public class Mod : MelonMod
     {
         // Look in all three patch holder classes — small enough that a
         // linear scan is cheaper than per-class lookups.
-        foreach (var holder in new[] { typeof(UriPatches), typeof(PhotonPatches), typeof(TlsPatches), typeof(DiagnosticPatches), typeof(SavePatches), typeof(ChatPatches) })
+        foreach (var holder in new[] { typeof(UriPatches), typeof(PhotonPatches), typeof(TlsPatches), typeof(DiagnosticPatches), typeof(SavePatches), typeof(ChatPatches), typeof(DebugConsolePatches) })
         {
             var m = holder.GetMethod(name, BindingFlags.Public | BindingFlags.Static);
             if (m is not null) return m;
@@ -524,6 +546,202 @@ public class Mod : MelonMod
 // Each holder is a static class with public static Prefix methods that
 // Harmony invokes. Kept separate from Mod for readability and so the
 // reflection lookup in GetPatchMethod stays simple.
+
+// ── Debug console access ───────────────────────────────────────────────
+// The 2020 client ships RecRoom.Debugging.DebugConsole — a real in-game
+// dev console (text input + a DebugConsoleCommandConfig command table:
+// SetTimeScale, Fly, Teleport, GoToRoom, KillAllEnemies, DebugCompleteDaily,
+// …). Retail gates it behind a developer flag. This holder force-toggles
+// its UI on a hotkey and (via the OnLateInitializeMelon patch above) skips
+// CheatManager's tamper detectors so movement/time commands don't drop you
+// to the dorm.
+//
+// Everything is resolved by reflection at runtime so the SAME code works on
+// both client builds despite their differing obfuscation:
+//   * The show/hide toggle is the one non-compiler-generated private
+//     instance void(bool) on DebugConsole — ShowInputField on 2020.03,
+//     MCNBJFECHLJ on 2020.12. We try the readable name, then the obfuscated
+//     one, then fall back to that structural match.
+//   * The live component is found via UnityEngine.Object.FindObjectOfType
+//     (name-stable) rather than the SingletonMonoBehaviour<T> accessor.
+//   * Execute(string) keeps its readable name on both builds (kept here as
+//     a scripted-command entry point even though the hotkey drives the UI).
+internal static class DebugConsolePatches
+{
+    private static bool _consoleVisible;
+    private static bool _pollErrorLogged;
+    private static int _probeFrame;
+    private static bool _probeDone;
+
+    private static bool _inputResolved;
+    private static MethodInfo? _getKeyDown;     // UnityEngine.Input.GetKeyDown(KeyCode)
+    private static object? _toggleKeyValue;     // boxed KeyCode enum value
+
+    private static bool _consoleResolved;
+    private static Type? _consoleType;
+    private static MethodInfo? _toggleMethod;     // ShowInputField(bool) / MCNBJFECHLJ(bool)
+    private static MethodInfo? _findObjectOfType; // UnityEngine.Object.FindObjectOfType(Type)
+
+    // Harmony prefix returning false → skips the original CheatManager
+    // detector, so a tripped heuristic never runs its punish/drop path.
+    public static bool SuppressCheatDetected_Prefix() => false;
+
+    // Polled every frame from Mod.OnUpdate while EnableDebugConsole is set.
+    public static void PollToggleKey()
+    {
+        try
+        {
+            if (!_inputResolved) ResolveInput();
+            // One-shot probe ~3s in (≈180 frames @60fps): log whether the
+            // console object actually exists, so we learn that even if the
+            // hotkey never fires.
+            if (!_probeDone && _probeFrame++ > 180)
+            {
+                _probeDone = true;
+                ProbeConsole();
+            }
+            if (_getKeyDown is null || _toggleKeyValue is null) return;
+            if (_getKeyDown.Invoke(null, new[] { _toggleKeyValue }) is true)
+            {
+                Mod.Log.Msg($"[debugconsole] toggle key '{Mod.Cfg.DebugConsoleToggleKey}' detected");
+                Toggle();
+            }
+        }
+        catch (Exception ex)
+        {
+            if (!_pollErrorLogged) { _pollErrorLogged = true; Mod.Log.Warning($"[debugconsole] poll failed (logged once): {ex}"); }
+        }
+    }
+
+    // Diagnostic: reports whether a live DebugConsole component exists and
+    // whether the show/hide method resolved — without needing a keypress.
+    private static void ProbeConsole()
+    {
+        if (!_consoleResolved) ResolveConsole();
+        if (_consoleType is null) { Mod.Log.Warning("[debugconsole] probe: DebugConsole type NOT resolved"); return; }
+        try
+        {
+            var active = _findObjectOfType?.Invoke(null, new object[] { _consoleType });
+            Mod.Log.Msg($"[debugconsole] probe: type={_consoleType.FullName}, toggleMethod={(_toggleMethod?.Name ?? "<none>")}, activeInstance={(active is null ? "null" : "found")}");
+        }
+        catch (Exception ex) { Mod.Log.Warning($"[debugconsole] probe failed: {ex.Message}"); }
+    }
+
+    // Runs DebugConsole.Execute(command) directly — bypasses the UI/gate
+    // entirely. Handy for scripted one-shots; the hotkey path uses the UI.
+    public static void ExecuteCommand(string command)
+    {
+        if (!_consoleResolved) ResolveConsole();
+        if (_consoleType is null) return;
+        try
+        {
+            var execute = AccessTools.Method(_consoleType, "Execute", new[] { typeof(string) });
+            if (execute is null) { Mod.Log.Warning("[debugconsole] Execute(string) not found"); return; }
+            execute.Invoke(null, new object[] { command });
+            Mod.Log.Msg($"[debugconsole] executed: {command}");
+        }
+        catch (Exception ex) { Mod.Log.Warning($"[debugconsole] execute '{command}' failed: {ex.Message}"); }
+    }
+
+    private static void ResolveInput()
+    {
+        _inputResolved = true;
+        var keyCodeType = Mod.ResolveType("UnityEngine.KeyCode");
+        var inputType   = Mod.ResolveType("UnityEngine.Input");
+        if (keyCodeType is null || inputType is null)
+        {
+            Mod.Log.Warning("[debugconsole] UnityEngine.Input/KeyCode not found — hotkey disabled");
+            return;
+        }
+        try { _toggleKeyValue = Enum.Parse(keyCodeType, Mod.Cfg.DebugConsoleToggleKey, ignoreCase: true); }
+        catch
+        {
+            Mod.Log.Warning($"[debugconsole] '{Mod.Cfg.DebugConsoleToggleKey}' is not a KeyCode; defaulting to BackQuote");
+            _toggleKeyValue = Enum.Parse(keyCodeType, "BackQuote");
+        }
+        _getKeyDown = AccessTools.Method(inputType, "GetKeyDown", new[] { keyCodeType });
+        if (_getKeyDown is null) Mod.Log.Warning("[debugconsole] Input.GetKeyDown(KeyCode) not found");
+        else Mod.Log.Msg($"[debugconsole] hotkey armed: '{Mod.Cfg.DebugConsoleToggleKey}' (poll live)");
+    }
+
+    private static void ResolveConsole()
+    {
+        _consoleResolved = true;
+        _consoleType = Mod.ResolveType("RecRoom.Debugging.DebugConsole");
+        if (_consoleType is null) { Mod.Log.Warning("[debugconsole] DebugConsole type not found"); return; }
+
+        // Prefer the readable 2020.03 name, then the 2020.12 obfuscated
+        // name, then a structural fallback that fits both builds.
+        _toggleMethod = AccessTools.Method(_consoleType, "ShowInputField", new[] { typeof(bool) })
+                        ?? AccessTools.Method(_consoleType, "MCNBJFECHLJ", new[] { typeof(bool) })
+                        ?? FindToggleByShape(_consoleType);
+        if (_toggleMethod is null) Mod.Log.Warning("[debugconsole] show/hide method not found");
+
+        var objType = Mod.ResolveType("UnityEngine.Object");
+        _findObjectOfType = objType is null ? null
+            : AccessTools.Method(objType, "FindObjectOfType", new[] { typeof(Type) });
+        if (_findObjectOfType is null) Mod.Log.Warning("[debugconsole] Object.FindObjectOfType(Type) not found");
+    }
+
+    // The console's show/hide is the single private, instance, void method
+    // taking exactly one bool, excluding compiler-generated members (the
+    // property backing setter on 2020.12 is also void(bool) but is marked
+    // [CompilerGenerated]).
+    private static MethodInfo? FindToggleByShape(Type t)
+    {
+        MethodInfo? found = null;
+        foreach (var m in t.GetMethods(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.DeclaredOnly))
+        {
+            if (m.ReturnType != typeof(void)) continue;
+            var ps = m.GetParameters();
+            if (ps.Length != 1 || ps[0].ParameterType != typeof(bool)) continue;
+            if (m.Name.StartsWith("set_", StringComparison.Ordinal)) continue;
+            if (m.IsDefined(typeof(System.Runtime.CompilerServices.CompilerGeneratedAttribute), false)) continue;
+            if (found is not null) return null; // ambiguous — don't guess
+            found = m;
+        }
+        return found;
+    }
+
+    public static void Toggle()
+    {
+        if (!_consoleResolved) ResolveConsole();
+        if (_consoleType is null || _toggleMethod is null || _findObjectOfType is null) return;
+        try
+        {
+            var instance = _findObjectOfType.Invoke(null, new object[] { _consoleType });
+            if (instance is null)
+            {
+                Mod.Log.Warning("[debugconsole] no live DebugConsole in scene — it may not be instantiated on this build");
+                return;
+            }
+            // Best-effort: flip the static "show button" enable so the
+            // game's own Update keeps the console available instead of
+            // re-hiding it. Failures are ignored (obfuscated builds).
+            EnableShowButton();
+            _consoleVisible = !_consoleVisible;
+            _toggleMethod.Invoke(instance, new object[] { _consoleVisible });
+            Mod.Log.Msg($"[debugconsole] {(_consoleVisible ? "opened" : "closed")}");
+        }
+        catch (Exception ex) { Mod.Log.Warning($"[debugconsole] toggle failed: {ex.Message}"); }
+    }
+
+    private static void EnableShowButton()
+    {
+        if (_consoleType is null) return;
+        try
+        {
+            var prop = _consoleType.GetProperty("ShowButton", BindingFlags.Public | BindingFlags.Static);
+            if (prop is not null && prop.CanWrite) { prop.SetValue(null, true); return; }
+            foreach (var name in new[] { "showButton", "IEGCNLHPKFH" })
+            {
+                var f = _consoleType.GetField(name, BindingFlags.NonPublic | BindingFlags.Static);
+                if (f is not null && f.FieldType == typeof(bool)) { f.SetValue(null, true); return; }
+            }
+        }
+        catch { /* best-effort — the toggle still works without it */ }
+    }
+}
 
 internal static class UriPatches
 {

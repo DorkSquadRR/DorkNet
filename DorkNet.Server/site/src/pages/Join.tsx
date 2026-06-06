@@ -1,11 +1,5 @@
-import { useEffect, useState } from 'react';
-import { get, post } from '../lib/api';
-
-interface PendingDevice {
-  deviceId: string;
-  platform: number;
-  lastSeenAt: string;
-}
+import { useState } from 'react';
+import { post } from '../lib/api';
 
 // Server error code -> friendly copy.
 const ERRORS: Record<string, string> = {
@@ -16,40 +10,34 @@ const ERRORS: Record<string, string> = {
   code_expired: 'That code has expired. Ask for a new one.',
   invalid_username: 'Pick a username 2–24 characters long (letters, numbers, _ or -).',
   username_taken: 'That username is taken — try another.',
-  missing_device: 'Pick or paste the device id from your game client.',
-  device_in_use: 'That device already has an account — just launch the game to log in.',
+  missing_password: 'Enter a password.',
+  password_too_short: 'Use at least 8 characters for your password.',
+  password_mismatch: 'The passwords do not match.',
 };
 
 export function Join() {
   const [code, setCode] = useState('');
   const [username, setUsername] = useState('');
-  const [deviceId, setDeviceId] = useState('');
-  const [pending, setPending] = useState<PendingDevice[]>([]);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [doneUsername, setDoneUsername] = useState<string | null>(null);
-
-  // Pull the devices our caller's IP was recently refused from, so the
-  // player can pick the one their own game client reported instead of
-  // hunting for the Unity device id by hand.
-  useEffect(() => {
-    get<PendingDevice[]>('/join/pending-devices')
-      .then((rows) => {
-        setPending(rows);
-        if (rows.length > 0) setDeviceId((cur) => cur || rows[0].deviceId);
-      })
-      .catch(() => { /* picker is a convenience; manual paste still works */ });
-  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setErr(null);
+    if (password !== confirmPassword) {
+      setErr(ERRORS.password_mismatch);
+      setBusy(false);
+      return;
+    }
     try {
       const res = await post<{ ok: boolean; username: string }>('/join/redeem', {
         Code: code.trim(),
         Username: username.trim(),
-        DeviceId: deviceId.trim(),
+        Password: password,
       });
       setDoneUsername(res.username);
     } catch (e) {
@@ -66,8 +54,8 @@ export function Join() {
         <div className="card !p-6 text-center">
           <h1 className="text-2xl font-semibold text-ink-50">You're in, {doneUsername}! 🎉</h1>
           <p className="mt-3 text-sm text-ink-300">
-            Your account is ready. Launch the game through the DorkNet launcher on this
-            same device and you'll be logged straight in — no signup step needed.
+            Your account is ready. Launch the game through the DorkNet launcher and sign in
+            with your username and password.
           </p>
         </div>
       </div>
@@ -79,7 +67,7 @@ export function Join() {
       <div>
         <h1 className="text-2xl font-semibold text-ink-50">Join the server</h1>
         <p className="text-sm text-ink-400">
-          Got a signup code? Redeem it here to create your account, then launch the game.
+          Got a signup code? Redeem it here to create your account, then sign in from the game.
         </p>
       </div>
 
@@ -102,52 +90,33 @@ export function Join() {
             value={username}
             onChange={(e) => setUsername(e.target.value)}
             placeholder="2–24 chars: letters, numbers, _ or -"
+            autoComplete="username"
           />
         </label>
 
-        <div className="block">
-          <span className="label">Your device</span>
-          {pending.length > 0 ? (
-            <>
-              <select
-                className="input mt-1"
-                value={pending.some((d) => d.deviceId === deviceId) ? deviceId : '__manual__'}
-                onChange={(e) => setDeviceId(e.target.value === '__manual__' ? '' : e.target.value)}
-              >
-                {pending.map((d) => (
-                  <option key={d.deviceId} value={d.deviceId}>
-                    {d.deviceId.slice(0, 16)}… · last seen {new Date(d.lastSeenAt).toLocaleTimeString()}
-                  </option>
-                ))}
-                <option value="__manual__">Enter device id manually…</option>
-              </select>
-              {!pending.some((d) => d.deviceId === deviceId) && (
-                <input
-                  className="input mt-2 font-mono text-xs"
-                  value={deviceId}
-                  onChange={(e) => setDeviceId(e.target.value)}
-                  placeholder="paste your device id"
-                />
-              )}
-              <p className="mt-1 text-[11px] text-ink-500">
-                These are devices that just tried to sign in from your network. Pick yours.
-              </p>
-            </>
-          ) : (
-            <>
-              <input
-                className="input mt-1 font-mono text-xs"
-                value={deviceId}
-                onChange={(e) => setDeviceId(e.target.value)}
-                placeholder="paste your device id"
-              />
-              <p className="mt-1 text-[11px] text-ink-500">
-                Launch the game once first — when it says signups are disabled, come back here
-                and your device should appear automatically.
-              </p>
-            </>
-          )}
-        </div>
+        <label className="block">
+          <span className="label">Password</span>
+          <input
+            className="input mt-1"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="at least 8 characters"
+            autoComplete="new-password"
+          />
+        </label>
+
+        <label className="block">
+          <span className="label">Confirm password</span>
+          <input
+            className="input mt-1"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="type it again"
+            autoComplete="new-password"
+          />
+        </label>
 
         {err && (
           <div className="rounded-lg border border-danger/30 bg-danger/5 px-3 py-2 text-sm text-danger">{err}</div>

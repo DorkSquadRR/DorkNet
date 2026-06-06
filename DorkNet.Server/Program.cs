@@ -746,6 +746,11 @@ using (var scope = app.Services.CreateScope())
         await RunPatchAsync("ServerSettings.WeeklyChallengeRewardJson column",
             @"ALTER TABLE ""ServerSettings""
                 ADD COLUMN IF NOT EXISTS ""WeeklyChallengeRewardJson"" text NOT NULL DEFAULT '';");
+        // 2026-06-04 — "everyone is friends" admin toggle (synthesized at
+        // read time; see ServerSettingsEntity.GlobalFriendsEnabled).
+        await RunPatchAsync("ServerSettings.GlobalFriendsEnabled column",
+            @"ALTER TABLE ""ServerSettings""
+                ADD COLUMN IF NOT EXISTS ""GlobalFriendsEnabled"" boolean NOT NULL DEFAULT false;");
 
         // 2026-05-19 — Players.IsCommunityTeam column. Backs the
         // overhead-badge admin toggle alongside IsDeveloper; the
@@ -1319,6 +1324,9 @@ static void ApplySqliteCompatibilityPatches(DorkNetDbContext db)
         @"""WeeklyChallengesJson"" TEXT NOT NULL DEFAULT ''");
     AddSqliteColumnIfMissing(db, "ServerSettings", "WeeklyChallengeRewardJson",
         @"""WeeklyChallengeRewardJson"" TEXT NOT NULL DEFAULT ''");
+    // 2026-06-04 — "everyone is friends" admin toggle.
+    AddSqliteColumnIfMissing(db, "ServerSettings", "GlobalFriendsEnabled",
+        @"""GlobalFriendsEnabled"" INTEGER NOT NULL DEFAULT 0");
 }
 
 static void AddSqliteColumnIfMissing(DorkNetDbContext db, string table, string column, string definition)

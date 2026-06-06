@@ -9,8 +9,10 @@ import { useToast } from '../components/Toast';
 import { Empty } from '../components/Empty';
 import { PlayerAvatar } from '../components/PlayerAvatar';
 import { RefreshCw, Search } from '../components/Icons';
+import { GiftPanel } from './Gift';
+import { PasswordResetCard } from './Passwords';
 
-export function Players() {
+export function Players({ embedded }: { embedded?: boolean } = {}) {
   const [query, setQuery] = useState('');
   const [rows, setRows] = useState<Player[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -38,18 +40,24 @@ export function Players() {
 
   useEffect(() => { search(query); }, [query, search]);
 
+  const refreshBtn = (
+    <button onClick={() => search(query)} className="btn-secondary text-xs" disabled={loading}>
+      <RefreshCw className={loading ? 'animate-spin' : ''} />
+      Refresh
+    </button>
+  );
+
   return (
     <div>
-      <PageHeader
-        title="Players"
-        blurb="Search and moderate every account in the database."
-        actions={
-          <button onClick={() => search(query)} className="btn-secondary text-xs" disabled={loading}>
-            <RefreshCw className={loading ? 'animate-spin' : ''} />
-            Refresh
-          </button>
-        }
-      />
+      {embedded ? (
+        <div className="flex justify-end mb-3">{refreshBtn}</div>
+      ) : (
+        <PageHeader
+          title="Players"
+          blurb="Search and moderate every account in the database."
+          actions={refreshBtn}
+        />
+      )}
 
       <div className="card overflow-hidden">
         <div className="border-b border-ink-800 p-3 flex items-center gap-2">
@@ -146,7 +154,7 @@ export function Players() {
 function PlayerDetail({ id, onClose, onChanged }: { id: number; onClose: () => void; onChanged: () => void }) {
   const [data, setData] = useState<PlayerDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [tab, setTab] = useState<'overview' | 'mod' | 'grants' | 'profile'>('overview');
+  const [tab, setTab] = useState<'overview' | 'mod' | 'grants' | 'gift' | 'profile'>('overview');
 
   const reload = () => {
     setErr(null);
@@ -189,7 +197,7 @@ function PlayerDetail({ id, onClose, onChanged }: { id: number; onClose: () => v
           </div>
 
           <div className="flex border-b border-ink-800 text-sm">
-            {(['overview', 'mod', 'grants', 'profile'] as const).map(t => (
+            {(['overview', 'mod', 'grants', 'gift', 'profile'] as const).map(t => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -203,6 +211,7 @@ function PlayerDetail({ id, onClose, onChanged }: { id: number; onClose: () => v
           {tab === 'overview' && <OverviewTab data={data} />}
           {tab === 'mod'      && <ModerationTab data={data} onChanged={onChanged} />}
           {tab === 'grants'   && <GrantsTab    data={data} onChanged={reload} />}
+          {tab === 'gift'     && <GiftPanel    playerId={data.id} />}
           {tab === 'profile'  && <ProfileTab   data={data} onChanged={reload} />}
         </div>
       )}
@@ -537,6 +546,8 @@ function ProfileTab({ data, onChanged }: { data: PlayerDetail; onChanged: () => 
           className="btn-danger text-xs"
         >Reset to starter</button>
       </div>
+
+      <PasswordResetCard playerId={data.id} username={data.username} />
     </div>
   );
 }

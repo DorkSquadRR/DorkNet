@@ -48,7 +48,7 @@ namespace DorkNet.Server.Controllers.API.Relationships.V2;
 /// </summary>
 [ApiController]
 [Authorize]
-public class RelationshipsController(DorkNetDbContext db, NotificationService notifications) : ControllerBase
+public class RelationshipsController(DorkNetDbContext db, NotificationService notifications, ServerSettingsService settings) : ControllerBase
 {
     // RelationshipType — int values match Relationship.RelationshipType
     // in the patched dump.cs.
@@ -72,11 +72,82 @@ public class RelationshipsController(DorkNetDbContext db, NotificationService no
     public async Task<ActionResult> GetMyRelationships()
     {
         var me = CurrentPlayerId;
+
+        // Global-friends mode (admin toggle): synthesize a Friend row for
+        // every other account WITHOUT persisting anything. Real rows are
+        // overlaid so mute/favorite still apply and Blocked stays non-friend.
+        if (await settings.IsGlobalFriendsEnabledAsync())
+            return Ok(await BuildGlobalFriendListAsync(me));
+
         var rels = await db.Relationships
             .Where(r => r.RequesterId == me || r.TargetId == me)
             .ToListAsync();
-        var wire = rels.Select(r => BuildRelationship(r, me)).ToList();
+        // Merge the (up to two) rows per pair so a favorite/mute/ignore the
+        // caller set on a friendship the OTHER player initiated isn't dropped
+        // by the watch (which keys its list by PlayerID — duplicate ids lose).
+        var wire = rels
+            .GroupBy(r => r.RequesterId == me ? r.TargetId : r.RequesterId)
+            .Select(g => BuildMerged(me, g.Key, g.ToList()))
+            .ToList();
         return Ok(wire);
+    }
+
+    /// <summary>Synthesize the caller's friend list as "everyone" for the
+    /// global-friends toggle. One Friend entry per other account; real rows
+    /// are overlaid so a Block stays None and mute/favorite carry through.</summary>
+    private async Task<List<Dictionary<string, object>>> BuildGlobalFriendListAsync(long me)
+    {
+        var realRows = await db.Relationships
+            .Where(r => r.RequesterId == me || r.TargetId == me)
+            .ToListAsync();
+        // Group both directional rows per pair so the caller's favorite/mute/
+        // ignore (stored on the row where they're the requester) survives even
+        // when the friendship row itself was created by the other player.
+        var realByOther = realRows
+            .GroupBy(r => r.RequesterId == me ? r.TargetId : r.RequesterId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var others = await db.Players
+            .Where(p => p.Id != me && p.Id != RelationshipQueries.SystemAccountId)
+            .Select(p => new { p.Id, p.Username })
+            .ToListAsync();
+
+        var wire = new List<Dictionary<string, object>>(others.Count);
+        foreach (var other in others)
+        {
+            var otherId = other.Id;
+            if (realByOther.TryGetValue(otherId, out var pair))
+            {
+                // A real block wins — that pair is genuinely not friends.
+                if (pair.Any(r => r.Status == EntityStatus.Blocked)) { wire.Add(EmptyRelationship(otherId)); continue; }
+                // Carry the caller's own preference bits from their row.
+                var mineRow = pair.FirstOrDefault(r => r.RequesterId == me);
+                wire.Add(SynthFriend(otherId, mineRow, me));
+            }
+            else
+            {
+                // Hide auto-generated Player_NNN placeholders from the
+                // synthesized list (they never set a real username).
+                if (RelationshipQueries.IsPlaceholderUsername(other.Username)) continue;
+                wire.Add(SynthFriend(otherId, null, me));
+            }
+        }
+        return wire;
+    }
+
+    /// <summary>A synthetic Friend relationship for global-friends mode,
+    /// carrying mute/ignore/favorite from the caller's real row when present.</summary>
+    private static Dictionary<string, object> SynthFriend(long other, RelationshipEntity? real, long me)
+    {
+        var mineDir = real is not null && real.RequesterId == me;
+        return new()
+        {
+            ["PlayerID"]         = (int)other,
+            ["RelationshipType"] = RT_Friend,
+            ["Muted"]            = mineDir && real!.Muted     ? 1 : 0,
+            ["Ignored"]          = mineDir && real!.Ignored   ? 1 : 0,
+            ["Favorited"]        = mineDir && real!.Favorited ? 1 : 0,
+        };
     }
 
     /// <summary>GET <c>api/relationships/v2/personaldetails/{playerId}</c>
@@ -89,8 +160,27 @@ public class RelationshipsController(DorkNetDbContext db, NotificationService no
     {
         var me = CurrentPlayerId;
         if (playerId <= 0 || playerId == me) return Ok(EmptyRelationship(playerId));
-        var row = await FindAsync(me, playerId);
-        return Ok(row is null ? EmptyRelationship(playerId) : BuildRelationship(row, me));
+        var pair = await db.Relationships
+            .Where(r => (r.RequesterId == me && r.TargetId == playerId) ||
+                        (r.RequesterId == playerId && r.TargetId == me))
+            .ToListAsync();
+        var blocked = pair.Any(r => r.Status == EntityStatus.Blocked);
+        var mineRow = pair.FirstOrDefault(r => r.RequesterId == me);
+
+        // Global-friends mode: report Friend for any real account that isn't
+        // the system account and isn't explicitly blocked. Placeholder
+        // Player_NNN accounts are hidden unless there's a genuine row.
+        if (playerId != RelationshipQueries.SystemAccountId
+            && !blocked
+            && await settings.IsGlobalFriendsEnabledAsync())
+        {
+            var isPlaceholder = pair.Count == 0 && RelationshipQueries.IsPlaceholderUsername(
+                await db.Players.Where(p => p.Id == playerId)
+                    .Select(p => p.Username).FirstOrDefaultAsync());
+            if (!isPlaceholder) return Ok(SynthFriend(playerId, mineRow, me));
+        }
+
+        return Ok(pair.Count == 0 ? EmptyRelationship(playerId) : BuildMerged(me, playerId, pair));
     }
 
     // ── /api/relationships/v2/sendfriendrequest?id={N} ───────────────
@@ -106,17 +196,34 @@ public class RelationshipsController(DorkNetDbContext db, NotificationService no
         if (id <= 0 || id == me)
             return Ok(EmptyRelationship(id));
 
-        var existing = await FindAsync(me, id);
-        if (existing is not null)
-            return Ok(BuildRelationship(existing, me));
+        var pair = await db.Relationships
+            .Where(r => (r.RequesterId == me && r.TargetId == id) ||
+                        (r.RequesterId == id && r.TargetId == me))
+            .ToListAsync();
 
-        var row = new RelationshipEntity
+        // Anything that already defines a status (friend/pending/block) wins —
+        // a None row is preference-only and doesn't count as a relationship.
+        if (pair.Any(r => r.Status != EntityStatus.None))
+            return Ok(BuildMerged(me, id, pair));
+
+        // Promote the caller's own preference-only row if present (keeping its
+        // favorite/mute/ignore bits) rather than spawning a second row.
+        var row = pair.FirstOrDefault(r => r.RequesterId == me);
+        if (row is not null)
         {
-            RequesterId = me,
-            TargetId    = id,
-            Status      = EntityStatus.PendingSent,
-        };
-        db.Relationships.Add(row);
+            row.Status    = EntityStatus.PendingSent;
+            row.UpdatedAt = DateTime.UtcNow;
+        }
+        else
+        {
+            row = new RelationshipEntity
+            {
+                RequesterId = me,
+                TargetId    = id,
+                Status      = EntityStatus.PendingSent,
+            };
+            db.Relationships.Add(row);
+        }
         await db.SaveChangesAsync();
 
         await notifications.FriendRequestReceived(id, me);
@@ -162,16 +269,26 @@ public class RelationshipsController(DorkNetDbContext db, NotificationService no
         if (id <= 0)
             return Ok(EmptyRelationship(id));
 
-        var rel = await FindAsync(me, id);
-        if (rel is null)
+        var pair = await db.Relationships
+            .Where(r => (r.RequesterId == me && r.TargetId == id) ||
+                        (r.RequesterId == id && r.TargetId == me))
+            .ToListAsync();
+        if (pair.Count == 0)
             return Ok(EmptyRelationship(id));
-        if (rel.Status == EntityStatus.Blocked)
-            return Ok(BuildRelationship(rel, me));
 
-        db.Relationships.Remove(rel);
+        // Drop every non-block row for the pair (friendship row + any stray
+        // preference row), leaving a block intact — the watch unblocks
+        // through a separate path.
+        var removable = pair.Where(r => r.Status != EntityStatus.Blocked).ToList();
+        if (removable.Count == 0)
+            return Ok(BuildMerged(me, id, pair));
+
+        db.Relationships.RemoveRange(removable);
         await db.SaveChangesAsync();
         await notifications.FriendRemoved(id, me);
-        return Ok(EmptyRelationship(id));
+
+        var remaining = pair.Except(removable).ToList();
+        return Ok(remaining.Count == 0 ? EmptyRelationship(id) : BuildMerged(me, id, remaining));
     }
 
     // ── /api/relationships/v2/addfriend?id={N} ───────────────────────
@@ -186,7 +303,20 @@ public class RelationshipsController(DorkNetDbContext db, NotificationService no
         if (id <= 0 || id == me)
             return Ok(EmptyRelationship(id));
 
-        var existing = await FindAsync(me, id);
+        var pair = await db.Relationships
+            .Where(r => (r.RequesterId == me && r.TargetId == id) ||
+                        (r.RequesterId == id && r.TargetId == me))
+            .ToListAsync();
+
+        // Don't override a block, and don't spawn a duplicate when a
+        // friendship row already exists (in either direction).
+        if (pair.Any(r => r.Status == EntityStatus.Blocked) ||
+            pair.Any(r => r.Status == EntityStatus.Friend))
+            return Ok(BuildMerged(me, id, pair));
+
+        // Promote the caller's own row (preference-only or pending) to Friend,
+        // or create one if none exists.
+        var existing = pair.FirstOrDefault(r => r.RequesterId == me);
         if (existing is null)
         {
             existing = new RelationshipEntity
@@ -197,7 +327,7 @@ public class RelationshipsController(DorkNetDbContext db, NotificationService no
             };
             db.Relationships.Add(existing);
         }
-        else if (existing.Status != EntityStatus.Blocked)
+        else
         {
             existing.Status    = EntityStatus.Friend;
             existing.UpdatedAt = DateTime.UtcNow;
@@ -211,8 +341,8 @@ public class RelationshipsController(DorkNetDbContext db, NotificationService no
     // "api/relationships/v1/unfavorite?id={N}". These return a
     // boolean-ish RecNetResult per the FavoritePlayer/UnfavoritePlayer
     // disassembly (Core.Post … ExpectHttpStatusSuccess), not a
-    // Relationship — they don't surface any state change in the
-    // 2020 storage model so we just acknowledge.
+    // Relationship. The flag is persisted on the caller's directional row
+    // and surfaced back through v2/get + personaldetails (see BuildMerged).
     [HttpPost("api/relationships/v1/favorite")]
     public Task<IActionResult> Favorite([FromQuery] long id) => SetPreference(id, favorited: true);
 
@@ -249,11 +379,16 @@ public class RelationshipsController(DorkNetDbContext db, NotificationService no
             r.RequesterId == me && r.TargetId == otherId);
         if (row is null)
         {
+            // A preference (favorite/mute/ignore) is the caller's own bit and
+            // lives on their own directional row. Status None — favorite/mute/
+            // ignore must NOT fabricate a friendship; the real friendship row
+            // (this direction or the other) carries the actual status and the
+            // read path merges the two.
             row = new RelationshipEntity
             {
                 RequesterId = me,
                 TargetId = otherId,
-                Status = EntityStatus.Friend, // placeholder; favorite/mute/ignore don't require friend status
+                Status = EntityStatus.None,
             };
             db.Relationships.Add(row);
         }
@@ -304,11 +439,6 @@ public class RelationshipsController(DorkNetDbContext db, NotificationService no
 
     // ── helpers ──────────────────────────────────────────────────────
 
-    private Task<RelationshipEntity?> FindAsync(long me, long other) =>
-        db.Relationships.FirstOrDefaultAsync(r =>
-            (r.RequesterId == me && r.TargetId == other) ||
-            (r.RequesterId == other && r.TargetId == me));
-
     /// <summary>Map a storage row to the watch's wire RelationshipType
     /// from <paramref name="me"/>'s perspective. PendingSent flips
     /// direction depending on which side originated.</summary>
@@ -350,6 +480,32 @@ public class RelationshipsController(DorkNetDbContext db, NotificationService no
             ["Muted"]            = muted,
             ["Ignored"]          = ignored,
             ["Favorited"]        = favored,
+        };
+    }
+
+    /// <summary>Merge all rows for one pair (up to two — one per direction)
+    /// into a single wire object from <paramref name="me"/>'s view. The
+    /// relationship type comes from whichever row defines it (Blocked &gt;
+    /// Friend &gt; Pending); the favorite/mute/ignore bits are the caller's
+    /// own, read from the row where the caller is the requester. Without this
+    /// a favorite the caller set on a friendship the OTHER player initiated
+    /// lands on a separate row and is dropped by the watch (its list is keyed
+    /// by PlayerID, so a duplicate id loses).</summary>
+    private static Dictionary<string, object> BuildMerged(long me, long other, List<RelationshipEntity> pair)
+    {
+        var statusRow =
+            pair.FirstOrDefault(r => r.Status == EntityStatus.Blocked)
+            ?? pair.FirstOrDefault(r => r.Status == EntityStatus.Friend)
+            ?? pair.FirstOrDefault(r => r.Status is EntityStatus.PendingSent or EntityStatus.PendingReceived)
+            ?? pair[0];
+        var mineRow = pair.FirstOrDefault(r => r.RequesterId == me);
+        return new()
+        {
+            ["PlayerID"]         = (int)other,
+            ["RelationshipType"] = MapType(statusRow, me),
+            ["Muted"]            = mineRow is { Muted: true }     ? 1 : 0,
+            ["Ignored"]          = mineRow is { Ignored: true }   ? 1 : 0,
+            ["Favorited"]        = mineRow is { Favorited: true } ? 1 : 0,
         };
     }
 

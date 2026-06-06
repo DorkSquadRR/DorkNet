@@ -267,16 +267,15 @@ public class PublicSiteController(
         }).ToList());
     }
 
-    public sealed record JoinRedeemRequest(string? Code, string? Username, string? DeviceId);
+    public sealed record JoinRedeemRequest(string? Code, string? Username, string? Password);
 
     /// <summary>POST /api/site/v1/join/redeem — redeem a signup code,
-    /// minting an account bound to the supplied device id. On success the
-    /// player relaunches the game and the watch's device-id login finds
-    /// the new account. Returns {ok, error?, username?}.</summary>
+    /// minting a username/password account. Returns {ok, error?,
+    /// username?}.</summary>
     [HttpPost("join/redeem")]
     public async Task<IActionResult> JoinRedeem([FromBody] JoinRedeemRequest body)
     {
-        var result = await signupCodes.RedeemAsync(body.Code, body.Username, body.DeviceId);
+        var result = await signupCodes.RedeemAsync(body.Code, body.Username, body.Password);
         if (!result.Ok)
             return BadRequest(new { ok = false, error = result.Error });
         return Ok(new { ok = true, username = result.Username, playerId = result.PlayerId });

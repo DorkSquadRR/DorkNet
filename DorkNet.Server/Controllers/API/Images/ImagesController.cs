@@ -284,7 +284,10 @@ public class ImagesController(
     [HttpGet("api/images/v1/slideshow")]
     public IActionResult SlideshowInfo() => Ok(new
     {
-        ValidTill = new DateTime(9999, 12, 31, 0, 0, 0, DateTimeKind.Utc),
+        // WireDates.FarFuture (2099), NOT year 9999 — a 9999 ValidTill
+        // overflows the watch's local-timezone date parse in some DST
+        // timezones → "malformed RecNet response". See WireDates.
+        ValidTill = WireDates.FarFuture,
         Images = Array.Empty<object>(),
     });
 

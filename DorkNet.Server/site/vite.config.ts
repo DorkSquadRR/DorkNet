@@ -20,6 +20,12 @@ export default defineConfig({
     emptyOutDir: true,
     target: 'es2022',
     sourcemap: true,
+    rollupOptions: {
+      output: {
+        entryFileNames: 'assets/[name]-join-password-[hash].js',
+        chunkFileNames: 'assets/[name]-join-password-[hash].js',
+      },
+    },
   },
   server: {
     port: 5174,

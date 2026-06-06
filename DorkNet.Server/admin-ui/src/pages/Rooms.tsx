@@ -8,7 +8,7 @@ import { Empty } from '../components/Empty';
 import { Modal } from '../components/Modal';
 import { useToast } from '../components/Toast';
 import { Confirm } from '../components/Confirm';
-import { RefreshCw, Trash } from '../components/Icons';
+import { RefreshCw, Trash, Upload } from '../components/Icons';
 
 export function Rooms() {
   const { data, loading, error, refresh } = useApi<Room[]>('/rooms');
@@ -55,6 +55,9 @@ export function Rooms() {
         title="Rooms"
         blurb="Every room in the DB. Archive (trash icon) is soft and reversible. Purge is a hard wipe — drops scene rows + per-room blobs + thumbnail and requires typing the room name twice."
         actions={<>
+          <Link to="/import-room" className="btn-primary text-xs">
+            <Upload /> Import room
+          </Link>
           <button onClick={refresh} className="btn-secondary text-xs" disabled={loading}>
             <RefreshCw className={loading ? 'animate-spin' : ''} /> Refresh
           </button>

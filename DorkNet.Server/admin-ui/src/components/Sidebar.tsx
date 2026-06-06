@@ -1,10 +1,16 @@
 import { useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard, Users, Building2, Ban, Flag, ScrollText, Activity,
-  Megaphone, Upload, ShoppingBag, Gift, KeyRound, Wrench, MessageSquare, HardDrive, Settings, X,
+  LayoutDashboard, Users, Building2, Activity,
+  Megaphone, MessageSquare, HardDrive, Settings, X,
 } from './Icons';
 
+// Consolidated navigation. Per-player moderation (bans, grants, gifts,
+// password resets) lives in the player detail modal; the old Bans /
+// Reports / Audit / Player-logs / Community / Loading-tips / Gift /
+// Passwords / Signup-codes pages are now tabs under Players, Activity,
+// Content, and Settings. Import room is a header action on the Rooms
+// page. Old routes still resolve via redirects in App.tsx.
 const groups: Array<{ title: string; items: Array<{ to: string; label: string; icon: React.ReactNode; new?: boolean }>}> = [
   {
     title: 'Overview',
@@ -13,39 +19,25 @@ const groups: Array<{ title: string; items: Array<{ to: string; label: string; i
     ],
   },
   {
-    title: 'People',
+    title: 'Moderation',
     items: [
-      { to: '/players',   label: 'Players',     icon: <Users /> },
-      { to: '/bans',      label: 'Bans',        icon: <Ban /> },
-      { to: '/reports',   label: 'Reports',     icon: <Flag /> },
-      { to: '/audit',     label: 'Audit log',   icon: <ScrollText /> },
-      { to: '/logs',      label: 'Player logs', icon: <Activity /> },
+      { to: '/players',   label: 'Players',  icon: <Users /> },
+      { to: '/activity',  label: 'Activity', icon: <Activity /> },
     ],
   },
   {
     title: 'Content',
     items: [
-      // Rooms is the unified view — clicking a row opens /rooms/:id
-      // which carries the old RR-Originals edit modal, live Photon
-      // instance list, recent visitors, ownership management, and
-      // per-room leaderboard channels in one tabbed page.
-      { to: '/rooms',         label: 'Rooms',           icon: <Building2 /> },
-      { to: '/import-room',   label: 'Import room',     icon: <Upload /> },
-      { to: '/store',         label: 'Store catalog',   icon: <ShoppingBag /> },
-      { to: '/community',     label: 'Community board', icon: <MessageSquare /> },
-      { to: '/loading-tips',  label: 'Loading screen tips', icon: <MessageSquare /> },
+      { to: '/rooms',  label: 'Rooms',   icon: <Building2 /> },
+      { to: '/content', label: 'Content', icon: <MessageSquare /> },
     ],
   },
   {
-    title: 'Tools',
+    title: 'Operations',
     items: [
-      { to: '/broadcast',  label: 'Broadcast',         icon: <Megaphone /> },
-      { to: '/gift',       label: 'Gift items',        icon: <Gift />,   new: true },
-      { to: '/passwords',  label: 'Reset passwords',   icon: <KeyRound />, new: true },
-      { to: '/grants',     label: 'Grant maker pen',   icon: <Wrench />,   new: true },
-      { to: '/storage',    label: 'Storage backfill',  icon: <HardDrive />, new: true },
-      { to: '/signup-codes', label: 'Signup codes',    icon: <KeyRound />, new: true },
-      { to: '/settings',   label: 'Server settings',   icon: <Settings />, new: true },
+      { to: '/broadcast', label: 'Broadcast', icon: <Megaphone /> },
+      { to: '/storage',   label: 'Storage',   icon: <HardDrive /> },
+      { to: '/settings',  label: 'Settings',  icon: <Settings /> },
     ],
   },
 ];

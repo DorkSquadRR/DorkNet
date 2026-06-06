@@ -7,7 +7,7 @@ import { Empty } from '../components/Empty';
 import { absoluteTime, clip, relativeTime } from '../lib/format';
 import { RefreshCw } from '../components/Icons';
 
-export function PlayerLogs() {
+export function PlayerLogs({ embedded }: { embedded?: boolean } = {}) {
   const { data: players } = useApi<Player[]>('/players?take=500');
   const [pid, setPid] = useState<number | null>(null);
   const [filter, setFilter] = useState('');
@@ -49,10 +49,12 @@ export function PlayerLogs() {
 
   return (
     <div>
-      <PageHeader
-        title="Player request logs"
-        blurb="Last few hundred HTTP calls per player, pulled from the Redis ring buffer. Useful when a player reports something weird."
-      />
+      {!embedded && (
+        <PageHeader
+          title="Player request logs"
+          blurb="Last few hundred HTTP calls per player, pulled from the Redis ring buffer. Useful when a player reports something weird."
+        />
+      )}
 
       <div className="card !p-4 mb-4 grid grid-cols-1 md:grid-cols-[2fr,1fr,120px,auto,auto] gap-2 items-end">
         <label className="flex flex-col gap-1">

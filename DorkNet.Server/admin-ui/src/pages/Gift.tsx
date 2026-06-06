@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api, get } from '../lib/api';
-import type { Player } from '../lib/types';
 import { useApi } from '../lib/useApi';
-import { PageHeader } from '../components/PageHeader';
 import { useToast } from '../components/Toast';
 import { Confirm } from '../components/Confirm';
 import { RefreshCw, Search, Trash } from '../components/Icons';
@@ -27,12 +25,14 @@ const RARITY_OPTIONS: Array<{ value: number; label: string }> = [
 ];
 
 interface AvatarItem {
+  // The exact RecNet desc to gift: a bare base GUID (default colour) or a
+  // "{guid},{swatch},{mask}," string for a colour variant.
+  desc: string;
   guid: string;
   slot: number;
   friendlyName: string;
-  tooltip: string;
-  rarity: number;
-  safe: boolean;
+  color: string | null;
+  isVariant: boolean;
 }
 
 // Gifting fires the in-game gift-box popup by inserting a GiftPackageEntity
@@ -41,10 +41,11 @@ interface AvatarItem {
 // and the consume endpoint writes the avatar item into their inventory.
 // This is the only flow that triggers the popup — directly poking
 // InventoryJson skips it entirely.
-export function Gift() {
-  const { data: players } = useApi<Player[]>('/players?take=500');
-  const [playerId, setPlayerId] = useState<number | null>(null);
-
+// Per-player gift composer, rendered as the "Gift" tab of the player
+// detail modal. The recipient is fixed to the open player, so there's
+// no picker and no page chrome — just the reward builder, presentation
+// options, and that player's pending-gift inbox.
+export function GiftPanel({ playerId }: { playerId: number }) {
   const [includeItem, setIncludeItem] = useState(true);
   const [includeCurrency, setIncludeCurrency] = useState(false);
   const [includeXp, setIncludeXp] = useState(false);
@@ -66,12 +67,14 @@ export function Gift() {
   const toast = useToast();
 
   const send = async () => {
-    if (!playerId) return toast.push('Pick a recipient first', 'error');
     if (!includeItem && !includeCurrency && !includeXp) {
       return toast.push('Pick at least one reward (item / currency / xp)', 'error');
     }
-    const guid = includeItem ? (manualGuid.trim() || item?.guid) : null;
-    if (includeItem && !guid) {
+    // The picked item carries the full desc (colour variants included);
+    // a manually pasted value may be a bare GUID or a full desc — both are
+    // normalised server-side.
+    const desc = includeItem ? (manualGuid.trim() || item?.desc) : null;
+    if (includeItem && !desc) {
       return toast.push('Pick an avatar item from the list, or paste a GUID', 'error');
     }
     setBusy(true);
@@ -79,7 +82,7 @@ export function Gift() {
       const res = await api<{ id: number }>(`/players/${playerId}/gift`, {
         method: 'POST',
         body: {
-          AvatarItemGuid: includeItem ? guid : null,
+          AvatarItemGuid: includeItem ? desc : null,
           AvatarItemType: includeItem ? avatarItemType : null,
           CurrencyType: includeCurrency ? currencyType : null,
           Currency: includeCurrency ? currencyAmount : null,
@@ -101,23 +104,14 @@ export function Gift() {
 
   return (
     <div>
-      <PageHeader
-        title="Send a gift"
-        blurb="Drops a wrapped gift box on the recipient's HUD — they tap to open it and the rewards land in their inventory / wallet."
-      />
+      <p className="text-xs text-ink-400 mb-4">
+        Drops a wrapped gift box on this player's HUD — they tap to open it and the rewards land in their inventory / wallet.
+      </p>
 
-      {playerId !== null && <PendingGifts playerId={playerId} refreshKey={pendingRefreshKey} />}
+      <PendingGifts playerId={playerId} refreshKey={pendingRefreshKey} />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr,360px] gap-4 max-w-5xl">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr,360px] gap-4">
         <div className="card !p-5 space-y-4">
-          <label className="flex flex-col gap-1">
-            <span className="label">Recipient</span>
-            <select value={playerId ?? ''} onChange={e => setPlayerId(e.target.value ? parseInt(e.target.value) : null)} className="input">
-              <option value="">— pick a player —</option>
-              {(players ?? []).map(p => <option key={p.id} value={p.id}>{p.displayName || p.username} · @{p.username} · #{p.id}</option>)}
-            </select>
-          </label>
-
           <div className="space-y-2">
             <label className="flex items-center gap-2 text-sm text-ink-100 font-medium">
               <input type="checkbox" checked={includeItem} onChange={e => setIncludeItem(e.target.checked)} className="size-4 accent-brand-500" />
@@ -198,7 +192,7 @@ export function Gift() {
             <span className="label">Message (shown on the open card)</span>
             <textarea value={message} onChange={e => setMessage(e.target.value)} rows={3} className="input" />
           </label>
-          <button onClick={send} disabled={busy || !playerId} className="btn-primary w-full text-xs">
+          <button onClick={send} disabled={busy} className="btn-primary w-full text-xs">
             {busy ? 'Sending…' : 'Send gift'}
           </button>
           <div className="text-[11px] text-ink-500">
@@ -219,7 +213,10 @@ function AvatarItemPicker({ selected, onSelect }: { selected: AvatarItem | null;
     const term = search.trim().toLowerCase();
     return (catalog ?? []).filter(it => {
       if (slotFilter !== 'all' && it.slot !== slotFilter) return false;
-      if (term && !it.friendlyName.toLowerCase().includes(term) && !it.guid.toLowerCase().includes(term)) return false;
+      if (term
+          && !it.friendlyName.toLowerCase().includes(term)
+          && !(it.color ?? '').toLowerCase().includes(term)
+          && !it.guid.toLowerCase().includes(term)) return false;
       return true;
     });
   }, [catalog, search, slotFilter]);
@@ -244,21 +241,24 @@ function AvatarItemPicker({ selected, onSelect }: { selected: AvatarItem | null;
         {filtered.length > 0 && (
           <div className="table-scroll"><table className="w-full text-sm min-w-[560px]">
             <tbody className="divide-y divide-ink-800">
-              {filtered.slice(0, 200).map(it => (
+              {filtered.slice(0, 500).map(it => (
                 <tr
-                  key={it.guid}
+                  key={it.desc}
                   onClick={() => onSelect(it)}
-                  className={`cursor-pointer table-row-hover ${selected?.guid === it.guid ? 'bg-brand-500/10' : ''}`}
+                  className={`cursor-pointer table-row-hover ${selected?.desc === it.desc ? 'bg-brand-500/10' : ''}`}
                 >
                   <td className="px-3 py-1.5">
-                    <div className="text-ink-100 text-sm">{it.friendlyName || <span className="text-ink-500">unnamed</span>}</div>
-                    <div className="font-mono text-[10px] text-ink-500">{it.guid}</div>
+                    <div className="text-ink-100 text-sm flex items-center gap-1.5">
+                      {it.friendlyName || <span className="text-ink-500">unnamed</span>}
+                      {it.isVariant && <span className="badge-neutral text-[10px]">{it.color}</span>}
+                    </div>
+                    <div className="font-mono text-[10px] text-ink-500">{it.desc}</div>
                   </td>
                   <td className="px-3 py-1.5 text-xs text-ink-300 whitespace-nowrap">{SLOT_NAMES[it.slot] ?? `slot ${it.slot}`}</td>
                 </tr>
               ))}
-              {filtered.length > 200 && (
-                <tr><td colSpan={2} className="p-3 text-center text-xs text-ink-500">+ {filtered.length - 200} more — refine the search.</td></tr>
+              {filtered.length > 500 && (
+                <tr><td colSpan={2} className="p-3 text-center text-xs text-ink-500">+ {filtered.length - 500} more — refine the search.</td></tr>
               )}
             </tbody>
           </table></div>

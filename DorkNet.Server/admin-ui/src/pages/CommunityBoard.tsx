@@ -6,7 +6,7 @@ import { PageHeader } from '../components/PageHeader';
 import { useToast } from '../components/Toast';
 import { Plus, Trash } from '../components/Icons';
 
-export function CommunityBoard() {
+export function CommunityBoard({ embedded }: { embedded?: boolean } = {}) {
   const { data: roomList } = useApi<Room[]>('/rooms');
   const { data: players } = useApi<Player[]>('/players?take=500');
   const [state, setState] = useState<CommunityBoardState | null>(null);
@@ -37,13 +37,19 @@ export function CommunityBoard() {
     }
   };
 
+  const saveBtn = <button onClick={save} disabled={busy} className="btn-primary text-xs">{busy ? 'Saving…' : 'Save all'}</button>;
+
   return (
     <div>
-      <PageHeader
-        title="Community board"
-        blurb="The dorm community panel the watch fetches from /api/communityboard/v1/current. Edits go live instantly."
-        actions={<button onClick={save} disabled={busy} className="btn-primary text-xs">{busy ? 'Saving…' : 'Save all'}</button>}
-      />
+      {embedded ? (
+        <div className="flex justify-end mb-3">{saveBtn}</div>
+      ) : (
+        <PageHeader
+          title="Community board"
+          blurb="The dorm community panel the watch fetches from /api/communityboard/v1/current. Edits go live instantly."
+          actions={saveBtn}
+        />
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Announcement state={state} setState={setState} />
