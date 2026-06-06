@@ -302,9 +302,10 @@ public class MessagesController(
         //   PRIVATE instance: the sender created an invite-only match
         //   (via /goto/room/X?CreatePrivateInstance=1). The
         //   roomInstanceId the watch sends maps to a registered
-        //   PrivateInstance and only the owner is allowed to invite
-        //   anyone in. Enforces our private-match access control —
-        //   no random can DM their way past the invite list.
+        //   PrivateInstance and the owner or someone already inside
+        //   that exact live instance can invite. That keeps access
+        //   control intact while still letting a guest in someone
+        //   else's dorm invite a friend from the in-game watch.
         //
         //   PUBLIC room: the sender is in a public room / a dorm /
         //   any non-private room. RoomInstanceId is just
@@ -319,12 +320,23 @@ public class MessagesController(
         var inst = await privateInstances.GetAsync(roomInstanceId);
         if (inst is not null)
         {
-            if (inst.OwnerPlayerId != Me) return Forbid();
+            var senderPresence = presence.GetRoom(Me);
+            var senderIsInInstance = senderPresence is not null
+                && senderPresence.RoomInstanceId == roomInstanceId;
+            if (inst.OwnerPlayerId != Me && !senderIsInInstance)
+            {
+                logger.LogWarning(
+                    "[invite] from={From} tried to invite to private instance={Instance} ownedBy={Owner} while presenceInstance={PresenceInstance}; rejecting",
+                    Me, roomInstanceId, inst.OwnerPlayerId, senderPresence?.RoomInstanceId);
+                return Forbid();
+            }
             resolvedRoomId = inst.RoomId;
-            roomName = await db.Rooms
-                .Where(r => r.Id == inst.RoomId)
-                .Select(r => r.Name)
-                .FirstOrDefaultAsync() ?? "Private match";
+            roomName = !string.IsNullOrWhiteSpace(inst.Name)
+                ? inst.Name
+                : await db.Rooms
+                    .Where(r => r.Id == inst.RoomId)
+                    .Select(r => r.Name)
+                    .FirstOrDefaultAsync() ?? "Private match";
         }
         else
         {

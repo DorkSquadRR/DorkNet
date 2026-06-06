@@ -103,6 +103,7 @@ public class StorefrontsBuyController(
         StoreService.TryGetAvatarItemPayload(item.Slug, out var avatarItemType, out avatarItemDesc);
         var inventoryAvatarDesc = StoreService.InventoryAvatarItemDesc(avatarItemDesc);
         StoreService.TryGetConsumableItemDesc(item.Slug, out var consumableItemDesc);
+        StoreService.TryGetEquipmentPayload(item.Slug, out var equipmentPrefabName, out var equipmentModificationGuid);
         if (StoreService.TryGetHairDyePayload(item.Slug, out var hairDyeConsumableDesc, out var hairDyeColorGuid))
         {
             avatarItemType = 1;
@@ -116,6 +117,8 @@ public class StorefrontsBuyController(
             AvatarItemType              = string.IsNullOrEmpty(inventoryAvatarDesc) ? null : avatarItemType,
             AvatarItemDescOrHairDyeDesc = inventoryAvatarDesc,
             ConsumableItemDesc          = consumableItemDesc,
+            EquipmentPrefabName         = equipmentPrefabName,
+            EquipmentModificationGuid   = equipmentModificationGuid,
             CurrencyType                = req.CurrencyType,
             Currency                    = 0,
             Xp                          = 0,
@@ -158,6 +161,8 @@ public class StorefrontsBuyController(
                     AvatarItemType = gift.AvatarItemType,
                     AvatarItemDesc = avatarItemDesc,
                     ConsumableItemDesc = gift.ConsumableItemDesc ?? string.Empty,
+                    EquipmentPrefabName = gift.EquipmentPrefabName,
+                    EquipmentModificationGuid = gift.EquipmentModificationGuid,
                     Message      = gift.Message ?? string.Empty,
                 });
         }
@@ -341,10 +346,13 @@ public class StorefrontsBuyController(
         var avatarItemType = 0;
         var avatarItemDesc = string.Empty;
         var consumableItemDesc = string.Empty;
+        var equipmentPrefabName = string.Empty;
+        var equipmentModificationGuid = string.Empty;
         if (grantedSlug is not null)
         {
             StoreService.TryGetAvatarItemPayload(grantedSlug, out avatarItemType, out avatarItemDesc);
             StoreService.TryGetConsumableItemDesc(grantedSlug, out consumableItemDesc);
+            StoreService.TryGetEquipmentPayload(grantedSlug, out equipmentPrefabName, out equipmentModificationGuid);
             if (StoreService.TryGetHairDyePayload(grantedSlug, out var hairDyeConsumableDesc, out var hairDyeColorGuid))
             {
                 avatarItemType = 1;
@@ -378,8 +386,8 @@ public class StorefrontsBuyController(
             AvatarItemDesc            = avatarItemDesc,
             AvatarItemDescOrHairDyeDesc = StoreService.InventoryAvatarItemDesc(avatarItemDesc),
             ConsumableItemDesc        = consumableItemDesc,
-            EquipmentPrefabName       = string.Empty,
-            EquipmentModificationGuid = string.Empty,
+            EquipmentPrefabName       = equipmentPrefabName,
+            EquipmentModificationGuid = equipmentModificationGuid,
             CurrencyType              = currencyType,
             Currency                  = 0,
             Message                   = string.Empty,

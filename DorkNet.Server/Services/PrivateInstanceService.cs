@@ -133,6 +133,7 @@ public class PrivateInstanceService(DorkNetDbContext db)
             if (existing.DataBlob != dataBlob)         { existing.DataBlob = dataBlob;         changed = true; }
             if (existing.Location != location)         { existing.Location = location;         changed = true; }
             if (existing.PhotonRegion != photonRegion) { existing.PhotonRegion = photonRegion; changed = true; }
+            if (existing.Name != baseName)             { existing.Name = baseName;             changed = true; }
             if (changed) await db.SaveChangesAsync();
             return ToRecord(existing);
         }

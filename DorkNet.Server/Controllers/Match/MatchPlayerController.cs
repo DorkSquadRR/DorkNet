@@ -338,6 +338,7 @@ public class MatchPlayerController(
         var dataBlob = await ResolveDataBlobForPresenceAsync(roomId, playerId);
         var photonRegion = (config["Photon:CloudRegion"] ?? "us").ToLowerInvariant();
         var photonRoomId = $"^dormroom_p{playerId}";
+        var dormInstanceName = await BuildDormInstanceNameAsync(playerId);
 
         // EnsureForDormAsync owns the deterministic dorm instance-id
         // formula; reusing it here guarantees the heartbeat's
@@ -346,7 +347,7 @@ public class MatchPlayerController(
             ownerPlayerId: playerId,
             roomId: roomId,
             subRoomId: 0,
-            baseName: "DormRoom",
+            baseName: dormInstanceName,
             location: location,
             dataBlob: dataBlob,
             photonRegion: photonRegion,
@@ -361,7 +362,7 @@ public class MatchPlayerController(
             Location = location,
             PhotonRegionId = photonRegion,
             PhotonRoomId = photonRoomId,
-            Name = "DormRoom",
+            Name = dormInstanceName,
             MaxCapacity = 8,
             IsFull = false,
             IsPrivate = true,
@@ -369,6 +370,23 @@ public class MatchPlayerController(
             DataBlob = dataBlob ?? string.Empty,
             EventId = 0,
         };
+    }
+
+    private async Task<string> BuildDormInstanceNameAsync(long ownerPlayerId)
+    {
+        var player = await db.Players.AsNoTracking()
+            .Where(p => p.Id == ownerPlayerId)
+            .Select(p => new { p.DisplayName, p.Username })
+            .FirstOrDefaultAsync();
+        var name = !string.IsNullOrWhiteSpace(player?.DisplayName)
+            ? player!.DisplayName
+            : !string.IsNullOrWhiteSpace(player?.Username)
+                ? player!.Username
+                : $"Player{ownerPlayerId}";
+        var cleaned = new string(name
+            .Select(ch => char.IsLetterOrDigit(ch) || ch == '_' || ch == '-' ? ch : '_')
+            .ToArray()).Trim('_');
+        return string.IsNullOrWhiteSpace(cleaned) ? $"Player{ownerPlayerId}_dorm" : $"{cleaned}_dorm";
     }
 
     private async Task<string> ResolveDataBlobForPresenceAsync(long roomId, int playerId)

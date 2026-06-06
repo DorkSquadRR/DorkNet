@@ -1073,6 +1073,9 @@ public class GoToController(
         // load (black screen).
         var isDorm = roomName.Equals("DormRoom", StringComparison.OrdinalIgnoreCase);
         var dormOwnerId = this.CurrentPlayerId();
+        var dormInstanceName = isDorm && dormOwnerId is long ownerForDisplay
+            ? await BuildDormInstanceNameAsync(ownerForDisplay)
+            : roomName;
         var photonRoom = (isDorm && dormOwnerId is long ownerForName)
             ? $"^dormroom_p{ownerForName}"
             : $"^{roomName.ToLowerInvariant()}_{roomId}";
@@ -1099,7 +1102,7 @@ public class GoToController(
                 // Lowercase enum names — that's the wire format Photon uses too.
                 PhotonRegionId = photonRegion,
                 PhotonRoomId = photonRoom,
-                Name = roomName,
+                Name = dormInstanceName,
                 MaxCapacity = 8,
                 IsFull = false,
                 IsPrivate = false,
@@ -1123,7 +1126,7 @@ public class GoToController(
                 ownerPlayerId: ownerPid,
                 roomId: resp.RoomInstance.RoomId,
                 subRoomId: 0,
-                baseName: resp.RoomInstance.Name,
+                baseName: dormInstanceName,
                 location: resp.RoomInstance.Location,
                 dataBlob: resp.RoomInstance.DataBlob,
                 photonRegion: resp.RoomInstance.PhotonRegionId,
@@ -1134,6 +1137,23 @@ public class GoToController(
         }
 
         return resp;
+    }
+
+    private async Task<string> BuildDormInstanceNameAsync(long ownerPlayerId)
+    {
+        var player = await db.Players.AsNoTracking()
+            .Where(p => p.Id == ownerPlayerId)
+            .Select(p => new { p.DisplayName, p.Username })
+            .FirstOrDefaultAsync();
+        var name = !string.IsNullOrWhiteSpace(player?.DisplayName)
+            ? player!.DisplayName
+            : !string.IsNullOrWhiteSpace(player?.Username)
+                ? player!.Username
+                : $"Player{ownerPlayerId}";
+        var cleaned = new string(name
+            .Select(ch => char.IsLetterOrDigit(ch) || ch == '_' || ch == '-' ? ch : '_')
+            .ToArray()).Trim('_');
+        return string.IsNullOrWhiteSpace(cleaned) ? $"Player{ownerPlayerId}_dorm" : $"{cleaned}_dorm";
     }
 
     private async Task<string> ResolveInitialDataBlobAsync(long roomId, bool isDorm, long? dormOwnerId)

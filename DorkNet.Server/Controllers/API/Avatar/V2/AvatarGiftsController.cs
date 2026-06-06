@@ -198,6 +198,32 @@ public class AvatarGiftsController(
             }
         }
 
+        if (!string.IsNullOrWhiteSpace(gift.EquipmentPrefabName) ||
+            !string.IsNullOrWhiteSpace(gift.EquipmentModificationGuid))
+        {
+            var itemSlug = !string.IsNullOrWhiteSpace(gift.EquipmentModificationGuid)
+                ? StoreService.EquipmentSkinSlug(gift.EquipmentPrefabName, gift.EquipmentModificationGuid)
+                : gift.EquipmentPrefabName;
+            if (!string.IsNullOrWhiteSpace(itemSlug))
+            {
+                var row = await db.PlayerInventory
+                    .FirstOrDefaultAsync(p => p.PlayerId == pid && p.ItemSlug == itemSlug);
+                if (row is null)
+                {
+                    db.PlayerInventory.Add(new PlayerInventoryEntity
+                    {
+                        PlayerId = pid,
+                        ItemSlug = itemSlug,
+                        Quantity = 1,
+                    });
+                }
+                else
+                {
+                    row.Quantity = Math.Max(row.Quantity, 1);
+                }
+            }
+        }
+
         // Apply currency / XP / level rewards bundled with the gift.
         // The previous implementation only handled the avatar item path,
         // so token gifts from the admin SPA marked themselves consumed

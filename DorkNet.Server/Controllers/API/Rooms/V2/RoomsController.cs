@@ -371,6 +371,9 @@ public class RoomsController(
     [HttpPost("api/rooms/v4/saveData")]
     [Authorize]
     public async Task<IActionResult> SaveData([FromBody] SaveRoomSceneRequest body)
+        => await SaveDataCore(body);
+
+    private async Task<IActionResult> SaveDataCore(SaveRoomSceneRequest body, long? routeRoomId = null)
     {
         var pid = this.RequireCurrentPlayerId();
 
@@ -381,7 +384,7 @@ public class RoomsController(
         // on every /goto). This is the only signal we have without a
         // RoomId on the request body.
         var current = presence.GetRoom(pid);
-        if (current is null)
+        if (current is null && routeRoomId is null)
         {
             // No active room — without it we can't pick a target row.
             // Return a degenerate RoomScene so the deserializer doesn't
@@ -401,11 +404,18 @@ public class RoomsController(
             });
         }
 
-        var roomId = current.RoomId;
+        var roomId = routeRoomId ?? current!.RoomId;
         var room = await rooms.GetByIdAsync(roomId);
         if (room is null) return NotFound(new { error = "room_not_found" });
 
-        var newBlob = body.RoomDataFilename?.Trim() ?? string.Empty;
+        var newBlob = body.EffectiveRoomDataFilename.Trim();
+        if (string.IsNullOrWhiteSpace(newBlob))
+        {
+            logger.LogWarning(
+                "[rooms-save] missing blob filename player={PlayerId} room={RoomId} requestedScene={RequestedSceneId} routeRoom={RouteRoomId}",
+                pid, roomId, body.RoomSceneId, routeRoomId);
+            return BadRequest(new { error = "missing_room_data_filename" });
+        }
         var savedAt = DateTime.UtcNow;
 
         // Multi-scene rooms have a RoomScenes row per scene. The 2020
@@ -494,30 +504,35 @@ public class RoomsController(
         logger.LogInformation(
             "[rooms-save] saveData player={PlayerId} room={RoomId} requestedScene={RequestedSceneId} savedScene={SavedSceneId} blob={BlobName} sceneRow={SceneRowFound} scenes={SceneCount}",
             pid, roomId, body.RoomSceneId, savedSceneId, newBlob, sceneRow is not null, sceneRowsForRoom.Count);
-        var playersInInstance = onlinePresence.OnlinePlayerIds()
-            .Where(playerId =>
-            {
-                var playerRoom = presence.GetRoom(playerId);
-                return playerRoom is not null
-                    && playerRoom.RoomId == roomId
-                    && playerRoom.RoomInstanceId == current.RoomInstanceId;
-            })
-            .Append(pid)
-            .Distinct()
-            .ToArray();
+        var activeInstanceId = current is not null && current.RoomId == roomId
+            ? current.RoomInstanceId
+            : 0L;
+        var playersInInstance = activeInstanceId == 0
+            ? new[] { pid }
+            : onlinePresence.OnlinePlayerIds()
+                .Where(playerId =>
+                {
+                    var playerRoom = presence.GetRoom(playerId);
+                    return playerRoom is not null
+                        && playerRoom.RoomId == roomId
+                        && playerRoom.RoomInstanceId == activeInstanceId;
+                })
+                .Append(pid)
+                .Distinct()
+                .ToArray();
         logger.LogInformation(
             "[rooms-save] fanout room update player={PlayerId} room={RoomId} instance={InstanceId} blob={BlobName} recipients={RecipientCount}",
-            pid, roomId, current.RoomInstanceId, newBlob, playersInInstance.Length);
+            pid, roomId, activeInstanceId, newBlob, playersInInstance.Length);
 
         var updatedRoomInstances = new Dictionary<long, RoomInstanceDto>();
         foreach (var playerId in playersInInstance)
         {
             var currentPresence = presence.GetRoom(playerId);
-            if (currentPresence is null && playerId == pid)
+            if (currentPresence is null && playerId == pid && current is not null)
             {
                 currentPresence = current;
             }
-            if (currentPresence is null) continue;
+            if (currentPresence is null || currentPresence.RoomId != roomId) continue;
 
             currentPresence.DataBlob = newBlob;
             presence.SetRoom(playerId, currentPresence);
@@ -601,9 +616,16 @@ public class RoomsController(
     {
         public long RoomSceneId { get; set; }
         public string? RoomDataFilename { get; set; }
+        [System.Text.Json.Serialization.JsonPropertyName("filename")]
+        public string? Filename { get; set; }
         public List<long>? InventionUsages { get; set; }
+        public string? InventionUsageBase64 { get; set; }
         public CreatorActionContextDto? CreatorActionContext { get; set; }
         public long RequestPlayerId { get; set; }
+        public int SaveRequestPlayerId { get; set; }
+
+        public string EffectiveRoomDataFilename =>
+            RoomDataFilename ?? Filename ?? string.Empty;
     }
 
     public class CreatorActionContextDto
@@ -2403,7 +2425,7 @@ public class RoomsController(
         [FromBody] SaveRoomSceneRequest body)
     {
         body.RoomSceneId = subRoomId;
-        return SaveData(body);
+        return SaveDataCore(body, roomId);
     }
 
     private async Task<IActionResult> MutateScene(long roomId, long subRoomId, Action<RoomSceneEntity> mutator)
