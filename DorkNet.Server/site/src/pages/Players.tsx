@@ -33,6 +33,11 @@ export function Players() {
     };
   }, [setParams]);
 
+  useEffect(() => {
+    const next = params.get('q') ?? '';
+    setQ(current => current === next ? current : next);
+  }, [params]);
+
   useEffect(() => { debounce(q); }, [q, debounce]);
 
   return (

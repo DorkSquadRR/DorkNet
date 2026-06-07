@@ -1,16 +1,19 @@
 import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { get } from '../lib/api';
-import type { SitePhoto, SitePlayerDetail } from '../lib/types';
+import type { SitePhoto, SitePlayerDetail, SiteRoom } from '../lib/types';
 import { PlayerAvatar } from '../components/PlayerAvatar';
 import { PhotoCard } from '../components/PhotoCard';
 import { Empty } from '../components/Empty';
 import { absoluteTime, num, relativeTime } from '../lib/format';
+import { RoomCard } from './Rooms';
 
 export function PlayerProfile() {
   const { id } = useParams<{ id: string }>();
   const [player, setPlayer] = useState<SitePlayerDetail | null>(null);
   const [photos, setPhotos] = useState<SitePhoto[] | null>(null);
+  const [taggedPhotos, setTaggedPhotos] = useState<SitePhoto[] | null>(null);
+  const [rooms, setRooms] = useState<SiteRoom[] | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   useEffect(() => {
@@ -18,10 +21,14 @@ export function PlayerProfile() {
     setErr(null);
     setPlayer(null);
     setPhotos(null);
+    setTaggedPhotos(null);
+    setRooms(null);
     get<SitePlayerDetail>(`/players/${id}`)
       .then(setPlayer)
       .catch(e => setErr((e as Error).message));
     get<SitePhoto[]>(`/players/${id}/photos?take=48`).then(setPhotos).catch(() => setPhotos([]));
+    get<SitePhoto[]>(`/players/${id}/photos/of?take=48`).then(setTaggedPhotos).catch(() => setTaggedPhotos([]));
+    get<SiteRoom[]>(`/players/${id}/rooms?take=24`).then(setRooms).catch(() => setRooms([]));
   }, [id]);
 
   if (err) return (
@@ -59,13 +66,20 @@ export function PlayerProfile() {
         </div>
         <div className="grid grid-cols-3 sm:grid-cols-1 sm:w-32 gap-2 text-xs">
           <Stat label="Level"  value={num(player.level)} />
-          <Stat label="Photos" value={num(player.photoCount)} />
+          <Stat label="Friends" value={num(player.friendCount)} />
           <Stat label="Joined" value={relativeTime(player.createdAt)} title={absoluteTime(player.createdAt)} />
         </div>
       </header>
 
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+        <Stat label="Photos Taken" value={num(player.photosTakenCount ?? player.photoCount)} />
+        <Stat label="Photos Of" value={num(player.photosOfPlayerCount)} />
+        <Stat label="Public Rooms" value={num(player.publicRoomCount)} />
+        <Stat label="XP" value={num(player.xp)} />
+      </div>
+
       <section>
-        <h2 className="text-lg font-semibold text-ink-50 mb-3">Photos</h2>
+        <h2 className="text-lg font-semibold text-ink-50 mb-3">Photos taken</h2>
         {photos === null
           ? <div className="text-xs text-ink-400 py-6">Loading…</div>
           : photos.length === 0
@@ -73,6 +87,30 @@ export function PlayerProfile() {
             : <div className="photo-grid">
                 {photos.map(p => <PhotoCard key={p.id} photo={p} />)}
               </div>
+        }
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold text-ink-50 mb-3">Pictures they appear in</h2>
+        {taggedPhotos === null
+          ? <div className="text-xs text-ink-400 py-6">Loading…</div>
+          : taggedPhotos.length === 0
+            ? <Empty title="No tagged photos" blurb={`${player.displayName || player.username} hasn't been tagged in public photos yet.`} />
+            : <div className="photo-grid">
+                {taggedPhotos.map(p => <PhotoCard key={p.id} photo={p} />)}
+              </div>
+        }
+      </section>
+
+      <section>
+        <h2 className="text-lg font-semibold text-ink-50 mb-3">Public rooms</h2>
+        {rooms === null
+          ? <div className="text-xs text-ink-400 py-6">Loading…</div>
+          : rooms.length === 0
+            ? <Empty title="No public rooms" blurb={`${player.displayName || player.username} hasn't published any public rooms.`} />
+            : <ul className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {rooms.map(r => <li key={r.id}><RoomCard room={r} /></li>)}
+              </ul>
         }
       </section>
     </div>

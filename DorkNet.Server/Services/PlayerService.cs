@@ -681,8 +681,21 @@ public class PlayerService(DorkNetDbContext db, RoomService rooms, ILogger<Playe
         // request `take=1000000` and exhaust the connection. 50 is enough
         // for the watch's typeahead UI (it shows ~10 rows at a time).
         var clamped = Math.Clamp(take, 1, 50);
+        var needle = (query ?? string.Empty).Trim().ToLower();
+        if (needle.Length == 0) return [];
+        var idQuery = long.TryParse(needle, out var parsedId) ? parsedId : -1;
+
         return await db.Players
-            .Where(p => p.Username.Contains(query) || p.DisplayName.Contains(query))
+            .Where(p => p.Id == idQuery ||
+                        p.Username.ToLower().Contains(needle) ||
+                        p.DisplayName.ToLower().Contains(needle))
+            .OrderBy(p =>
+                p.Id == idQuery ||
+                p.Username.ToLower() == needle ||
+                p.DisplayName.ToLower() == needle ? 0 :
+                p.Username.ToLower().StartsWith(needle) ||
+                p.DisplayName.ToLower().StartsWith(needle) ? 1 : 2)
+            .ThenBy(p => p.Username)
             .Take(clamped)
             .ToListAsync();
     }

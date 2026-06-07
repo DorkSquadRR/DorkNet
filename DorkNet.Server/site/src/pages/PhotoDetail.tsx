@@ -63,6 +63,24 @@ export function PhotoDetail() {
             <p className="text-sm text-ink-200 whitespace-pre-wrap">{photo.caption}</p>
           )}
 
+          {(photo.taggedPlayers ?? []).length > 0 && (
+            <div className="space-y-2">
+              <div className="text-[10px] uppercase tracking-widest text-ink-400">Players in photo</div>
+              <div className="flex flex-wrap gap-2">
+                {photo.taggedPlayers.map(p => (
+                  <Link
+                    key={p.id}
+                    to={`/players/${p.id}`}
+                    className="inline-flex max-w-full items-center gap-2 rounded-md border border-ink-800 bg-ink-900/60 px-2 py-1 text-xs text-ink-200 hover:bg-ink-800/80 hover:text-ink-50"
+                  >
+                    <PlayerAvatar name={p.profileImageName} displayName={p.displayName || p.username} size={22} />
+                    <span className="truncate">{p.displayName || p.username}</span>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-2 text-xs">
             <div className="rounded-md border border-ink-800 bg-ink-900/60 px-3 py-2">
               <div className="text-[10px] uppercase tracking-widest text-ink-400">Cheers</div>

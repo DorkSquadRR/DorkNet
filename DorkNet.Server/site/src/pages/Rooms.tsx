@@ -55,7 +55,7 @@ export function Rooms() {
   );
 }
 
-function RoomCard({ room }: { room: SiteRoom }) {
+export function RoomCard({ room }: { room: SiteRoom }) {
   const img = room.imageName ? `https://img.${imageApex()}/${encodeURIComponent(room.imageName)}?width=320&sig=p1` : null;
   return (
     <div className="card overflow-hidden">
