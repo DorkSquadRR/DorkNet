@@ -37,6 +37,17 @@ public class NotificationController(
 
         using var ws = await HttpContext.WebSockets.AcceptWebSocketAsync();
         log.LogInformation("[notify] 2018 client opened notification WebSocket");
+
+        // HANDSHAKE: on connect the 2018 client enters PerformingHandshake and
+        // blocks ("Connecting to RecNet") until the SERVER sends a handshake
+        // message — any valid JSON object marks the channel Connected
+        // (RecNet.cs:49616-49620, JFBBMEIDBNA just needs dict != null). Without
+        // it both sides wait for each other ~35s, then the client aborts the
+        // channel and shows "Failed to connect to RecNet". Send {} immediately.
+        var handshake = System.Text.Encoding.UTF8.GetBytes("{}");
+        await ws.SendAsync(handshake, WebSocketMessageType.Text, endOfMessage: true,
+            HttpContext.RequestAborted);
+
         var buf = new byte[4096];
         try
         {

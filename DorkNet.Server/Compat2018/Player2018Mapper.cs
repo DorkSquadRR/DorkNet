@@ -26,5 +26,6 @@ public static class Player2018Mapper
         ProfileImageName = p.ProfileImageName ?? string.Empty,
         JuniorProfile = p.IsJunior,
         HasBirthday = p.Birthday.HasValue,
+        PlayerReputation = new PlayerReputation2018 { Noteriety = p.Reputation },
     };
 }

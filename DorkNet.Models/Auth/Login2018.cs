@@ -102,6 +102,30 @@ public class Player2018
 
     [JsonPropertyName("AvoidJuniors")]
     public bool AvoidJuniors { get; set; }
+
+    // REQUIRED to be non-null: the post-login analytics Identify dereferences
+    // localPlayer.PlayerReputation.<field> (RecNet.cs ~NECCOFKHCAA) — a null
+    // here NREs the boot coroutine and the client hangs on splash_screen.
+    [JsonPropertyName("PlayerReputation")]
+    public PlayerReputation2018 PlayerReputation { get; set; } = new();
+}
+
+/// <summary>
+/// 2018 PlayerReputation (RecNet.HOLNFPNKNGB.Deserialize) — all int. Keys exact
+/// incl. the "Noteriety" misspelling. Must be present (non-null) on the player.
+/// </summary>
+public class PlayerReputation2018
+{
+    [JsonPropertyName("Noteriety")] public int Noteriety { get; set; }
+    [JsonPropertyName("CheerGeneral")] public int CheerGeneral { get; set; }
+    [JsonPropertyName("CheerHelpful")] public int CheerHelpful { get; set; }
+    [JsonPropertyName("CheerGreatHost")] public int CheerGreatHost { get; set; }
+    [JsonPropertyName("CheerSportsman")] public int CheerSportsman { get; set; }
+    [JsonPropertyName("CheerCreative")] public int CheerCreative { get; set; }
+    [JsonPropertyName("CheerCredit")] public int CheerCredit { get; set; }
+    [JsonPropertyName("SubscriberCount")] public int SubscriberCount { get; set; }
+    [JsonPropertyName("SubscribedCount")] public int SubscribedCount { get; set; }
+    [JsonPropertyName("SelectedCheer")] public int SelectedCheer { get; set; }
 }
 
 /// <summary>
