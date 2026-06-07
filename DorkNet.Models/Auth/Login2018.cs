@@ -72,11 +72,12 @@ public class Player2018
     [JsonPropertyName("Level")]
     public int Level { get; set; } = 1;
 
-    // Obfuscated enum in the dump; not a gate (the client just stores it). 3 is
-    // the "fully registered" value used elsewhere; verify against a live client
-    // if the signup flow re-appears for an existing account.
+    // Registration step enum (ProfileSelectionManager.NFCBDCFLBOC):
+    // invalid=-1, video=0, birthday=1, email=2, COMPLETE=10. Anything < 10
+    // makes the client run the signup step flow (it got "stuck on birthday").
+    // 10 = fully registered → client goes straight in-game.
     [JsonPropertyName("RegistrationStatus")]
-    public int RegistrationStatus { get; set; } = 3;
+    public int RegistrationStatus { get; set; } = 10;
 
     [JsonPropertyName("Developer")]
     public bool Developer { get; set; }

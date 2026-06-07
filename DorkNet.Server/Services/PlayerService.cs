@@ -517,6 +517,7 @@ public class PlayerService(DorkNetDbContext db, RoomService rooms, ILogger<Playe
             HairColor = StarterHairColor,
             SkinColor = StarterSkinColor,
         };
+        ApplyRegistrationDefaults(player);
 
         db.Players.Add(player);
         await db.SaveChangesAsync();
@@ -596,6 +597,7 @@ public class PlayerService(DorkNetDbContext db, RoomService rooms, ILogger<Playe
             HairColor = StarterHairColor,
             SkinColor = StarterSkinColor,
         };
+        ApplyRegistrationDefaults(player);
         db.Players.Add(player);
         await db.SaveChangesAsync();
 
@@ -627,6 +629,43 @@ public class PlayerService(DorkNetDbContext db, RoomService rooms, ILogger<Playe
         db.Players.Remove(player);
         await db.SaveChangesAsync();
         return true;
+    }
+
+    // 2018 client runs a signup step-flow (video→birthday→email→complete) for
+    // accounts missing these — and its screen-mode UI is unusable, so accounts
+    // are born COMPLETE: an adult birthday, a synthetic email, and a default
+    // password ("dorknet"). RegistrationStatus is reported as complete(10) in
+    // the Player2018 wire shape.
+    private static readonly DateTime DefaultBirthday = new(1990, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+    private static readonly string DefaultPasswordHash = BCrypt.Net.BCrypt.HashPassword("dorknet", 11);
+
+    private static void ApplyRegistrationDefaults(PlayerEntity p)
+    {
+        p.Birthday ??= DefaultBirthday;
+        if (string.IsNullOrEmpty(p.Email))
+            p.Email = $"{(string.IsNullOrEmpty(p.Username) ? "player" : p.Username).ToLowerInvariant()}@dorknet.local";
+        if (string.IsNullOrEmpty(p.PasswordHash)) p.PasswordHash = DefaultPasswordHash;
+        // 2018 SCREEN MODE is a developer-gated feature: SessionManager.BIAOMKDOLDL
+        // (which keeps screen mode enabled post-login) = account.Developer
+        // (RecNet EEBPLECPEGD.Deserialize "Developer" key). Without it the client
+        // demands a headset (vr_device_required) after login. Grant it so the
+        // screen-mode (non-VR) client is playable on this local-test branch.
+        p.IsDeveloper = true;
+    }
+
+    /// <summary>Complete any account missing birthday/email/password so the 2018
+    /// client never enters its (broken-in-screen-mode) signup step flow. Runs at
+    /// startup like the other backfills.</summary>
+    public async Task BackfillAccountCompletionAsync()
+    {
+        var incomplete = await db.Players
+            .Where(p => p.Birthday == null || p.Email == null || p.PasswordHash == null || !p.IsDeveloper)
+            .ToListAsync();
+        if (incomplete.Count == 0) return;
+        foreach (var p in incomplete) ApplyRegistrationDefaults(p);
+        await db.SaveChangesAsync();
+        logger.LogInformation(
+            "[backfill] completed registration (birthday/email/password) for {N} account(s)", incomplete.Count);
     }
 
     public async Task<PlayerEntity?> GetByIdAsync(long id) =>

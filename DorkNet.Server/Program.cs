@@ -886,6 +886,11 @@ using (var scope = app.Services.CreateScope())
     // that's already there (so spent-down accounts aren't refilled).
     await playerService.BackfillStarterWalletsAsync();
 
+    // 2018 client: complete any account missing birthday/email/password so the
+    // (screen-mode-broken) signup step flow never appears. See
+    // PlayerService.ApplyRegistrationDefaults.
+    await playerService.BackfillAccountCompletionAsync();
+
     // Backfill the per-player dorm room + DormStateEntity for any
     // legacy account that signed in via a path that didn't run
     // EnsurePersonalDormAsync (early-bird signups, manual SQL

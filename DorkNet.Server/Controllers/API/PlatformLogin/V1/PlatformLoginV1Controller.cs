@@ -166,10 +166,15 @@ public class PlatformLoginV1Controller(
     // account-selection list. Returns a BARE JSON ARRAY of Player2018 objects.
     [HttpPost("getcachedlogins")]
     [HttpGet("getcachedlogins")]
-    public async Task<IActionResult> GetCachedLogins(
-        [FromQuery] int Platform = 0, [FromQuery] string? PlatformId = null)
+    public async Task<IActionResult> GetCachedLogins()
     {
-        var players = await playerService.GetCachedLoginsAsync(Platform, PlatformId);
+        // The 2018 client sends Platform/PlatformId in the FORM BODY
+        // (application/x-www-form-urlencoded), not the query string — so read
+        // from form/query/json. Reading [FromQuery] only returned [] (empty
+        // account grid + broke +profile auto-login). Verified from the wire:
+        // req=Platform=0&PlatformId=76561198969189675.
+        var p = await ReadParamsAsync();
+        var players = await playerService.GetCachedLoginsAsync(p.GetInt("Platform"), p.Get("PlatformId"));
         return Ok(players.Select(ToPlayer2018).ToList());
     }
 

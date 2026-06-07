@@ -98,11 +98,17 @@ public class PhotonConfig
 
 public class MatchmakingParams
 {
-    [JsonPropertyName("MaxPlayersPerRoom")]
-    public int MaxPlayersPerRoom { get; set; } = 8;
+    // 2018 RecNet.LOIBFONMHMF.Deserialize reads exactly TWO required float keys
+    // via Util.GetKey<Single> (verified via dnlib). It's fetched as an optional
+    // object (GetObjectKey) inside config/v2, but once PRESENT the client
+    // deserializes it — wrong/missing keys throw KeyNotFoundException →
+    // "Received malformed RecNet response" → "Failed to connect to RecNet" at
+    // boot. The 2020 MaxPlayersPerRoom/MinPlayersToStart keys are NOT read here.
+    [JsonPropertyName("PreferFullRoomsFrequency")]
+    public float PreferFullRoomsFrequency { get; set; } = 0.5f;
 
-    [JsonPropertyName("MinPlayersToStart")]
-    public int MinPlayersToStart { get; set; } = 1;
+    [JsonPropertyName("PreferEmptyRoomsFrequency")]
+    public float PreferEmptyRoomsFrequency { get; set; } = 0.5f;
 }
 
 public class LevelProgressionEntry
