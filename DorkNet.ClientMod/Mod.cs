@@ -355,6 +355,11 @@ public class Mod : MelonMod
                     $"(raisePhotonRate={Cfg.DesktopScreenShareRaisePhotonRate})");
         }
 
+        TryPatchByName("RecRoom.Tools.MakerPenVisuals",
+                       "set_LaserPointerEnabled",
+                       args: new[] { typeof(bool) },
+                       prefix: nameof(MakerPenGiftPreviewPatches.LaserPointerEnabled_Prefix));
+
         RegisterDiagnostics();
         Log.Msg("=== Client patches registered ===");
     }
@@ -769,7 +774,7 @@ public class Mod : MelonMod
     {
         // Look in all three patch holder classes — small enough that a
         // linear scan is cheaper than per-class lookups.
-        foreach (var holder in new[] { typeof(UriPatches), typeof(PhotonPatches), typeof(TlsPatches), typeof(DiagnosticPatches), typeof(SavePatches), typeof(ChatPatches), typeof(JoinPatches), typeof(RegistrationPatches), typeof(DebugConsolePatches), typeof(ScreenSharePatches) })
+        foreach (var holder in new[] { typeof(UriPatches), typeof(PhotonPatches), typeof(TlsPatches), typeof(DiagnosticPatches), typeof(SavePatches), typeof(ChatPatches), typeof(JoinPatches), typeof(RegistrationPatches), typeof(DebugConsolePatches), typeof(ScreenSharePatches), typeof(MakerPenGiftPreviewPatches) })
         {
             var m = holder.GetMethod(name, BindingFlags.Public | BindingFlags.Static);
             if (m is not null) return m;
@@ -1537,6 +1542,52 @@ internal static class ScreenSharePatches
         if (p is not null && p.CanWrite) { p.SetValue(null, value); return; }
         var f = t.GetField(name, BindingFlags.Public | BindingFlags.Static);
         if (f is not null) f.SetValue(null, value);
+    }
+}
+
+internal static class MakerPenGiftPreviewPatches
+{
+    private static bool _loggedMissingPointer;
+    private static bool _loggedMissingRestrictionFlag;
+
+    public static bool LaserPointerEnabled_Prefix(object __instance, bool ONGBFDACHHG)
+    {
+        try
+        {
+            if (__instance is null) return true;
+            var t = __instance.GetType();
+            if (ReadField(__instance, t, "pointerLineRenderer") is null)
+            {
+                if (!_loggedMissingPointer)
+                {
+                    _loggedMissingPointer = true;
+                    Mod.Log.Msg("[makerpen-preview] skipped LaserPointerEnabled on MakerPenVisuals with no pointerLineRenderer");
+                }
+                return false;
+            }
+
+            if (ONGBFDACHHG && ReadField(__instance, t, "EANJBIDHAMN") is null)
+            {
+                if (!_loggedMissingRestrictionFlag)
+                {
+                    _loggedMissingRestrictionFlag = true;
+                    Mod.Log.Msg("[makerpen-preview] skipped LaserPointerEnabled=true on MakerPenVisuals with no laser restriction flag");
+                }
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            Mod.Log.Warning($"[makerpen-preview] guard failed, letting original run: {ex.Message}");
+        }
+
+        return true;
+    }
+
+    private static object? ReadField(object instance, Type type, string name)
+    {
+        var field = AccessTools.Field(type, name) ?? AccessTools.Field(type.BaseType, name);
+        return field?.GetValue(instance);
     }
 }
 

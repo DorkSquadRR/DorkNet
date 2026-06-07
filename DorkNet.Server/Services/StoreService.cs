@@ -383,40 +383,6 @@ public class StoreService(DorkNetDbContext db, LevelService level, IConfiguratio
         out string modificationGuid) =>
         TryGetEquipmentPayload(slug, out prefabName, out modificationGuid, out _);
 
-    public static bool TryGetGiftBoxEquipmentPayload(
-        string? slug,
-        out string prefabName,
-        out string modificationGuid,
-        out EquipmentSkinEntry? entry)
-    {
-        if (!TryGetEquipmentPayload(slug, out prefabName, out modificationGuid, out entry))
-            return false;
-
-        // The 2020 client previews GiftPackage equipment by spawning the
-        // prefab. Spawning [MakerPen] outside the real tool equip flow wakes
-        // MakerPen tool scripts without their visuals wired up, causing a
-        // repeating MakerPenVisuals null-ref/spin. Still grant the skin as
-        // inventory; just don't ask the gift-box/store-preview path to spawn it.
-        if (IsMakerPenPrefab(prefabName))
-        {
-            prefabName = string.Empty;
-            modificationGuid = string.Empty;
-            entry = null;
-            return false;
-        }
-
-        return true;
-    }
-
-    public static bool TryGetGiftBoxEquipmentPayload(
-        string? slug,
-        out string prefabName,
-        out string modificationGuid) =>
-        TryGetGiftBoxEquipmentPayload(slug, out prefabName, out modificationGuid, out _);
-
-    private static bool IsMakerPenPrefab(string? prefabName) =>
-        string.Equals(prefabName, "[MakerPen]", StringComparison.OrdinalIgnoreCase);
-
     private async Task SeedEquipmentSkinsAsync(HashSet<string> existingSlugs)
     {
         var catalog = _equipmentSkinCatalog.Value;
@@ -983,7 +949,7 @@ public class StoreService(DorkNetDbContext db, LevelService level, IConfiguratio
         // here too.
         TryGetAvatarItemPayload(i.Slug, out var avatarItemType, out var avatarItemDesc);
         TryGetConsumableItemDesc(i.Slug, out var consumableItemDesc);
-        TryGetGiftBoxEquipmentPayload(i.Slug, out var equipmentPrefabName, out var equipmentModificationGuid, out var equipmentEntry);
+        TryGetEquipmentPayload(i.Slug, out var equipmentPrefabName, out var equipmentModificationGuid, out var equipmentEntry);
         var isHairDye = TryGetHairDyePayload(i.Slug, out var consumableHairDyeDesc, out var hairDyeColorGuid);
         if (isHairDye)
         {
