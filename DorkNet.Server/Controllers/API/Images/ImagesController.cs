@@ -68,6 +68,13 @@ public class ImagesController(
     [HttpPost("api/images/v3/uploadsaved")]
     [HttpPost("api/images/v4/uploadsaved")]
     [HttpPost("api/images/v5/uploadsaved")]
+    // 2018 flat-screen (non-VR) camera save posts a single 'image' part to
+    // uploadsavedsingle (RecNet.cs:35080); ReadImageBytesAsync already falls
+    // back to the first uploaded file, so the same handler serves it.
+    [HttpPost("api/images/v2/uploadsavedsingle")]
+    [HttpPost("api/images/v3/uploadsavedsingle")]
+    [HttpPost("api/images/v4/uploadsavedsingle")]
+    [HttpPost("api/images/v5/uploadsavedsingle")]
     [Authorize]
     public async Task<IActionResult> UploadSaved()
     {

@@ -116,15 +116,16 @@ public class StorefrontsController(
     {
         var pid = this.RequireCurrentPlayerId();
         var balance = await level.GetBalanceAsync(pid, currencyType);
-        return Ok(new[]
+        // 2018 client (RecNet.cs:94092, KKBGNKJHGJF<BalanceResponseDTO>) parses a
+        // SINGLE object reading Balance(long)+CurrencyType(int) off the root —
+        // reading "Balance" off an array root throws. This branch is 2018-only,
+        // so the per-currency balance returns a single object, not an array.
+        return Ok(new
         {
-            new
-            {
-                CurrencyType = currencyType,
-                BalanceType = 0,
-                Balance = balance,
-                Platform = 0,
-            },
+            CurrencyType = currencyType,
+            BalanceType = 0,
+            Balance = balance,
+            Platform = 0,
         });
     }
 

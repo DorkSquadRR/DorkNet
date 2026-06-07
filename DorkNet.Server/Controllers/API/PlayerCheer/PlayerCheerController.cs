@@ -34,9 +34,14 @@ public class PlayerCheerController(
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
     public async Task<IActionResult> Create(
         [FromForm(Name = "TargetAccountId")] long? targetAccountId,
-        [FromForm(Name = "Type")] int type = 0)
+        [FromForm(Name = "PlayerIdTo")] long? playerIdTo,
+        [FromForm(Name = "Type")] int type = 0,
+        [FromForm(Name = "CheerCategory")] int? cheerCategory = null)
     {
-        if (targetAccountId is not long target || target <= 0)
+        // 2018 client posts PlayerIdTo + CheerCategory (RecNet.cs); 2020 posts
+        // TargetAccountId + Type. Accept both.
+        type = cheerCategory ?? type;
+        if ((targetAccountId ?? playerIdTo) is not long target || target <= 0)
             return Ok(new { success = false, error = "missing_target" });
         if (Me == target)
             return Ok(new { success = false, error = "cannot_cheer_self" });
@@ -65,8 +70,11 @@ public class PlayerCheerController(
     /// PlayerSetting key <c>SelectedCheer</c> (string-form int).</summary>
     [HttpPost("api/PlayerCheer/v1/SetSelectedCheer")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
-    public async Task<IActionResult> SetSelectedCheer([FromForm(Name = "Cheer")] int cheer = 0)
+    public async Task<IActionResult> SetSelectedCheer(
+        [FromForm(Name = "Cheer")] int cheer = 0,
+        [FromForm(Name = "CheerCategory")] int? cheerCategory = null)
     {
+        cheer = cheerCategory ?? cheer; // 2018 sends CheerCategory
         var existing = await db.PlayerSettings
             .FirstOrDefaultAsync(s => s.PlayerId == Me && s.Key == "SelectedCheer");
         if (existing is null)

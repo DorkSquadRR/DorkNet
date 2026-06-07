@@ -51,6 +51,7 @@ public class StorefrontsBuyController(
         public int GiftContext { get; set; }
     }
 
+    [HttpPost("api/storefronts/v1/buyItem")]
     [HttpPost("api/storefronts/v2/buyItem")]
     public async Task<IActionResult> BuyItem([FromBody] RequestPurchaseItemDto req)
     {
@@ -170,6 +171,7 @@ public class StorefrontsBuyController(
             isGift ? null : gift.Id));
     }
 
+    [HttpPost("api/storefronts/v1/buyTier")]
     [HttpPost("api/storefronts/v2/buyTier")]
     public async Task<IActionResult> BuyTier([FromBody] RequestPurchaseItemDto req)
     {
@@ -185,6 +187,7 @@ public class StorefrontsBuyController(
         return Ok(BalanceUpdateResponse(newBalance, req.CurrencyType));
     }
 
+    [HttpPost("api/storefronts/v1/buyElite")]
     [HttpPost("api/storefronts/v2/buyElite")]
     public async Task<IActionResult> BuyElite([FromBody] RequestPurchaseItemDto req)
     {

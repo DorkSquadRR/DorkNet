@@ -26,6 +26,7 @@ public class AvatarSavedOutfitsController(DorkNetDbContext db) : ControllerBase
 {
     private const int MaxSlots = 20;
 
+    [HttpGet("api/avatar/v1/saved")]
     [HttpGet("api/avatar/v2/saved")]
     [HttpGet("api/avatar/v3/saved")]
     [HttpGet("api/avatar/v4/saved")]
@@ -39,6 +40,7 @@ public class AvatarSavedOutfitsController(DorkNetDbContext db) : ControllerBase
 
     /// <summary>POST <c>v3/saved/set</c> — upsert one outfit by Slot.
     /// Body is the SavedOutfit shape directly.</summary>
+    [HttpPost("api/avatar/v1/saved/set")]
     [HttpPost("api/avatar/v3/saved/set")]
     [HttpPost("api/avatar/v2/saved/set")]
     public async Task<IActionResult> Set([FromBody] SavedOutfitDto body)

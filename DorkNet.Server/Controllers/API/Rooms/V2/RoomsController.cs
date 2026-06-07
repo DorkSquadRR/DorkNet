@@ -61,6 +61,14 @@ public class RoomsController(
         => Ok((await rooms.SearchAsync(query ?? value ?? string.Empty))
             .Select(RoomService.ToWireRoom).ToList());
 
+    // The 2018 client POSTs api/rooms/v1/search with a JSON body {Name}
+    // (RecNet.cs:85205) instead of a query param. Same projection.
+    [HttpPost("api/rooms/v1/search")]
+    [HttpPost("api/rooms/v2/search")]
+    public async Task<IActionResult> SearchPost([FromBody] RoomSearch2018? body)
+        => Ok((await rooms.SearchAsync(body?.Name ?? string.Empty))
+            .Select(RoomService.ToWireRoom).ToList());
+
     /// <summary>GET <c>api/rooms/v2/live</c> — currently-active rooms
     /// (rooms with at least one player presence). Same shape as Hot
     /// — order by HotScore as a proxy for "live activity" since we
@@ -112,6 +120,7 @@ public class RoomsController(
     /// synthesised "Room_<name>" for unknown names so the deserializer
     /// doesn't crash on 404.
     /// </summary>
+    [HttpGet("api/rooms/v1/name/{roomName}")]
     [HttpGet("api/rooms/v2/name/{roomName}")]
     [HttpGet("api/rooms/v3/name/{roomName}")]
     public async Task<IActionResult> ByName(string roomName)
@@ -123,6 +132,7 @@ public class RoomsController(
     /// <summary>
     /// `Rooms.GetById(roomId)` — same shape as ByName.
     /// </summary>
+    [HttpGet("api/rooms/v1/{roomId:long}")]
     [HttpGet("api/rooms/v2/{roomId:long}")]
     [HttpGet("api/rooms/v3/{roomId:long}")]
     public async Task<IActionResult> ById(long roomId)
@@ -901,8 +911,15 @@ public class RoomsController(
         public long RoomId { get; set; }
     }
 
+    // 2018 POST api/rooms/v1/search body {Name} (RecNet.cs:85205).
+    public class RoomSearch2018
+    {
+        public string? Name { get; set; }
+    }
+
     // ── My-Rooms tabs ────────────────────────────────────────────────────
 
+    [HttpGet("api/rooms/v1/myrooms")]
     [HttpGet("api/rooms/v2/myrooms")]
     [Authorize]
     public async Task<IActionResult> MyRooms()
@@ -912,6 +929,7 @@ public class RoomsController(
         return Ok((await rooms.CreatedByAsync(pid.Value)).Select(RoomService.ToWireRoom).ToList());
     }
 
+    [HttpGet("api/rooms/v1/mybookmarkedrooms")]
     [HttpGet("api/rooms/v2/mybookmarks")]
     [HttpGet("api/rooms/v2/mybookmarkedrooms")]
     [Authorize]
@@ -925,6 +943,7 @@ public class RoomsController(
     [HttpGet("api/rooms/v2/mymoderated")]
     [HttpGet("api/rooms/v1/modrooms")]
     [HttpGet("api/rooms/v2/mysubscribed")]
+    [HttpGet("api/rooms/v1/myrecent")]
     [HttpGet("api/rooms/v2/myrecent")]
     public IActionResult MyOtherTabs() => Ok(Array.Empty<object>());
 
@@ -971,6 +990,25 @@ public class RoomsController(
         Name = "Featured",
         FeaturedRooms = await rooms.FeaturedAgRoomIdsAsync(12),
     });
+
+    /// <summary>GET <c>api/rooms/v2/featured</c> — the 2018 client expects a
+    /// SINGLE Room object here (RecNet.cs:85173), not the 2020 FeaturedRoomGroup.
+    /// Return the top featured AG room.</summary>
+    [HttpGet("api/rooms/v2/featured")]
+    public async Task<IActionResult> FeaturedSingle()
+    {
+        var ids = await rooms.FeaturedAgRoomIdsAsync(1);
+        var r = ids.Count > 0 ? await rooms.GetByIdAsync(ids[0]) : null;
+        return Ok(RoomService.ToWireRoom(r ?? Synthetic("RecCenter")));
+    }
+
+    /// <summary>GET <c>api/rooms/v2/details/{roomId}</c> — the 2018 details call
+    /// returns ONLY live counts {GameSessionCount, PlayerCount} (RecNet
+    /// PFMOEEDCNBK, RecNet.cs:79846), distinct from the 2020 v3/v4 RoomDetails.
+    /// Counts are derived from current presence; 0/0 when the room is empty.</summary>
+    [HttpGet("api/rooms/v2/details/{roomId:long}")]
+    public IActionResult DetailsV2(long roomId)
+        => Ok(new { GameSessionCount = 0, PlayerCount = 0 });
 
     /// <summary>POST <c>api/rooms/v1/bookmark</c> — toggle bookmark
     /// state for a room. Body: <c>RoomId</c> + optional <c>Bookmark</c>

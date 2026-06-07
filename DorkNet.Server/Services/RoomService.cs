@@ -839,37 +839,13 @@ public class RoomService(DorkNetDbContext db)
     }
 
     /// <summary>
-    /// Project a RoomEntity to the wire shape Room.Deserialize at RVA
-    /// 0x114E430 expects. Required keys (PascalCase):
-    ///   RoomId, Name, Description, CreatorPlayerId, ImageName, State,
-    ///   Accessibility, SupportsLevelVoting, IsAGRoom, CloningAllowed,
-    ///   SupportsScreens, SupportsWalkVR, SupportsTeleportVR,
-    ///   AllowsJuniors, RoomWarningMask, CustomRoomWarning
-    /// Optional: IsDormRoom, SupportsVRLow, SupportsMobile, DisableMicAutoMute.
+    /// Project a RoomEntity to the flat June-2018 wire room (RecNet
+    /// Room.Deserialize, RecNet.cs:78244). This branch is 2018-only, so every
+    /// room-returning endpoint emits this shape via the shared mapper — the
+    /// 2020 RoomDetails/Scenes shape crashes the 2018 deserializer. See
+    /// <see cref="Compat2018.Room2018Mapper"/>.
     /// </summary>
-    public static object ToWireRoom(RoomEntity r) => new
-    {
-        RoomId = r.Id,
-        Name = r.Name,
-        Description = r.Description,
-        CreatorPlayerId = r.CreatorPlayerId,
-        ImageName = r.ImageName,
-        State = r.State,
-        Accessibility = r.Accessibility,
-        SupportsLevelVoting = r.SupportsLevelVoting,
-        IsAGRoom = r.IsAGRoom,
-        IsDormRoom = r.IsDormRoom,
-        CloningAllowed = r.CloningAllowed,
-        SupportsVRLow = r.SupportsVRLow,
-        SupportsMobile = r.SupportsMobile,
-        SupportsScreens = r.SupportsScreens,
-        SupportsWalkVR = r.SupportsWalkVR,
-        SupportsTeleportVR = r.SupportsTeleportVR,
-        AllowsJuniors = r.AllowsJuniors,
-        RoomWarningMask = r.RoomWarningMask,
-        CustomRoomWarning = r.CustomRoomWarning,
-        DisableMicAutoMute = r.DisableMicAutoMute,
-    };
+    public static object ToWireRoom(RoomEntity r) => Compat2018.Room2018Mapper.From(r);
 
     /// <summary>
     /// Idempotent admin overrides applied AFTER SeedAsync. Keeps the seed

@@ -50,11 +50,32 @@ public class RecRoomConfig
     [JsonPropertyName("DailyObjectives")]
     public List<List<DailyObjective>> DailyObjectives { get; set; } = DailyObjective.DefaultSets();
 
-    [JsonPropertyName("ConfigTable")]
+    // 2018.06 client (RecNet.OPOHNGAOCCD.Deserialize, RecNet.cs:9062-9068) reads
+    // ConfigTable as an ARRAY of {Key,Value} objects, NOT a JSON object map:
+    //   foreach elem in dict["ConfigTable"]: table[elem["Key"]] = elem["Value"]
+    // The 2020 client read it as an object — but this branch targets 2018, so we
+    // emit the array form. Keep the settable Dictionary for existing call sites
+    // (ConfigService.GetConfig populates it) and project to the wire array.
+    [JsonIgnore]
     public Dictionary<string, string> ConfigTable { get; set; } = [];
+
+    [JsonPropertyName("ConfigTable")]
+    public List<ConfigTableEntry> ConfigTableWire =>
+        ConfigTable.Select(kv => new ConfigTableEntry { Key = kv.Key, Value = kv.Value }).ToList();
 
     [JsonPropertyName("ServiceUrls")]
     public Dictionary<string, string> ServiceUrls { get; set; } = [];
+}
+
+// 2018 ConfigTable element shape: {"Key": "...", "Value": "..."} (PascalCase,
+// LitJson Util.GetKey<string>("Key"/"Value")).
+public class ConfigTableEntry
+{
+    [JsonPropertyName("Key")]
+    public string Key { get; set; } = string.Empty;
+
+    [JsonPropertyName("Value")]
+    public string Value { get; set; } = string.Empty;
 }
 
 public class PhotonConfig

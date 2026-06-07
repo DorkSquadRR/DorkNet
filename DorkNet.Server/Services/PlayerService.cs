@@ -632,6 +632,15 @@ public class PlayerService(DorkNetDbContext db, RoomService rooms, ILogger<Playe
     public async Task<PlayerEntity?> GetByIdAsync(long id) =>
         await db.Players.Include(p => p.Avatar).FirstOrDefaultAsync(p => p.Id == id);
 
+    /// <summary>Bulk profile fetch for the 2018 client's batch resolvers
+    /// (api/players/v1/list, presence). Single query; order is not guaranteed.</summary>
+    public async Task<List<PlayerEntity>> GetByIdsAsync(IEnumerable<long> ids)
+    {
+        var idList = ids.Distinct().ToList();
+        if (idList.Count == 0) return [];
+        return await db.Players.Where(p => idList.Contains(p.Id)).ToListAsync();
+    }
+
     /// <summary>
     /// Stamp the calling platform onto an existing account so the
     /// next boot's <c>/cachedlogin/forplatformid</c> query finds it.

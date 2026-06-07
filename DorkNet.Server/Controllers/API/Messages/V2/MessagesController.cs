@@ -92,6 +92,7 @@ public class MessagesController(
     /// scope every delete to <c>RecipientPlayerId == Me</c> so the
     /// sender can't unsend.</summary>
     [HttpPost("/api/messages/v3/delete")]
+    [HttpPost("/api/messages/v2/delete")]
     [HttpPost("/api/messages/v1/delete")]
     [Consumes("application/json")]
     public async Task<IActionResult> DeleteJson([FromBody] DeleteRequest body)
@@ -105,6 +106,7 @@ public class MessagesController(
     }
 
     [HttpPost("/api/messages/v3/delete")]
+    [HttpPost("/api/messages/v2/delete")]
     [HttpPost("/api/messages/v1/delete")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
     public async Task<IActionResult> DeleteForm(

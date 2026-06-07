@@ -71,27 +71,37 @@ public class InventoryController(
     /// <summary>POST <c>api/equipment/v1/update</c> — toggle the
     /// "favorited" flag on a piece of equipment (the watch lets the
     /// player pin commonly-used tools).</summary>
+    // The 2018 client posts a JSON ARRAY of equipment objects (RecNet.cs:21812)
+    // — each {PrefabName, ModificationGuid, UnlockedLevel, Favorited}. Accept an
+    // array OR a single object so both shapes bind. Slug = modification GUID, or
+    // the prefab name when no mod is applied. Unowned items are skipped (not a
+    // hard reject) so one stale entry doesn't drop the whole batch.
     [HttpPost("api/equipment/v1/update")]
-    public async Task<IActionResult> UpdateEquipment([FromBody] EquipmentUpdateRequest req)
+    public async Task<IActionResult> UpdateEquipment([FromBody] System.Text.Json.JsonElement body)
     {
         var pid = Me;
-        // The slug for equipment is the modification GUID (or prefab
-        // name fallback when no mod is applied).
-        var slug = !string.IsNullOrWhiteSpace(req.ModificationGuid)
-            ? req.ModificationGuid
-            : req.PrefabName;
-        if (string.IsNullOrWhiteSpace(slug)) return BadRequest("missing prefab/mod identifier");
+        var items = new List<System.Text.Json.JsonElement>();
+        if (body.ValueKind == System.Text.Json.JsonValueKind.Array)
+            items.AddRange(body.EnumerateArray());
+        else if (body.ValueKind == System.Text.Json.JsonValueKind.Object)
+            items.Add(body);
 
-        var row = await db.PlayerInventory
-            .FirstOrDefaultAsync(p => p.PlayerId == pid && p.ItemSlug == slug);
-        if (row is null)
+        static string? Str(System.Text.Json.JsonElement e, string k)
+            => e.TryGetProperty(k, out var v) && v.ValueKind == System.Text.Json.JsonValueKind.String
+                ? v.GetString() : null;
+        static bool Bool(System.Text.Json.JsonElement e, string k)
+            => e.TryGetProperty(k, out var v) && (v.ValueKind == System.Text.Json.JsonValueKind.True
+                || (v.ValueKind == System.Text.Json.JsonValueKind.String && v.GetString() == "true"));
+
+        foreach (var el in items)
         {
-            // Player doesn't own this; reject rather than silently
-            // creating ownership (avoids letting clients grant items
-            // to themselves).
-            return Forbid();
+            var slug = Str(el, "ModificationGuid") is { Length: > 0 } mod ? mod : Str(el, "PrefabName");
+            if (string.IsNullOrWhiteSpace(slug)) continue;
+            var row = await db.PlayerInventory
+                .FirstOrDefaultAsync(p => p.PlayerId == pid && p.ItemSlug == slug);
+            if (row is null) continue; // skip items the player doesn't own
+            row.IsActive = Bool(el, "Favorited");
         }
-        row.IsActive = req.Favorited;
         await db.SaveChangesAsync();
         return Ok(new { Updated = true });
     }

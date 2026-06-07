@@ -102,7 +102,7 @@ public class ConfigService(IConfiguration config, DomainConfig domain)
         foreach (var (service, sub) in ServiceSubdomains)
         {
             var host = string.IsNullOrEmpty(sub) ? apex : $"{sub}.{apex}";
-            map[service] = $"https://{host}";
+            map[service] = $"https://{host}/";
         }
         return map;
     }
@@ -115,12 +115,21 @@ public class ConfigService(IConfiguration config, DomainConfig domain)
             if (domain.SingleOriginEnabled)
             {
                 var prefix = string.IsNullOrEmpty(sub) ? "www" : sub;
-                map[service] = $"{domain.SingleOriginBaseUrl}/__dn/{prefix}";
+                map[service] = $"{domain.SingleOriginBaseUrl}/__dn/{prefix}/";
                 continue;
             }
             var host = string.IsNullOrEmpty(sub) ? domain.Apex : domain.Sub(sub);
-            map[service] = domain.Url(host);
+            map[service] = EnsureTrailingSlash(domain.Url(host));
         }
         return map;
     }
+
+    // The 2018.06 client builds every API URL by RAW string concat —
+    // new Uri(string.Concat(serviceBase, "api/config/v2")) — so each service
+    // base MUST be an absolute origin ending in '/', else the host glues to
+    // the path ("https://api.apexapi/config/v2") and every call 404s. The
+    // 2020 client runs EnsureEndsWith('/') on these values itself, so the
+    // trailing slash is idempotent there — safe for both eras.
+    private static string EnsureTrailingSlash(string url)
+        => url.EndsWith('/') ? url : url + "/";
 }
