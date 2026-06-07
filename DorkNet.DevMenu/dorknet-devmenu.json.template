@@ -1,0 +1,11 @@
+{
+  "EnableDebugConsole": false,
+  "DebugConsoleToggleKey": "BackQuote",
+  "DiagnoseDevMenu": false,
+  "EnableDevWatchButton": false,
+  "DevCommands": [
+    "Help=help",
+    "Fly=fly",
+    "NoClip=noclip"
+  ]
+}

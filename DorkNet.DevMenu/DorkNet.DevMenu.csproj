@@ -4,29 +4,16 @@
     <TargetFramework>net6.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
-    <RootNamespace>DorkNet.ClientMod</RootNamespace>
-    <AssemblyName>DorkNet.ClientMod</AssemblyName>
+    <RootNamespace>DorkNet.DevMenu</RootNamespace>
+    <AssemblyName>DorkNet.DevMenu</AssemblyName>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
     <NoWarn>$(NoWarn);CS8602;CS8604;CS0436</NoWarn>
   </PropertyGroup>
 
-  <!--
-    MelonLoader 0.6.x build of the DorkNet client patches. Resolves
-    every game-side type at runtime via AccessTools.TypeByName, so
-    Rec Room's IL2CPP-derived interop assemblies (Assembly-CSharp,
-    Photon3Unity3D, UnityEngine.*) are NOT needed at compile time —
-    they would be derivative works of the game anyway, so we never
-    reference them. Only MelonLoader's own DLLs are needed.
-
-    By default the project downloads the pinned MelonLoader release
-    into DorkNet.ClientMod/build/ and references those DLLs. Pass
-    -p:MelonLoaderDir=<path-to-extracted-MelonLoader> only when you
-    deliberately want to use a local override.
-  -->
   <PropertyGroup>
     <MelonLoaderVersion Condition="'$(MelonLoaderVersion)' == ''">v0.6.6</MelonLoaderVersion>
-    <MelonLoaderCacheRoot>$(MSBuildThisFileDirectory)build\melonloader</MelonLoaderCacheRoot>
+    <MelonLoaderCacheRoot>$(MSBuildThisFileDirectory)..\DorkNet.ClientMod\build\melonloader</MelonLoaderCacheRoot>
     <MelonLoaderZip>$(MelonLoaderCacheRoot)\MelonLoader.x64.$(MelonLoaderVersion).zip</MelonLoaderZip>
     <MelonLoaderDir Condition="'$(MelonLoaderDir)' == ''">$(MelonLoaderCacheRoot)\MelonLoader</MelonLoaderDir>
   </PropertyGroup>
@@ -62,6 +49,20 @@
       <HintPath>$(MelonLoaderDir)\net6\Il2CppInterop.Common.dll</HintPath>
       <Private>false</Private>
     </Reference>
+  </ItemGroup>
+
+  <PropertyGroup>
+    <Il2CppAsmDir Condition="'$(Il2CppAsmDir)' == ''">C:\Users\Alexa\Downloads\DorkRoom-2020.12\MelonLoader\Il2CppAssemblies</Il2CppAsmDir>
+  </PropertyGroup>
+  <ItemGroup Condition="Exists('$(Il2CppAsmDir)')">
+    <Reference Include="Assembly-CSharp"><HintPath>$(Il2CppAsmDir)\Assembly-CSharp.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Il2Cppmscorlib"><HintPath>$(Il2CppAsmDir)\Il2Cppmscorlib.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.CoreModule"><HintPath>$(Il2CppAsmDir)\UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.UI"><HintPath>$(Il2CppAsmDir)\UnityEngine.UI.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.InputLegacyModule"><HintPath>$(Il2CppAsmDir)\UnityEngine.InputLegacyModule.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Unity.TextMeshPro"><HintPath>$(Il2CppAsmDir)\Unity.TextMeshPro.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Il2CppRecRoom.Promises.Runtime"><HintPath>$(Il2CppAsmDir)\Il2CppRecRoom.Promises.Runtime.dll</HintPath><Private>false</Private></Reference>
+    <Reference Include="Il2CppRecRoom.Datastructures.Runtime"><HintPath>$(Il2CppAsmDir)\Il2CppRecRoom.Datastructures.Runtime.dll</HintPath><Private>false</Private></Reference>
   </ItemGroup>
 
 </Project>

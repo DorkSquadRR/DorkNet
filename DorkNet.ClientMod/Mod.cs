@@ -133,6 +133,15 @@ public class Mod : MelonMod
         // DebugConsole.Execute(command). Edit to match this build's actual
         // DebugConsoleCommandConfig command names/args.
         public static string[] DevCommands = { "Help=help", "Fly=fly", "NoClip=noclip" };
+
+        // Raise RRO quest party size past the baked 4. The cap lives in each
+        // quest GameConfigurationAsset.TeamConfigurations[].MaxTeamSize
+        // ScriptableObject (baked in the client bundle; no server lever). The
+        // quest scoreboard + party HUD build rows dynamically, so they
+        // auto-scale once the team cap is raised. 0 = off (leave at 4).
+        // Only single-team, quest-named configs are touched, so PvP team
+        // sizes (paintball/laser tag) are never changed. See QuestTeamSize.
+        public static int    QuestMaxTeamSize = 0;
     }
 
     public override void OnInitializeMelon()
@@ -330,17 +339,6 @@ public class Mod : MelonMod
         }
 
         RegisterJoinTracePatches();
-
-        // Debug console: skip CheatManager's tamper detectors so the
-        // console's movement/time commands don't trip a dorm-drop. The
-        // console UI toggle itself is driven from OnUpdate (hotkey) and
-        // resolved lazily — only the anti-cheat skip needs a patch.
-        if (Cfg.EnableDebugConsole)
-        {
-            foreach (var m in new[] { "OnTimeCheatDetected", "OnObscuredTypeCheatDetected", "OnHeightCheatDetected", "OnAdvancedMovementCheatDetected" })
-                TryPatchByName("CheatManager", m, prefix: nameof(DebugConsolePatches.SuppressCheatDetected_Prefix));
-            Log.Msg($"[debugconsole] enabled — CheatManager detectors silenced; press '{Cfg.DebugConsoleToggleKey}' to toggle the console.");
-        }
 
         // Desktop Screen Sharing FPS override. Only register when a target
         // is set; the postfix on the gadget's Awake rewrites the baked
@@ -556,9 +554,12 @@ public class Mod : MelonMod
             _firstUpdateLogged = true;
             Log.Msg("[lifecycle] first OnUpdate tick (Unity frame loop is live)");
         }
-        if (Cfg.EnableDebugConsole) DebugConsolePatches.PollToggleKey();
-        if (Cfg.DiagnoseDevMenu) DevMenuProbe.Tick();
-        if (Cfg.EnableDevWatchButton) DevWatchButton.Tick();
+
+        // Quest party-size bump runs independent of the diagnostic flow below
+        // (quest GameConfigurationAssets load when the quest room loads, so we
+        // re-apply periodically). Gated behind QuestMaxTeamSize > 0.
+        if (Cfg.QuestMaxTeamSize > 0) QuestTeamSize.Tick();
+
         if (_diagnosticGameComplete) return;
         if (_diagnosticRetryFrame++ > 3600) return;
         if ((_diagnosticRetryFrame % 60) != 0) return;
@@ -613,6 +614,7 @@ public class Mod : MelonMod
             if (r.TryGetProperty("DesktopScreenShareResolution", out v))      Cfg.DesktopScreenShareResolution = v.GetInt32();
             if (r.TryGetProperty("DesktopScreenShareQuality", out v))         Cfg.DesktopScreenShareQuality = v.GetInt32();
             if (r.TryGetProperty("DiagnoseDevMenu", out v))                   Cfg.DiagnoseDevMenu = v.GetBoolean();
+            if (r.TryGetProperty("QuestMaxTeamSize", out v))                  Cfg.QuestMaxTeamSize = v.GetInt32();
             if (r.TryGetProperty("EnableDevWatchButton", out v))              Cfg.EnableDevWatchButton = v.GetBoolean();
             if (r.TryGetProperty("DevCommands", out v) && v.ValueKind == JsonValueKind.Array)
             {

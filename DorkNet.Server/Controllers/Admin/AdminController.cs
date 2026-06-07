@@ -903,7 +903,8 @@ public class AdminController(
         string? TagsCsv,
         double? HotScore,
         int? State,
-        string? ImageName);
+        string? ImageName,
+        int? MaxCapacity);
 
     /// <summary>POST <c>api/admin/v1/rooms/{id}/props</c> — partial
     /// update of room properties. Only the non-null fields in the
@@ -926,6 +927,13 @@ public class AdminController(
         if (body.HotScore is double h)     { room.HotScore = h;         changes.Add($"hot={h}"); }
         if (body.State is int st)          { room.State = st;           changes.Add($"state={st}"); }
         if (body.ImageName is string img)  { room.ImageName = img;      changes.Add($"image={img}"); }
+        if (body.MaxCapacity is int cap)
+        {
+            // Clamp to a sane range. Note: advertised cap only on the 2020.12
+            // client today (no Photon hard-enforce) — see RoomEntity.MaxCapacity.
+            room.MaxCapacity = Math.Clamp(cap, 1, 80);
+            changes.Add($"maxCapacity={room.MaxCapacity}");
+        }
 
         if (changes.Count == 0) return Ok(new { room.Id, unchanged = true });
 
@@ -989,6 +997,7 @@ public class AdminController(
             room.SupportsWalkVR,
             room.SupportsTeleportVR,
             room.AllowsJuniors,
+            room.MaxCapacity,
             room.DisableMicAutoMute,
             room.RoomWarningMask,
             room.CustomRoomWarning,

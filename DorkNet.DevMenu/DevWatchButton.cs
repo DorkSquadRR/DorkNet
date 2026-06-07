@@ -15,7 +15,7 @@ using Il2CppTMPro;
 using UnityEngine.Events;
 using UObject = UnityEngine.Object;
 
-namespace DorkNet.ClientMod;
+namespace DorkNet.DevMenu;
 
 internal static class DevWatchButton
 {
@@ -32,9 +32,9 @@ internal static class DevWatchButton
         var home = UObject.FindObjectOfType<HomeScreenFlow>();
         if (home == null && _frame < 3600) return;       // wait for the watch
         _done = true;
-        if (home == null) { Mod.Log.Warning("[devbtn] HomeScreenFlow never appeared"); return; }
+        if (home == null) { DevMenuMod.Log.Warning("[devbtn] HomeScreenFlow never appeared"); return; }
         try { Inject(home); }
-        catch (Exception ex) { Mod.Log.Warning($"[devbtn] inject failed: {ex}"); }
+        catch (Exception ex) { DevMenuMod.Log.Warning($"[devbtn] inject failed: {ex}"); }
     }
 
     private static void Inject(HomeScreenFlow home)
@@ -42,7 +42,7 @@ internal static class DevWatchButton
         var buttons = home.GetComponentsInChildren<Button3D>(true);
         if (buttons == null || buttons.Length == 0)
         {
-            Mod.Log.Warning("[devbtn] no Button3D found under HomeScreenFlow");
+            DevMenuMod.Log.Warning("[devbtn] no Button3D found under HomeScreenFlow");
             return;
         }
 
@@ -53,7 +53,7 @@ internal static class DevWatchButton
             if (buttons[i].GetComponentInChildren<TextMeshProUGUI>(true) != null) { src = buttons[i]; break; }
         bool labeled = src != null;
         if (src == null) src = buttons[0]; // fall back: inject anyway, just no text
-        Mod.Log.Msg($"[devbtn] {buttons.Length} watch buttons; clone source='{src.name}' labeled={labeled}");
+        DevMenuMod.Log.Msg($"[devbtn] {buttons.Length} watch buttons; clone source='{src.name}' labeled={labeled}");
 
         int n = 0;
         foreach (var (label, cmd) in ParsePresets())
@@ -72,7 +72,7 @@ internal static class DevWatchButton
             _clones.Add(clone);
             n++;
         }
-        Mod.Log.Msg($"[devbtn] injected {n} dev command button(s) into the watch bar — open the watch to use them");
+        DevMenuMod.Log.Msg($"[devbtn] injected {n} dev command button(s) into the watch bar — open the watch to use them");
         DumpCommands();
     }
 
@@ -84,34 +84,34 @@ internal static class DevWatchButton
         try
         {
             var cfgs = UObject.FindObjectsOfTypeAll(Il2CppType.Of<DebugConsoleCommandConfig>());
-            Mod.Log.Msg($"[devcmds] {cfgs.Length} DebugConsoleCommandConfig asset(s) loaded");
+            DevMenuMod.Log.Msg($"[devcmds] {cfgs.Length} DebugConsoleCommandConfig asset(s) loaded");
             for (int c = 0; c < cfgs.Length; c++)
             {
                 var cfg = cfgs[c].TryCast<DebugConsoleCommandConfig>();
                 var metas = cfg?.Metas;
                 if (metas == null) continue;
-                Mod.Log.Msg($"[devcmds] {metas.Count} command(s):");
+                DevMenuMod.Log.Msg($"[devcmds] {metas.Count} command(s):");
                 for (int i = 0; i < metas.Count; i++)
                 {
                     var m = metas[i];
-                    Mod.Log.Msg($"    {m.MethodName}   ({m.DeclaringType})");
+                    DevMenuMod.Log.Msg($"    {m.MethodName}   ({m.DeclaringType})");
                 }
             }
         }
-        catch (Exception ex) { Mod.Log.Warning($"[devcmds] failed: {ex.Message}"); }
+        catch (Exception ex) { DevMenuMod.Log.Warning($"[devcmds] failed: {ex.Message}"); }
     }
 
     private static void Run(string label, string command)
     {
-        Mod.Log.Msg($"[devbtn] '{label}' → DebugConsole.Execute(\"{command}\")");
+        DevMenuMod.Log.Msg($"[devbtn] '{label}' -> DebugConsole.Execute(\"{command}\")");
         try { DebugConsole.Execute(command); }
-        catch (Exception ex) { Mod.Log.Warning($"[devbtn] Execute('{command}') failed: {ex.Message}"); }
+        catch (Exception ex) { DevMenuMod.Log.Warning($"[devbtn] Execute('{command}') failed: {ex.Message}"); }
     }
 
     // Presets come from Cfg.DevCommands as "Label=command" strings.
     private static System.Collections.Generic.IEnumerable<(string label, string cmd)> ParsePresets()
     {
-        foreach (var entry in Mod.Cfg.DevCommands)
+        foreach (var entry in DevMenuMod.Cfg.DevCommands)
         {
             if (string.IsNullOrWhiteSpace(entry)) continue;
             var eq = entry.IndexOf('=');

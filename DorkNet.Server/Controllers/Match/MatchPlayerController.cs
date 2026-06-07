@@ -351,7 +351,7 @@ public class MatchPlayerController(
             location: location,
             dataBlob: dataBlob,
             photonRegion: photonRegion,
-            maxCapacity: 8,
+            maxCapacity: personal.MaxCapacity,
             photonRoomId: photonRoomId);
 
         return new RoomInstanceDto
@@ -363,7 +363,7 @@ public class MatchPlayerController(
             PhotonRegionId = photonRegion,
             PhotonRoomId = photonRoomId,
             Name = dormInstanceName,
-            MaxCapacity = 8,
+            MaxCapacity = personal.MaxCapacity,
             IsFull = false,
             IsPrivate = true,
             IsInProgress = true,

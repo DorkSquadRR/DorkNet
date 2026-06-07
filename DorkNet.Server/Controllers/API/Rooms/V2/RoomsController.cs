@@ -1200,7 +1200,7 @@ public class RoomsController(
                     Name = "Home",
                     IsSandbox = false,
                     DataBlobName = dataBlobName,
-                    MaxPlayers = 8,
+                    MaxPlayers = room.MaxCapacity,
                     CanMatchmakeInto = true,
                     // Use the room's actual UpdatedAt so the watch's
                     // "is my local cache stale?" check sees an accurate

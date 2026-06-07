@@ -54,6 +54,15 @@ public class RoomEntity
     public bool SupportsWalkVR { get; set; } = true;
     public bool SupportsTeleportVR { get; set; } = true;
     public bool AllowsJuniors { get; set; } = true;
+
+    /// <summary>Max players the room advertises per instance — flows into the
+    /// matchmaking RoomInstance.MaxCapacity and the v4/details synthesized
+    /// Scenes[0].MaxPlayers. Admin-adjustable. NOTE: the 2020.12 client
+    /// doesn't hard-enforce this (it never sets Photon RoomOptions.MaxPlayers),
+    /// so today it's the advertised/intended cap; true enforcement needs a
+    /// ClientMod Photon patch (tracked as a follow-up).</summary>
+    public int MaxCapacity { get; set; } = 8;
+
     public int RoomWarningMask { get; set; } = 0;
 
     [MaxLength(512)]

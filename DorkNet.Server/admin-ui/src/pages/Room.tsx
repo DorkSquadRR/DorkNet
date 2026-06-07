@@ -166,6 +166,7 @@ function GeneralTab({ room, onSaved }: { room: RoomDetail; onSaved: () => void }
   const [tagsCsv, setTagsCsv] = useState(room.tagsCsv);
   const [hotScore, setHotScore] = useState(String(room.hotScore));
   const [imageName, setImageName] = useState(room.imageName);
+  const [maxCapacity, setMaxCapacity] = useState(String(room.maxCapacity ?? 8));
   const [busy, setBusy] = useState(false);
 
   // Re-sync local state if a refresh brings new server values in.
@@ -176,12 +177,14 @@ function GeneralTab({ room, onSaved }: { room: RoomDetail; onSaved: () => void }
     setTagsCsv(room.tagsCsv);
     setHotScore(String(room.hotScore));
     setImageName(room.imageName);
+    setMaxCapacity(String(room.maxCapacity ?? 8));
   }, [room.id, room.updatedAt]);
 
   const save = async () => {
     setBusy(true);
     try {
       const hot = Number(hotScore);
+      const cap = parseInt(maxCapacity, 10);
       await api(`/rooms/${room.id}/props`, {
         method: 'POST',
         body: {
@@ -191,6 +194,7 @@ function GeneralTab({ room, onSaved }: { room: RoomDetail; onSaved: () => void }
           TagsCsv: tagsCsv,
           HotScore: Number.isFinite(hot) ? hot : undefined,
           ImageName: imageName,
+          MaxCapacity: Number.isFinite(cap) ? cap : undefined,
         },
       });
       toast.push('Saved', 'success');
@@ -235,6 +239,20 @@ function GeneralTab({ room, onSaved }: { room: RoomDetail; onSaved: () => void }
             onChange={e => setHotScore(e.target.value)}
             className="input tabular-nums"
           />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="label">Max players (capacity)</span>
+          <input
+            type="number"
+            min={1}
+            max={80}
+            value={maxCapacity}
+            onChange={e => setMaxCapacity(e.target.value)}
+            className="input tabular-nums"
+          />
+          <span className="text-[11px] text-ink-500">
+            Advertised cap on the 2020 client (not hard-enforced yet). 1–80.
+          </span>
         </label>
         <label className="flex flex-col gap-1">
           <span className="label">Tags (comma-separated)</span>

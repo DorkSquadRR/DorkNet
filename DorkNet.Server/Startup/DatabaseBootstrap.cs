@@ -103,6 +103,7 @@ public static class DatabaseBootstrap
         await EnsureServerSettingsColumnsAsync(db);
         await EnsureInventorySchemaAsync(db);
         await EnsureLeaderboardSchemaAsync(db);
+        await EnsureRoomColumnsAsync(db);
 
         // Coach system account at Player.Id=1. The RR-Original room seeder
         // below assigns CreatorPlayerId=1 to every canonical room
@@ -237,6 +238,30 @@ public static class DatabaseBootstrap
 
         foreach (var sql in statements)
             await db.Database.ExecuteSqlRawAsync(sql);
+    }
+
+    /// <summary>Add post-Initial columns to the Rooms table. Like the other
+    /// Ensure*Columns helpers, this exists because the Postgres path is
+    /// EnsureCreated-only (no migration replay), so a new entity property
+    /// won't appear on an existing DB without an idempotent ALTER.</summary>
+    private static async Task EnsureRoomColumnsAsync(DorkNetDbContext db)
+    {
+        var provider = db.Database.ProviderName ?? string.Empty;
+        if (provider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""Rooms"" ADD COLUMN IF NOT EXISTS ""MaxCapacity"" integer NOT NULL DEFAULT 8;");
+            return;
+        }
+
+        try
+        {
+            // SQLite has no ADD COLUMN IF NOT EXISTS; ignore the duplicate-
+            // column error when it already exists.
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""Rooms"" ADD COLUMN ""MaxCapacity"" INTEGER NOT NULL DEFAULT 8;");
+        }
+        catch { }
     }
 
     private static async Task EnsureServerSettingsColumnsAsync(DorkNetDbContext db)

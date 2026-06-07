@@ -1026,6 +1026,7 @@ public class GoToController(
         // baked-in DormRoom mapping for unknown names.
         long roomId;
         string locationId;
+        var maxCapacity = 8; // admin-adjustable per-room cap; 8 = default/fallback
         if (roomName.Equals("DormRoom", StringComparison.OrdinalIgnoreCase))
         {
             // Each player has their own dorm row (created at signup,
@@ -1038,6 +1039,7 @@ public class GoToController(
                 var personal = await rooms.EnsurePersonalDormAsync(callerPid);
                 roomId = personal.Id;
                 locationId = personal.LocationReplicationId;
+                maxCapacity = personal.MaxCapacity;
             }
             else
             {
@@ -1055,6 +1057,7 @@ public class GoToController(
             {
                 roomId = room.Id;
                 locationId = room.LocationReplicationId;
+                maxCapacity = room.MaxCapacity;
             }
             else
             {
@@ -1103,7 +1106,7 @@ public class GoToController(
                 PhotonRegionId = photonRegion,
                 PhotonRoomId = photonRoom,
                 Name = dormInstanceName,
-                MaxCapacity = 8,
+                MaxCapacity = maxCapacity,
                 IsFull = false,
                 IsPrivate = false,
                 IsInProgress = true,

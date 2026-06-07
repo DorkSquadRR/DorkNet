@@ -142,6 +142,7 @@ export interface RoomDetail {
   supportsWalkVR: boolean;
   supportsTeleportVR: boolean;
   allowsJuniors: boolean;
+  maxCapacity: number;
   disableMicAutoMute: boolean;
   roomWarningMask: number;
   customRoomWarning: string;
