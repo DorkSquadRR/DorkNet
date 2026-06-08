@@ -3,5 +3,13 @@
   "PhotonAppId": "{PHOTON_APPID}",
   "PhotonVoiceAppId": "{PHOTON_VOICE_APPID}",
   "PhotonCloudRegion": "{PHOTON_REGION}",
-  "EnableTlsTrustBypass": {ENABLE_TLS_TRUST_BYPASS}
+  "EnableTlsTrustBypass": {ENABLE_TLS_TRUST_BYPASS},
+  "QuestMaxTeamSize": 0,
+  "QuestMaxTeamSizeRooms": [
+    "CrimsonCauldron",
+    "Crescendo",
+    "GoldenTrophy",
+    "IsleOfLostSkulls",
+    "TheRiseofJumbotron"
+  ]
 }

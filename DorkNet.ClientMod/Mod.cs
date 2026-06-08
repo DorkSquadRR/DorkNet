@@ -142,6 +142,13 @@ public class Mod : MelonMod
         // Only single-team, quest-named configs are touched, so PvP team
         // sizes (paintball/laser tag) are never changed. See QuestTeamSize.
         public static int    QuestMaxTeamSize = 0;
+        // Only these RRO quest GameConfigurationAssets get their team size
+        // bumped (matched loosely: case/space-insensitive, filler words like
+        // "the/of/for/quest" ignored, so "IsleOfLostSkulls" matches the
+        // in-game "Isle of the Lost Skulls"). Empty = bump nothing. The
+        // generic "Quest" config is intentionally NOT in the default list.
+        public static string[] QuestMaxTeamSizeRooms =
+            { "CrimsonCauldron", "Crescendo", "GoldenTrophy", "IsleOfLostSkulls", "TheRiseofJumbotron" };
     }
 
     public override void OnInitializeMelon()
@@ -358,6 +365,28 @@ public class Mod : MelonMod
                        args: new[] { typeof(bool) },
                        prefix: nameof(MakerPenGiftPreviewPatches.LaserPointerEnabled_Prefix));
 
+        // RRO quest party-size bump. Prefix the runtime config-apply path so
+        // we can read the config's Name (scope to the allowlisted quests) and
+        // bump GameConfigurationData.TeamConfigurations[].TeamSize before the
+        // team manager / pre-game roster reads it. Only when a target is set.
+        if (Cfg.QuestMaxTeamSize > 0)
+        {
+            // The runtime team cap is built from the baked GameConfigurationAsset
+            // (a readable ScriptableObject) by GameConfigurationAsset.GDECPANDBHJ()
+            // — it reads asset.TeamConfigurations[i].MaxTeamSize (a typed int
+            // struct-array) into the protobuf TeamSize. Prefix that builder and
+            // bump the source array IN PLACE before it converts, scoped by
+            // asset.Name. This avoids the obfuscated protobuf entirely (its
+            // generic RepeatedField getter isn't emitted by Il2CppInterop).
+            // Host-authoritative: the quest host must run the mod. See QuestTeamSize.
+            TryPatchByName("RecRoom.Core.GameManagement.GameConfigurationAsset", "GDECPANDBHJ",
+                           prefix: nameof(QuestTeamSize.Build_Prefix));
+            QuestTeamSize.TryPatchSpawnIndexNormalizers(HarmonyInstance);
+            TryPatchByName("GameSpawnManager", "FKEICBPCMPJ",
+                           postfix: nameof(QuestTeamSize.RelaxEmptySpawnFilter_Postfix));
+            Log.Msg($"[questsize] armed: target {Cfg.QuestMaxTeamSize} for [{string.Join(", ", Cfg.QuestMaxTeamSizeRooms)}]");
+        }
+
         RegisterDiagnostics();
         Log.Msg("=== Client patches registered ===");
     }
@@ -555,11 +584,6 @@ public class Mod : MelonMod
             Log.Msg("[lifecycle] first OnUpdate tick (Unity frame loop is live)");
         }
 
-        // Quest party-size bump runs independent of the diagnostic flow below
-        // (quest GameConfigurationAssets load when the quest room loads, so we
-        // re-apply periodically). Gated behind QuestMaxTeamSize > 0.
-        if (Cfg.QuestMaxTeamSize > 0) QuestTeamSize.Tick();
-
         if (_diagnosticGameComplete) return;
         if (_diagnosticRetryFrame++ > 3600) return;
         if ((_diagnosticRetryFrame % 60) != 0) return;
@@ -615,6 +639,14 @@ public class Mod : MelonMod
             if (r.TryGetProperty("DesktopScreenShareQuality", out v))         Cfg.DesktopScreenShareQuality = v.GetInt32();
             if (r.TryGetProperty("DiagnoseDevMenu", out v))                   Cfg.DiagnoseDevMenu = v.GetBoolean();
             if (r.TryGetProperty("QuestMaxTeamSize", out v))                  Cfg.QuestMaxTeamSize = v.GetInt32();
+            if (r.TryGetProperty("QuestMaxTeamSizeRooms", out v) && v.ValueKind == JsonValueKind.Array)
+            {
+                var rooms = new List<string>();
+                foreach (var e in v.EnumerateArray())
+                    if (e.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(e.GetString()))
+                        rooms.Add(e.GetString()!);
+                Cfg.QuestMaxTeamSizeRooms = rooms.ToArray(); // explicit (incl. empty = none)
+            }
             if (r.TryGetProperty("EnableDevWatchButton", out v))              Cfg.EnableDevWatchButton = v.GetBoolean();
             if (r.TryGetProperty("DevCommands", out v) && v.ValueKind == JsonValueKind.Array)
             {
@@ -776,7 +808,7 @@ public class Mod : MelonMod
     {
         // Look in all three patch holder classes — small enough that a
         // linear scan is cheaper than per-class lookups.
-        foreach (var holder in new[] { typeof(UriPatches), typeof(PhotonPatches), typeof(TlsPatches), typeof(DiagnosticPatches), typeof(SavePatches), typeof(ChatPatches), typeof(JoinPatches), typeof(RegistrationPatches), typeof(DebugConsolePatches), typeof(ScreenSharePatches), typeof(MakerPenGiftPreviewPatches) })
+        foreach (var holder in new[] { typeof(UriPatches), typeof(PhotonPatches), typeof(TlsPatches), typeof(DiagnosticPatches), typeof(SavePatches), typeof(ChatPatches), typeof(JoinPatches), typeof(RegistrationPatches), typeof(DebugConsolePatches), typeof(ScreenSharePatches), typeof(MakerPenGiftPreviewPatches), typeof(QuestTeamSize) })
         {
             var m = holder.GetMethod(name, BindingFlags.Public | BindingFlags.Static);
             if (m is not null) return m;

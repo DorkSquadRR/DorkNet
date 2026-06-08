@@ -130,6 +130,32 @@ keep the prefab value) trade per-frame size for bandwidth if a high FPS
 saturates the link. Only the player *sharing* needs the override. Default
 `0` (off).
 
+### RRO quest team size (opt-in)
+
+RRO quests ship with a baked 4-player `GameConfigurationAsset` team cap.
+Set `"QuestMaxTeamSize"` in `dorknet-clientmod.json` (for example `8`) to
+raise that cap for the allowlisted quest configs in
+`"QuestMaxTeamSizeRooms"`:
+
+```json
+{
+  "QuestMaxTeamSize": 8,
+  "QuestMaxTeamSizeRooms": [
+    "CrimsonCauldron",
+    "Crescendo",
+    "GoldenTrophy",
+    "IsleOfLostSkulls",
+    "TheRiseofJumbotron"
+  ]
+}
+```
+
+The quest host must run the mod: the host builds the game configuration
+that gets networked to joiners. The patch also relaxes the quest spawn
+filter for extra players, so player indexes above the four baked spawn
+slots can reuse existing quest spawn points instead of being left out.
+Default `0` (off).
+
 ---
 
 ## Code map

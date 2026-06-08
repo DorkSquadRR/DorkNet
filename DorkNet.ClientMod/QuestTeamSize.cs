@@ -1,116 +1,370 @@
-// Raise RRO quest party size past the baked 4.
+// Raise RRO quest party size past the baked 4 — precisely, only for the
+// allowlisted quests (Cfg.QuestMaxTeamSizeRooms).
 //
-// The cap is NOT in quest-specific code and NOT server-driven — it lives in
-// each quest's GameConfigurationAsset.TeamConfigurations[].MaxTeamSize, a
-// ScriptableObject baked into the client asset bundle. The quest scoreboard
-// (GameScoreboardBodyView instantiates rows into a List) and the party HUD are
-// fully dynamic, so they auto-scale once the team cap is raised.
+// HOW THE CAP IS REALLY BUILT (cracked from the December dump/ISIL):
+//   GameConfigurationTool.Awake()
+//     → reads its baked `defaultGameConfiguration` (GameConfigurationAsset, the
+//       Unity ScriptableObject @0x58)
+//     → calls GameConfigurationAsset.GDECPANDBHJ()  ← builds the runtime
+//       protobuf GameConfigurationData (PJPAPHKPKGM) FROM the asset
+//     → stores it @0x88 and applies it (OAHJOLJOKGI) to the team manager.
+//   Inside GDECPANDBHJ the build loop reads asset.TeamConfigurations[i]
+//   .MaxTeamSize (a typed int struct-array: [arr+0x20 + i*4]) and writes each
+//   straight into a new GameTeamConfigurationData.TeamSize (HFBCEJLLDLI @0x10).
 //
-// Implemented with reflection (this project references only MelonLoader /
-// Harmony / Il2CppInterop.Runtime — NOT the game's interop assemblies), the
-// same way DevMenuProbe drives the game. Quest configs load when the quest
-// room loads, so we poll from Mod.OnUpdate rather than running once, and only
-// touch single-team, quest-named configs so PvP team sizes (paintball/laser
-// tag, 2+ teams) are never changed. Every config is logged once so we can
-// confirm targeting (these MaxTeamSize values aren't in the static dump).
-// Gated behind Cfg.QuestMaxTeamSize.
+// So the runtime cap originates from the asset's `TeamConfiguration[]` — a
+// READABLE, typed struct array — NOT from anything that needs the obfuscated
+// protobuf. Earlier attempts failed because:
+//   • bumping the asset on a 2s poll happened AFTER GDECPANDBHJ already built &
+//     cached the protobuf (timing, not the wrong field);
+//   • patching the protobuf getters (get_FNJLAGHPMFL / get_FBOCAPLIIDH) is
+//     impossible — Il2CppInterop doesn't emit the generic RepeatedField<T>
+//     getter, and the simple int getter wasn't emitted either.
+//
+// THE FIX: Harmony-PREFIX GameConfigurationAsset.GDECPANDBHJ() and bump the
+// asset's TeamConfigurations[i].MaxTeamSize to the target IN PLACE, right
+// before it builds the protobuf. The built config then carries the new cap and
+// the team manager / pre-game roster / open-slots all honour it. Scoped by
+// asset.Name to the allowlist (PvP/sandbox configs are left alone).
+//
+// HOST-AUTHORITATIVE: the quest host builds the config it networks to joiners
+// (RpcDeserializeConfig), so the host must run this mod for everyone to see the
+// raised cap. (A joiner can't override — that would need the unreachable
+// protobuf path.)
 using System;
 using System.Collections.Generic;
 using System.Reflection;
-using Il2CppInterop.Runtime;
+using HarmonyLib;
 
 namespace DorkNet.ClientMod;
 
 internal static class QuestTeamSize
 {
     private const BindingFlags BF = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
-    private static int _frame;
-    private static readonly HashSet<string> _logged = new(StringComparer.Ordinal);
 
-    public static void Tick()
+    private static readonly HashSet<string> _seen = new(StringComparer.Ordinal);
+    private static bool _loggedBump;
+    private static bool _activeAllowedQuestConfig;
+    private static int _teamIndexNormalizeLogCount;
+    private static int _spawnModeDataNormalizeLogCount;
+    private static int _requiredSpawnIndexNormalizeLogCount;
+    private static int _spawnRelaxLogCount;
+
+    public static bool TryPatchSpawnIndexNormalizers(HarmonyLib.Harmony harmony)
     {
-        _frame++;
-        if (_frame < 120 || (_frame % 120) != 0) return; // settle, then ~every 2s
-        try { Apply(Mod.Cfg.QuestMaxTeamSize); }
-        catch (Exception ex) { Mod.Log.Warning($"[questsize] failed: {ex.Message}"); }
+        var ok = true;
+        ok &= TryPatchTeamIndexNormalizer(harmony);
+        ok &= TryPatchSpawnModeDataNormalizer(harmony);
+        ok &= TryPatchRequiredSpawnIndexNormalizer(harmony);
+        return ok;
     }
 
-    private static void Apply(int target)
+    private static bool TryPatchTeamIndexNormalizer(HarmonyLib.Harmony harmony)
     {
-        if (target <= 0) return;
-        var assetType = Mod.ResolveType("RecRoom.Core.GameManagement.GameConfigurationAsset");
-        if (assetType is null) return;
-
-        // Invoke Il2CppType.From via reflection so the Il2CppSystem.Type
-        // return value stays boxed as object — calling it directly would
-        // need a compile reference to Il2Cppmscorlib, which we don't carry.
-        var il2 = ToIl2CppType(assetType);
-        if (il2 is null) return;
-
-        var resources = Mod.ResolveType("UnityEngine.Resources");
-        var findAll = OneArgStatic(resources, "FindObjectsOfTypeAll", il2);
-        var all = findAll?.Invoke(null, new[] { il2 });
-        int n = ArrLen(all);
-        for (int i = 0; i < n; i++)
+        try
         {
-            var asset = ArrItem(all, i);
-            if (asset is null) continue;
-            asset = EnsureConcrete(asset, assetType);
-
-            var name = ReadName(asset);
-            var teams = GetMember(asset, "TeamConfigurations");
-            if (teams is null) continue;
-            int tn = ArrLen(teams);
-
-            if (_logged.Add(name))
+            var managerType = Mod.ResolveType("GameTeamManager");
+            var indexType = Mod.ResolveType("CCMLKDOHKJE");
+            if (managerType is null || indexType is null)
             {
-                var sizes = new List<string>(tn);
-                for (int t = 0; t < tn; t++) sizes.Add(ReadInt(ArrItem(teams, t), "MaxTeamSize").ToString());
-                Mod.Log.Msg($"[questsize] config '{name}' teams=[{string.Join(",", sizes)}] (n={tn})");
+                Mod.Log.Warning("[patch-miss] GameTeamManager.GetTeamPlayerIndex: type not found");
+                return false;
             }
 
-            // Quests are SINGLE-TEAM co-op. That's the reliable signal: PvP
-            // modes have 2+ teams (Paintball [4,4], StuntRunner [1,1,1,1])
-            // and Sandbox has many — only quests (the generic "Quest" config
-            // AND each per-quest config like "The Rise Of JumboTron") are
-            // n==1. Name-matching missed the per-quest configs, so we key off
-            // team count instead and leave every 2+-team mode untouched.
-            if (tn != 1) continue;
-
-            var changed = false;
-            for (int t = 0; t < tn; t++)
+            var target = AccessTools.Method(managerType, "GetTeamPlayerIndex");
+            if (target is null)
             {
-                var box = ArrItem(teams, t);
-                if (box is null || ReadInt(box, "MaxTeamSize") >= target) continue;
-                if (WriteInt(box, "MaxTeamSize", target) && ArrSet(teams, t, box)) changed = true;
+                Mod.Log.Warning("[patch-miss] GameTeamManager.GetTeamPlayerIndex");
+                return false;
             }
-            if (changed) Mod.Log.Msg($"[questsize] bumped '{name}' → MaxTeamSize {target}");
+
+            var patch = typeof(QuestTeamSize)
+                .GetMethod(nameof(NormalizeTeamPlayerIndex_Postfix), BindingFlags.Public | BindingFlags.Static)!
+                .MakeGenericMethod(indexType);
+            harmony.Patch(target, postfix: new HarmonyMethod(patch));
+            Mod.Log.Msg("[patch-ok] GameTeamManager.GetTeamPlayerIndex");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Mod.Log.Error($"[patch-fail] GameTeamManager.GetTeamPlayerIndex: {ex.Message}");
+            return false;
         }
     }
 
-    // FindObjectsOfTypeAll returns base-typed elements; downcast to the
-    // concrete interop type so reflection sees TeamConfigurations/Name.
-    private static object EnsureConcrete(object obj, Type target)
+    private static bool TryPatchSpawnModeDataNormalizer(HarmonyLib.Harmony harmony)
     {
-        if (target.IsInstanceOfType(obj)) return obj;
-        var bt = obj.GetType();
-        while (bt != null && bt.Name != "Il2CppObjectBase") bt = bt.BaseType;
-        var cast = bt?.GetMethod("Cast", BindingFlags.Public | BindingFlags.Instance);
-        if (cast != null)
+        try
         {
-            try { return cast.MakeGenericMethod(target).Invoke(obj, null) ?? obj; }
-            catch { }
+            var spawnType = Mod.ResolveType("GameSpawnManager");
+            var indexType = Mod.ResolveType("CCMLKDOHKJE");
+            if (spawnType is null || indexType is null)
+            {
+                Mod.Log.Warning("[patch-miss] GameSpawnManager.ALCADGJKKHJ: type not found");
+                return false;
+            }
+
+            var target = AccessTools.Method(spawnType, "ALCADGJKKHJ");
+            if (target is null)
+            {
+                Mod.Log.Warning("[patch-miss] GameSpawnManager.ALCADGJKKHJ");
+                return false;
+            }
+
+            var patch = typeof(QuestTeamSize)
+                .GetMethod(nameof(NormalizeSpawnModeData_Postfix), BindingFlags.Public | BindingFlags.Static)!
+                .MakeGenericMethod(indexType);
+            harmony.Patch(target, postfix: new HarmonyMethod(patch));
+            Mod.Log.Msg("[patch-ok] GameSpawnManager.ALCADGJKKHJ");
+            return true;
         }
-        return obj;
+        catch (Exception ex)
+        {
+            Mod.Log.Error($"[patch-fail] GameSpawnManager.ALCADGJKKHJ: {ex.Message}");
+            return false;
+        }
     }
 
-    private static string ReadName(object asset)
+    private static bool TryPatchRequiredSpawnIndexNormalizer(HarmonyLib.Harmony harmony)
     {
-        if (GetMember(asset, "Name") is string n && n.Length > 0) return n;
-        if (GetMember(asset, "name") is string un && un.Length > 0) return un;
-        return "?";
+        try
+        {
+            var spawnType = Mod.ResolveType("GameSpawnManager");
+            var indexType = Mod.ResolveType("CCMLKDOHKJE");
+            if (spawnType is null || indexType is null)
+            {
+                Mod.Log.Warning("[patch-miss] GameSpawnManager.FKEICBPCMPJ index normalizer: type not found");
+                return false;
+            }
+
+            var target = AccessTools.Method(spawnType, "FKEICBPCMPJ");
+            if (target is null)
+            {
+                Mod.Log.Warning("[patch-miss] GameSpawnManager.FKEICBPCMPJ index normalizer");
+                return false;
+            }
+
+            var patch = typeof(QuestTeamSize)
+                .GetMethod(nameof(NormalizeRequiredSpawnIndex_Prefix), BindingFlags.Public | BindingFlags.Static)!
+                .MakeGenericMethod(indexType);
+            harmony.Patch(target, prefix: new HarmonyMethod(patch));
+            Mod.Log.Msg("[patch-ok] GameSpawnManager.FKEICBPCMPJ index normalizer");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Mod.Log.Error($"[patch-fail] GameSpawnManager.FKEICBPCMPJ index normalizer: {ex.Message}");
+            return false;
+        }
     }
 
+    // POSTFIX on GameTeamManager.GetTeamPlayerIndex(Player). The RRO quest
+    // scenes only have spawn points for indexes 0-3. After raising the quest
+    // team cap, players 5+ legitimately receive INDEX_4+, but those values
+    // cannot match any baked quest spawn point. Normalize just the enum result
+    // that spawn code asks for; the actual team roster/cap remains raised.
+    public static void NormalizeTeamPlayerIndex_Postfix<T>(ref T __result) where T : struct
+    {
+        try
+        {
+            if (Mod.Cfg.QuestMaxTeamSize <= 4) return;
+
+            var value = Convert.ToInt32(__result);
+            if (!TryNormalizeIndex(value, out var normalized)) return;
+
+            __result = (T)Enum.ToObject(typeof(T), normalized);
+
+            if (_teamIndexNormalizeLogCount < 12)
+            {
+                _teamIndexNormalizeLogCount++;
+                Mod.Log.Msg($"[questsize] normalized team-player index {value} -> {normalized} for quest spawn lookup " +
+                            $"activeQuest={_activeAllowedQuestConfig}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Mod.Log.Warning($"[questsize] team-player index normalize failed: {ex.Message}");
+        }
+    }
+
+    // POSTFIX on GameSpawnManager.ALCADGJKKHJ(..., out CCMLKDOHKJE index, ...).
+    // FPBFJMMKPPJ calls this private helper immediately before FKEICBPCMPJ, so
+    // this is the exact spawn-path value seen in the "TeamIndex INDEX_4" log.
+    public static void NormalizeSpawnModeData_Postfix<T>(ref T __3) where T : struct
+    {
+        try
+        {
+            if (Mod.Cfg.QuestMaxTeamSize <= 4) return;
+
+            var value = Convert.ToInt32(__3);
+            if (!TryNormalizeIndex(value, out var normalized)) return;
+
+            __3 = (T)Enum.ToObject(typeof(T), normalized);
+
+            if (_spawnModeDataNormalizeLogCount < 12)
+            {
+                _spawnModeDataNormalizeLogCount++;
+                Mod.Log.Msg($"[questsize] normalized spawn-mode team-player index {value} -> {normalized} " +
+                            $"activeQuest={_activeAllowedQuestConfig}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Mod.Log.Warning($"[questsize] spawn-mode index normalize failed: {ex.Message}");
+        }
+    }
+
+    // PREFIX on GameSpawnManager.FKEICBPCMPJ(..., CCMLKDOHKJE requiredIndex, ...).
+    // This is the last guard before the spawn point field compare at +0x88.
+    public static void NormalizeRequiredSpawnIndex_Prefix<T>(ref T __2) where T : struct
+    {
+        try
+        {
+            if (Mod.Cfg.QuestMaxTeamSize <= 4) return;
+
+            var value = Convert.ToInt32(__2);
+            if (!TryNormalizeIndex(value, out var normalized)) return;
+
+            __2 = (T)Enum.ToObject(typeof(T), normalized);
+
+            if (_requiredSpawnIndexNormalizeLogCount < 12)
+            {
+                _requiredSpawnIndexNormalizeLogCount++;
+                Mod.Log.Msg($"[questsize] normalized required spawn index {value} -> {normalized} " +
+                            $"activeQuest={_activeAllowedQuestConfig}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Mod.Log.Warning($"[questsize] required spawn index normalize failed: {ex.Message}");
+        }
+    }
+
+    private static bool TryNormalizeIndex(int value, out int normalized)
+    {
+        normalized = value % 4;
+        return value >= 4;
+    }
+
+    // PREFIX on GameConfigurationAsset.GDECPANDBHJ()  (asset → protobuf builder).
+    public static void Build_Prefix(object __instance)
+    {
+        try
+        {
+            var target = Mod.Cfg.QuestMaxTeamSize;
+            if (target <= 0 || __instance is null) return;
+
+            var name = GetMember(__instance, "Name") as string ?? "";
+            var allowed = IsAllowed(name);
+            _activeAllowedQuestConfig = allowed;
+            if (_seen.Add(name))
+                Mod.Log.Msg($"[questsize] config build '{name}' allowed={allowed}");
+            if (!allowed) return;
+
+            var arr = GetMember(__instance, "TeamConfigurations");
+            int len = ArrLen(arr);
+            if (len <= 0) return;
+
+            int bumped = 0;
+            for (int i = 0; i < len; i++)
+            {
+                var elem = ArrItem(arr, i);     // boxed TeamConfiguration struct (copy)
+                if (elem is null) continue;
+                int cur = ReadInt(elem, "MaxTeamSize");
+                if (cur > 0 && cur < target &&
+                    WriteInt(elem, "MaxTeamSize", target) &&
+                    SetArrItem(arr!, i, elem))   // write the mutated struct back
+                    bumped++;
+            }
+
+            if (bumped > 0 && !_loggedBump)
+            {
+                _loggedBump = true;
+                Mod.Log.Msg($"[questsize] '{name}': bumped {bumped} team slot(s) → {target}");
+            }
+        }
+        catch (Exception ex) { Mod.Log.Warning($"[questsize] build prefix failed: {ex.Message}"); }
+    }
+
+    // POSTFIX on GameSpawnManager.FKEICBPCMPJ(..., outputList). That method
+    // filters spawn points by state/game-mode/spectator/team/team-player-index/
+    // custom-tag before the spawn selector runs. The RRO quest prefabs only
+    // have indexed start points for players 0-3; once we raise the team size,
+    // player index 4+ can filter every point out before the built-in overlap
+    // fallback has a chance to help.
+    //
+    // December decompile: FPBFJMMKPPJ calls this filter, then if output.Count
+    // is still 0 it logs "due to spawn point requirement tests" and falls back
+    // to the unfiltered source list as an arbitrary spawn set. Filling the
+    // output list here keeps the normal overlap pass and spawn-selection mode
+    // alive instead of taking that bad arbitrary fallback.
+    //
+    // Harmony binds __0 and __7 by argument position: source list and output
+    // list. The obfuscated parameter names are not reliable in MelonLoader's
+    // generated IL2CPP metadata, which is why this intentionally avoids them.
+    // If the filtered output is empty, copy the already-selected candidate
+    // scene spawn list back into the output so extra players reuse baked quest
+    // spawn points instead of being left out in the void.
+    public static void RelaxEmptySpawnFilter_Postfix(object __0, object __7)
+    {
+        try
+        {
+            if (Mod.Cfg.QuestMaxTeamSize <= 4) return;
+            if (Count(__7) > 0) return;
+
+            var sourceCount = Count(__0);
+            if (sourceCount <= 0) return;
+
+            var copied = CopyListItems(__0, __7);
+            if (_spawnRelaxLogCount < 12)
+            {
+                _spawnRelaxLogCount++;
+                Mod.Log.Msg($"[questsize] relaxed empty quest spawn filter; activeQuest={_activeAllowedQuestConfig} " +
+                            $"source={sourceCount} copied={copied} " +
+                            $"sourceType={TypeName(__0)} outputType={TypeName(__7)}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Mod.Log.Warning($"[questsize] spawn filter relax failed: {ex.Message}");
+        }
+    }
+
+    // ── allowlist matching (normalize: lowercase-alnum, strip filler) ──────
+    private static List<string>? _wanted;
+
+    private static bool IsAllowed(string configName)
+    {
+        _wanted ??= BuildWanted();
+        if (_wanted.Count == 0) return false;
+        var have = Norm(configName);
+        foreach (var w in _wanted)
+            if (have.Contains(w)) return true;
+        return false;
+    }
+
+    private static List<string> BuildWanted()
+    {
+        var list = new List<string>();
+        foreach (var entry in Mod.Cfg.QuestMaxTeamSizeRooms)
+        {
+            var nrm = Norm(entry);
+            if (nrm.Length > 0) list.Add(nrm);
+        }
+        return list;
+    }
+
+    private static string Norm(string s)
+    {
+        if (string.IsNullOrEmpty(s)) return "";
+        var sb = new System.Text.StringBuilder(s.Length);
+        foreach (var c in s)
+            if (char.IsLetterOrDigit(c)) sb.Append(char.ToLowerInvariant(c));
+        return sb.ToString().Replace("the", "").Replace("for", "").Replace("of", "");
+    }
+
+    // ── reflection helpers (Il2CppInterop exposes il2cpp members as either a
+    //    property or a field depending on version — try both) ────────────────
     private static object? GetMember(object o, string name)
     {
         var t = o.GetType();
@@ -148,6 +402,8 @@ internal static class QuestTeamSize
         return (lp?.GetValue(arr) as int?) ?? 0;
     }
 
+    private static int Count(object? collection) => ArrLen(collection);
+
     private static object? ArrItem(object? arr, int i)
     {
         if (arr is null) return null;
@@ -156,38 +412,53 @@ internal static class QuestTeamSize
         return gi?.Invoke(arr, new object[] { i });
     }
 
-    private static bool ArrSet(object arr, int i, object val)
+    // Write a (boxed) struct element back into an Il2CppStructArray via its
+    // set_Item(int, T) indexer. Reflection unboxes to T on invoke.
+    private static bool SetArrItem(object arr, int i, object val)
     {
-        var si = arr.GetType().GetMethod("set_Item", new[] { typeof(int), val.GetType() })
-                 ?? arr.GetType().GetMethod("set_Item");
-        if (si is null) return false;
-        try { si.Invoke(arr, new object[] { i, val }); return true; } catch { return false; }
-    }
-
-    private static object? ToIl2CppType(Type managed)
-    {
-        try
+        if (arr is Array a) { try { a.SetValue(val, i); return true; } catch { return false; } }
+        foreach (var m in arr.GetType().GetMethods())
         {
-            var t = typeof(Il2CppType);
-            var from = t.GetMethod("From", new[] { typeof(Type), typeof(bool) })
-                       ?? t.GetMethod("From", new[] { typeof(Type) });
-            if (from is null) return null;
-            var args = from.GetParameters().Length == 2
-                ? new object[] { managed, true } : new object[] { managed };
-            return from.Invoke(null, args);
-        }
-        catch { return null; }
-    }
-
-    private static MethodInfo? OneArgStatic(Type? t, string name, object arg)
-    {
-        if (t is null) return null;
-        foreach (var m in t.GetMethods(BindingFlags.Public | BindingFlags.Static))
-        {
-            if (m.Name != name) continue;
+            if (m.Name != "set_Item") continue;
             var ps = m.GetParameters();
-            if (ps.Length == 1 && ps[0].ParameterType.IsInstanceOfType(arg)) return m;
+            if (ps.Length == 2 && ps[0].ParameterType == typeof(int))
+            {
+                try { m.Invoke(arr, new[] { i, val }); return true; } catch { }
+            }
         }
-        return null;
+        return false;
     }
+
+    private static int CopyListItems(object? src, object? dst)
+    {
+        if (src is null || dst is null) return 0;
+
+        MethodInfo? add = null;
+        foreach (var method in dst.GetType().GetMethods())
+        {
+            if (method.Name != "Add") continue;
+            if (method.GetParameters().Length != 1) continue;
+            add = method;
+            break;
+        }
+        if (add is null) return 0;
+
+        var n = ArrLen(src);
+        var copied = 0;
+        for (var i = 0; i < n; i++)
+        {
+            var item = ArrItem(src, i);
+            if (item is null) continue;
+            try
+            {
+                add.Invoke(dst, new[] { item });
+                copied++;
+            }
+            catch { }
+        }
+        return copied;
+    }
+
+    private static string TypeName(object? value) =>
+        value?.GetType().FullName ?? "<null>";
 }
