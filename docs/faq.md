@@ -40,8 +40,9 @@ We recommend keeping servers small (friends + community), private
 ### Will mobile / Junior accounts work?
 
 Mobile binaries from 2020 are platform-locked to App Store / Play Store
-servers and can't easily be retargeted. Quest standalone is possible in
-principle but hasn't been validated.
+servers and can't easily be retargeted. Quest standalone is being ported
+separately through the December/March branches with LemonLoader and a
+resigned APK; it is not part of the public launcher flow yet.
 
 Junior accounts work but DorkNet patches out the chat-permission gate by
 default since on a private server with friends, the chat moderation
@@ -49,9 +50,12 @@ plumbing is overkill. Toggle in admin → Server settings if you need it.
 
 ### Does this work with Quest VR?
 
-Desktop VR via SteamVR works. Standalone Quest builds aren't easily
-patchable (sideloaded APK signing is its own world). Quest Link / Air
-Link puts you back in the SteamVR case, which works.
+Desktop VR via SteamVR works. Quest Link / Air Link puts you back in the
+SteamVR case, which works.
+
+Standalone Quest is experimental: the version branches can build the
+client mod against LemonLoader's Android runtime, but APK injection,
+signing, sideloading, and device smoke testing are still manual.
 
 ### How many players can one server handle?
 
