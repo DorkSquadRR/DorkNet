@@ -219,7 +219,7 @@ function PlayerDetail({ id, onClose, onChanged }: { id: number; onClose: () => v
           {tab === 'mod'      && <ModerationTab data={data} onChanged={onChanged} />}
           {tab === 'grants'   && <GrantsTab    data={data} onChanged={reload} />}
           {tab === 'gift'     && <GiftPanel    playerId={data.id} />}
-          {tab === 'profile'  && <ProfileTab   data={data} onChanged={reload} />}
+          {tab === 'profile'  && <ProfileTab   data={data} onChanged={reload} onDeleted={onChanged} />}
         </div>
       )}
     </Modal>
@@ -502,10 +502,11 @@ function GrantsTab({ data, onChanged }: { data: PlayerDetail; onChanged: () => v
 
 // ── Profile: display name + role flags ───────────────────────────────
 
-function ProfileTab({ data, onChanged }: { data: PlayerDetail; onChanged: () => void }) {
+function ProfileTab({ data, onChanged, onDeleted }: { data: PlayerDetail; onChanged: () => void; onDeleted: () => void }) {
   const toast = useToast();
   const [displayName, setDisplayName] = useState(data.displayName);
   const [username, setUsername] = useState(data.username);
+  const [deleteOpen, setDeleteOpen] = useState(false);
   const [flags, setFlags] = useState({
     isVerified: data.isVerified,
     isDeveloper: data.isDeveloper,
@@ -598,6 +599,112 @@ function ProfileTab({ data, onChanged }: { data: PlayerDetail; onChanged: () => 
       </div>
 
       <PasswordResetCard playerId={data.id} username={data.username} />
+
+      <div className="card !p-4 md:col-span-2 border-danger/40 bg-danger/5">
+        <h3 className="text-sm font-semibold text-danger mb-1">Remove account</h3>
+        <p className="text-xs text-ink-300 mb-3">
+          Deletes the account and personal rows. Rooms, inventions, clubs, and other durable authored content are reassigned to the system account.
+        </p>
+        <button
+          onClick={() => setDeleteOpen(true)}
+          className="btn-danger text-xs"
+          disabled={data.isAdmin || data.id === 1}
+        >Remove account</button>
+        {data.isAdmin && <p className="text-[11px] text-warn mt-2">Demote this admin before removing the account.</p>}
+        {data.id === 1 && <p className="text-[11px] text-warn mt-2">The system account cannot be removed.</p>}
+      </div>
+
+      <DeleteAccountModal
+        open={deleteOpen}
+        data={data}
+        onClose={() => setDeleteOpen(false)}
+        onDeleted={onDeleted}
+      />
     </div>
+  );
+}
+
+function DeleteAccountModal({ open, data, onClose, onDeleted }: {
+  open: boolean;
+  data: PlayerDetail;
+  onClose: () => void;
+  onDeleted: () => void;
+}) {
+  const toast = useToast();
+  const [confirmUsername, setConfirmUsername] = useState('');
+  const [confirmPhrase, setConfirmPhrase] = useState('');
+  const [reason, setReason] = useState('');
+  const [busy, setBusy] = useState(false);
+  const expectedPhrase = `DELETE ${data.id}`;
+  const valid = confirmUsername.trim() === data.username && confirmPhrase.trim() === expectedPhrase;
+
+  const remove = async () => {
+    if (!valid) return;
+    setBusy(true);
+    try {
+      await api(`/players/${data.id}`, {
+        method: 'DELETE',
+        body: {
+          ConfirmUsername: confirmUsername.trim(),
+          ConfirmPhrase: confirmPhrase.trim(),
+          Reason: reason.trim() || null,
+        },
+      });
+      toast.push(`@${data.username} removed`, 'success');
+      onClose();
+      onDeleted();
+    } catch (e) {
+      toast.push((e as Error).message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      title="Remove account"
+      open={open}
+      onClose={onClose}
+      size="sm"
+      footer={<>
+        <button onClick={onClose} className="btn-ghost text-xs" disabled={busy}>Cancel</button>
+        <button onClick={remove} className="btn-danger text-xs" disabled={busy || !valid}>
+          {busy ? 'Removing…' : 'Remove account'}
+        </button>
+      </>}
+    >
+      <div className="space-y-3 text-sm">
+        <p className="text-ink-200">
+          This removes <span className="font-mono">@{data.username}</span> and cannot be undone from the admin UI.
+        </p>
+        <label className="block">
+          <span className="block text-[11px] uppercase tracking-widest text-ink-400 mb-1">Type username</span>
+          <input
+            value={confirmUsername}
+            onChange={e => setConfirmUsername(e.target.value)}
+            placeholder={data.username}
+            className="input font-mono text-xs"
+          />
+        </label>
+        <label className="block">
+          <span className="block text-[11px] uppercase tracking-widest text-ink-400 mb-1">Type confirmation phrase</span>
+          <input
+            value={confirmPhrase}
+            onChange={e => setConfirmPhrase(e.target.value)}
+            placeholder={expectedPhrase}
+            className="input font-mono text-xs"
+          />
+        </label>
+        <label className="block">
+          <span className="block text-[11px] uppercase tracking-widest text-ink-400 mb-1">Reason</span>
+          <input
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            placeholder="Optional audit note"
+            className="input text-xs"
+          />
+        </label>
+      </div>
+    </Modal>
   );
 }

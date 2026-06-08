@@ -76,6 +76,13 @@ obscure the mirror relationship.
 | `Ns/` | `ns.{apex}/*` — service-URL registry the watch queries on startup |
 | `PlayerSettings/`, `Rooms/`, `Site/`, `Storage/`, `Strings/` | Smaller surfaces with self-explanatory scope |
 
+Destructive admin account removal lives in `AdminController` under
+`DELETE api/admin/v1/players/{id}` and is surfaced from the Players
+detail modal. It requires two exact confirmations: the current username
+and `DELETE {id}`. The endpoint refuses system, self, and still-admin
+accounts; personal rows are deleted while durable authored content is
+reassigned to the system account.
+
 ---
 
 ## Request lifecycle

@@ -102,6 +102,38 @@ self-signed certs work. (First run prints "launch the game once"; do
 that, then re-run with `-ResumeBuild` to finish — see the script's
 `-?` help.)
 
+### Standalone Quest build (experimental)
+
+The December Quest APK is also IL2CPP and can build the same
+`DorkNet.ClientMod` source against LemonLoader's Android runtime. The
+current Quest path is still device-tested manually: build the mod as a
+net8 LemonLoader DLL, install it into a LemonLoader-patched APK, then
+sideload the resigned APK.
+
+From this branch:
+
+```pwsh
+dotnet build .\DorkNet.ClientMod\DorkNet.ClientMod.csproj `
+  -p:TargetFrameworks=net8.0 `
+  -p:MelonLoaderDir="C:\path\to\LemonLoader\melon_data\MelonLoader"
+```
+
+Output lands at
+`DorkNet.ClientMod\bin\Debug\net8.0\DorkNet.ClientMod.dll`. Desktop
+builds still default to net6 and keep the historical flat output path.
+
+Quest notes:
+
+- Target package: `com.AgainstGravity.RecRoom`.
+- Use a public HTTPS DorkNet host; keep `"EnableTlsTrustBypass": false`
+  for Quest builds.
+- The Dec Photon hooks are discovered from the unique
+  `PUNNetworkManager` methods returning `AppSettings` and
+  `AuthenticationValues`, with the known Dec obfuscated names as fallback.
+- Standalone APK patching/resigning is not yet wrapped by
+  `install-melon.ps1`; this is the porting path, not a public one-click
+  installer yet.
+
 ### Debug console (opt-in)
 
 The 2020 client ships a built-in dev console

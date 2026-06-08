@@ -179,10 +179,16 @@ public class Mod : MelonMod
         //   EMGGKBALALH returns Photon.Realtime.AuthenticationValues —
         //     verified at PUNNetworkManager.txt:7560. Builds AuthValues with
         //     environment + accessToken AuthGetParameters.
-        TryPatchByName("PUNNetworkManager", "FJOLIPKKIBE",
-                       postfix: nameof(PhotonPatches.LogAppSettings_Postfix));
-        TryPatchByName("PUNNetworkManager", "EMGGKBALALH",
-                       postfix: nameof(PhotonPatches.LogAuthValues_Postfix));
+        //
+        // Quest-Dec uses the same obfuscation seed as PC-Dec, but discover by
+        // return type first so a future platform/reseed does not make these
+        // two critical hooks depend on the private method names.
+        TryPatchDeclaredMethodByReturnType("PUNNetworkManager", "AppSettings",
+                                           fallbackMethodName: "FJOLIPKKIBE",
+                                           postfix: nameof(PhotonPatches.LogAppSettings_Postfix));
+        TryPatchDeclaredMethodByReturnType("PUNNetworkManager", "AuthenticationValues",
+                                           fallbackMethodName: "EMGGKBALALH",
+                                           postfix: nameof(PhotonPatches.LogAuthValues_Postfix));
         // PUNNetworkManager.OnCustomAuthenticationFailed — accepts whatever
         // string-like arg the IL2CPP method takes (declared `string` in
         // dump.cs but Il2CppInterop wraps it in a way that breaks
@@ -723,6 +729,58 @@ public class Mod : MelonMod
         return TryPatch(label, type, methodName, args, prefix, postfix, logMiss);
     }
 
+    private bool TryPatchDeclaredMethodByReturnType(string typeName, string returnTypeName,
+                                                    string fallbackMethodName,
+                                                    string? prefix = null, string? postfix = null,
+                                                    bool logMiss = true)
+    {
+        var type = ResolveType(typeName);
+        var label = $"{typeName}.<returns {returnTypeName}>";
+        if (type is null)
+        {
+            if (logMiss) Log.Warning($"[patch-miss] {label}: type not found");
+            return TryPatchByName(typeName, fallbackMethodName, args: null, prefix, postfix, logMiss);
+        }
+
+        var matches = new List<MethodInfo>();
+        foreach (var method in AccessTools.GetDeclaredMethods(type))
+        {
+            if (method.IsAbstract || method.ContainsGenericParameters || method.IsSpecialName) continue;
+            if (ReturnTypeMatches(method.ReturnType, returnTypeName)) matches.Add(method);
+        }
+
+        if (matches.Count == 1)
+        {
+            var method = matches[0];
+            try
+            {
+                HarmonyInstance.Patch(method,
+                    prefix:  prefix  is null ? null : new HarmonyMethod(GetPatchMethod(prefix)),
+                    postfix: postfix is null ? null : new HarmonyMethod(GetPatchMethod(postfix)));
+                Log.Msg($"[patch-ok] {typeName}.{method.Name} (returns {returnTypeName})");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                Log.Error($"[patch-fail] {typeName}.{method.Name} (returns {returnTypeName}): {ex.Message}");
+                return false;
+            }
+        }
+
+        if (matches.Count > 1)
+        {
+            var names = new List<string>();
+            foreach (var method in matches) names.Add(method.Name);
+            Log.Warning($"[patch-ambiguous] {label}: {string.Join(", ", names)}; falling back to {fallbackMethodName}");
+        }
+        else if (logMiss)
+        {
+            Log.Warning($"[patch-miss] {label}; falling back to {fallbackMethodName}");
+        }
+
+        return TryPatchByName(typeName, fallbackMethodName, args: null, prefix, postfix, logMiss);
+    }
+
     internal static Type? ResolveType(string name)
     {
         if (ResolvedTypeCache.TryGetValue(name, out var cached))
@@ -787,6 +845,15 @@ public class Mod : MelonMod
     }
 
     private static bool MatchesRequestedType(Type type, string requested)
+    {
+        var prefixed = "Il2Cpp" + requested;
+        if (type.FullName == requested || type.FullName == prefixed) return true;
+        if (type.Name == requested || type.Name == prefixed) return true;
+        return type.FullName?.EndsWith("." + requested, StringComparison.Ordinal) == true ||
+               type.FullName?.EndsWith(".Il2Cpp" + requested, StringComparison.Ordinal) == true;
+    }
+
+    private static bool ReturnTypeMatches(Type type, string requested)
     {
         var prefixed = "Il2Cpp" + requested;
         if (type.FullName == requested || type.FullName == prefixed) return true;

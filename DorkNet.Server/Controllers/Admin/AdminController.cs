@@ -203,6 +203,56 @@ public class AdminController(
         return Ok(new { player.Id, player.IsAdmin });
     }
 
+    public sealed record DeletePlayerRequest(string ConfirmUsername, string ConfirmPhrase, string? Reason);
+
+    /// <summary>Hard-remove a non-admin player account. The destructive
+    /// endpoint requires two exact confirmations: the current username and
+    /// the phrase <c>DELETE {id}</c>. Personal rows are deleted, authored
+    /// durable content is reassigned to the system account, and live sessions
+    /// are kicked so stale bearer tokens stop being useful immediately.</summary>
+    [HttpDelete("players/{id:long}")]
+    public async Task<ActionResult> DeletePlayer(long id, [FromBody] DeletePlayerRequest body)
+    {
+        if (id == 1)
+            return BadRequest(new { Error = "Cannot delete the system account." });
+        if (id == CurrentAdminId)
+            return BadRequest(new { Error = "Cannot delete your own admin account." });
+
+        var player = await db.Players.FirstOrDefaultAsync(p => p.Id == id);
+        if (player is null) return NotFound();
+        if (player.IsAdmin)
+            return BadRequest(new { Error = "Cannot delete an admin account. Demote it first." });
+
+        var expectedPhrase = $"DELETE {player.Id}";
+        if (!string.Equals(body.ConfirmUsername?.Trim(), player.Username, StringComparison.Ordinal)
+            || !string.Equals(body.ConfirmPhrase?.Trim(), expectedPhrase, StringComparison.Ordinal))
+            return BadRequest(new { Error = $"Confirmation failed. Type @{player.Username} and {expectedPhrase} exactly." });
+
+        var reason = string.IsNullOrWhiteSpace(body.Reason)
+            ? $"removed @{player.Username}"
+            : body.Reason.Trim();
+        var systemPlayerId = await db.Players.AnyAsync(p => p.Id == 1) ? 1L : CurrentAdminId;
+
+        await using var tx = await db.Database.BeginTransactionAsync();
+
+        var summary = await DeletePlayerDataAsync(id, systemPlayerId);
+        db.Players.Remove(player);
+        await LogAsync("delete_player", "player", id, $"{reason}; {summary}");
+        await db.SaveChangesAsync();
+        await tx.CommitAsync();
+
+        await notifications.KickPlayerAsync(id, "Your account has been removed by an admin.");
+        playerPresence.Clear(id);
+
+        return Ok(new
+        {
+            deleted = id,
+            username = player.Username,
+            reassignedToPlayerId = systemPlayerId,
+            summary,
+        });
+    }
+
     // ── Rooms ────────────────────────────────────────────────────────────
 
     public sealed record DeleteRoomRequest(string? Reason);
@@ -3043,6 +3093,133 @@ public class AdminController(
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
+
+    private async Task<string> DeletePlayerDataAsync(long playerId, long systemPlayerId)
+    {
+        var now = DateTime.UtcNow;
+        var deleted = 0;
+        var reassigned = 0;
+
+        deleted += await db.Avatars.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.PlayerSettings.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.Relationships.Where(x => x.RequesterId == playerId || x.TargetId == playerId).ExecuteDeleteAsync();
+        deleted += await db.CurrencyBalances.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.PlayerInventory.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.PlayerDevices.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.NotificationPrefs.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.CohortAssignments.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.PushTokens.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.PlatformIgnores.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.Cards.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.ObjectiveProgress.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.GameRewardSelections.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.CouponRedemptions.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.LeaderboardStats.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.PlayerElo.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.RoyalePlayerProgress.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.RoyaleMatchPlayers.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+
+        deleted += await db.Messages.Where(x => x.SenderPlayerId == playerId || x.RecipientPlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.ChatMessages.Where(x => x.SenderPlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.ChatThreadMembers.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        reassigned += await db.ChatThreads
+            .Where(x => x.CreatorPlayerId == playerId)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.CreatorPlayerId, systemPlayerId));
+
+        deleted += await db.Cheers.Where(x => x.FromPlayerId == playerId || x.TargetPlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.Reports.Where(x => x.ReporterPlayerId == playerId || x.TargetPlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.BugReports.Where(x => x.ReporterPlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.Subscriptions.Where(x => x.SubscriberPlayerId == playerId || x.TargetPlayerId == playerId).ExecuteDeleteAsync();
+
+        deleted += await db.ClubMemberships.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.ClubSubscriptions.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.ClubAnnouncementReads.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        reassigned += await db.Clubs
+            .Where(x => x.CreatorPlayerId == playerId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.CreatorPlayerId, systemPlayerId)
+                .SetProperty(x => x.UpdatedAt, now));
+        reassigned += await db.ClubAnnouncements
+            .Where(x => x.AuthorPlayerId == playerId)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.AuthorPlayerId, systemPlayerId));
+
+        deleted += await db.RoomBookmarks.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.RoomVisits.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.RoomRoles.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        deleted += await db.RoomBans.Where(x => x.BannedPlayerId == playerId).ExecuteDeleteAsync();
+        reassigned += await db.RoomBans
+            .Where(x => x.BannedByPlayerId == playerId)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.BannedByPlayerId, systemPlayerId));
+        reassigned += await db.RoomRoles
+            .Where(x => x.GrantedByPlayerId == playerId)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.GrantedByPlayerId, systemPlayerId));
+        reassigned += await db.Rooms
+            .Where(x => x.CreatorPlayerId == playerId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.CreatorPlayerId, systemPlayerId)
+                .SetProperty(x => x.UpdatedAt, now));
+        reassigned += await db.RoomDataBlobs
+            .Where(x => x.UploadedByPlayerId == playerId)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.UploadedByPlayerId, systemPlayerId));
+        reassigned += await db.RoomKeys
+            .Where(x => x.CreatorPlayerId == playerId)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.CreatorPlayerId, systemPlayerId));
+        deleted += await db.RoomKeyPurchases.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+
+        deleted += await db.PlaylistInteractions.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        reassigned += await db.Playlists
+            .Where(x => x.CreatorPlayerId == playerId)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.CreatorPlayerId, systemPlayerId));
+
+        deleted += await db.PlayerEventResponses
+            .Where(x => x.PlayerId == playerId
+                || db.PlayerEvents.Where(e => e.CreatorPlayerId == playerId).Select(e => e.Id).Contains(x.EventId))
+            .ExecuteDeleteAsync();
+        deleted += await db.PlayerEvents.Where(x => x.CreatorPlayerId == playerId).ExecuteDeleteAsync();
+
+        deleted += await db.PrivateInstanceInvitees.Where(x => x.PlayerId == playerId).ExecuteDeleteAsync();
+        var privateInstanceIds = await db.PrivateInstances
+            .Where(x => x.OwnerPlayerId == playerId)
+            .Select(x => x.Id)
+            .ToListAsync();
+        if (privateInstanceIds.Count > 0)
+        {
+            deleted += await db.PrivateInstanceInvitees
+                .Where(x => privateInstanceIds.Contains(x.PrivateInstanceId))
+                .ExecuteDeleteAsync();
+            deleted += await db.PrivateInstances
+                .Where(x => privateInstanceIds.Contains(x.Id))
+                .ExecuteDeleteAsync();
+        }
+
+        deleted += await db.GiftPackages
+            .Where(x => x.RecipientPlayerId == playerId)
+            .ExecuteDeleteAsync();
+        if (playerId <= int.MaxValue)
+        {
+            reassigned += await db.GiftPackages
+                .Where(x => x.FromPlayerId == (int)playerId)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.FromPlayerId, (int?)null));
+        }
+
+        reassigned += await db.Inventions
+            .Where(x => x.CreatorPlayerId == playerId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.CreatorPlayerId, systemPlayerId)
+                .SetProperty(x => x.UpdatedAt, now));
+        reassigned += await db.Photos
+            .Where(x => x.UploaderPlayerId == playerId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.UploaderPlayerId, systemPlayerId)
+                .SetProperty(x => x.DeletedAt, now)
+                .SetProperty(x => x.IsPublic, false));
+
+        reassigned += await db.SignupCodes
+            .Where(x => x.RedeemedByPlayerId == playerId)
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.RedeemedByPlayerId, (long?)null));
+
+        return $"deleted_rows={deleted} reassigned_rows={reassigned}";
+    }
 
     private Task LogAsync(string action, string targetType, long targetId, string reason)
     {
