@@ -406,7 +406,7 @@ public class RoomsController(
                 DataModifiedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
             };
             return Ok(wrapCreateModifyResponse
-                ? new { Result = 0, RoomScene = missingPresenceScene }
+                ? new { success = true, value = missingPresenceScene, error = string.Empty }
                 : missingPresenceScene);
         }
 
@@ -617,7 +617,7 @@ public class RoomsController(
             DataModifiedAt = savedAt.ToString("yyyy-MM-ddTHH:mm:ssZ"),
         };
         return Ok(wrapCreateModifyResponse
-            ? new { Result = 0, RoomScene = savedScene }
+            ? new { success = true, value = savedScene, error = string.Empty }
             : savedScene);
     }
 
