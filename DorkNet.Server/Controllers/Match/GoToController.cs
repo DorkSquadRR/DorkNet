@@ -1166,16 +1166,15 @@ public class GoToController(
 
         if (isDorm && dormOwnerId is long ownerId)
         {
-            var dormBlob = await db.DormStates.AsNoTracking()
-                .Where(d => d.PlayerId == ownerId)
-                .Select(d => d.CurrentDataBlobName)
-                .FirstOrDefaultAsync();
+            var dormBlob = await rooms.ResolveDormDataBlobNameAsync(ownerId, room.Id);
             if (!string.IsNullOrWhiteSpace(dormBlob)) return dormBlob;
         }
 
         if (!string.IsNullOrWhiteSpace(room.CurrentDataBlobName)) return room.CurrentDataBlobName;
 
-        var customisable = room.IsDormRoom || room.CreatorPlayerId != 1;
+        if (room.IsDormRoom) return string.Empty;
+
+        var customisable = room.CreatorPlayerId != 1;
         return customisable ? $"room_{room.Id}_v1.dat" : string.Empty;
     }
 
