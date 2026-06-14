@@ -319,8 +319,9 @@ public class RoomsController(
         var sceneRow = sceneRows.FirstOrDefault(s => s.OrderIndex == (int)subRoomId);
         if (sceneRow is null) return NotFound(new { error = "subroom_not_found", subRoomId });
 
+        var restoredAt = DateTime.UtcNow;
         sceneRow.DataBlobName = filename;
-        sceneRow.DataModifiedAt = DateTime.UtcNow;
+        sceneRow.DataModifiedAt = restoredAt;
 
         // Only stamp the room-level CurrentDataBlobName when restoring the
         // entry scene (OrderIndex 0). Restoring a non-entry sub-room
@@ -331,7 +332,9 @@ public class RoomsController(
                 .Where(r => r.Id == roomId)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(r => r.CurrentDataBlobName, filename)
-                    .SetProperty(r => r.UpdatedAt, DateTime.UtcNow));
+                    .SetProperty(r => r.UpdatedAt, restoredAt));
+            room.CurrentDataBlobName = filename;
+            room.UpdatedAt = restoredAt;
         }
         await db.SaveChangesAsync();
 
@@ -345,13 +348,13 @@ public class RoomsController(
             "[rooms-restore] player={PlayerId} room={RoomId} subRoom={SubRoomId} scene={Scene} blob={Blob}",
             pid, roomId, subRoomId, sceneRow.Name, filename);
 
-        // Watch's response deserializer is PPENFJMFPNE — the full Room DTO
-        // (verified at EJDCNGBEICB:6029 in the 2020.12.18 dump). Returning
-        // a bare RoomScene wrapper makes its dict-based decoder throw
-        // KeyNotFoundException ("Failed to restore subroom save: Malformed
-        // Response"). Mirror the /roomserver/rooms/{id} shape — same
-        // payload BuildRoomDetails generates for /v4/details.
-        return Ok(roomDetailsPayload);
+        // Watch's response deserializer is RecNetResult<PPENFJMFPNE> —
+        // the same legacy success/value/error envelope used by
+        // roomserver/rooms/{id}/subrooms/{id}/data. `value` must be the
+        // flattened /roomserver/rooms/{id} DTO, not the modern
+        // { Room, Scenes } details payload pushed over SubscriptionUpdateRoom.
+        var roomServerDetails = BuildRoomServerDetails(pushRoom, sceneRows, filename);
+        return Ok(new { success = true, value = roomServerDetails, error = string.Empty });
     }
 
     /// <summary>POST api/rooms/v4/saveData — the watch's
@@ -616,9 +619,13 @@ public class RoomsController(
             CanMatchmakeInto = sceneRow?.CanMatchmakeInto ?? true,
             DataModifiedAt = savedAt.ToString("yyyy-MM-ddTHH:mm:ssZ"),
         };
-        return Ok(wrapCreateModifyResponse
-            ? new { success = true, value = savedScene, error = string.Empty }
-            : savedScene);
+        if (wrapCreateModifyResponse)
+        {
+            var roomServerDetails = BuildRoomServerDetails(pushRoom, sceneRowsForRoom, newBlob);
+            return Ok(new { success = true, value = roomServerDetails, error = string.Empty });
+        }
+
+        return Ok(savedScene);
     }
 
     public class SaveRoomSceneRequest
