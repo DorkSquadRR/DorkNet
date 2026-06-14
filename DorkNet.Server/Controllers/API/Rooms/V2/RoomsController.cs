@@ -373,7 +373,10 @@ public class RoomsController(
     public async Task<IActionResult> SaveData([FromBody] SaveRoomSceneRequest body)
         => await SaveDataCore(body);
 
-    private async Task<IActionResult> SaveDataCore(SaveRoomSceneRequest body, long? routeRoomId = null)
+    private async Task<IActionResult> SaveDataCore(
+        SaveRoomSceneRequest body,
+        long? routeRoomId = null,
+        bool wrapCreateModifyResponse = false)
     {
         var pid = this.RequireCurrentPlayerId();
 
@@ -390,7 +393,7 @@ public class RoomsController(
             // Return a degenerate RoomScene so the deserializer doesn't
             // throw, but flag CanMatchmakeInto=false so the watch
             // doesn't think the save succeeded.
-            return Ok(new
+            var missingPresenceScene = new
             {
                 RoomSceneId = body.RoomSceneId,
                 RoomId = 0L,
@@ -401,7 +404,10 @@ public class RoomsController(
                 MaxPlayers = 8,
                 CanMatchmakeInto = false,
                 DataModifiedAt = DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
-            });
+            };
+            return Ok(wrapCreateModifyResponse
+                ? new { Result = 0, RoomScene = missingPresenceScene }
+                : missingPresenceScene);
         }
 
         var roomId = routeRoomId ?? current!.RoomId;
@@ -598,7 +604,7 @@ public class RoomsController(
             await notifications.NotifyAsync(playerId, PushNotificationId.SubscriptionUpdatePresence, presencePayload);
         }
 
-        return Ok(new
+        var savedScene = new
         {
             RoomSceneId = savedSceneId,
             RoomId = roomId,
@@ -609,7 +615,10 @@ public class RoomsController(
             MaxPlayers = sceneRow?.MaxPlayers ?? 8,
             CanMatchmakeInto = sceneRow?.CanMatchmakeInto ?? true,
             DataModifiedAt = savedAt.ToString("yyyy-MM-ddTHH:mm:ssZ"),
-        });
+        };
+        return Ok(wrapCreateModifyResponse
+            ? new { Result = 0, RoomScene = savedScene }
+            : savedScene);
     }
 
     public class SaveRoomSceneRequest
@@ -2429,7 +2438,7 @@ public class RoomsController(
     {
         var body = await ReadSaveRoomSceneRequestAsync();
         body.RoomSceneId = subRoomId;
-        return await SaveDataCore(body, roomId);
+        return await SaveDataCore(body, roomId, wrapCreateModifyResponse: true);
     }
 
     private async Task<SaveRoomSceneRequest> ReadSaveRoomSceneRequestAsync()
