@@ -450,15 +450,17 @@ public class RoomService(DorkNetDbContext db)
         // RoomsController.Details substitutes into the dorm response so
         // each player loads THEIR save instead of whoever-saved-last's).
         // Both are idempotent: we no-op if either side already exists,
-        // and we always end with both rows present so the watch's
-        // GetRoomData → /room/{blobName} flow has a deterministic
-        // CurrentDataBlobName to fetch (empty string until the player
-        // saves; CdnController.Serve treats empty as "return the
-        // default dorm bytes").
+        // and we always end with both rows present. Empty CurrentDataBlobName
+        // means "no saved dorm yet"; the details/goto paths keep the blob
+        // name empty so the watch uses the baked DormRoom scene.
         const string DormLocationId = "76d98498-60a1-430c-ab76-b54a29b7a163";
 
         var existing = await db.Rooms
-            .FirstOrDefaultAsync(r => r.IsDormRoom && r.CreatorPlayerId == playerId);
+            .Where(r => r.IsDormRoom && r.CreatorPlayerId == playerId)
+            .OrderByDescending(r => r.CurrentDataBlobName != "")
+            .ThenByDescending(r => r.UpdatedAt)
+            .ThenByDescending(r => r.Id)
+            .FirstOrDefaultAsync();
         var dormStateExists = await db.DormStates
             .AnyAsync(d => d.PlayerId == playerId);
 
@@ -470,14 +472,23 @@ public class RoomService(DorkNetDbContext db)
         // infinite-reloading. Every dorm renders the same canonical scene, so
         // force any non-canonical dorm row (and its saved RoomScene rows) back
         // to it. Idempotent — runs on the next goto/heartbeat for that player.
+        var existingChanged = false;
         if (existing is not null && existing.LocationReplicationId != DormLocationId)
         {
             existing.LocationReplicationId = DormLocationId;
             await db.RoomScenes
                 .Where(s => s.RoomId == existing.Id && s.RoomSceneLocationId != DormLocationId)
                 .ExecuteUpdateAsync(u => u.SetProperty(s => s.RoomSceneLocationId, DormLocationId));
-            await db.SaveChangesAsync();
+            existingChanged = true;
         }
+
+        if (existing is not null && ShouldRepairDormName(existing.Name, playerId))
+        {
+            existing.Name = await BuildUniquePersonalDormNameAsync(playerId, existing.Id);
+            existingChanged = true;
+        }
+
+        if (existingChanged) await db.SaveChangesAsync();
 
         if (existing is not null && dormStateExists)
             return existing;
@@ -520,11 +531,9 @@ public class RoomService(DorkNetDbContext db)
             {
                 PlayerId = playerId,
                 // Empty until the player saves their dorm via Maker
-                // Pen. CdnController.Serve sees the empty blob name in
-                // the Details response and serves
-                // RoomDataBlobService.GetDefaultBlob() back to the
-                // watch — boots into the stock dorm scene without a
-                // 500.
+                // Pen. Details/goto emit an empty blob name so the
+                // watch short-circuits persisted-room download and boots
+                // into the stock baked dorm scene.
                 CurrentDataBlobName = string.Empty,
             });
         }
@@ -562,6 +571,160 @@ public class RoomService(DorkNetDbContext db)
         // but log the aggregate once for ops visibility.
         // (Per-call save keeps each row's failure isolated; if one
         // EnsurePersonalDorm throws we still backfilled the rest.)
+    }
+
+    /// <summary>
+    /// Resolve the saved room-data blob for a personal dorm and repair stale
+    /// pointers left by older builds. Some existing dorm rows only have the
+    /// real save in RoomDataBlobs or RoomScenes while DormStates/Rooms still
+    /// point at the synthetic room_{id}_v1.dat fallback.
+    /// </summary>
+    public async Task<string> ResolveDormDataBlobNameAsync(long playerId, long dormRoomId)
+    {
+        var dormState = await db.DormStates
+            .FirstOrDefaultAsync(d => d.PlayerId == playerId);
+        if (await IsUsableDormBlobNameAsync(dormState?.CurrentDataBlobName, dormRoomId))
+            return dormState!.CurrentDataBlobName;
+
+        var room = await db.Rooms
+            .FirstOrDefaultAsync(r => r.Id == dormRoomId && r.IsDormRoom);
+        if (await IsUsableDormBlobNameAsync(room?.CurrentDataBlobName, dormRoomId))
+        {
+            await RepairDormCurrentBlobAsync(playerId, dormRoomId, room!.CurrentDataBlobName);
+            return room.CurrentDataBlobName;
+        }
+
+        var entrySceneBlob = await db.RoomScenes.AsNoTracking()
+            .Where(s => s.RoomId == dormRoomId && s.OrderIndex == 0)
+            .Select(s => s.DataBlobName)
+            .FirstOrDefaultAsync();
+        if (await IsUsableDormBlobNameAsync(entrySceneBlob, dormRoomId))
+        {
+            await RepairDormCurrentBlobAsync(playerId, dormRoomId, entrySceneBlob!);
+            return entrySceneBlob!;
+        }
+
+        var blobPrefix = $"dorm_p{playerId}_v";
+        var latestDormBlob = await db.RoomDataBlobs.AsNoTracking()
+            .Where(b => b.RoomId == dormRoomId
+                        && b.UploadedByPlayerId == playerId
+                        && b.BlobName.StartsWith(blobPrefix))
+            .OrderByDescending(b => b.UploadedAt)
+            .ThenByDescending(b => b.Id)
+            .Select(b => b.BlobName)
+            .FirstOrDefaultAsync()
+            ?? await db.RoomDataBlobs.AsNoTracking()
+                .Where(b => b.UploadedByPlayerId == playerId
+                            && b.BlobName.StartsWith(blobPrefix))
+                .OrderByDescending(b => b.UploadedAt)
+                .ThenByDescending(b => b.Id)
+                .Select(b => b.BlobName)
+                .FirstOrDefaultAsync();
+
+        if (!string.IsNullOrWhiteSpace(latestDormBlob))
+        {
+            await RepairDormCurrentBlobAsync(playerId, dormRoomId, latestDormBlob);
+            return latestDormBlob;
+        }
+
+        return string.Empty;
+    }
+
+    private async Task<bool> IsUsableDormBlobNameAsync(string? blobName, long dormRoomId)
+    {
+        if (string.IsNullOrWhiteSpace(blobName)) return false;
+
+        if (!blobName.StartsWith($"room_{dormRoomId}_v", StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        return await db.RoomDataBlobs.AsNoTracking().AnyAsync(b => b.BlobName == blobName);
+    }
+
+    private async Task RepairDormCurrentBlobAsync(long playerId, long dormRoomId, string blobName)
+    {
+        var changed = false;
+
+        var dormState = await db.DormStates.FirstOrDefaultAsync(d => d.PlayerId == playerId);
+        if (dormState is null)
+        {
+            dormState = new DormStateEntity { PlayerId = playerId };
+            db.DormStates.Add(dormState);
+            changed = true;
+        }
+
+        if (!string.Equals(dormState.CurrentDataBlobName, blobName, StringComparison.Ordinal))
+        {
+            dormState.CurrentDataBlobName = blobName;
+            dormState.UpdatedAt = DateTime.UtcNow;
+            changed = true;
+        }
+
+        var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == dormRoomId && r.IsDormRoom);
+        if (room is not null && !string.Equals(room.CurrentDataBlobName, blobName, StringComparison.Ordinal))
+        {
+            room.CurrentDataBlobName = blobName;
+            room.UpdatedAt = DateTime.UtcNow;
+            changed = true;
+        }
+
+        var entryScene = await db.RoomScenes
+            .FirstOrDefaultAsync(s => s.RoomId == dormRoomId && s.OrderIndex == 0);
+        if (entryScene is not null && !string.Equals(entryScene.DataBlobName, blobName, StringComparison.Ordinal))
+        {
+            entryScene.DataBlobName = blobName;
+            entryScene.DataModifiedAt = DateTime.UtcNow;
+            changed = true;
+        }
+
+        if (changed) await db.SaveChangesAsync();
+    }
+
+    private async Task<string> BuildUniquePersonalDormNameAsync(long playerId, long roomId)
+    {
+        var baseName = await BuildPersonalDormDisplayNameAsync(playerId);
+        var candidate = baseName;
+        var suffix = 2;
+        while (await db.Rooms.AsNoTracking().AnyAsync(r => r.Id != roomId && r.Name == candidate))
+        {
+            var suffixText = $"_{suffix++}";
+            candidate = TrimRoomName(baseName, suffixText.Length) + suffixText;
+        }
+
+        return candidate;
+    }
+
+    public async Task<string> BuildPersonalDormDisplayNameAsync(long playerId)
+    {
+        var player = await db.Players.AsNoTracking()
+            .Where(p => p.Id == playerId)
+            .Select(p => new { p.DisplayName, p.Username })
+            .FirstOrDefaultAsync();
+        var rawName = !string.IsNullOrWhiteSpace(player?.DisplayName)
+            ? player!.DisplayName
+            : !string.IsNullOrWhiteSpace(player?.Username)
+                ? player!.Username
+                : $"Player{playerId}";
+        var cleaned = CleanRoomNameStem(rawName);
+        return TrimRoomName($"{cleaned}_dorm");
+    }
+
+    private static bool ShouldRepairDormName(string? name, long playerId) =>
+        string.IsNullOrWhiteSpace(name)
+        || Guid.TryParse(name, out _)
+        || string.Equals(name, $"Dorm_{playerId}", StringComparison.OrdinalIgnoreCase);
+
+    private static string CleanRoomNameStem(string raw)
+    {
+        var cleaned = new string(raw
+            .Select(ch => char.IsLetterOrDigit(ch) || ch is '_' or '-' ? ch : '_')
+            .ToArray()).Trim('_');
+        return string.IsNullOrWhiteSpace(cleaned) ? "Player" : cleaned;
+    }
+
+    private static string TrimRoomName(string name, int reservedSuffixLength = 0)
+    {
+        var max = Math.Max(1, 128 - reservedSuffixLength);
+        return name.Length <= max ? name : name[..max];
     }
 
     /// <summary>
