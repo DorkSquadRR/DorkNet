@@ -288,7 +288,7 @@ public class NotificationService(
                     ["roomCode"]         = redacted.RoomCode,
                     ["photonRegionId"]   = redacted.PhotonRegionId,
                     ["photonRoomId"]     = redacted.PhotonRoomId,
-                    ["name"]             = redacted.Name,
+                    ["name"]             = redacted.NameWire,
                     ["maxCapacity"]      = redacted.MaxCapacity,
                     ["isFull"]           = redacted.IsFull,
                     ["isPrivate"]        = redacted.IsPrivate,

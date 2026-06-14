@@ -532,6 +532,19 @@ public class RoomsController(
         logger.LogInformation(
             "[rooms-save] fanout room update player={PlayerId} room={RoomId} instance={InstanceId} blob={BlobName} recipients={RecipientCount}",
             pid, roomId, activeInstanceId, newBlob, playersInInstance.Length);
+        if (activeInstanceId != 0)
+        {
+            var updatedPrivateInstances = await db.PrivateInstances
+                .Where(instance => instance.Id == activeInstanceId && instance.RoomId == roomId)
+                .ExecuteUpdateAsync(setters => setters
+                    .SetProperty(instance => instance.DataBlob, newBlob));
+            if (updatedPrivateInstances > 0)
+            {
+                logger.LogInformation(
+                    "[rooms-save] updated private instance blob room={RoomId} instance={InstanceId} blob={BlobName}",
+                    roomId, activeInstanceId, newBlob);
+            }
+        }
 
         var updatedRoomInstances = new Dictionary<long, RoomInstanceDto>();
         foreach (var playerId in playersInInstance)
@@ -594,7 +607,7 @@ public class RoomsController(
                     roomCode         = currentPresence.RoomCode,
                     photonRegionId   = currentPresence.PhotonRegionId,
                     photonRoomId     = currentPresence.PhotonRoomId,
-                    name             = currentPresence.Name,
+                    name             = currentPresence.NameWire,
                     maxCapacity      = currentPresence.MaxCapacity,
                     isFull           = currentPresence.IsFull,
                     isPrivate        = currentPresence.IsPrivate,

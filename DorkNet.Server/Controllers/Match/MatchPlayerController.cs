@@ -285,17 +285,15 @@ public class MatchPlayerController(
             return null;
         }
 
-        if (string.IsNullOrWhiteSpace(room.DataBlob))
+        var resolvedDataBlob = await ResolveDataBlobForPresenceAsync(room.RoomId, playerId, room.RoomInstanceId);
+        if (!string.IsNullOrWhiteSpace(resolvedDataBlob)
+            && !string.Equals(room.DataBlob, resolvedDataBlob, StringComparison.Ordinal))
         {
-            var resolved = await ResolveDataBlobForPresenceAsync(room.RoomId, playerId);
-            if (!string.IsNullOrWhiteSpace(resolved))
-            {
-                log.LogWarning(
-                    "[player-heartbeat] repairing empty presence dataBlob player={PlayerId} room={RoomId} instance={InstanceId} resolved={DataBlob}",
-                    playerId, room.RoomId, room.RoomInstanceId, resolved);
-                room.DataBlob = resolved;
-                presence.SetRoom(playerId, room);
-            }
+            log.LogWarning(
+                "[player-heartbeat] repairing stale presence dataBlob player={PlayerId} room={RoomId} instance={InstanceId} cached={CachedDataBlob} resolved={ResolvedDataBlob}",
+                playerId, room.RoomId, room.RoomInstanceId, room.DataBlob, resolvedDataBlob);
+            room.DataBlob = resolvedDataBlob;
+            presence.SetRoom(playerId, room);
         }
         presence.MarkActive(playerId);
         presence.TouchRoom(playerId);
@@ -389,7 +387,10 @@ public class MatchPlayerController(
         return string.IsNullOrWhiteSpace(cleaned) ? $"Player{ownerPlayerId}_dorm" : $"{cleaned}_dorm";
     }
 
-    private async Task<string> ResolveDataBlobForPresenceAsync(long roomId, int playerId)
+    private async Task<string> ResolveDataBlobForPresenceAsync(
+        long roomId,
+        int playerId,
+        long? roomInstanceId = null)
     {
         var room = await db.Rooms.AsNoTracking().FirstOrDefaultAsync(r => r.Id == roomId);
         if (room is null) return string.Empty;
@@ -401,6 +402,15 @@ public class MatchPlayerController(
                 .Select(d => d.CurrentDataBlobName)
                 .FirstOrDefaultAsync();
             if (!string.IsNullOrWhiteSpace(dormBlob)) return dormBlob;
+        }
+
+        if (roomInstanceId is > 0)
+        {
+            var instanceBlob = await db.PrivateInstances.AsNoTracking()
+                .Where(instance => instance.Id == roomInstanceId && instance.RoomId == roomId)
+                .Select(instance => instance.DataBlob)
+                .FirstOrDefaultAsync();
+            if (!string.IsNullOrWhiteSpace(instanceBlob)) return instanceBlob;
         }
 
         if (!string.IsNullOrWhiteSpace(room.CurrentDataBlobName)) return room.CurrentDataBlobName;
