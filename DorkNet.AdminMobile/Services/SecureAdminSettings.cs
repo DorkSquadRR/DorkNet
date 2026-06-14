@@ -19,11 +19,22 @@ public sealed class SecureAdminSettings
 
     public async Task<AdminConnectionSettings> LoadConnectionAsync()
     {
-        var baseUrl = await SecureStorage.GetAsync(BaseUrlKey) ?? "https://admin.rec.net";
-        var cfId = await SecureStorage.GetAsync(CfClientIdKey) ?? string.Empty;
-        var cfSecret = await SecureStorage.GetAsync(CfClientSecretKey) ?? string.Empty;
-        var cfJwt = await SecureStorage.GetAsync(CfJwtKey) ?? string.Empty;
-        return new AdminConnectionSettings(baseUrl, cfId, cfSecret, cfJwt);
+        try
+        {
+            var baseUrl = await SecureStorage.GetAsync(BaseUrlKey) ?? "https://admin.rec.net";
+            var cfId = await SecureStorage.GetAsync(CfClientIdKey) ?? string.Empty;
+            var cfSecret = await SecureStorage.GetAsync(CfClientSecretKey) ?? string.Empty;
+            var cfJwt = await SecureStorage.GetAsync(CfJwtKey) ?? string.Empty;
+            return new AdminConnectionSettings(baseUrl, cfId, cfSecret, cfJwt);
+        }
+        catch
+        {
+            SecureStorage.Remove(BaseUrlKey);
+            SecureStorage.Remove(CfClientIdKey);
+            SecureStorage.Remove(CfClientSecretKey);
+            SecureStorage.Remove(CfJwtKey);
+            return new AdminConnectionSettings("https://admin.rec.net", string.Empty, string.Empty, string.Empty);
+        }
     }
 
     public async Task SaveConnectionAsync(AdminConnectionSettings settings)

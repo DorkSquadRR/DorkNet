@@ -2415,17 +2415,69 @@ public class RoomsController(
         return Ok(SceneWire(moving));
     }
 
-    /// <summary>POST <c>rooms/{id}/subrooms/{sub}/data</c> — bare-path
-    /// equivalent of <c>api/rooms/v4/saveData</c>. Delegates to the
-    /// existing save logic so the watch's two URL variants land on the
-    /// same persistence path.</summary>
+    /// <summary>POST <c>roomserver/rooms/{id}/subrooms/{sub}/data</c> —
+    /// commit the blob returned by <c>storage/upload</c> as the current
+    /// scene save. The 2020 watch posts this as form-urlencoded
+    /// (<c>filename</c>, <c>inventionUsage</c>, <c>savedByAccountId</c>),
+    /// while some tooling uses JSON. Both variants delegate to the
+    /// existing saveData path so room, scene, dorm-state, presence, and
+    /// subscription fanout stay consistent.</summary>
+    [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/data")]
     [HttpPost("rooms/{roomId:long}/subrooms/{subRoomId:long}/data")]
     [Authorize]
-    public Task<IActionResult> SubRoomData(long roomId, long subRoomId,
-        [FromBody] SaveRoomSceneRequest body)
+    public async Task<IActionResult> SubRoomData(long roomId, long subRoomId)
     {
+        var body = await ReadSaveRoomSceneRequestAsync();
         body.RoomSceneId = subRoomId;
-        return SaveDataCore(body, roomId);
+        return await SaveDataCore(body, roomId);
+    }
+
+    private async Task<SaveRoomSceneRequest> ReadSaveRoomSceneRequestAsync()
+    {
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync();
+            var request = new SaveRoomSceneRequest
+            {
+                Filename = FirstFormValue(form, "filename", "Filename"),
+                RoomDataFilename = FirstFormValue(form, "roomDataFilename", "RoomDataFilename", "roomDataFileName", "RoomDataFileName"),
+                InventionUsageBase64 = FirstFormValue(form, "inventionUsage", "InventionUsage", "inventionUsageBase64", "InventionUsageBase64"),
+            };
+
+            if (long.TryParse(FirstFormValue(form, "requestPlayerId", "RequestPlayerId", "savedByAccountId", "SavedByAccountId"), out var requestPlayerId))
+                request.RequestPlayerId = requestPlayerId;
+            if (int.TryParse(FirstFormValue(form, "saveRequestPlayerId", "SaveRequestPlayerId"), out var saveRequestPlayerId))
+                request.SaveRequestPlayerId = saveRequestPlayerId;
+
+            return request;
+        }
+
+        if (Request.ContentType?.Contains("json", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            try
+            {
+                return await JsonSerializer.DeserializeAsync<SaveRoomSceneRequest>(
+                    Request.Body,
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                    ?? new SaveRoomSceneRequest();
+            }
+            catch (JsonException)
+            {
+                return new SaveRoomSceneRequest();
+            }
+        }
+
+        return new SaveRoomSceneRequest();
+    }
+
+    private static string? FirstFormValue(IFormCollection form, params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            var value = form[key].FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(value)) return value;
+        }
+        return null;
     }
 
     private async Task<IActionResult> MutateScene(long roomId, long subRoomId, Action<RoomSceneEntity> mutator)

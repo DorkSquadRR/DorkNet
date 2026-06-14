@@ -61,6 +61,12 @@ public sealed class AdminApiClient(SecureAdminSettings settings)
     public Task ResetAvatarAsync(long playerId) =>
         SendAsync<object>(HttpMethod.Post, $"players/{playerId}/avatar/reset");
 
+    public Task DeletePlayerAsync(long playerId, string username, string phrase, string? reason) =>
+        SendAsync<object>(
+            HttpMethod.Delete,
+            $"players/{playerId}",
+            new { ConfirmUsername = username, ConfirmPhrase = phrase, Reason = reason });
+
     private async Task<T> SendAsync<T>(
         HttpMethod method,
         string path,

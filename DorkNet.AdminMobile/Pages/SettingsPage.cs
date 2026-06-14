@@ -96,7 +96,7 @@ public sealed class SettingsPage : ContentPage
         }
     }
 
-    private static Grid Row(string label, View control)
+    private static View Row(string label, View control)
     {
         var grid = new Grid
         {

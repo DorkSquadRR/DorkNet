@@ -11,6 +11,7 @@ public sealed class RoomsPage : ContentPage
     private readonly CollectionView rooms = new();
     private readonly CollectionView instances = new();
     private readonly Label status = AppDesign.StatusLabel();
+    private readonly Button refresh = AppDesign.SecondaryButton("Refresh");
     private bool loaded;
 
     public RoomsPage(AdminApiClient api)
@@ -19,18 +20,28 @@ public sealed class RoomsPage : ContentPage
         Title = "Rooms";
         Background = AppDesign.PageBackground;
 
+        rooms.SelectionMode = SelectionMode.None;
+        rooms.ItemSizingStrategy = ItemSizingStrategy.MeasureFirstItem;
+        rooms.EmptyView = EmptyList("No recent rooms");
         rooms.ItemTemplate = new DataTemplate(() =>
         {
             var name = new Label { TextColor = AppDesign.Text, FontAttributes = FontAttributes.Bold, FontSize = 15 };
             name.SetBinding(Label.TextProperty, nameof(RoomSummary.Name));
             var meta = new Label { TextColor = AppDesign.Muted, FontSize = 12 };
             meta.SetBinding(Label.TextProperty, new Binding(nameof(RoomSummary.Id), stringFormat: "Room #{0}"));
-            return AppDesign.GlassCard(new VerticalStackLayout
+            var row = new VerticalStackLayout
             {
+                Padding = new Thickness(12, 9),
+                Spacing = 2,
+                BackgroundColor = AppDesign.RowSurface,
                 Children = { name, meta },
-            }, new Thickness(12, 9));
+            };
+            return new VerticalStackLayout { Spacing = 0, Children = { row, AppDesign.Divider() } };
         });
 
+        instances.SelectionMode = SelectionMode.None;
+        instances.ItemSizingStrategy = ItemSizingStrategy.MeasureFirstItem;
+        instances.EmptyView = EmptyList("No active instances");
         instances.ItemTemplate = new DataTemplate(() =>
         {
             var name = new Label { TextColor = AppDesign.Text, FontAttributes = FontAttributes.Bold, FontSize = 15 };
@@ -39,34 +50,50 @@ public sealed class RoomsPage : ContentPage
             meta.SetBinding(Label.TextProperty, new Binding(nameof(InstanceSummary.PhotonRegionId), stringFormat: "Region {0}"));
             var count = new Label { TextColor = AppDesign.Subtle, FontSize = 12 };
             count.SetBinding(Label.TextProperty, new Binding("Participants.Count", stringFormat: "{0} participants"));
-            return AppDesign.GlassCard(new VerticalStackLayout
+            var row = new VerticalStackLayout
             {
+                Padding = new Thickness(12, 9),
+                Spacing = 2,
+                BackgroundColor = AppDesign.RowSurface,
                 Children = { name, meta, count },
-            }, new Thickness(12, 9));
+            };
+            return new VerticalStackLayout { Spacing = 0, Children = { row, AppDesign.Divider() } };
         });
 
-        var refresh = AppDesign.SecondaryButton("Refresh");
         refresh.Clicked += async (_, _) => await LoadAsync();
 
-        Content = new ScrollView
+        var grid = new Grid
         {
-            Content = new VerticalStackLayout
+            Padding = 16,
+            RowSpacing = 10,
+            RowDefinitions =
             {
-                Padding = 16,
-                Spacing = 14,
-                Children =
-                {
-                    AppDesign.Title("Rooms"),
-                    refresh,
-                    new Label { Text = "Live instances", TextColor = AppDesign.Muted, FontAttributes = FontAttributes.Bold },
-                    instances,
-                    new Label { Text = "Recent rooms", TextColor = AppDesign.Muted, FontAttributes = FontAttributes.Bold },
-                    rooms,
-                    status,
-                },
+                new RowDefinition { Height = GridLength.Auto },
+                new RowDefinition { Height = GridLength.Auto },
+                new RowDefinition { Height = GridLength.Auto },
+                new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
+                new RowDefinition { Height = GridLength.Auto },
+                new RowDefinition { Height = new GridLength(2, GridUnitType.Star) },
+                new RowDefinition { Height = GridLength.Auto },
             },
         };
+        grid.Add(AppDesign.Title("Rooms"), 0, 0);
+        grid.Add(refresh, 0, 1);
+        grid.Add(new Label { Text = "Live instances", TextColor = AppDesign.Muted, FontAttributes = FontAttributes.Bold }, 0, 2);
+        grid.Add(instances, 0, 3);
+        grid.Add(new Label { Text = "Recent rooms", TextColor = AppDesign.Muted, FontAttributes = FontAttributes.Bold }, 0, 4);
+        grid.Add(rooms, 0, 5);
+        grid.Add(status, 0, 6);
+        Content = grid;
     }
+
+    private static Label EmptyList(string text) => new()
+    {
+        Text = text,
+        TextColor = AppDesign.Subtle,
+        HorizontalTextAlignment = TextAlignment.Center,
+        VerticalTextAlignment = TextAlignment.Center,
+    };
 
     protected override async void OnAppearing()
     {
@@ -82,6 +109,7 @@ public sealed class RoomsPage : ContentPage
     {
         try
         {
+            refresh.IsEnabled = false;
             status.Text = "Loading...";
             var instanceRows = await api.GetInstancesAsync();
             var roomRows = await api.GetRoomsAsync();
@@ -92,6 +120,10 @@ public sealed class RoomsPage : ContentPage
         catch (Exception ex)
         {
             status.Text = ex.Message;
+        }
+        finally
+        {
+            refresh.IsEnabled = true;
         }
     }
 }

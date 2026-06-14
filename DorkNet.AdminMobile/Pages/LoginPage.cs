@@ -43,6 +43,13 @@ public sealed class LoginPage : ContentPage
                 Spacing = 14,
                 Children =
                 {
+                    new Image
+                    {
+                        Source = "dorknet.svg",
+                        WidthRequest = 96,
+                        HeightRequest = 96,
+                        HorizontalOptions = LayoutOptions.Start,
+                    },
                     AppDesign.Title("Admin mobile"),
                     new Label
                     {
@@ -86,11 +93,19 @@ public sealed class LoginPage : ContentPage
         base.OnAppearing();
         if (loaded) return;
         loaded = true;
-        var saved = await settings.LoadConnectionAsync();
-        baseUrl.Text = saved.BaseUrl;
-        cfClientId.Text = saved.CloudflareAccessClientId;
-        cfClientSecret.Text = saved.CloudflareAccessClientSecret;
-        cfJwt.Text = saved.CloudflareAccessJwt;
+        try
+        {
+            var saved = await settings.LoadConnectionAsync();
+            baseUrl.Text = saved.BaseUrl;
+            cfClientId.Text = saved.CloudflareAccessClientId;
+            cfClientSecret.Text = saved.CloudflareAccessClientSecret;
+            cfJwt.Text = saved.CloudflareAccessJwt;
+        }
+        catch (Exception ex)
+        {
+            baseUrl.Text = "https://admin.rec.net";
+            status.Text = $"Secure storage was reset: {ex.Message}";
+        }
     }
 
     private async void OnLogin(object? sender, EventArgs e)
