@@ -897,12 +897,7 @@ public class RoomsController(
         // owner's DormStateEntity blob so they load the same room state.
         if (room.IsDormRoom)
         {
-            var dormBlobName = await db.DormStates
-                .Where(d => d.PlayerId == room.CreatorPlayerId)
-                .Select(d => d.CurrentDataBlobName)
-                .FirstOrDefaultAsync()
-                ?? string.Empty;
-            room = CloneWithCreator(room, room.CreatorPlayerId, dormBlobName);
+            room = await ShapeDormRoomAsync(room);
         }
 
         var scenes = await db.RoomScenes
@@ -939,15 +934,9 @@ public class RoomsController(
         room ??= Synthetic(roomName);
         if (room.IsDormRoom)
         {
-            var dormBlobName = await db.DormStates
-                .Where(d => d.PlayerId == room.CreatorPlayerId)
-                .Select(d => d.CurrentDataBlobName)
-                .FirstOrDefaultAsync()
-                ?? string.Empty;
             // Stamp the wire Name with the requested name so the watch's
             // name-keyed room cache (OJMCBOKJFOF.NHBPIIGDAJP) can find it.
-            room = CloneWithCreator(room, room.CreatorPlayerId, dormBlobName,
-                overrideName: DormNameOverride(roomName));
+            room = await ShapeDormRoomAsync(room, DormNameOverride(roomName));
         }
 
         var scenes = await db.RoomScenes
@@ -997,15 +986,9 @@ public class RoomsController(
             room ??= Synthetic(name);
             if (room.IsDormRoom)
             {
-                var dormBlobName = await db.DormStates
-                    .Where(d => d.PlayerId == room.CreatorPlayerId)
-                    .Select(d => d.CurrentDataBlobName)
-                    .FirstOrDefaultAsync()
-                    ?? string.Empty;
                 // Stamp the wire Name with the requested name so the watch's
                 // name-keyed room cache (OJMCBOKJFOF.NHBPIIGDAJP) finds it.
-                room = CloneWithCreator(room, room.CreatorPlayerId, dormBlobName,
-                    overrideName: DormNameOverride(name));
+                room = await ShapeDormRoomAsync(room, DormNameOverride(name));
             }
 
             var scenes = await db.RoomScenes
@@ -1028,12 +1011,7 @@ public class RoomsController(
 
             if (room.IsDormRoom)
             {
-                var dormBlobName = await db.DormStates
-                    .Where(d => d.PlayerId == room.CreatorPlayerId)
-                    .Select(d => d.CurrentDataBlobName)
-                    .FirstOrDefaultAsync()
-                    ?? string.Empty;
-                room = CloneWithCreator(room, room.CreatorPlayerId, dormBlobName);
+                room = await ShapeDormRoomAsync(room);
             }
 
             var scenes = await db.RoomScenes
@@ -1064,6 +1042,13 @@ public class RoomsController(
         requestedName.Equals("DormRoom", StringComparison.OrdinalIgnoreCase)
             ? requestedName
             : null;
+
+    private async Task<RoomEntity> ShapeDormRoomAsync(RoomEntity room, string? overrideName = null)
+    {
+        var dormBlobName = await rooms.ResolveDormDataBlobNameAsync(room.CreatorPlayerId, room.Id);
+        var dormName = overrideName ?? await rooms.BuildPersonalDormDisplayNameAsync(room.CreatorPlayerId);
+        return CloneWithCreator(room, room.CreatorPlayerId, dormBlobName, dormName);
+    }
 
     public static RoomEntity CloneWithCreator(
         RoomEntity src, long creatorId, string? overrideBlobName = null,
@@ -1165,11 +1150,13 @@ public class RoomsController(
         // no DeserializeRoomDataBlobCoroutine, the master init
         // proceeds with default-zero permissions.
         //
-        //   • Dorm / customisable rooms: DataBlobName is either the
+        //   • Saved dorm / customisable rooms: DataBlobName is the
         //     latest uploaded blob name (RoomEntity.CurrentDataBlobName,
-        //     written by StorageController on /upload) or, before any
-        //     save, "room_<id>_v1.dat" — which the catch-all serves
-        //     from RoomDataBlobService (the all-perms default blob).
+        //     written by StorageController on /upload). Unsaved dorms
+        //     deliberately use "" so the baked DormRoom scene loads
+        //     without deserializing the synthetic all-perms blob. The
+        //     role-only default blob made December wait forever on
+        //     StandaloneShapeContainer big-data during first-dorm entry.
         //   • AG-Original rooms: DataBlobName="" → completed-promise
         //     short-circuit → no download → no leaked stale-blob
         //     behaviour → master flow proceeds → spawn fires. Maker
@@ -1187,6 +1174,7 @@ public class RoomsController(
         var customisable = room.IsDormRoom || room.CreatorPlayerId != 1 || editableRro;
         var dataBlobName = !string.IsNullOrEmpty(room.CurrentDataBlobName)
             ? room.CurrentDataBlobName
+            : room.IsDormRoom ? ""
             : customisable ? $"room_{room.Id}_v1.dat" : "";
 
         // Multi-scene rooms (imported via tools/import-room.ps1) carry one
@@ -1209,6 +1197,7 @@ public class RoomsController(
                     DataBlobName = !string.IsNullOrWhiteSpace(overrideDataBlobName) &&
                         (overrideSceneId == s.OrderIndex || sceneRows.Count == 1)
                         ? overrideDataBlobName
+                        : room.IsDormRoom ? dataBlobName
                         : s.DataBlobName,
                     MaxPlayers = s.MaxPlayers,
                     CanMatchmakeInto = s.CanMatchmakeInto,
@@ -1303,6 +1292,7 @@ public class RoomsController(
         var customisable = room.IsDormRoom || room.CreatorPlayerId != 1 || editableRro;
         var dataBlobName = !string.IsNullOrEmpty(room.CurrentDataBlobName)
             ? room.CurrentDataBlobName
+            : room.IsDormRoom ? ""
             : customisable ? $"room_{room.Id}_v1.dat" : "";
         var updatedAt = (room.UpdatedAt == default ? DateTime.UtcNow : room.UpdatedAt)
             .ToString("yyyy-MM-ddTHH:mm:ssZ");
@@ -1315,6 +1305,7 @@ public class RoomsController(
                 Name = s.Name,
                 DataBlob = !string.IsNullOrWhiteSpace(overrideDataBlobName) && sceneRows.Count == 1
                     ? overrideDataBlobName
+                    : room.IsDormRoom ? dataBlobName
                     : s.DataBlobName,
                 DataSavedAt = (s.DataModifiedAt == default ? DateTime.UtcNow : s.DataModifiedAt)
                     .ToString("yyyy-MM-ddTHH:mm:ssZ"),

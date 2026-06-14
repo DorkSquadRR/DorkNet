@@ -397,10 +397,7 @@ public class MatchPlayerController(
 
         if (room.IsDormRoom)
         {
-            var dormBlob = await db.DormStates.AsNoTracking()
-                .Where(d => d.PlayerId == playerId)
-                .Select(d => d.CurrentDataBlobName)
-                .FirstOrDefaultAsync();
+            var dormBlob = await rooms.ResolveDormDataBlobNameAsync(playerId, room.Id);
             if (!string.IsNullOrWhiteSpace(dormBlob)) return dormBlob;
         }
 
@@ -415,7 +412,9 @@ public class MatchPlayerController(
 
         if (!string.IsNullOrWhiteSpace(room.CurrentDataBlobName)) return room.CurrentDataBlobName;
 
-        var customisable = room.IsDormRoom || room.CreatorPlayerId != 1;
+        if (room.IsDormRoom) return string.Empty;
+
+        var customisable = room.CreatorPlayerId != 1;
         return customisable ? $"room_{room.Id}_v1.dat" : string.Empty;
     }
 }
