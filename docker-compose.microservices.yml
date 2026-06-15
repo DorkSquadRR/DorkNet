@@ -8,6 +8,12 @@ x-dorknet-service-env: &dorknet-service-env
   S3__AccessKey: ${DORKNET_S3_ACCESS_KEY:-}
   S3__SecretKey: ${DORKNET_S3_SECRET_KEY:-}
   S3__Region: ${DORKNET_S3_REGION:-garage}
+  Photon__AppId: ${Photon__AppId:-}
+  Photon__VoiceAppId: ${Photon__VoiceAppId:-}
+  Photon__CloudRegion: ${Photon__CloudRegion:-eu}
+  DorkNet__DefaultClientVersion: ${DORKNET_DEFAULT_CLIENT_VERSION:-december_2020_12_18}
+  DorkNet__SupportedVersions__0: ${DORKNET_SUPPORTED_VERSION:-december_2020_12_18}
+  DorkNet__BuildIdToVersionKey__20201210: ${DORKNET_DECEMBER_BUILD_VERSION_KEY:-december_2020_12_18}
 
 services:
   gateway:

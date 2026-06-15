@@ -53,6 +53,9 @@ S3__Region=garage
 Photon__AppId=your-photon-realtime-app-id
 Photon__VoiceAppId=your-photon-voice-app-id
 Photon__CloudRegion=eu
+DORKNET_DEFAULT_CLIENT_VERSION=december_2020_12_18
+DORKNET_SUPPORTED_VERSION=december_2020_12_18
+DORKNET_DECEMBER_BUILD_VERSION_KEY=december_2020_12_18
 ```
 
 If Postgres and Redis are Dokploy-managed services in the same project,
@@ -163,6 +166,9 @@ DORKNET_DOMAIN=yourdomain.com
 DORKNET_JWT_SECRET=replace-with-at-least-64-random-characters
 POSTGRES_PASSWORD=replace-with-a-random-db-password
 CLOUDFLARE_TUNNEL_TOKEN=<token from Cloudflare Zero Trust tunnel>
+Photon__AppId=your-photon-realtime-app-id
+Photon__VoiceAppId=your-photon-voice-app-id
+Photon__CloudRegion=eu
 ```
 
 By default the service containers connect to the bundled compose
@@ -280,6 +286,24 @@ S3__TimeoutSeconds=300
 
 For the microservices compose file, use the `DORKNET_S3_*` equivalents;
 Compose maps them into `S3__*` for the service containers.
+
+The microservices compose files also map `Photon__AppId`,
+`Photon__VoiceAppId`, and `Photon__CloudRegion` into every backend
+service. Missing or wrong Photon values show up in the 2020 client as
+NameServer/region connection failures after the boot version check.
+
+They also map the December 2020 build ID into the version gate. A quick
+check for the 2020 client should return `{"VersionStatus":0}`:
+
+```bash
+curl https://api.yourdomain.com/api/versioncheck/v4?v=20201210
+```
+
+If `admin.<domain>` or `feed.<domain>` returns the NameServer JSON
+instead of the static site, verify the `web` container contains
+`/app/wwwroot/admin/index.html` and `/app/wwwroot/feed/index.html`.
+Those hosts should resolve through the gateway to the `web` service, not
+the `ns` service or monolith fallback.
 
 ---
 

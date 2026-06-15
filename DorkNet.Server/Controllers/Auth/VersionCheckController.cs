@@ -46,6 +46,12 @@ public class VersionCheckController(
     private const int VersionStatus_ValidForMenu = 1;
     private const int VersionStatus_UpdateRequired = 2;
 
+    private static readonly IReadOnlyDictionary<string, string> BuiltInBuildIdToVersionKey =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["20201210"] = "december_2020_12_18",
+        };
+
     [HttpGet("/api/versioncheck/v4")]
     [HttpGet("/api/versioncheck/v3")]
     [HttpGet("/api/versioncheck/v2")]
@@ -66,9 +72,17 @@ public class VersionCheckController(
         //     }
         // Mapping ABSENT → unknown build → UpdateRequired.
         var mapSection = config.GetSection("DorkNet:BuildIdToVersionKey");
-        string? versionKey = !string.IsNullOrWhiteSpace(buildId)
-            ? mapSection[buildId]
-            : null;
+        string? versionKey = null;
+        if (!string.IsNullOrWhiteSpace(buildId))
+        {
+            var normalizedBuildId = buildId.Trim();
+            versionKey = mapSection[normalizedBuildId];
+            if (string.IsNullOrWhiteSpace(versionKey)
+                && BuiltInBuildIdToVersionKey.TryGetValue(normalizedBuildId, out var builtInVersionKey))
+            {
+                versionKey = builtInVersionKey;
+            }
+        }
 
         bool allowed = versionKey is not null && registry.IsSupported(versionKey);
         var status = allowed ? VersionStatus_ValidForPlay : VersionStatus_UpdateRequired;
