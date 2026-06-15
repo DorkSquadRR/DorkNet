@@ -16,11 +16,9 @@ export function Home() {
 
   return (
     <div className="space-y-10">
-      <section className="card !p-6 sm:!p-10 relative overflow-hidden">
-        <div className="absolute -top-20 -right-24 size-72 rounded-full bg-brand-500/20 blur-3xl pointer-events-none" />
-        <div className="absolute -bottom-20 -left-24 size-72 rounded-full bg-brand-700/20 blur-3xl pointer-events-none" />
+      <section className="card !p-6 sm:!p-10 relative overflow-hidden border-brand-500/20 bg-[linear-gradient(135deg,rgba(11,149,199,0.16),rgba(19,20,24,0.72)_42%,rgba(19,20,24,0.92))]">
         <div className="relative max-w-2xl">
-          <h1 className="text-3xl sm:text-5xl font-bold text-ink-50 tracking-tight">
+          <h1 className="text-3xl sm:text-5xl font-bold text-ink-50">
             Rec Room, kept alive.
           </h1>
           <p className="mt-3 text-ink-300 text-base sm:text-lg">
