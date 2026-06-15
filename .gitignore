@@ -48,6 +48,7 @@ dist$ZIPNAME.zip
 ## time someone rebuilds. Keep the source committed, regenerate output.
 DorkNet.Server/wwwroot/admin/index.html
 DorkNet.Server/wwwroot/admin/assets/
+DorkNet.Server/wwwroot/admin/brand/
 DorkNet.Server/wwwroot/admin/*.map
 DorkNet.Server/admin-ui/node_modules/
 DorkNet.Server/admin-ui/dist/
@@ -58,6 +59,7 @@ DorkNet.Server/admin-ui/tsconfig.tsbuildinfo
 ## Same reasoning as admin-ui above: hashed output, regenerate per build.
 DorkNet.Server/wwwroot/site/index.html
 DorkNet.Server/wwwroot/site/assets/
+DorkNet.Server/wwwroot/site/brand/
 DorkNet.Server/wwwroot/site/*.map
 DorkNet.Server/site/node_modules/
 DorkNet.Server/site/dist/

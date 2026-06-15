@@ -1,5 +1,6 @@
 import { NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useEffect, useRef, useState } from 'react';
+import { BrandMark } from './BrandMark';
 
 const NAV = [
   { to: '/', label: 'Home', exact: true },
@@ -30,8 +31,8 @@ export function Header() {
     <header className="sticky top-0 z-40 border-b border-ink-800 bg-ink-950/85 backdrop-blur">
       <div className="mx-auto max-w-6xl flex items-center gap-4 px-4 sm:px-6 py-3">
         <Link to="/" className="flex items-center gap-2 shrink-0">
-          <span className="inline-block size-6 rounded-md bg-gradient-to-br from-brand-400 to-brand-700 shadow-inner" />
-          <span className="font-semibold text-ink-50 tracking-tight">DorkNet</span>
+          <BrandMark className="size-7" />
+          <span className="font-semibold text-ink-50">DorkNet</span>
         </Link>
 
         <nav className="hidden md:flex items-center gap-1 ml-2">

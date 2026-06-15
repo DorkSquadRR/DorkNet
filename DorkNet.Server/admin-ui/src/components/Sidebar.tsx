@@ -4,6 +4,7 @@ import {
   LayoutDashboard, Users, Building2, Activity,
   Megaphone, MessageSquare, Settings, X,
 } from './Icons';
+import { BrandMark } from './BrandMark';
 
 // Consolidated navigation. Per-player moderation (bans, grants, gifts,
 // password resets) lives in the player detail modal; the old Bans /
@@ -67,9 +68,9 @@ export function Sidebar({ open, onClose, onNavigate }: { open: boolean; onClose:
     <>
       <div className="px-2 pb-4 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <div className="size-8 rounded-md bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center font-bold text-white">D</div>
+          <BrandMark className="size-9" />
           <div>
-            <div className="text-sm font-semibold tracking-tight text-ink-50">DorkNet</div>
+            <div className="text-sm font-semibold text-ink-50">DorkNet</div>
             <div className="text-[10px] uppercase tracking-widest text-ink-400">admin</div>
           </div>
         </div>
