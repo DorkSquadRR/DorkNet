@@ -23,7 +23,7 @@ public class AuthAccountController(DorkNetDbContext db) : ControllerBase
     /// <c>ExpectPrimitiveResponse&lt;bool&gt;</c> so the body must be
     /// the literal JSON <c>true</c> or <c>false</c>.</summary>
     [HttpGet("/account/me/haspassword")]
-    [HttpGet("/api/platformlogin/haspassword")]
+    [HttpGet("/api/platformlogin/haspassword", Order = 10)]
     [Authorize]
     public async Task<IActionResult> HasPassword()
     {
@@ -40,8 +40,8 @@ public class AuthAccountController(DorkNetDbContext db) : ControllerBase
     /// one; first-time creation skips that check. Form-encoded body.</summary>
     [HttpPost("/account/me/changepassword")]
     [HttpPost("/account/me/createpassword")]
-    [HttpPost("/api/platformlogin/password")]
-    [HttpPut("/api/platformlogin/password")]
+    [HttpPost("/api/platformlogin/password", Order = 10)]
+    [HttpPut("/api/platformlogin/password", Order = 10)]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
     [Authorize]
     public async Task<IActionResult> ChangePassword(
@@ -76,7 +76,7 @@ public class AuthAccountController(DorkNetDbContext db) : ControllerBase
     /// account from the admin tab and the user re-creates it via
     /// changepassword on next login. Anonymous calls 401.</summary>
     [HttpPost("/account/me/resetpassword")]
-    [HttpPost("/api/platformlogin/resetpassword")]
+    [HttpPost("/api/platformlogin/resetpassword", Order = 10)]
     [Authorize]
     [AdminOnly]
     public async Task<IActionResult> AdminResetPassword(
