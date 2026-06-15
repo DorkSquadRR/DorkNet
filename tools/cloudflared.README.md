@@ -3,7 +3,9 @@
 Cloudflare Tunnel is used in two DorkNet workflows:
 
 - Local standalone testing, where cloudflared forwards `*.localhost`
-  traffic to a locally running `DorkNet.Server`.
+  traffic to a locally running `DorkNet.Server`. The default origin is
+  `http://localhost:8080`; use local HTTPS only when you intentionally
+  run the standalone server with a wildcard dev certificate.
 - Dokploy production microservices, where the compose sidecar forwards
   the apex and wildcard hostnames to `http://gateway:8080`.
 
@@ -26,10 +28,9 @@ friends to reach it through Cloudflare.
 1. **`localhost` is on a Cloudflare account you control.** The DNS
    nameservers for the domain need to be Cloudflare's. Check at
    <https://dash.cloudflare.com/> — the zone should be Active.
-2. **Local standalone server running** on `0.0.0.0:443` with the wildcard cert
-   that covers `*.localhost` (re-run `tools/patch-client.ps1` if your
-   cert is still the `+1` rec.net-only one — it'll regenerate as
-   `+3` covering both domains).
+2. **Local standalone server running.** The current quickstart listens
+   on `http://localhost:8080`. Older local TLS setups can still run on
+   `0.0.0.0:443` with a wildcard certificate that covers `*.localhost`.
 3. **Patched client** with `tools/patch-domain.ps1` so the in-game
    URLs resolve to `*.localhost`. (Players using the public deployment
    need to run this on their own client too.)
@@ -97,7 +98,7 @@ visitor -> https://api.localhost/api/versioncheck/v4
         -> Cloudflare edge
         -> cloudflared tunnel
         -> cloudflared running on your machine
-        -> https://localhost:443  (Host preserved)
+        -> http://localhost:8080  (Host preserved)
         -> DorkNet.Server
 ```
 
@@ -112,12 +113,14 @@ visitor -> https://api.yourdomain.com/api/versioncheck/v4
         -> dedicated service slice or monolith fallback
 ```
 
-For the local standalone template, the leg from cloudflared to localhost
-has `noTLSVerify: true` because the local server's cert is from mkcert
-(private CA only trusted on your machine). The Cloudflare-edge to
-cloudflared leg is still TLS-encrypted with Cloudflare's cert. In the
-Dokploy microservices stack, the tunnel sidecar uses plain HTTP on the
-private Compose network and sends everything to the gateway.
+For default local testing, point the local cloudflared origin at
+`http://localhost:8080`. If you intentionally test a local HTTPS origin,
+the leg from cloudflared to localhost can use `noTLSVerify: true`
+because that certificate is usually from a private dev CA. The
+Cloudflare-edge to cloudflared leg is still TLS-encrypted with
+Cloudflare's cert. In the Dokploy microservices stack, the tunnel
+sidecar uses plain HTTP on the private Compose network and sends
+everything to the gateway.
 
 ## Tearing down
 

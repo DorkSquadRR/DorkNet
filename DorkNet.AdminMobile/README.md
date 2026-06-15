@@ -4,8 +4,13 @@ Native Android/iOS admin app for DorkNet, built with .NET MAUI.
 
 In the microservices deployment, point the app at the public admin host
 for the stack, usually `https://admin.<domain>`. Cloudflare and
-`DorkNet.Gateway` keep the public URL stable while admin API requests are
-routed to the owning backend slice.
+`DorkNet.Gateway` keep the public URL stable. Requests made through the
+admin host are handled by the `web` service's same-origin admin route;
+the `/api/admin/*` path family is also exposed by the moderation slice
+for non-admin-host routing.
+
+The browser admin page, route map, and troubleshooting flow are
+documented in [`../docs/admin.md`](../docs/admin.md).
 
 ## Authentication
 
