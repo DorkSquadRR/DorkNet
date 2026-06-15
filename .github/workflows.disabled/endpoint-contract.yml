@@ -1,0 +1,78 @@
+# Disabled template. GitHub ignores files outside .github/workflows/.
+# Move this file to .github/workflows/endpoint-contract.yml when it should run.
+name: Endpoint Contract
+
+on:
+  workflow_dispatch:
+
+jobs:
+  endpoint-contract:
+    runs-on: ubuntu-latest
+
+    env:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://127.0.0.1:18080
+      Database__Provider: sqlite
+      Database__SqlitePath: ${{ runner.temp }}/dorknet-endpoint-contract.db
+      DORKNET_JWT_SECRET: endpoint-contract-secret-000000000000000000000000000000000000000000
+      S3__Endpoint: ""
+      S3__AccessKey: ""
+      S3__SecretKey: ""
+      PROTOBUF_PROTOC: /usr/bin/protoc
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Install protobuf compiler
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler
+
+      - name: Build server
+        run: dotnet build DorkNet.Server/DorkNet.Server.csproj
+
+      - name: Build endpoint contract runner
+        run: dotnet build tools/DorkNet.EndpointContract/DorkNet.EndpointContract.csproj --no-restore
+
+      - name: Start server
+        run: |
+          dotnet DorkNet.Server/bin/Debug/net9.0/DorkNet.Server.dll > "$RUNNER_TEMP/dorknet-server.log" 2>&1 &
+          echo "$!" > "$RUNNER_TEMP/dorknet-server.pid"
+
+      - name: Wait for server readiness
+        run: |
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:18080/healthz; then
+              exit 0
+            fi
+            sleep 2
+          done
+          cat "$RUNNER_TEMP/dorknet-server.log"
+          exit 1
+
+      - name: Run endpoint contract
+        run: |
+          dotnet run --project tools/DorkNet.EndpointContract/DorkNet.EndpointContract.csproj --no-build -- \
+            --server-assembly DorkNet.Server/bin/Debug/net9.0/DorkNet.Server.dll \
+            --base-url http://127.0.0.1:18080 \
+            --report "$RUNNER_TEMP/endpoint-contract-report.json"
+
+      - name: Upload endpoint contract artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: endpoint-contract
+          path: |
+            ${{ runner.temp }}/endpoint-contract-report.json
+            ${{ runner.temp }}/dorknet-server.log
+
+      - name: Stop server
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/dorknet-server.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/dorknet-server.pid")" || true
+          fi
