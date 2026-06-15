@@ -10,6 +10,25 @@ modified game files anywhere.
 DorkNet's authors don't ship Rec Room IP and don't help users obtain it.
 See [DISCLAIMER.md](../DISCLAIMER.md) for the full position.
 
+### Do I need to disable my antivirus?
+
+No, and you shouldn't have to. A lot of closed-source private-server tools
+ask you to turn your antivirus off or add exclusions before running them.
+That's usually because they ship obfuscated or packed binaries — code
+that's been deliberately scrambled so you can't see what it does, which
+also happens to trip antivirus heuristics. You're being asked to lower
+your guard for something you can't inspect.
+
+DorkNet is the opposite. Everything is open source and nothing is
+obfuscated — the server, the launcher, and the patcher are all right here
+in the repo for anyone to read, and you can build them yourself instead of
+trusting our prebuilt releases. There's nothing hidden for a scanner to
+choke on, so there's no reason to weaken your protection to run it.
+
+If a release binary ever does get flagged, that's a false positive on an
+unsigned indie executable, not malware — and you always have the option to
+build from source and verify it yourself.
+
 ### Will Rec Room Inc. shut this down?
 
 Possibly. Fan-server projects exist in a grey zone. AGPL doesn't shield
