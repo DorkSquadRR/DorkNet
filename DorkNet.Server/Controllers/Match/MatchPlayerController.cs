@@ -223,9 +223,12 @@ public class MatchPlayerController(
         var playerId = TryGetCurrentPlayerId();
         if (playerId == 0) return Ok();
 
-        var form = Request.Form;
-        var regions = form["region"].ToArray();
-        var pings = form["ping"].ToArray();
+        var regions = Request.HasFormContentType
+            ? Request.Form["region"].ToArray()
+            : Request.Query["region"].ToArray();
+        var pings = Request.HasFormContentType
+            ? Request.Form["ping"].ToArray()
+            : Request.Query["ping"].ToArray();
         var pairs = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         for (var i = 0; i < Math.Min(regions.Length, pings.Length); i++)
         {

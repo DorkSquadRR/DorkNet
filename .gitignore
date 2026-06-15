@@ -21,7 +21,7 @@ tmp/
 ## OS
 .DS_Store
 Thumbs.db
-
+.backups
 ## Reverse-engineered artifacts (Il2CppDumper / Cpp2IL output, not for commit)
 dump.cs
 il2cpp.h

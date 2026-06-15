@@ -23,7 +23,7 @@ main also auto-detects your install.
 | **Version key** (sent as `X-DorkNet-Version` header) | `december_2020_12_18` |
 | **Version plugin** | `DorkNet.Server/Versions/Late2020/Late2020VersionPlugin.cs` |
 | **Schema** | One EF `Initial` migration; SQLite + Postgres both work |
-| **Runtime topology** | Full API still runs from `DorkNet.Server`; microservice gateway/service hosts are scaffolded for incremental split |
+| **Runtime topology** | Standalone `DorkNet.Server`, plus gateway-fronted service slices with monolith fallback |
 | **Diverges from `march-2020-03-10` by** | ~170 files |
 
 Subsystems present on this branch that the March branch doesn't have:
@@ -84,7 +84,7 @@ categories / playlists, and starts listening. You should see
 `Application started.` in the log; `curl http://localhost:8080/healthz`
 returns 200.
 
-For Docker, Dokploy, and microservices-scaffold deploy notes, see
+For Docker, Dokploy, and microservices deploy notes, see
 [docs/deploy.md](docs/deploy.md).
 
 ---
@@ -201,10 +201,10 @@ Default `0` (off).
 |---|---|
 | `DorkNet.Server/` | ASP.NET Core backend (controllers, services, data, hubs, middleware) |
 | `DorkNet.Models/` | DTOs shared between server and client mod |
-| `DorkNet.Contracts/` | Shared service names, service-map options, and health/probe contracts |
-| `DorkNet.ServiceDefaults/` | Shared microservice health, JSON, HTTP client, and service identity setup |
-| `DorkNet.Gateway/` | Edge/gateway host scaffold with service-map and service-health endpoints |
-| `DorkNet.Services.*` | Initial identity, rooms, and notify service host scaffolds |
+| `DorkNet.Contracts/` | Shared service names, route ownership, service-map options, and health/probe contracts |
+| `DorkNet.ServiceDefaults/` | Shared service health, JSON, HTTP client, service identity, and route-guard setup |
+| `DorkNet.Gateway/` | Edge reverse proxy with service-map, route-table, and service-health endpoints |
+| `DorkNet.Services.*` | Gateway-fronted service hosts for identity, rooms, notify, content, social, commerce, platform, moderation, and web |
 | `DorkNet.ClientMod/` | MelonLoader IL2CPP mod — the client patcher |
 | `tools/` | Installers (`install-melon.ps1`, `install-legacy-client.ps1`, `remove-eac.ps1`), Cloudflare tunnel templates |
 | `Dockerfile`, `Dockerfile.service`, `docker-compose.microservices*.yml` | Full-server, local microservices, and Dokploy microservices deployment entrypoints |
@@ -213,16 +213,19 @@ See [docs/architecture.md](docs/architecture.md) for the full mental
 model (project layout, request lifecycle, watch-mirror controller
 pattern, where to start contributing).
 
-### Microservices scaffold
+### Microservices
 
-`docker-compose.microservices.yml` starts the new gateway, identity,
-rooms, and notify service hosts plus Compose-managed Postgres and Redis
+`docker-compose.microservices.yml` starts the gateway, identity, rooms,
+notify, content, social, commerce, platform, moderation, web, and
+monolith fallback service hosts plus Compose-managed Postgres and Redis
 for local testing. `docker-compose.microservices.dokploy.yml` is the
 Dokploy version; it adds a `cloudflared` sidecar so Cloudflare Tunnel
-can route the apex and wildcard hostnames to the gateway without
-Dokploy domain rows. These files do **not** replace the full
-`DorkNet.Server` runtime yet; the public API is still served by the
-monolith while domains are peeled into services incrementally.
+can route the apex and wildcard hostnames to the gateway without Dokploy
+domain rows.
+
+The gateway routes owned host/path slices to the dedicated service hosts.
+The monolith fallback is still present for unknown route families, so
+public client URLs remain stable while the split continues.
 
 The compose file intentionally does not start object storage. Point it at
 your separate S3-compatible instance:

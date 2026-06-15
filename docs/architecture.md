@@ -18,10 +18,16 @@ DorkNet.sln
 ├── DorkNet.Models             Shared DTO + serialization types
 ├── DorkNet.Contracts          Shared service contracts for the service split
 ├── DorkNet.ServiceDefaults    Shared service-host setup
-├── DorkNet.Gateway            Gateway/edge host scaffold
-├── DorkNet.Services.Identity  Identity service scaffold
-├── DorkNet.Services.Rooms     Rooms service scaffold
-├── DorkNet.Services.Notify    Notify service scaffold
+├── DorkNet.Gateway            Gateway/edge reverse proxy
+├── DorkNet.Services.Identity  Auth/accounts service host
+├── DorkNet.Services.Rooms     Rooms/matchmaking service host
+├── DorkNet.Services.Notify    Notify/chat service host
+├── DorkNet.Services.Content   CDN/images/photos/storage service host
+├── DorkNet.Services.Social    Clubs/groups/events/social service host
+├── DorkNet.Services.Commerce  Store/econ/inventory service host
+├── DorkNet.Services.Platform  Service directory/config/platform service host
+├── DorkNet.Services.Moderation Bug reporting/moderation service host
+├── DorkNet.Services.Web       Public/admin/feed web host
 └── DorkNet.ClientMod          MelonLoader 6 IL2CPP mod — the client patcher
 ```
 
@@ -29,12 +35,18 @@ DorkNet.sln
 |---|---|---|
 | `DorkNet.Server` | REST API, SignalR hub, admin SPA host, static-site host, image CDN, matchmaking, persistence | .NET 9 |
 | `DorkNet.Models` | DTOs the wire protocol speaks. No project dependencies. | .NET 9 |
-| `DorkNet.Contracts` | Service names, service-map options, health responses, probe responses | .NET 9 |
-| `DorkNet.ServiceDefaults` | Common microservice health checks, JSON defaults, HTTP clients, service identity | .NET 9 |
-| `DorkNet.Gateway` | Edge/gateway scaffold; exposes internal service map and service health probes | .NET 9 |
-| `DorkNet.Services.Identity` | Future home for accounts, auth, platform login, JWT issuance | .NET 9 |
-| `DorkNet.Services.Rooms` | Future home for rooms, room keys, matchmaking, discovery | .NET 9 |
-| `DorkNet.Services.Notify` | Future home for SignalR edge, notification fan-out, presence, request logs | .NET 9 |
+| `DorkNet.Contracts` | Service names, route ownership, service-map options, health responses, probe responses | .NET 9 |
+| `DorkNet.ServiceDefaults` | Common service health checks, JSON defaults, HTTP clients, service identity, route guard | .NET 9 |
+| `DorkNet.Gateway` | Edge reverse proxy; routes host/path slices to services and exposes service health probes | .NET 9 |
+| `DorkNet.Services.Identity` | Accounts, auth, platform login, JWT issuance route slice | .NET 9 |
+| `DorkNet.Services.Rooms` | Rooms, room keys, matchmaking, discovery route slice | .NET 9 |
+| `DorkNet.Services.Notify` | SignalR edge, messages/chat, notification fan-out route slice | .NET 9 |
+| `DorkNet.Services.Content` | CDN paths, image/photo APIs, uploads, S3-backed blobs | .NET 9 |
+| `DorkNet.Services.Social` | Clubs, groups, announcements, player events, subscriptions | .NET 9 |
+| `DorkNet.Services.Commerce` | Catalog, storefronts, econ, inventory, inventions | .NET 9 |
+| `DorkNet.Services.Platform` | Service URLs, config, version checks, geo, strings, telemetry-style surfaces | .NET 9 |
+| `DorkNet.Services.Moderation` | Bug reporting, player reporting, sanitize, admin API, testcase routes | .NET 9 |
+| `DorkNet.Services.Web` | Public site, admin static host, feed static host, site API | .NET 9 |
 | `DorkNet.ClientMod` | MelonLoader 0.6.x IL2CPP mod — the client patcher, JSON config | .NET 6 |
 
 `ClientMod` applies the client-side patches needed to point the 2020
@@ -66,31 +78,42 @@ DorkNet.Server/
 
 ## Runtime topology
 
-`DorkNet.Server` is still the only production-complete runtime. It owns
-the full public Rec Room-compatible HTTP surface, SignalR hub, static
-hosts, database bootstrap, Redis-backed ephemeral state, and S3-backed
-blob storage.
+`DorkNet.Server` remains the compatibility fallback and full standalone
+runtime. It can still run by itself, serving the full public
+Rec Room-compatible HTTP surface, SignalR hub, static hosts, database
+bootstrap, Redis-backed ephemeral state, and S3-backed blob storage.
 
-The microservice projects are the migration scaffold. They are wired into
-the solution and Docker Compose, but they only expose internal health and
-capability endpoints today:
+The microservice shape is a gateway-fronted split:
+
+- `DorkNet.Gateway` reverse-proxies public requests by host/path.
+- `DorkNet.Services.Identity`, `DorkNet.Services.Rooms`,
+  `DorkNet.Services.Notify`, `DorkNet.Services.Content`,
+  `DorkNet.Services.Social`, `DorkNet.Services.Commerce`,
+  `DorkNet.Services.Platform`, `DorkNet.Services.Moderation`, and
+  `DorkNet.Services.Web` run the shared server stack behind a route
+  ownership guard. That keeps response shapes identical while moving
+  traffic by domain/path slice.
+- `DorkNet.Server` runs as `monolith` behind the gateway for unknown
+  route families that are not assigned to a dedicated service yet.
 
 - `DorkNet.Gateway` exposes `/internal/services` and
-  `/internal/services/health`.
+  `/internal/services/health`, plus `/internal/routes` for the active
+  proxy table.
 - `DorkNet.Services.Identity` exposes
   `/internal/identity/capabilities`.
 - `DorkNet.Services.Rooms` exposes `/internal/rooms/capabilities`.
 - `DorkNet.Services.Notify` exposes `/internal/notify/capabilities`.
+- The other slices expose matching `/internal/{service}/capabilities`
+  endpoints.
 
-`docker-compose.microservices.yml` starts gateway, identity, rooms, and
-notify alongside Compose-managed Postgres and Redis for local testing.
+`docker-compose.microservices.yml` starts gateway, all dedicated service
+slices, the monolith fallback, and Compose-managed Postgres and Redis for
+local testing.
 `docker-compose.microservices.dokploy.yml` is the Dokploy shape: it adds
 a `cloudflared` sidecar that joins the same Compose network and forwards
 Cloudflare Tunnel traffic to `http://gateway:8080`. Object storage is
 external S3-compatible storage configured with `DORKNET_S3_*`
-environment variables; the compose files do not run MinIO or Garage. The
-next migration step is to move one public route group at a time behind
-the gateway while preserving existing URLs and response shapes.
+environment variables; the compose files do not run MinIO or Garage.
 
 ### Controllers/ groupings
 
@@ -277,10 +300,11 @@ worse.
   intentional — the decompiled source is provenance only, not
   shippable. Comments give a future contributor a breadcrumb to
   re-derive the wire shape if the decompile changes.
-- **Microservices are scaffolded, not fully cut over.** The gateway and
-  service hosts compile and run, but the public API still lives in
-  `DorkNet.Server`. Move endpoints by domain slice, not by copying random
-  controllers.
+- **Microservices use shared server code during extraction.** The
+  dedicated service hosts run the proven controller/service stack behind
+  route guards instead of copying controllers into new projects. This
+  keeps the client contract stable while route families are peeled away
+  from the monolith fallback.
 - **Two-provider EF.** SQLite and Postgres each have their own
   EnsureCreated/Migrate dance because some Postgres-only column types
   drift the model snapshot. The split is annoying but lets one

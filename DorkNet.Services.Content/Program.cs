@@ -6,32 +6,32 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("appsettings.Local.json",
     optional: true, reloadOnChange: true);
 
-builder.AddDorkNetServiceDefaults(ServiceNames.Rooms);
+builder.AddDorkNetServiceDefaults(ServiceNames.Content);
 builder.AddDorkNetServices();
 
 var app = builder.Build();
 
 await app.RunDatabaseBootstrapAsync();
 app.MapDorkNetServiceDefaults(mapPublicHealth: false);
-app.MapGet("/internal/rooms/capabilities", () =>
+app.MapGet("/internal/content/capabilities", () =>
     Results.Ok(new ServiceCapabilityResponse(
-        ServiceNames.Rooms,
+        ServiceNames.Content,
         [
-            "rooms",
-            "subrooms",
-            "room-keys",
-            "matchmaking",
-            "discovery",
+            "cdn",
+            "images",
+            "photos",
+            "room-blobs",
+            "storage",
         ],
         [
-            "/rooms/*",
-            "/api/rooms/*",
-            "/roomserver/*",
-            "/v1/find",
-            "/v1/join/*",
+            "/api/images/*",
+            "/api/photos/*",
+            "/data/*",
+            "/img/*",
+            "/upload",
         ])));
 
-app.UseDorkNetRouteOwnershipGuard(ServiceNames.Rooms);
+app.UseDorkNetRouteOwnershipGuard(ServiceNames.Content);
 app.UseDorkNetPipeline();
 
 app.Run();
