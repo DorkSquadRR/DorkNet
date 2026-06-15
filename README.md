@@ -245,6 +245,9 @@ For deployment details, including Dokploy env vars, Cloudflare Tunnel
 routing, external Postgres, and S3 setup, see
 [docs/deploy.md](docs/deploy.md).
 
+For the browser admin console, its routes, auth model, and production
+troubleshooting, see [docs/admin.md](docs/admin.md).
+
 ---
 
 ## Database & migrations

@@ -45,8 +45,8 @@ DorkNet.sln
 | `DorkNet.Services.Social` | Clubs, groups, announcements, player events, subscriptions | .NET 9 |
 | `DorkNet.Services.Commerce` | Catalog, storefronts, econ, inventory, inventions | .NET 9 |
 | `DorkNet.Services.Platform` | Service URLs, config, version checks, geo, strings, telemetry-style surfaces | .NET 9 |
-| `DorkNet.Services.Moderation` | Bug reporting, player reporting, sanitize, admin API, testcase routes | .NET 9 |
-| `DorkNet.Services.Web` | Public site, admin static host, feed static host, site API | .NET 9 |
+| `DorkNet.Services.Moderation` | Bug reporting, player reporting, sanitize, path-routed admin API, testcase routes | .NET 9 |
+| `DorkNet.Services.Web` | Public site, admin static host, same-origin admin browser API, feed static host, site API | .NET 9 |
 | `DorkNet.ClientMod` | MelonLoader 0.6.x IL2CPP mod — the client patcher, JSON config | .NET 6 |
 
 `ClientMod` applies the client-side patches needed to point the 2020
@@ -118,6 +118,10 @@ do not run MinIO or Garage.
 SPAs for service images that need static assets, publishes the selected
 .NET project, and runs that DLL in the runtime image. The root
 `Dockerfile` builds only the standalone/fallback `DorkNet.Server` image.
+
+For the admin browser console specifically, including the host routing
+split between the admin static host and `/api/admin/v1`, see
+[`admin.md`](admin.md).
 
 ### Controllers/ groupings
 

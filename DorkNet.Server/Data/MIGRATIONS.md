@@ -30,7 +30,7 @@ Both were collapsed in 2026-05-25:
   no per-feature patches needed.
 - The PhotonRegion coerce (the only data transform in the block)
   was moved into `LegacyUpgrades.CoercePhotonRegionAsync`.
-- The Storage admin page (`admin-ui/src/pages/Storage.tsx`) and
+- The legacy storage backfill page (`admin-ui/src/pages/Storage.tsx`) and
   `StorageBackfillController.cs` were deleted — they were the UI for
   draining the legacy `RoomDataBlobs.Bytes` column into S3, which is
   no longer needed.

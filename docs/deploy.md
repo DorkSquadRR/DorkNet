@@ -29,8 +29,8 @@ while route slices move out of the fallback server.
 | `social` | Clubs, groups, announcements, player events, subscriptions |
 | `commerce` | Catalog, storefronts, econ, inventory, inventions |
 | `platform` | Service directory, config, version checks, geo, strings |
-| `moderation` | Bug reports, player reports, sanitize, admin API, testcase routes |
-| `web` | Apex/www/admin/feed static hosts and site API |
+| `moderation` | Bug reports, player reports, sanitize, path-routed admin API, testcase routes |
+| `web` | Apex/www/admin/feed static hosts, same-origin admin browser API, and site API |
 | `monolith` | Fallback shared server for route families not split yet |
 | `postgres` | Bundled Postgres for the compose network |
 | `redis` | Bundled Redis for ephemeral state and fan-out |
@@ -240,11 +240,15 @@ Expected key files:
 slice or to the monolith fallback. `/internal/services/health` reports
 gateway-visible health for each backend service.
 
+For the admin page's browser routes, auth flow, same-origin API calls,
+and focused troubleshooting, see [`admin.md`](admin.md).
+
 ### Useful Logs
 
 ```bash
 docker logs <stack>-gateway-1 --tail=200
 docker logs <stack>-web-1 --tail=200
+docker logs <stack>-moderation-1 --tail=200
 docker logs <stack>-platform-1 --tail=200
 docker logs <stack>-cloudflared-1 --tail=200
 ```
@@ -259,6 +263,10 @@ probe="/app/wwwroot/admin/index.html" exists=False
 That means the `web` image did not include the built SPA assets or the
 old container is still running. Force a clean Dokploy rebuild on the
 latest branch commit.
+
+Admin browser traffic on `admin.<domain>` is routed to `web`. The
+`moderation` service is still useful when testing the `/api/admin/*`
+path family through non-admin hosts.
 
 ---
 
