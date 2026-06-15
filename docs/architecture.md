@@ -84,13 +84,13 @@ capability endpoints today:
 
 `docker-compose.microservices.yml` starts gateway, identity, rooms, and
 notify alongside Compose-managed Postgres and Redis for local testing.
-`docker-compose.microservices.dokploy.yml` is the Dokploy shape: it puts
-the gateway on `dokploy-network` and builds exact Traefik host rules from
-`DORKNET_DOMAIN`. Object storage is external S3-compatible storage
-configured with `DORKNET_S3_*` environment variables; the compose files
-do not run MinIO or Garage. The next migration step is to move one public
-route group at a time behind the gateway while preserving existing URLs
-and response shapes.
+`docker-compose.microservices.dokploy.yml` is the Dokploy shape: it adds
+a `cloudflared` sidecar that joins the same Compose network and forwards
+Cloudflare Tunnel traffic to `http://gateway:8080`. Object storage is
+external S3-compatible storage configured with `DORKNET_S3_*`
+environment variables; the compose files do not run MinIO or Garage. The
+next migration step is to move one public route group at a time behind
+the gateway while preserving existing URLs and response shapes.
 
 ### Controllers/ groupings
 

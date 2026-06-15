@@ -14,59 +14,17 @@ services:
       DorkNet__Services__Monolith: ""
     expose:
       - "8080"
-    labels:
-      traefik.enable: "true"
-      traefik.docker.network: dokploy-network
-      traefik.http.routers.dorknet-gateway.entrypoints: web
-      traefik.http.routers.dorknet-gateway.service: dorknet-gateway
-      traefik.http.routers.dorknet-gateway.rule: >-
-        Host(`${DORKNET_DOMAIN}`)
-        || Host(`www.${DORKNET_DOMAIN}`)
-        || Host(`admin.${DORKNET_DOMAIN}`)
-        || Host(`api.${DORKNET_DOMAIN}`)
-        || Host(`auth.${DORKNET_DOMAIN}`)
-        || Host(`accounts.${DORKNET_DOMAIN}`)
-        || Host(`bugreporting.${DORKNET_DOMAIN}`)
-        || Host(`cards.${DORKNET_DOMAIN}`)
-        || Host(`cdn.${DORKNET_DOMAIN}`)
-        || Host(`chat.${DORKNET_DOMAIN}`)
-        || Host(`clubs.${DORKNET_DOMAIN}`)
-        || Host(`cms.${DORKNET_DOMAIN}`)
-        || Host(`commerce.${DORKNET_DOMAIN}`)
-        || Host(`data.${DORKNET_DOMAIN}`)
-        || Host(`datacollection.${DORKNET_DOMAIN}`)
-        || Host(`discovery.${DORKNET_DOMAIN}`)
-        || Host(`econ.${DORKNET_DOMAIN}`)
-        || Host(`feed.${DORKNET_DOMAIN}`)
-        || Host(`gamelogs.${DORKNET_DOMAIN}`)
-        || Host(`geo.${DORKNET_DOMAIN}`)
-        || Host(`img.${DORKNET_DOMAIN}`)
-        || Host(`leaderboard.${DORKNET_DOMAIN}`)
-        || Host(`link.${DORKNET_DOMAIN}`)
-        || Host(`lists.${DORKNET_DOMAIN}`)
-        || Host(`match.${DORKNET_DOMAIN}`)
-        || Host(`moderation.${DORKNET_DOMAIN}`)
-        || Host(`notify.${DORKNET_DOMAIN}`)
-        || Host(`ns.${DORKNET_DOMAIN}`)
-        || Host(`platformnotifications.${DORKNET_DOMAIN}`)
-        || Host(`playersettings.${DORKNET_DOMAIN}`)
-        || Host(`roomcomments.${DORKNET_DOMAIN}`)
-        || Host(`roomieintegrations.${DORKNET_DOMAIN}`)
-        || Host(`rooms.${DORKNET_DOMAIN}`)
-        || Host(`storage.${DORKNET_DOMAIN}`)
-        || Host(`strings.${DORKNET_DOMAIN}`)
-        || Host(`strings-cdn.${DORKNET_DOMAIN}`)
-        || Host(`studio.${DORKNET_DOMAIN}`)
-        || Host(`thorn.${DORKNET_DOMAIN}`)
-        || Host(`videos.${DORKNET_DOMAIN}`)
-      traefik.http.services.dorknet-gateway.loadbalancer.server.port: "8080"
-    networks:
-      - default
-      - dokploy-network
     depends_on:
       - identity
       - rooms
       - notify
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:?Set CLOUDFLARE_TUNNEL_TOKEN in Dokploy}
+    depends_on:
+      - gateway
+    restart: unless-stopped
 
   identity:
     build:
@@ -116,10 +74,6 @@ services:
 
   redis:
     image: redis:7-alpine
-
-networks:
-  dokploy-network:
-    external: true
 
 volumes:
   microservices-postgres:

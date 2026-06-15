@@ -129,8 +129,8 @@ Create a Dokploy **Compose** service from one of these files:
 
 | Compose file | Use |
 |---|---|
-| `docker-compose.microservices.yml` | Local/dev-style compose; use Dokploy's domain UI manually |
-| `docker-compose.microservices.dokploy.yml` | Dokploy Traefik labels generated from `DORKNET_DOMAIN` |
+| `docker-compose.microservices.yml` | Local/dev-style compose |
+| `docker-compose.microservices.dokploy.yml` | Dokploy compose with a Cloudflare Tunnel sidecar |
 
 Both compose files provide:
 
@@ -142,50 +142,34 @@ Both compose files provide:
 | `notify` | Future notification/presence service |
 | `postgres` | Internal Postgres for the service network |
 | `redis` | Internal Redis for ephemeral state and fan-out |
+| `cloudflared` | Cloudflare Tunnel sidecar; Dokploy file only |
 
-Only the gateway needs a public domain during scaffold testing. Route the
-gateway domain to service `gateway`, container port `8080`.
+### Cloudflare Tunnel domains
 
-In Dokploy's Compose domain modal:
+Use `docker-compose.microservices.dokploy.yml` with Cloudflare Tunnel.
+Do not add Dokploy domain rows for this compose stack; public traffic
+enters through the `cloudflared` sidecar instead of Dokploy's Traefik
+router.
 
-| Field | Value |
-|---|---|
-| Service Name | `gateway` |
-| Host | the domain you are adding |
-| Path | `/` |
-| Internal Path | `/` |
-| Container Port | `8080` |
-| Strip Path | off |
-
-If the service dropdown says **Services not found**, deploy or redeploy
-the Compose service first, then refresh the domain modal. Dokploy derives
-the service list from the parsed compose file.
-
-### Env-driven domains
-
-Use `docker-compose.microservices.dokploy.yml` if you do not want to add
-every domain row manually in Dokploy. Set:
+Set these Dokploy Compose environment variables:
 
 ```env
 DORKNET_DOMAIN=yourdomain.com
+CLOUDFLARE_TUNNEL_TOKEN=<token from Cloudflare Zero Trust tunnel>
 ```
 
-That file adds Traefik labels to `gateway` for the apex plus every host
-listed in the full-server domain list above, then sends them all to
-container port `8080`. It also attaches the gateway to Dokploy's external
-`dokploy-network`, which is why this is a separate file instead of the
-default local compose file.
-
-DNS still has to resolve to the Dokploy server. The simplest setup is an
-apex record plus wildcard subdomain record:
+In Cloudflare Zero Trust, configure the tunnel with two public hostnames:
 
 ```text
-yourdomain.com      A/AAAA  <dokploy-server-ip>
-*.yourdomain.com    A/AAAA  <dokploy-server-ip>
+yourdomain.com      -> http://gateway:8080
+*.yourdomain.com    -> http://gateway:8080
 ```
 
-If you do not use wildcard DNS, add A/AAAA or CNAME records for each
-listed subdomain.
+The wildcard covers `api`, `auth`, `rooms`, `notify`, and the other
+client-facing subdomains. The apex rule is separate because wildcard DNS
+does not cover the root domain. Let Cloudflare create the tunnel DNS
+records, or create CNAME records to the tunnel target Cloudflare gives
+you.
 
 When the gateway starts carrying the public API, every public DorkNet
 domain listed above should point to `gateway`. Until then, keep the real
@@ -207,9 +191,9 @@ service unless you intentionally want a local dev-only S3 emulator.
 Useful smoke checks after deploy:
 
 ```bash
-curl https://gateway.yourdomain.com/healthz
-curl https://gateway.yourdomain.com/internal/services
-curl https://gateway.yourdomain.com/internal/services/health
+curl https://api.yourdomain.com/healthz
+curl https://api.yourdomain.com/internal/services
+curl https://api.yourdomain.com/internal/services/health
 ```
 
 Expected during scaffold-only deploys: `/internal/services/health`
