@@ -1,0 +1,125 @@
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        PROJECT_PATH: DorkNet.Gateway/DorkNet.Gateway.csproj
+        APP_DLL: DorkNet.Gateway.dll
+    environment:
+      DORKNET_DOMAIN: ${DORKNET_DOMAIN:?Set DORKNET_DOMAIN in Dokploy}
+      DorkNet__Services__Identity: http://identity:8080
+      DorkNet__Services__Rooms: http://rooms:8080
+      DorkNet__Services__Notify: http://notify:8080
+      DorkNet__Services__Monolith: ""
+    expose:
+      - "8080"
+    labels:
+      traefik.enable: "true"
+      traefik.docker.network: dokploy-network
+      traefik.http.routers.dorknet-gateway.entrypoints: web
+      traefik.http.routers.dorknet-gateway.service: dorknet-gateway
+      traefik.http.routers.dorknet-gateway.rule: >-
+        Host(`${DORKNET_DOMAIN}`)
+        || Host(`www.${DORKNET_DOMAIN}`)
+        || Host(`admin.${DORKNET_DOMAIN}`)
+        || Host(`api.${DORKNET_DOMAIN}`)
+        || Host(`auth.${DORKNET_DOMAIN}`)
+        || Host(`accounts.${DORKNET_DOMAIN}`)
+        || Host(`bugreporting.${DORKNET_DOMAIN}`)
+        || Host(`cards.${DORKNET_DOMAIN}`)
+        || Host(`cdn.${DORKNET_DOMAIN}`)
+        || Host(`chat.${DORKNET_DOMAIN}`)
+        || Host(`clubs.${DORKNET_DOMAIN}`)
+        || Host(`cms.${DORKNET_DOMAIN}`)
+        || Host(`commerce.${DORKNET_DOMAIN}`)
+        || Host(`data.${DORKNET_DOMAIN}`)
+        || Host(`datacollection.${DORKNET_DOMAIN}`)
+        || Host(`discovery.${DORKNET_DOMAIN}`)
+        || Host(`econ.${DORKNET_DOMAIN}`)
+        || Host(`feed.${DORKNET_DOMAIN}`)
+        || Host(`gamelogs.${DORKNET_DOMAIN}`)
+        || Host(`geo.${DORKNET_DOMAIN}`)
+        || Host(`img.${DORKNET_DOMAIN}`)
+        || Host(`leaderboard.${DORKNET_DOMAIN}`)
+        || Host(`link.${DORKNET_DOMAIN}`)
+        || Host(`lists.${DORKNET_DOMAIN}`)
+        || Host(`match.${DORKNET_DOMAIN}`)
+        || Host(`moderation.${DORKNET_DOMAIN}`)
+        || Host(`notify.${DORKNET_DOMAIN}`)
+        || Host(`ns.${DORKNET_DOMAIN}`)
+        || Host(`platformnotifications.${DORKNET_DOMAIN}`)
+        || Host(`playersettings.${DORKNET_DOMAIN}`)
+        || Host(`roomcomments.${DORKNET_DOMAIN}`)
+        || Host(`roomieintegrations.${DORKNET_DOMAIN}`)
+        || Host(`rooms.${DORKNET_DOMAIN}`)
+        || Host(`storage.${DORKNET_DOMAIN}`)
+        || Host(`strings.${DORKNET_DOMAIN}`)
+        || Host(`strings-cdn.${DORKNET_DOMAIN}`)
+        || Host(`studio.${DORKNET_DOMAIN}`)
+        || Host(`thorn.${DORKNET_DOMAIN}`)
+        || Host(`videos.${DORKNET_DOMAIN}`)
+      traefik.http.services.dorknet-gateway.loadbalancer.server.port: "8080"
+    networks:
+      - default
+      - dokploy-network
+    depends_on:
+      - identity
+      - rooms
+      - notify
+
+  identity:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        PROJECT_PATH: DorkNet.Services.Identity/DorkNet.Services.Identity.csproj
+        APP_DLL: DorkNet.Services.Identity.dll
+    depends_on:
+      - postgres
+      - redis
+
+  rooms:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        PROJECT_PATH: DorkNet.Services.Rooms/DorkNet.Services.Rooms.csproj
+        APP_DLL: DorkNet.Services.Rooms.dll
+    environment:
+      S3__Endpoint: ${DORKNET_S3_ENDPOINT:-}
+      S3__AccessKey: ${DORKNET_S3_ACCESS_KEY:-}
+      S3__SecretKey: ${DORKNET_S3_SECRET_KEY:-}
+      S3__Region: ${DORKNET_S3_REGION:-garage}
+    depends_on:
+      - postgres
+      - redis
+
+  notify:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        PROJECT_PATH: DorkNet.Services.Notify/DorkNet.Services.Notify.csproj
+        APP_DLL: DorkNet.Services.Notify.dll
+    depends_on:
+      - redis
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: dorknet
+      POSTGRES_USER: dorknet
+      POSTGRES_PASSWORD: dorknet_dev
+    volumes:
+      - microservices-postgres:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+
+networks:
+  dokploy-network:
+    external: true
+
+volumes:
+  microservices-postgres:

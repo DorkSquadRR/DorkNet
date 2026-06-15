@@ -23,6 +23,7 @@ main also auto-detects your install.
 | **Version key** (sent as `X-DorkNet-Version` header) | `december_2020_12_18` |
 | **Version plugin** | `DorkNet.Server/Versions/Late2020/Late2020VersionPlugin.cs` |
 | **Schema** | One EF `Initial` migration; SQLite + Postgres both work |
+| **Runtime topology** | Full API still runs from `DorkNet.Server`; microservice gateway/service hosts are scaffolded for incremental split |
 | **Diverges from `march-2020-03-10` by** | ~170 files |
 
 Subsystems present on this branch that the March branch doesn't have:
@@ -58,7 +59,7 @@ cd DorkNet
 
 | Config key | Env var | Required | Notes |
 |---|---|---|---|
-| `Jwt:Secret` | `Jwt__Secret` | yes | ≥64 random chars |
+| `Jwt:Secret` | `DORKNET_JWT_SECRET` or `Jwt__Secret` | yes | >=64 random chars |
 | `Photon:AppId` | `Photon__AppId` | yes | Photon Realtime AppId (free at dashboard.photonengine.com) |
 | `Photon:VoiceAppId` | `Photon__VoiceAppId` | no | only if voice chat |
 | `Photon:CloudRegion` | `Photon__CloudRegion` | no | defaults to `us` |
@@ -66,6 +67,10 @@ cd DorkNet
 | `ConnectionStrings:Default` | `ConnectionStrings__Default` | postgres-only | full Npgsql connection string |
 | `ConnectionStrings:Redis` | `ConnectionStrings__Redis` | no | enables SignalR backplane |
 | `Domain:Apex` | `DORKNET_DOMAIN` | no | defaults to `localhost`; set for production |
+| `S3:Endpoint` | `S3__Endpoint` | production | S3-compatible API endpoint for blobs/images |
+| `S3:AccessKey` | `S3__AccessKey` | production | S3 access key |
+| `S3:SecretKey` | `S3__SecretKey` | production | S3 secret key |
+| `S3:Region` | `S3__Region` | no | defaults to `garage`; use `auto` for R2 |
 
 **4. Boot:**
 
@@ -79,8 +84,8 @@ categories / playlists, and starts listening. You should see
 `Application started.` in the log; `curl http://localhost:8080/healthz`
 returns 200.
 
-For a full Docker / VPS deploy, see
-[main's Advanced setup guide](../../blob/main/docs/advanced-setup.md).
+For Docker, Dokploy, and microservices-scaffold deploy notes, see
+[docs/deploy.md](docs/deploy.md).
 
 ---
 
@@ -196,12 +201,41 @@ Default `0` (off).
 |---|---|
 | `DorkNet.Server/` | ASP.NET Core backend (controllers, services, data, hubs, middleware) |
 | `DorkNet.Models/` | DTOs shared between server and client mod |
+| `DorkNet.Contracts/` | Shared service names, service-map options, and health/probe contracts |
+| `DorkNet.ServiceDefaults/` | Shared microservice health, JSON, HTTP client, and service identity setup |
+| `DorkNet.Gateway/` | Edge/gateway host scaffold with service-map and service-health endpoints |
+| `DorkNet.Services.*` | Initial identity, rooms, and notify service host scaffolds |
 | `DorkNet.ClientMod/` | MelonLoader IL2CPP mod — the client patcher |
 | `tools/` | Installers (`install-melon.ps1`, `install-legacy-client.ps1`, `remove-eac.ps1`), Cloudflare tunnel templates |
+| `Dockerfile`, `Dockerfile.service`, `docker-compose.microservices*.yml` | Full-server, local microservices, and Dokploy microservices deployment entrypoints |
 
 See [docs/architecture.md](docs/architecture.md) for the full mental
 model (project layout, request lifecycle, watch-mirror controller
 pattern, where to start contributing).
+
+### Microservices scaffold
+
+`docker-compose.microservices.yml` starts the new gateway, identity,
+rooms, and notify service hosts plus Compose-managed Postgres and Redis
+for local testing. `docker-compose.microservices.dokploy.yml` is the
+Dokploy version; it reads `DORKNET_DOMAIN` and publishes the required
+Traefik host rules for the gateway. These files do **not** replace the
+full `DorkNet.Server` runtime yet; the public API is still served by the
+monolith while domains are peeled into services incrementally.
+
+The compose file intentionally does not start object storage. Point it at
+your separate S3-compatible instance:
+
+```pwsh
+$env:DORKNET_S3_ENDPOINT="https://your-s3-endpoint"
+$env:DORKNET_S3_ACCESS_KEY="..."
+$env:DORKNET_S3_SECRET_KEY="..."
+$env:DORKNET_S3_REGION="garage" # or auto for R2
+docker compose -f docker-compose.microservices.yml up --build
+```
+
+For deployment details, including Dokploy env vars and the current
+monolith-vs-microservices split, see [docs/deploy.md](docs/deploy.md).
 
 ---
 

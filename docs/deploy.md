@@ -1,280 +1,313 @@
-# DorkNet — Coolify deployment
+# DorkNet Deployment
 
-This doc covers the production cutover from the local-machine setup
-(SQLite + Kestrel direct + mkcert + per-machine cloudflared) to the
-horizontally-scaled Coolify deployment (Postgres + Redis + Garage S3 +
-2-replica Kestrel behind cloudflared, all on the same Coolify project).
+This branch has two deployable shapes:
 
-The plan-of-record is `BUILD_PROPER_PLAN.md` at the repo root and the
-phased writeup at `~/.claude/plans/pahese-0-1-horizontal-cheeky-hickey.md`.
-Anything that contradicts this doc, that doc wins.
+- **Production/full API:** build the root `Dockerfile`, which runs
+  `DorkNet.Server`. This is still the runtime that serves every public
+  Rec Room-compatible endpoint.
+- **Microservices scaffold:** deploy `docker-compose.microservices.yml`
+  for local testing or `docker-compose.microservices.dokploy.yml` on
+  Dokploy. Both start `DorkNet.Gateway`,
+  `DorkNet.Services.Identity`, `DorkNet.Services.Rooms`,
+  `DorkNet.Services.Notify`, Postgres, and Redis. These hosts currently
+  expose internal health/capability endpoints only; public routes move
+  behind the gateway incrementally.
+
+Object storage is always a **separate S3-compatible instance**. The
+microservices compose files do not start MinIO/Garage.
 
 ---
 
-## Coolify project layout
+## Dokploy: full server
 
-One Coolify *project* with these services:
+Use this for a real server today.
 
-| Service              | Image / source                                 | Notes                                                                        |
-| -------------------- | ---------------------------------------------- | ---------------------------------------------------------------------------- |
-| `dorknet-server`     | Build from this repo's `Dockerfile`            | Replicas: **2** to start. Internal port 8080. No public domain.              |
-| `dorknet-postgres`   | Coolify one-click **Postgres**                 | Persistent volume on Coolify's data store.                                   |
-| `dorknet-redis`      | Coolify one-click **Redis**                    | Persistent volume optional; used for ephemeral state + SignalR backplane.    |
-| `dorknet-garage`     | Coolify one-click **Garage**                   | S3-compatible. Persistent volume (room blobs are 100s of MB).                |
-| `dorknet-cloudflared`| Cloudflare's `cloudflared` image, custom config | Reads `tools/cloudflared-config.coolify.yml.template` rendered with a tunnel ID. |
+Create a Dokploy **Application**:
 
-All five sit on the same project network so the server reaches its
-dependencies over Coolify's internal Docker DNS.
+| Field | Value |
+|---|---|
+| Source | This GitHub repo / branch |
+| Build type | Dockerfile |
+| Dockerfile path | `Dockerfile` |
+| Context | `.` |
+| Container port | `8080` |
 
-## Required environment variables on `dorknet-server`
+Set application environment variables:
 
-Set these in Coolify's *Environment Variables* tab. Coolify expands
-`${...}` references to other services in the same project, so the
-connection-string lookups link automatically.
-
-```
+```env
 ASPNETCORE_ENVIRONMENT=Production
+ASPNETCORE_URLS=http://0.0.0.0:8080
+DOTNET_RUNNING_IN_CONTAINER=true
 
-# Database
-ConnectionStrings__Default=Host=dorknet-postgres;Port=5432;Database=dorknet;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+DORKNET_DOMAIN=yourdomain.com
+DORKNET_JWT_SECRET=replace-with-at-least-64-random-characters
 
-# Redis
-ConnectionStrings__Redis=dorknet-redis:6379
+Database__Provider=postgres
+ConnectionStrings__Default=Host=<postgres-host>;Port=5432;Database=dorknet;Username=<user>;Password=<password>
+ConnectionStrings__Redis=redis://<redis-host>:6379
 
-# JWT
-DORKNET_JWT_SECRET=<openssl rand -base64 64>
-
-# Object storage (Garage). Bucket names are hard-coded in code; only
-# the endpoint + credentials need configuring. Objects are organized
-# under owner-scoped keys inside each bucket, e.g.
-# players/{playerId}/camera, players/{playerId}/profile,
-# players/{playerId}/rooms/{roomId}, players/{playerId}/dorm.
-S3__Endpoint=http://dorknet-garage:3900
+S3__Endpoint=https://your-s3-api-endpoint
+S3__AccessKey=your-access-key
+S3__SecretKey=your-secret-key
 S3__Region=garage
-S3__AccessKey=<garage admin key>
-S3__SecretKey=<garage admin secret>
 
-# Image CDN signing. The 2020 client verifies Content-Signature on
-# image downloads. Use the private half of the key whose public modulus
-# the client knows for p1. Store PEM newlines as \n if your env UI is
-# single-line, or use DORKNET_IMAGE_SIGNING_PRIVATE_KEY_BASE64.
-DORKNET_IMAGE_SIGNING_KEY_ID=p1
-DORKNET_IMAGE_SIGNING_PRIVATE_KEY=<PEM RSA private key>
-
-# Photon (copy from local appsettings.json — same AppId across envs)
-Photon__AppId=<your-photon-realtime-app-id>
-Photon__VoiceAppId=1917ff4a-b7ad-4ad6-9ea2-9642bc174b70
-Photon__CloudRegion=us
+Photon__AppId=your-photon-realtime-app-id
+Photon__VoiceAppId=your-photon-voice-app-id
+Photon__CloudRegion=eu
 ```
 
-### Cloudflare R2 instead of Garage
+If Postgres and Redis are Dokploy-managed services in the same project,
+use the internal service hostnames Dokploy gives you. For a Compose-style
+network the values usually look like:
 
-DorkNet can use Cloudflare R2 without code changes because R2 speaks the
-S3-compatible API. Create these three R2 buckets first:
-
+```env
+ConnectionStrings__Default=Host=postgres;Port=5432;Database=dorknet;Username=dorknet;Password=dorknet_dev
+ConnectionStrings__Redis=redis://redis:6379
 ```
+
+### Domains
+
+Point DNS at the Dokploy server, then add domains to the same
+application. Every host routes to container port `8080`.
+
+Add these hosts for full client compatibility:
+
+```text
+yourdomain.com
+www.yourdomain.com
+admin.yourdomain.com
+api.yourdomain.com
+auth.yourdomain.com
+accounts.yourdomain.com
+bugreporting.yourdomain.com
+cards.yourdomain.com
+cdn.yourdomain.com
+chat.yourdomain.com
+clubs.yourdomain.com
+cms.yourdomain.com
+commerce.yourdomain.com
+data.yourdomain.com
+datacollection.yourdomain.com
+discovery.yourdomain.com
+econ.yourdomain.com
+feed.yourdomain.com
+gamelogs.yourdomain.com
+geo.yourdomain.com
+img.yourdomain.com
+leaderboard.yourdomain.com
+link.yourdomain.com
+lists.yourdomain.com
+match.yourdomain.com
+moderation.yourdomain.com
+notify.yourdomain.com
+ns.yourdomain.com
+platformnotifications.yourdomain.com
+playersettings.yourdomain.com
+roomcomments.yourdomain.com
+roomieintegrations.yourdomain.com
+rooms.yourdomain.com
+storage.yourdomain.com
+strings.yourdomain.com
+strings-cdn.yourdomain.com
+studio.yourdomain.com
+thorn.yourdomain.com
+videos.yourdomain.com
+```
+
+All of these point to the same `DorkNet.Server` application/container
+port today. `admin` and `feed` serve static hosts; the rest are the
+service URLs returned to the client by `ConfigService`.
+
+---
+
+## Dokploy: microservices scaffold
+
+Use this to run the new gateway/service-host layout. It is not yet a
+replacement for the full public API.
+
+Create a Dokploy **Compose** service from one of these files:
+
+| Compose file | Use |
+|---|---|
+| `docker-compose.microservices.yml` | Local/dev-style compose; use Dokploy's domain UI manually |
+| `docker-compose.microservices.dokploy.yml` | Dokploy Traefik labels generated from `DORKNET_DOMAIN` |
+
+Both compose files provide:
+
+| Service | Purpose |
+|---|---|
+| `gateway` | Edge host scaffold; service map and service health probes |
+| `identity` | Future identity/auth/accounts service |
+| `rooms` | Future rooms/matchmaking/discovery service |
+| `notify` | Future notification/presence service |
+| `postgres` | Internal Postgres for the service network |
+| `redis` | Internal Redis for ephemeral state and fan-out |
+
+Only the gateway needs a public domain during scaffold testing. Route the
+gateway domain to service `gateway`, container port `8080`.
+
+In Dokploy's Compose domain modal:
+
+| Field | Value |
+|---|---|
+| Service Name | `gateway` |
+| Host | the domain you are adding |
+| Path | `/` |
+| Internal Path | `/` |
+| Container Port | `8080` |
+| Strip Path | off |
+
+If the service dropdown says **Services not found**, deploy or redeploy
+the Compose service first, then refresh the domain modal. Dokploy derives
+the service list from the parsed compose file.
+
+### Env-driven domains
+
+Use `docker-compose.microservices.dokploy.yml` if you do not want to add
+every domain row manually in Dokploy. Set:
+
+```env
+DORKNET_DOMAIN=yourdomain.com
+```
+
+That file adds Traefik labels to `gateway` for the apex plus every host
+listed in the full-server domain list above, then sends them all to
+container port `8080`. It also attaches the gateway to Dokploy's external
+`dokploy-network`, which is why this is a separate file instead of the
+default local compose file.
+
+DNS still has to resolve to the Dokploy server. The simplest setup is an
+apex record plus wildcard subdomain record:
+
+```text
+yourdomain.com      A/AAAA  <dokploy-server-ip>
+*.yourdomain.com    A/AAAA  <dokploy-server-ip>
+```
+
+If you do not use wildcard DNS, add A/AAAA or CNAME records for each
+listed subdomain.
+
+When the gateway starts carrying the public API, every public DorkNet
+domain listed above should point to `gateway`. Until then, keep the real
+player-facing domains on the full `DorkNet.Server` application.
+
+Set these Compose environment variables in Dokploy:
+
+```env
+DORKNET_S3_ENDPOINT=https://your-s3-api-endpoint
+DORKNET_S3_ACCESS_KEY=your-access-key
+DORKNET_S3_SECRET_KEY=your-secret-key
+DORKNET_S3_REGION=garage
+```
+
+The compose services already refer to Postgres as `postgres` and Redis as
+`redis` on the internal Compose network. Do not add an `object-storage`
+service unless you intentionally want a local dev-only S3 emulator.
+
+Useful smoke checks after deploy:
+
+```bash
+curl https://gateway.yourdomain.com/healthz
+curl https://gateway.yourdomain.com/internal/services
+curl https://gateway.yourdomain.com/internal/services/health
+```
+
+Expected during scaffold-only deploys: `/internal/services/health`
+reports gateway-visible status for identity, rooms, and notify. It does
+not prove the full game API has moved yet.
+
+---
+
+## S3 storage
+
+DorkNet uses S3-compatible storage for room blobs, profile images,
+camera photos, and CDN/image pipeline backing data. Create these buckets
+before production cutover:
+
+```text
 profile-images
 camera-photos
 room-blobs
 ```
 
-Then create an R2 API token with Object Read & Write access to both
-buckets and set the server env vars:
+Garage-style endpoints usually use:
 
+```env
+S3__Endpoint=https://your-garage-or-s3-api
+S3__Region=garage
+S3__AccessKey=...
+S3__SecretKey=...
 ```
+
+Cloudflare R2 uses the S3 API endpoint, not a public bucket URL:
+
+```env
 S3__Endpoint=https://<cloudflare-account-id>.r2.cloudflarestorage.com
 S3__Region=auto
 S3__AccessKey=<r2 access key id>
 S3__SecretKey=<r2 secret access key>
 S3__MaxErrorRetry=1
-S3__TimeoutSeconds=8
+S3__TimeoutSeconds=300
 ```
 
-Do not use an R2 public bucket URL or custom domain for `S3__Endpoint`.
-That value must be the S3 API endpoint ending in
-`.r2.cloudflarestorage.com`.
-DorkNet disables S3 chunked upload encoding in code because R2 rejects
-`STREAMING-AWS4-HMAC-SHA256-PAYLOAD` request bodies.
+For the microservices compose file, use the `DORKNET_S3_*` equivalents;
+Compose maps them into `S3__*` for the rooms service.
 
-`appsettings.Production.json` already pins `Database:Provider=postgres`
-and binds Kestrel to `http://0.0.0.0:8080`, so those don't need to be
-set as env vars.
+---
 
-## First-time cutover (stop-the-world)
+## First-time cutover from SQLite
 
-1. **Drain the local server.** Tell players, take it down. The cutover
-   is non-incremental — once the SQLite source is read, no further
-   writes can be accepted there.
+1. Stop the local server so the SQLite source stops accepting writes.
+2. Snapshot the SQLite database.
+3. Provision Postgres, Redis, and the separate S3-compatible storage.
+4. Run the migration/import tooling against the new Postgres and S3
+   targets.
+5. Deploy the full `DorkNet.Server` application.
+6. Verify `/healthz` returns 200 before sending players to the new host.
 
-2. **Snapshot SQLite.** `tools/snapshot-db.ps1` writes a timestamped
-   copy. Keep it indefinitely as the pre-cutover baseline.
+The server uses an advisory-lock guarded startup path for Postgres so
+multiple replicas can start without racing schema/bootstrap work.
 
-3. **Deploy the Coolify project** with the four services above
-   (Postgres / Redis / Garage / cloudflared) but the server replicas
-   set to 0 — we want the database empty and idle while the migrator
-   runs.
+Rollback before players write to Postgres is simple: stop the deploy and
+return to the SQLite snapshot. After players write to Postgres, rollback
+means losing post-cutover writes unless you migrate them back.
 
-4. **Run the migrator** from the operator's laptop, pointed at the
-   newly-provisioned Postgres + Garage:
+---
 
-   ```pwsh
-   dotnet run --project Tools/MigrateSqliteToPostgres -- `
-       --sqlite ./snapshots/dorknet-pre-cutover.db `
-       --postgres "Host=<coolify-postgres-public-host>;Port=5432;Database=dorknet;Username=...;Password=...;SSL Mode=Require" `
-       --reset `
-       --upload-blobs `
-       --s3-endpoint http://<coolify-garage-public-host>:3900 `
-       --s3-bucket room-blobs `
-       --s3-access-key ... `
-       --s3-secret-key ...
-   ```
+## Photon Cloud
 
-   The migrator runs the 9-step verification + an optional 10th step
-   that bulk-uploads every `RoomDataBlobs.Bytes` row to S3, idempotent
-   on re-run. A non-zero exit means **abort**: leave the destination
-   in its dirty state, fix the diff, re-run with `--reset` for a clean
-   slate.
+Use your own Photon AppIds. Rec Room's original Photon AppIds reject
+external clients because their dashboard points CustomAuth at the
+official backend.
 
-5. **Scale `dorknet-server` to 2 replicas.** First boot: one replica
-   wins the `pg_advisory_xact_lock` and runs `EnsureCreated` (no-op,
-   schema already there from the migrator) + the seed steps; the other
-   blocks on the lock until the first commits, sees the schema is
-   complete, and proceeds.
+1. Create a Photon Realtime app at <https://dashboard.photonengine.com>.
+2. Create a Photon Voice app if voice chat is needed.
+3. Set:
 
-6. **Verify `/healthz` is 200** on both replicas (Coolify shows this
-   in the Container tab) before pointing the tunnel at the service.
-
-7. **Bring up `dorknet-cloudflared`** with the rendered config (see
-   `tools/cloudflared-config.coolify.yml.template`). Confirm `dig` /
-   `curl` against `https://api.localhost/api/health/v1` returns 200.
-
-8. **Tell players it's back.** Done.
-
-## Notes on multi-replica behaviour
-
-* **Sticky sessions are no longer required.** Auth's
-  `OrphanAccountTracker` writes the pending claim to Redis, so a
-  player whose two HTTP requests hit different replicas still sees
-  the same account-creation state.
-
-* **SignalR groups fan out across replicas.** The Redis backplane is
-  registered under the channel prefix `dorknet-signalr`; both replicas
-  publish/subscribe to the same channels, so a notification raised on
-  replica B reaches a player connected to replica A.
-
-* **Player presence is shared.** `PlayerPresenceService` writes
-  `presence:player:{id}` keys to Redis with a 45 s TTL (3× heartbeat).
-  Either replica can answer "where is player N?".
-
-* **Game session ids are allocated by Postgres.** `GameSessionService`
-  uses a `bigserial` so two replicas can `JoinOrCreate` simultaneously
-  without colliding.
-
-* **Private instances live in Postgres.** Cross-replica visibility is
-  automatic — both replicas read from the same `PrivateInstances`
-  table.
-
-## Rollback
-
-If the cutover goes sideways before step 5 (no replicas running yet),
-just delete the Postgres / Redis / Garage volumes in Coolify, set the
-server replica count back to 0, and bring the local SQLite server back
-up. The pre-cutover snapshot is still untouched.
-
-After step 5, rolling back means **restoring the SQLite snapshot**
-(any data players wrote on Postgres post-cutover will be lost). Be
-sure the cutover validation in step 6 is convincing before you tell
-players it's safe.
-
-## Photon Cloud — own AppId + CustomAuth callback
-
-The hard-coded RecRoom Photon AppId rejects external clients (NameServer
-error code 32736 / "No auth request during expected wait time") because
-their dashboard has CustomAuth set to "Reject if Auth Failed" pointing
-at RecRoom's own backend. Solution: register your own free AppId.
-
-1. Go to https://dashboard.photonengine.com → sign up → **Create a New App**
-   → "Photon Realtime" → save. Repeat for "Photon Voice" if you want voice.
-2. Copy each **AppId** (UUID) and set in Coolify env vars:
-   ```
-   Photon__AppId=<your realtime AppId>
-   Photon__VoiceAppId=<your voice AppId>
-   Photon__CloudRegion=us
-   ```
-3. Restart the server.
-
-That alone gets multiplayer working — the Photon NameServer accepts the
-client because no CustomAuth is required.
-
-### (Optional) wire up server-side single-session enforcement
-
-Server already exposes `https://auth.localhost/photon/customauth` — see
-[PhotonCustomAuthController.cs](DorkNet.Server/Controllers/Auth/PhotonCustomAuthController.cs).
-It accepts `userid` + `LoginLock` and validates them against
-`PlayerPresenceService` (Redis). Enable it in the dashboard:
-
-1. Photon dashboard → your app → **Manage** → **Custom Authentication** tab.
-2. **Enable Custom Authentication**.
-3. URL: `https://auth.localhost/photon/customauth?userid={userid}&LoginLock={LoginLock}`
-4. **Reject if Auth Failed**: **OFF for now** (see caveat below).
-5. Save.
-
-**Caveat — current 2020 watch doesn't send AuthValues**. A sweep of
-`Cpp2IL_ISIL/IsilDump/Assembly-CSharp/` turns up no caller of
-`PhotonNetwork.set_AuthValues` outside Photon's own library code, so
-the unmodified client connects without supplying `{userid, LoginLock}`.
-With "Reject if Auth Failed" ON, every Photon connect would fail with
-NameServer 32736 — same symptom we tried to solve. With it OFF, the
-client connects fine, the endpoint exists for future client patching.
-
-### Patching the watch to send AuthValues — `DorkNet.ClientMod/`
-
-The vanilla 2020 watch never sets `PhotonNetwork.AuthValues` (verified
-by an exhaustive grep across both `Assembly-CSharp.dll` and the
-Photon `Assembly-CSharp-firstpass.dll` library). To make Photon
-forward `userid` + `LoginLock` to our `/photon/customauth` endpoint a
-Harmony patch on the watch's Photon auth path has to attach the values
-in flight. That hook lives in the **MelonLoader IL2CPP mod**
-(`DorkNet.ClientMod`); the AuthValues injector itself is currently
-parked (see `DorkNet.ClientMod/attic/AuthValuesInjector.cs.attic` and
-the notes in `Mod.cs`) since the `/photon/customauth` endpoint runs in
-permissive mode.
-
-Install the mod on a tester's machine with:
-
-```pwsh
-.\tools\install-melon.ps1 `
-    -RecRoomPath "C:\…\RecRoom\Recroom_Release_Data" `
-    -PhotonAppId  cb0880d9-…
+```env
+Photon__AppId=<your realtime AppId>
+Photon__VoiceAppId=<your voice AppId>
+Photon__CloudRegion=eu
 ```
 
-The script unpacks MelonLoader, builds `DorkNet.ClientMod.dll`, and
-drops it into the client's `Mods/` folder. On the first run it prints
-"launch the game once" so MelonLoader can generate its IL2CPP
-assemblies; relaunch the script with `-ResumeBuild` to finish.
+Server-side Photon custom auth exists at `/photon/customauth`, but the
+2020 client does not send the needed AuthValues without client patching.
+Leave Photon dashboard "Reject if Auth Failed" off unless the client mod
+is updated to send `userid` and `LoginLock`.
 
-Once AuthValues injection is re-enabled in the mod and in production:
-
-1. Flip [`PhotonCustomAuthController`](../DorkNet.Server/Controllers/Auth/PhotonCustomAuthController.cs)
-   from permissive-mode (`ResultCode 1` always) back to strict —
-   parse `userid` + `LoginLock`, validate against
-   `PlayerPresenceService.ValidateLock`, return `ResultCode 3` on
-   mismatch.
-2. In the Photon dashboard, flip **"Reject if Auth Failed"** ON.
-3. Duplicate-account login from a different LoginLock now fails
-   Photon auth at the NameServer — never reaches the dorm.
+---
 
 ## Future schema changes
 
-PR 4 keeps `EnsureCreated` for the first deploy (the migrator builds
-the schema directly, then EnsureCreated is a no-op the server can do
-under advisory-lock to be safe on multi-replica boot). Any
-**post-cutover** schema change needs a real Postgres migration:
+SQLite dev DBs apply EF migrations. The production Postgres path is still
+based on `EnsureCreated()` plus idempotent bootstrap steps. Until that is
+changed to `Migrate()` under the same advisory lock, treat production
+schema changes as explicit deployment work:
 
-1. `dotnet ef migrations add <Name> --project DorkNet.Server`
-2. Replace the `EnsureCreated` call in `Program.cs` with
-   `db.Database.Migrate()` *inside* the same advisory-lock block.
-3. Deploy. Both replicas race for the lock, the winner runs the
-   migration, the loser sees the new history row and skips.
+1. Add or update the entity model.
+2. Add the migration for SQLite/dev.
+3. Add any needed idempotent Postgres bootstrap SQL.
+4. Deploy and verify `/healthz`.
 
-Until that swap happens, treat the schema as frozen.
+See [`../DorkNet.Server/Data/MIGRATIONS.md`](../DorkNet.Server/Data/MIGRATIONS.md)
+for the detailed migration discipline.

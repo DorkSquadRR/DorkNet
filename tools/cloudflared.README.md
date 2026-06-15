@@ -67,7 +67,7 @@ visitor → https://api.localhost/api/versioncheck/v4
         → cloudflared tunnel
         → cloudflared (running on your machine)
         → https://localhost:443  (Host: api.localhost, mkcert cert)
-        → DorkNet.Server matches [Host("api.localhost")] → handler runs
+        → DorkNet.Server HostFiltering + subdomain-aware handlers
 ```
 
 The leg from cloudflared → localhost has `noTLSVerify: true` because
