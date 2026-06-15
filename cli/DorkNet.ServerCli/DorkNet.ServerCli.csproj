@@ -6,6 +6,10 @@
          alongside Windows. The shared Backend classes are written to
          OperatingSystem.IsWindows()-gate any Windows-only paths. -->
     <TargetFramework>net9.0</TargetFramework>
+    <!-- Declared so a RID-less restore produces assets for every target the
+         CI matrix / release pipeline later publishes with no-restore. Without
+         this, RID-specific publish fails with NETSDK1047. -->
+    <RuntimeIdentifiers>win-x64;linux-x64;linux-arm64;osx-x64;osx-arm64</RuntimeIdentifiers>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>DorkNet.ServerCli</RootNamespace>
