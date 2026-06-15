@@ -180,6 +180,14 @@ bundled `postgres` hostname:
 DORKNET_POSTGRES_CONNECTION_STRING=Host=<postgres-host>;Port=5432;Database=dorknet;Username=<user>;Password=<password>
 ```
 
+`docker-compose.microservices.dokploy.yml` attaches every backend
+service that opens database connections to both the stack's default
+network and Dokploy's external `dokploy-network`. Use the managed
+Postgres service's real internal Docker/Dokploy hostname in
+`DORKNET_POSTGRES_CONNECTION_STRING`; inside a DorkNet service container,
+`getent hosts <postgres-host>` should return a Docker IP, not
+`127.0.0.1`.
+
 For hosted Postgres that requires TLS, include the Npgsql SSL options:
 
 ```env
