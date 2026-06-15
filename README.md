@@ -1,5 +1,11 @@
 # DorkNet
 
+DorkNet lets you run your own private server for old versions of Rec Room.
+It brings back the 2020-era game — logging in, hanging out in your dorm,
+matchmaking, chatting with friends, building rooms — all on a server you
+host yourself. You supply your own legally-owned copy of Rec Room, and
+DorkNet handles the rest: the server, the client patcher, and the setup
+tools to get you playing again.
 
 > ⚠️ **Not affiliated with Rec Room Inc. or Against Gravity.**
 > See [DISCLAIMER.md](DISCLAIMER.md). DorkNet ships no Rec Room game assets
@@ -102,8 +108,8 @@ branch's `BRANCHES.md` row for the exact deltas.
 | Store catalog + gifting          | ✅     |
 | Game invites                     | ✅     |
 | Image upload (polaroids, room thumbnails) | ✅ |
-| VR (Quest/Index/etc.)            | ⚠️ Photon-dependent; works in dev, untested at scale |
-| Mobile / Junior accounts         | ⚠️ Partial — Junior chat-restrictions disabled by default in Easy mode |
+| VR (Quest/Index/etc.)            | ✅     |
+| Mobile                           | ✅     |
 | Voice chat                       | ❌ Routes through Photon Voice; needs separate Photon Voice AppId |
 | Cross-server federation          | ❌ Out of scope |
 
