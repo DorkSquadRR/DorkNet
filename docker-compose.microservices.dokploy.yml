@@ -9,6 +9,11 @@ x-dorknet-service-env: &dorknet-service-env
   S3__SecretKey: ${DORKNET_S3_SECRET_KEY:?Set DORKNET_S3_SECRET_KEY in Dokploy}
   S3__Region: ${DORKNET_S3_REGION:-garage}
 
+x-dorknet-app-networks: &dorknet-app-networks
+  networks:
+    - default
+    - dokploy-network
+
 services:
   gateway:
     build:
@@ -59,6 +64,7 @@ services:
         APP_DLL: DorkNet.Services.Identity.dll
     environment:
       <<: *dorknet-service-env
+    <<: *dorknet-app-networks
     depends_on:
       - postgres
       - redis
@@ -72,6 +78,7 @@ services:
         APP_DLL: DorkNet.Services.Rooms.dll
     environment:
       <<: *dorknet-service-env
+    <<: *dorknet-app-networks
     depends_on:
       - postgres
       - redis
@@ -85,6 +92,7 @@ services:
         APP_DLL: DorkNet.Services.Notify.dll
     environment:
       <<: *dorknet-service-env
+    <<: *dorknet-app-networks
     depends_on:
       - postgres
       - redis
@@ -98,6 +106,7 @@ services:
         APP_DLL: DorkNet.Services.Content.dll
     environment:
       <<: *dorknet-service-env
+    <<: *dorknet-app-networks
     depends_on:
       - postgres
       - redis
@@ -111,6 +120,7 @@ services:
         APP_DLL: DorkNet.Services.Social.dll
     environment:
       <<: *dorknet-service-env
+    <<: *dorknet-app-networks
     depends_on:
       - postgres
       - redis
@@ -124,6 +134,7 @@ services:
         APP_DLL: DorkNet.Services.Commerce.dll
     environment:
       <<: *dorknet-service-env
+    <<: *dorknet-app-networks
     depends_on:
       - postgres
       - redis
@@ -137,6 +148,7 @@ services:
         APP_DLL: DorkNet.Services.Platform.dll
     environment:
       <<: *dorknet-service-env
+    <<: *dorknet-app-networks
     depends_on:
       - postgres
       - redis
@@ -150,6 +162,7 @@ services:
         APP_DLL: DorkNet.Services.Moderation.dll
     environment:
       <<: *dorknet-service-env
+    <<: *dorknet-app-networks
     depends_on:
       - postgres
       - redis
@@ -163,6 +176,7 @@ services:
         APP_DLL: DorkNet.Services.Web.dll
     environment:
       <<: *dorknet-service-env
+    <<: *dorknet-app-networks
     depends_on:
       - postgres
       - redis
@@ -173,6 +187,7 @@ services:
       dockerfile: Dockerfile
     environment:
       <<: *dorknet-service-env
+    <<: *dorknet-app-networks
     depends_on:
       - postgres
       - redis
@@ -191,3 +206,7 @@ services:
 
 volumes:
   microservices-postgres:
+
+networks:
+  dokploy-network:
+    external: true
