@@ -53,9 +53,9 @@ S3__Region=garage
 Photon__AppId=your-photon-realtime-app-id
 Photon__VoiceAppId=your-photon-voice-app-id
 Photon__CloudRegion=eu
-DORKNET_DEFAULT_CLIENT_VERSION=december_2020_12_18
-DORKNET_SUPPORTED_VERSION=december_2020_12_18
-DORKNET_DECEMBER_BUILD_VERSION_KEY=december_2020_12_18
+DorkNet__DefaultClientVersion=december_2020_12_18
+DorkNet__SupportedVersions__0=december_2020_12_18
+DorkNet__BuildIdToVersionKey__20201210=december_2020_12_18
 ```
 
 If Postgres and Redis are Dokploy-managed services in the same project,
@@ -169,6 +169,9 @@ CLOUDFLARE_TUNNEL_TOKEN=<token from Cloudflare Zero Trust tunnel>
 Photon__AppId=your-photon-realtime-app-id
 Photon__VoiceAppId=your-photon-voice-app-id
 Photon__CloudRegion=eu
+DORKNET_DEFAULT_CLIENT_VERSION=december_2020_12_18
+DORKNET_SUPPORTED_VERSION=december_2020_12_18
+DORKNET_DECEMBER_BUILD_VERSION_KEY=december_2020_12_18
 ```
 
 By default the service containers connect to the bundled compose
