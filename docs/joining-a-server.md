@@ -12,7 +12,8 @@ locally — nothing is sent anywhere until you actually launch the game.
 ## What you'll need
 
 - Windows 10 or 11
-- A copy of **Rec Room 2020.03.10** — your own, see
+- A copy of the **same 2020 Rec Room build your host is using**,
+  usually March 2020 or December 2020. Bring your own copy; see
   [Getting the 2020 client](easy-setup.md#getting-the-2020-client)
 - The join code your friend gave you (a base64-looking blob a few hundred
   characters long)

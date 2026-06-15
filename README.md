@@ -19,14 +19,14 @@ tuned to that build's wire protocol.
 | **Rec Room 2020.12.18** (December) | [`december-2020-12-18`](../../tree/december-2020-12-18) | Active |
 | **Rec Room 2020.03.10** (March) | [`march-2020-03-10`](../../tree/march-2020-03-10) | Active |
 
-See [BRANCHES.md](BRANCHES.md) for the full per-branch breakdown
-(supported features, schema notes, plugin compatibility). Programs that
-need the mapping in machine-readable form (the Easy launcher, install
-scripts) read it from [versions.json](versions.json).
+See [BRANCHES.md](BRANCHES.md) for the full per-branch breakdown:
+supported features, schema notes, and plugin compatibility. Tools that
+need the same list in machine-readable form read it from
+[versions.json](versions.json).
 
 This `main` branch is **docs-only** — it carries the project README, the
 manifest the launcher reads, the per-version setup guides, and the Easy
-app source. All actual server / patcher code lives on the per-version
+app source. Server and patcher code lives on the per-version
 branches above.
 
 ---
@@ -51,10 +51,10 @@ Pick a Rec Room build on first launch, host or join.
 
 ### Linux / macOS host — `dorknet-server` CLI
 
-Headless host-side CLI for Linux (x64/arm64), macOS (Intel/Apple
-Silicon), and Windows. Same server + tunnel pipeline as the GUI,
-suitable for a VPS or a permanent home server. Joiners still use the
-Windows launcher to apply the patch to their own Rec Room install.
+Command-line host for Linux (x64/arm64), macOS (Intel/Apple Silicon),
+and Windows. It runs the same server and tunnel flow as the GUI, so it
+works well on a VPS or permanent home server. Joiners still use the
+Windows launcher to patch their own Rec Room install.
 
 ```sh
 dorknet-server --photon-id YOUR-APPID --name "Sunday games"
@@ -64,16 +64,19 @@ dorknet-server --photon-id YOUR-APPID --name "Sunday games"
 
 ### Advanced — Docker / source
 
-For community-server hosts, modders, and contributors. Pick the branch
-matching your client build, clone, run.
+For community-server hosts, modders, and contributors. `main` is only
+the launcher and project docs, so the real server instructions live on
+the version branch you plan to run.
 
 ```bash
 # Example: hosting for December 2020.12.18 clients
 git clone --branch december-2020-12-18 https://github.com/DorkSquadRR/DorkNet
-cd DorkNet/docker
-cp .env.example .env  # fill in 2-3 values
-docker compose up -d
+cd DorkNet
 ```
+
+From there, follow that branch's `README.md` and `docs/deploy.md`.
+The December branch has the newer microservices/Dokploy path; March is
+the older single-server branch.
 
 → **[Advanced setup guide](docs/advanced-setup.md)**
 
@@ -120,7 +123,7 @@ branch's `BRANCHES.md` row for the exact deltas.
 - [Branch chart](BRANCHES.md) — which branch matches your client
 - [Easy setup](docs/easy-setup.md) — Windows GUI launcher
 - [Server CLI](docs/server-cli.md) — Linux / macOS / Windows headless
-- [Advanced setup](docs/advanced-setup.md) — Docker / VPS path
+- [Advanced setup](docs/advanced-setup.md) — source, Docker, VPS, and branch deploys
 - [Joining a server](docs/joining-a-server.md) — for players
 - [Photon setup](docs/photon-setup.md) — getting your AppIds
 - [Architecture](docs/architecture.md) — how the code is laid out

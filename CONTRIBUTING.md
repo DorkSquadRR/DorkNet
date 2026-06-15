@@ -7,8 +7,8 @@ Thanks for your interest. A few ground rules before you open a PR.
 - **C#**: nullable enabled. Match the file you're editing. No regions, no
   multi-paragraph XML docs, no async-without-await.
 - **TypeScript / React**: existing patterns — function components, named
-  exports, tailwind classes, no CSS modules. Lint with `npm run lint` from
-  `admin-ui/`.
+  exports, tailwind classes, no CSS modules. On a version branch, lint
+  with `npm run lint` from `DorkNet.Server/admin-ui/`.
 - **No AI-co-author trailers in commit messages.** Use a real attribution
   line or none at all.
 
@@ -44,10 +44,12 @@ metadata, or use GitHub's private vulnerability reporting.
 ## Setting up a dev environment
 
 See [docs/advanced-setup.md](docs/advanced-setup.md) for the full server
-stack. For just hacking on the admin UI:
+stack. The server and admin UI live on the version branches, not on
+`main`. For just hacking on the admin UI after you check out a version
+branch:
 
 ```bash
-cd admin-ui
+cd DorkNet.Server/admin-ui
 npm install
 npm run dev
 ```

@@ -34,7 +34,7 @@ launcher/
     ├── VersionsManifest.cs    Fetches versions.json from main
     ├── ReleaseDownloader.cs   GitHub Releases API + artifact unpack
     ├── ServerProcess.cs       Spawns the downloaded server binary
-    ├── ClientPatcher.cs       Invokes install-plugin.ps1 from the unpacked patcher
+    ├── ClientPatcher.cs       Applies the manifest-based patcher zip
     ├── LocaltunnelInstaller.cs Downloads the Localtunnel .NET client
     ├── LocaltunnelTunnel.cs    Spawns the tunnel + parses the *.loca.lt URL
     ├── RecRoomPicker.cs       Microsoft.Win32.OpenFolderDialog
@@ -67,7 +67,7 @@ launcher release workflow once it exists).
 
 ## Dependencies on per-version branches
 
-The launcher fetches release artifacts from GitHub Releases tagged on
+The launcher fetches release files from GitHub Releases tagged on
 the per-version branches. See [RELEASES.md](RELEASES.md) for the
 exact naming convention each branch must follow.
 
