@@ -26,7 +26,6 @@ var app = builder.Build();
 
 app.MapDorkNetServiceDefaults();
 
-app.MapGet("/", () => Results.Redirect("/healthz"));
 app.MapGet("/internal/services", (IOptions<DorkNetServiceMapOptions> options) =>
     Results.Ok(options.Value.Endpoints()));
 app.MapGet("/internal/routes", () =>
