@@ -59,6 +59,27 @@ Or install as a Windows service so it survives reboots:
 cloudflared service install
 ```
 
+## Dokploy sidecar
+
+For Dokploy microservices, use
+`docker-compose.microservices.dokploy.yml`. It starts `cloudflared` in
+the same Compose network as `gateway`, so the tunnel origin is:
+
+```text
+http://gateway:8080
+```
+
+Set `CLOUDFLARE_TUNNEL_TOKEN` in Dokploy from the Cloudflare Zero Trust
+tunnel token. In the Cloudflare tunnel's public hostnames, add:
+
+```text
+yourdomain.com      -> http://gateway:8080
+*.yourdomain.com    -> http://gateway:8080
+```
+
+Do not add these domains in Dokploy's domain modal for this compose
+stack; Cloudflare owns the public hostname routing.
+
 ## What happens at request time
 
 ```

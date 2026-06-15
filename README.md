@@ -218,9 +218,10 @@ pattern, where to start contributing).
 `docker-compose.microservices.yml` starts the new gateway, identity,
 rooms, and notify service hosts plus Compose-managed Postgres and Redis
 for local testing. `docker-compose.microservices.dokploy.yml` is the
-Dokploy version; it reads `DORKNET_DOMAIN` and publishes the required
-Traefik host rules for the gateway. These files do **not** replace the
-full `DorkNet.Server` runtime yet; the public API is still served by the
+Dokploy version; it adds a `cloudflared` sidecar so Cloudflare Tunnel
+can route the apex and wildcard hostnames to the gateway without
+Dokploy domain rows. These files do **not** replace the full
+`DorkNet.Server` runtime yet; the public API is still served by the
 monolith while domains are peeled into services incrementally.
 
 The compose file intentionally does not start object storage. Point it at
