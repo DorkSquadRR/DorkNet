@@ -110,6 +110,33 @@ static IReadOnlyList<RouteConfig> BuildRoutes(
         "web-admin-host",
         [SubdomainHost("admin", apexDomain)]);
 
+    AddHostRoute(
+        routes,
+        ref order,
+        webGroup.ServiceName,
+        BaseUrlFor(services, webGroup.ServiceName),
+        "web-feed-host",
+        [SubdomainHost("feed", apexDomain)]);
+
+    AddHostPathRoutes(
+        routes,
+        ref order,
+        webGroup.ServiceName,
+        BaseUrlFor(services, webGroup.ServiceName),
+        WebBrowserHosts(apexDomain),
+        [
+            "/admin",
+            "/assets",
+            "/brand",
+            "/feed",
+            "/join",
+            "/p",
+            "/photo",
+            "/players",
+            "/rooms",
+            "/u",
+        ]);
+
     foreach (var group in DorkNetRouteOwnership.RouteGroups.Where(group => group.ServiceName != ServiceNames.Web))
     {
         AddHostRoute(
@@ -158,6 +185,11 @@ static IReadOnlyList<ClusterConfig> BuildClusters(DorkNetServiceMapOptions servi
     return clusters;
 }
 
+static string[] WebBrowserHosts(string apexDomain)
+{
+    return [apexDomain, SubdomainHost("www", apexDomain)];
+}
+
 static void AddHostRoute(
     List<RouteConfig> routes,
     ref int order,
@@ -197,6 +229,28 @@ static void AddPathRoutes(
         var exactPath = NormalizeRoutePrefix(path);
         routes.Add(Route(serviceName, $"{routeId}-exact", exactPath, order++));
         routes.Add(Route(serviceName, routeId, $"{exactPath}/{{**catch-all}}", order++));
+    }
+}
+
+static void AddHostPathRoutes(
+    List<RouteConfig> routes,
+    ref int order,
+    string serviceName,
+    string baseUrl,
+    string[] hosts,
+    IEnumerable<string> paths)
+{
+    if (string.IsNullOrWhiteSpace(baseUrl) || hosts.Length == 0)
+    {
+        return;
+    }
+
+    foreach (var path in paths)
+    {
+        var routeId = $"{serviceName}-browser-{path.Trim('/').Replace('/', '-').Replace("{**catch-all}", "all")}";
+        var exactPath = NormalizeRoutePrefix(path);
+        routes.Add(Route(serviceName, $"{routeId}-exact", exactPath, order++, hosts));
+        routes.Add(Route(serviceName, routeId, $"{exactPath}/{{**catch-all}}", order++, hosts));
     }
 }
 
