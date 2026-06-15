@@ -12,4 +12,12 @@
     <ProjectReference Include="..\DorkNet.Server\DorkNet.Server.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\DorkNet.Server\wwwroot\**\*">
+      <Link>wwwroot\%(RecursiveDir)%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>
