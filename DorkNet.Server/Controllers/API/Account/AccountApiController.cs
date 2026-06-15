@@ -201,12 +201,12 @@ public class AccountApiController(
 
     [HttpPost("api/account/v1/profileimage")]
     [HttpPost("api/account/me/profileimage")]
-    [HttpPost("account/me/profileimage")]
-    [HttpPost("profileimage")]
+    [HttpPost("account/me/profileimage", Order = 10)]
+    [HttpPost("profileimage", Order = 10)]
     [HttpPut("api/account/v1/profileimage")]
     [HttpPut("api/account/me/profileimage")]
-    [HttpPut("account/me/profileimage")]
-    [HttpPut("profileimage")]
+    [HttpPut("account/me/profileimage", Order = 10)]
+    [HttpPut("profileimage", Order = 10)]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
     public async Task<IActionResult> SetProfileImage(
         [FromForm(Name = "imageName")] string? imageName,

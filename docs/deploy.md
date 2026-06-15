@@ -5,13 +5,12 @@ This branch has two deployable shapes:
 - **Production/full API:** build the root `Dockerfile`, which runs
   `DorkNet.Server`. This is still the runtime that serves every public
   Rec Room-compatible endpoint.
-- **Microservices scaffold:** deploy `docker-compose.microservices.yml`
+- **Microservices:** deploy `docker-compose.microservices.yml`
   for local testing or `docker-compose.microservices.dokploy.yml` on
-  Dokploy. Both start `DorkNet.Gateway`,
-  `DorkNet.Services.Identity`, `DorkNet.Services.Rooms`,
-  `DorkNet.Services.Notify`, Postgres, and Redis. These hosts currently
-  expose internal health/capability endpoints only; public routes move
-  behind the gateway incrementally.
+  Dokploy. Both start `DorkNet.Gateway`, the dedicated service slices,
+  the `DorkNet.Server` monolith fallback, Postgres, and Redis. The
+  gateway routes public traffic to owned service slices and sends
+  unknown route families to the fallback.
 
 Object storage is always a **separate S3-compatible instance**. The
 microservices compose files do not start MinIO/Garage.
@@ -120,10 +119,9 @@ service URLs returned to the client by `ConfigService`.
 
 ---
 
-## Dokploy: microservices scaffold
+## Dokploy: microservices
 
-Use this to run the new gateway/service-host layout. It is not yet a
-replacement for the full public API.
+Use this to run the gateway/service-host layout.
 
 Create a Dokploy **Compose** service from one of these files:
 
@@ -136,10 +134,17 @@ Both compose files provide:
 
 | Service | Purpose |
 |---|---|
-| `gateway` | Edge host scaffold; service map and service health probes |
-| `identity` | Future identity/auth/accounts service |
-| `rooms` | Future rooms/matchmaking/discovery service |
-| `notify` | Future notification/presence service |
+| `gateway` | Edge reverse proxy; service map, route table, and service health probes |
+| `identity` | Auth, accounts, and platform-login route slice |
+| `rooms` | Rooms, room keys, playlists, matchmaking, and discovery route slice |
+| `notify` | Notify, messages/chat, SignalR, and notification route slice |
+| `content` | CDN paths, uploads, images, photos, room blobs, and storage route slice |
+| `social` | Clubs, groups, announcements, player events, subscriptions route slice |
+| `commerce` | Catalog, storefronts, econ, inventory, inventions route slice |
+| `platform` | Service directory, config, version checks, geo, strings, and platform route slice |
+| `moderation` | Bug reporting, player reporting, sanitize, admin API, and testcase route slice |
+| `web` | Apex/www/admin/feed static hosts and site API route slice |
+| `monolith` | Fallback full server for unknown route families not assigned to a service yet |
 | `postgres` | Internal Postgres for the service network |
 | `redis` | Internal Redis for ephemeral state and fan-out |
 | `cloudflared` | Cloudflare Tunnel sidecar; Dokploy file only |
@@ -155,6 +160,8 @@ Set these Dokploy Compose environment variables:
 
 ```env
 DORKNET_DOMAIN=yourdomain.com
+DORKNET_JWT_SECRET=replace-with-at-least-64-random-characters
+POSTGRES_PASSWORD=replace-with-a-random-db-password
 CLOUDFLARE_TUNNEL_TOKEN=<token from Cloudflare Zero Trust tunnel>
 ```
 
@@ -165,15 +172,16 @@ yourdomain.com      -> http://gateway:8080
 *.yourdomain.com    -> http://gateway:8080
 ```
 
-The wildcard covers `api`, `auth`, `rooms`, `notify`, and the other
-client-facing subdomains. The apex rule is separate because wildcard DNS
-does not cover the root domain. Let Cloudflare create the tunnel DNS
-records, or create CNAME records to the tunnel target Cloudflare gives
-you.
+The wildcard covers `api`, `auth`, `rooms`, `notify`, `cdn`, `clubs`,
+`commerce`, and the other client-facing subdomains. The apex rule is
+separate because wildcard DNS does not cover the root domain. Let
+Cloudflare create the tunnel DNS records, or create CNAME records to the
+tunnel target Cloudflare gives you.
 
-When the gateway starts carrying the public API, every public DorkNet
-domain listed above should point to `gateway`. Until then, keep the real
-player-facing domains on the full `DorkNet.Server` application.
+Every public DorkNet domain listed above should point to the gateway.
+The gateway preserves the original Host header so service code still sees
+`auth.yourdomain.com`, `rooms.yourdomain.com`, and the other client
+hosts.
 
 Set these Compose environment variables in Dokploy:
 
@@ -194,11 +202,12 @@ Useful smoke checks after deploy:
 curl https://api.yourdomain.com/healthz
 curl https://api.yourdomain.com/internal/services
 curl https://api.yourdomain.com/internal/services/health
+curl https://api.yourdomain.com/internal/routes
 ```
 
-Expected during scaffold-only deploys: `/internal/services/health`
-reports gateway-visible status for identity, rooms, and notify. It does
-not prove the full game API has moved yet.
+`/internal/routes` shows which host/path patterns route to each service
+slice or the monolith fallback. `/internal/services/health` reports
+gateway-visible health for every backend service.
 
 ---
 
@@ -235,7 +244,7 @@ S3__TimeoutSeconds=300
 ```
 
 For the microservices compose file, use the `DORKNET_S3_*` equivalents;
-Compose maps them into `S3__*` for the rooms service.
+Compose maps them into `S3__*` for the service containers.
 
 ---
 

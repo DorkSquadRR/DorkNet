@@ -5,7 +5,7 @@ ARG PROJECT_PATH
 WORKDIR /src
 
 COPY . .
-RUN dotnet publish "${PROJECT_PATH}" -c Release -o /app/publish
+RUN dotnet publish "${PROJECT_PATH}" -c Release -p:SkipAdminUIBuild=true -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:${DOTNET_VERSION} AS runtime
 ARG APP_DLL

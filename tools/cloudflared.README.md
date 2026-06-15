@@ -87,8 +87,9 @@ visitor → https://api.localhost/api/versioncheck/v4
         → Cloudflare edge (real LE cert, validated)
         → cloudflared tunnel
         → cloudflared (running on your machine)
-        → https://localhost:443  (Host: api.localhost, mkcert cert)
-        → DorkNet.Server HostFiltering + subdomain-aware handlers
+        → http://gateway:8080  (Host preserved)
+        → DorkNet.Gateway reverse proxy
+        → dedicated service slice / monolith fallback
 ```
 
 The leg from cloudflared → localhost has `noTLSVerify: true` because
