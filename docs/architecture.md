@@ -14,15 +14,39 @@ files in this folder.
 
 ```
 DorkNet.sln
-├── DorkNet.Server      ASP.NET Core 9 backend — the bulk of the code
-├── DorkNet.Models      Shared DTO + serialization types
-└── DorkNet.ClientMod   MelonLoader 6 IL2CPP mod — the client patcher
+├── DorkNet.Server             Shared ASP.NET Core backend + monolith fallback
+├── DorkNet.Models             Shared DTO + serialization types
+├── DorkNet.Contracts          Shared service contracts for the service split
+├── DorkNet.ServiceDefaults    Shared service-host setup
+├── DorkNet.Gateway            Gateway/edge reverse proxy
+├── DorkNet.Services.Identity  Auth/accounts service host
+├── DorkNet.Services.Rooms     Rooms/matchmaking service host
+├── DorkNet.Services.Notify    Notify/chat service host
+├── DorkNet.Services.Content   CDN/images/photos/storage service host
+├── DorkNet.Services.Social    Clubs/groups/events/social service host
+├── DorkNet.Services.Commerce  Store/econ/inventory service host
+├── DorkNet.Services.Platform  Service directory/config/platform service host
+├── DorkNet.Services.Moderation Bug reporting/moderation service host
+├── DorkNet.Services.Web       Public/admin/feed web host
+└── DorkNet.ClientMod          MelonLoader 6 IL2CPP mod — the client patcher
 ```
 
 | Project | Responsibility | Target |
 |---|---|---|
-| `DorkNet.Server` | REST API, SignalR hub, admin SPA host, static-site host, image CDN, matchmaking, persistence | .NET 9 |
+| `DorkNet.Server` | Shared REST/controller/service stack, database bootstrap, standalone fallback, monolith fallback | .NET 9 |
 | `DorkNet.Models` | DTOs the wire protocol speaks. No project dependencies. | .NET 9 |
+| `DorkNet.Contracts` | Service names, route ownership, service-map options, health responses, probe responses | .NET 9 |
+| `DorkNet.ServiceDefaults` | Common service health checks, JSON defaults, HTTP clients, service identity, route guard | .NET 9 |
+| `DorkNet.Gateway` | Edge reverse proxy; routes host/path slices to services and exposes service health probes | .NET 9 |
+| `DorkNet.Services.Identity` | Accounts, auth, platform login, JWT issuance route slice | .NET 9 |
+| `DorkNet.Services.Rooms` | Rooms, room keys, matchmaking, discovery route slice | .NET 9 |
+| `DorkNet.Services.Notify` | SignalR edge, messages/chat, notification fan-out route slice | .NET 9 |
+| `DorkNet.Services.Content` | CDN paths, image/photo APIs, uploads, S3-backed blobs | .NET 9 |
+| `DorkNet.Services.Social` | Clubs, groups, announcements, player events, subscriptions | .NET 9 |
+| `DorkNet.Services.Commerce` | Catalog, storefronts, econ, inventory, inventions | .NET 9 |
+| `DorkNet.Services.Platform` | Service URLs, config, version checks, geo, strings, telemetry-style surfaces | .NET 9 |
+| `DorkNet.Services.Moderation` | Bug reporting, player reporting, sanitize, path-routed admin API, testcase routes | .NET 9 |
+| `DorkNet.Services.Web` | Public site, admin static host, same-origin admin browser API, feed static host, site API | .NET 9 |
 | `DorkNet.ClientMod` | MelonLoader 0.6.x IL2CPP mod — the client patcher, JSON config | .NET 6 |
 
 `ClientMod` applies the client-side patches needed to point the 2020
@@ -48,8 +72,56 @@ DorkNet.Server/
 ├── admin-ui/      Vite + React SPA source — builds to wwwroot/admin/
 ├── site/          Public website Vite SPA source — builds to wwwroot/site/
 ├── wwwroot/       Static file root, with per-host subdirs (admin/, site/, feed/)
-└── Program.cs     Host + DI + middleware pipeline (split candidates noted at the bottom)
+├── Startup/       Host composition, DI registration, database bootstrap, middleware pipeline
+└── Program.cs     Short composition root
 ```
+
+## Runtime topology
+
+The production runtime is the gateway-fronted service split.
+`DorkNet.Server` remains available as the shared compatibility runtime
+and as a standalone debug/fallback image. In the compose stack it runs as
+`monolith` behind the gateway for route families that have not been
+assigned to a dedicated service yet.
+
+The service split works like this:
+
+- `DorkNet.Gateway` reverse-proxies public requests by host/path.
+- `DorkNet.Services.Identity`, `DorkNet.Services.Rooms`,
+  `DorkNet.Services.Notify`, `DorkNet.Services.Content`,
+  `DorkNet.Services.Social`, `DorkNet.Services.Commerce`,
+  `DorkNet.Services.Platform`, `DorkNet.Services.Moderation`, and
+  `DorkNet.Services.Web` run the shared server stack behind a route
+  ownership guard. That keeps response shapes identical while moving
+  traffic by domain/path slice.
+- `DorkNet.Gateway` exposes `/internal/services` and
+  `/internal/services/health`, plus `/internal/routes` for the active
+  proxy table.
+- `DorkNet.Services.Identity` exposes
+  `/internal/identity/capabilities`.
+- `DorkNet.Services.Rooms` exposes `/internal/rooms/capabilities`.
+- `DorkNet.Services.Notify` exposes `/internal/notify/capabilities`.
+- The other slices expose matching `/internal/{service}/capabilities`
+  endpoints.
+
+`docker-compose.microservices.yml` starts gateway, all dedicated service
+slices, the monolith fallback, and Compose-managed Postgres and Redis for
+local testing. `docker-compose.microservices.dokploy.yml` is the Dokploy
+production shape: it adds a `cloudflared` sidecar that joins the same
+Compose network and forwards Cloudflare Tunnel traffic to
+`http://gateway:8080`. Object storage is external S3-compatible storage
+configured with `DORKNET_S3_*` environment variables; the compose files
+do not run MinIO or Garage.
+
+`Dockerfile.service` is the reusable service image. It accepts
+`PROJECT_PATH` and `APP_DLL` build args, rebuilds the admin/site Vite
+SPAs for service images that need static assets, publishes the selected
+.NET project, and runs that DLL in the runtime image. The root
+`Dockerfile` builds only the standalone/fallback `DorkNet.Server` image.
+
+For the admin browser console specifically, including the host routing
+split between the admin static host and `/api/admin/v1`, see
+[`admin.md`](admin.md).
 
 ### Controllers/ groupings
 
@@ -190,11 +262,14 @@ Two providers, switched by `Database:Provider` config:
 - **SQLite** — default for local dev. File at `bin/<config>/data/dorknet.db`.
 - **Postgres** — production. Connection string from `ConnectionStrings:Default`.
 
-Schema lives in `Data/Entities/*` and `Data/DorkNetDbContext.cs`. EF
-migrations under `Data/Migrations/` apply via `Database.Migrate()` on
-boot. Data transforms that can't be expressed as schema migrations
-(seed renames, computed backfills) go in `Data/LegacyUpgrades.cs` as
-idempotent methods registered in `RunAsync()`. See
+Schema lives in `Data/Entities/*` and `Data/DorkNetDbContext.cs`.
+SQLite dev DBs apply EF migrations under `Data/Migrations/` via
+`Database.Migrate()`. The production Postgres path still uses
+`EnsureCreated()` plus idempotent bootstrap work under the same
+advisory-lock discipline. Data transforms that can't be expressed as
+schema migrations (seed renames, computed backfills) go in
+`Data/LegacyUpgrades.cs` as idempotent methods registered in `RunAsync()`.
+See
 [`Data/MIGRATIONS.md`](../DorkNet.Server/Data/MIGRATIONS.md) for the
 discipline: one release = one migration; everything else is
 `LegacyUpgrades`.
@@ -216,9 +291,11 @@ If you've never touched this codebase, the most approachable path:
 4. Look at one **`Cpp2IL`-cited line** in a controller to see how
    wire shapes are pinned to decompiled provenance.
 
-When in doubt: open `DorkNet.Server/Program.cs` and the
+When in doubt: open `DorkNet.Contracts/DorkNetRouteOwnership.cs`,
+`DorkNet.Gateway/Program.cs`, `DorkNet.Server/Program.cs`, and the
 `Versions/Late2020/Late2020VersionPlugin.cs` summary doc-comment.
-Between them they explain 80% of the cross-cutting decisions.
+Together they explain route ownership, proxying, the shared server
+pipeline, and version compatibility.
 
 ---
 
@@ -236,11 +313,11 @@ worse.
   intentional — the decompiled source is provenance only, not
   shippable. Comments give a future contributor a breadcrumb to
   re-derive the wire shape if the decompile changes.
-- **`Program.cs` is long.** Most of it is one-time schema patching
-  (`RunPatchAsync` calls for the Postgres `EnsureCreated` path) that's
-  pending consolidation per [`Data/MIGRATIONS.md`](../DorkNet.Server/Data/MIGRATIONS.md).
-  Once that lands, the remaining ~500 lines of middleware + host
-  setup will be split into `Startup/*` extensions.
+- **Microservices use shared server code during extraction.** The
+  dedicated service hosts run the proven controller/service stack behind
+  route guards instead of copying controllers into new projects. This
+  keeps the client contract stable while route families are peeled away
+  from the monolith fallback.
 - **Two-provider EF.** SQLite and Postgres each have their own
   EnsureCreated/Migrate dance because some Postgres-only column types
   drift the model snapshot. The split is annoying but lets one

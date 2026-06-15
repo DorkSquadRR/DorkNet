@@ -15,3 +15,5 @@ var app = builder.Build();
 await app.RunDatabaseBootstrapAsync();
 app.UseDorkNetPipeline();
 app.Run();
+
+public partial class Program;
