@@ -1,8 +1,9 @@
 # Disclaimer
 
-DorkNet is an independent, fan-made, clean-room reimplementation of the
-backend protocol used by the **2020 release of Rec Room** (build
-`Recroom_Release` dated 2020.03.10).
+DorkNet is an independent, fan-made, clean-room reimplementation of
+backend protocols used by old **2020 Rec Room** builds. The supported
+client builds live on separate branches, currently March 2020 and
+December 2020.
 
 It is **not** affiliated with, endorsed by, or sponsored by:
 
@@ -30,10 +31,10 @@ DorkNet's repository **does not** contain:
 - Patched copies of `Recroom_Release.exe`, `global-metadata.dat`, or any
   Rec Room game file
 
-You must acquire the 2020.03.10 Rec Room client yourself through whatever
-means are legal in your jurisdiction (e.g. SteamDB depot tools against an
-account that owns Rec Room). The patcher runs on your machine, modifies
-files locally, and never uploads anything anywhere.
+You must acquire the matching 2020 Rec Room client yourself through
+whatever means are legal in your jurisdiction, for example SteamDB depot
+tools against an account that owns Rec Room. The patcher runs on your
+machine, modifies files locally, and never uploads the game anywhere.
 
 ## Use at your own risk
 
