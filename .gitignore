@@ -23,7 +23,7 @@ appsettings.Development.json
 .env
 .env.local
 .env.*.local
-
+.backups
 # Runtime data
 data/*.db
 data/*.db-shm
@@ -68,4 +68,3 @@ Thumbs.db
 # Test outputs
 TestResults/
 *.coverage
-
