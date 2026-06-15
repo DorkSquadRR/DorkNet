@@ -165,6 +165,33 @@ POSTGRES_PASSWORD=replace-with-a-random-db-password
 CLOUDFLARE_TUNNEL_TOKEN=<token from Cloudflare Zero Trust tunnel>
 ```
 
+By default the service containers connect to the bundled compose
+Postgres service:
+
+```env
+Host=postgres;Port=5432;Database=dorknet;Username=dorknet;Password=${POSTGRES_PASSWORD}
+```
+
+To use a Dokploy-managed or external Postgres instead, set a full
+connection string and the compose services will use it instead of the
+bundled `postgres` hostname:
+
+```env
+DORKNET_POSTGRES_CONNECTION_STRING=Host=<postgres-host>;Port=5432;Database=dorknet;Username=<user>;Password=<password>
+```
+
+For hosted Postgres that requires TLS, include the Npgsql SSL options:
+
+```env
+DORKNET_POSTGRES_CONNECTION_STRING=Host=<postgres-host>;Port=5432;Database=dorknet;Username=<user>;Password=<password>;SSL Mode=Require;Trust Server Certificate=true
+```
+
+If you use the bundled compose Postgres, `POSTGRES_PASSWORD` must match
+the password that initialized the existing Postgres volume. Changing
+`POSTGRES_PASSWORD` later does not change the already-created `dorknet`
+database user; either restore the original password, reset it inside
+Postgres, or recreate the Postgres volume.
+
 In Cloudflare Zero Trust, configure the tunnel with two public hostnames:
 
 ```text

@@ -2,7 +2,7 @@ x-dorknet-service-env: &dorknet-service-env
   DORKNET_DOMAIN: ${DORKNET_DOMAIN:?Set DORKNET_DOMAIN in Dokploy}
   DORKNET_JWT_SECRET: ${DORKNET_JWT_SECRET:?Set DORKNET_JWT_SECRET in Dokploy}
   Database__Provider: postgres
-  ConnectionStrings__Default: Host=postgres;Port=5432;Database=dorknet;Username=dorknet;Password=${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in Dokploy}
+  ConnectionStrings__Default: ${DORKNET_POSTGRES_CONNECTION_STRING:-Host=postgres;Port=5432;Database=dorknet;Username=dorknet;Password=${POSTGRES_PASSWORD:-dorknet_dev}}
   ConnectionStrings__Redis: redis:6379
   S3__Endpoint: ${DORKNET_S3_ENDPOINT:?Set DORKNET_S3_ENDPOINT in Dokploy}
   S3__AccessKey: ${DORKNET_S3_ACCESS_KEY:?Set DORKNET_S3_ACCESS_KEY in Dokploy}
@@ -182,7 +182,7 @@ services:
     environment:
       POSTGRES_DB: dorknet
       POSTGRES_USER: dorknet
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in Dokploy}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dorknet_dev}
     volumes:
       - microservices-postgres:/var/lib/postgresql/data
 
