@@ -5,6 +5,10 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Routing;
 
 var serverAssembly = LoadServerAssembly(args);
+var serverAssemblyWriteTime = File.GetLastWriteTimeUtc(serverAssembly.Location);
+Console.WriteLine($"Using server assembly: {serverAssembly.Location}");
+Console.WriteLine($"Server assembly timestamp (UTC): {serverAssemblyWriteTime:O}");
+
 var routes = DiscoverRoutes(serverAssembly).OrderBy(r => r.Method).ThenBy(r => r.Template).ToArray();
 var failures = new List<string>();
 
@@ -51,15 +55,23 @@ static Assembly LoadServerAssembly(string[] args)
         Path.Combine(repositoryRoot, "DorkNet.Server", "bin", "Release", "net9.0", "DorkNet.Server.dll")
     };
 
-    var serverAssemblyPath = candidates.FirstOrDefault(File.Exists);
-    if (serverAssemblyPath is null)
+    var existingCandidates = candidates.Where(File.Exists).ToArray();
+    if (existingCandidates.Length == 0)
     {
         throw new FileNotFoundException(
             "Could not find a built DorkNet.Server assembly. Build DorkNet.Server first or pass the DLL path as the first argument.",
             string.Join(Environment.NewLine, candidates));
     }
 
-    return LoadAssemblyFromPath(serverAssemblyPath);
+    if (existingCandidates.Length > 1)
+    {
+        throw new InvalidOperationException(
+            "Multiple DorkNet.Server assemblies were found. Pass the DLL path as the first argument so route coverage validates the intended build."
+            + Environment.NewLine
+            + string.Join(Environment.NewLine, existingCandidates));
+    }
+
+    return LoadAssemblyFromPath(existingCandidates[0]);
 }
 
 static Assembly LoadAssemblyFromPath(string assemblyPath)
