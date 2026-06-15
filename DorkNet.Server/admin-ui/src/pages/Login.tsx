@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { api, ApiError } from '../lib/api';
 import { notifyAuthChange, setSession } from '../lib/auth';
+import { BrandMark } from '../components/BrandMark';
 
 interface LoginResponse {
   access_token: string;
@@ -51,12 +52,12 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-full flex items-center justify-center px-4 py-12 bg-gradient-to-br from-ink-950 via-ink-950 to-ink-900">
+    <div className="min-h-full flex items-center justify-center px-4 py-12 bg-[linear-gradient(135deg,#0a0b0e_0%,#0d1d25_48%,#131418_100%)]">
       <div className="w-full max-w-sm">
         <div className="mb-8 flex flex-col items-center gap-2">
-          <div className="size-12 rounded-xl bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center text-xl font-bold text-white shadow-lg shadow-brand-900/40">D</div>
+          <BrandMark className="size-16 rounded-xl" />
           <div className="text-center">
-            <h1 className="text-xl font-semibold tracking-tight text-ink-50">DorkNet Admin</h1>
+            <h1 className="text-xl font-semibold text-ink-50">DorkNet Admin</h1>
             <p className="text-xs text-ink-400">Sign in with an admin account.</p>
           </div>
         </div>

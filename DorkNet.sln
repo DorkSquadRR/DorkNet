@@ -35,6 +35,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DorkNet.Services.Moderation
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DorkNet.Services.Web", "DorkNet.Services.Web\DorkNet.Services.Web.csproj", "{F29F1B14-B61E-47CC-820A-C98BAE8F21DB}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{07C2787E-EAC7-C090-1BA3-A61EC2A24D84}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DorkNet.ApiRouteCoverage", "tools\DorkNet.ApiRouteCoverage\DorkNet.ApiRouteCoverage.csproj", "{6BC447E7-3158-4FEC-81D4-506452157810}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -237,8 +241,23 @@ Global
 		{F29F1B14-B61E-47CC-820A-C98BAE8F21DB}.Release|x64.Build.0 = Release|Any CPU
 		{F29F1B14-B61E-47CC-820A-C98BAE8F21DB}.Release|x86.ActiveCfg = Release|Any CPU
 		{F29F1B14-B61E-47CC-820A-C98BAE8F21DB}.Release|x86.Build.0 = Release|Any CPU
+		{6BC447E7-3158-4FEC-81D4-506452157810}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6BC447E7-3158-4FEC-81D4-506452157810}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6BC447E7-3158-4FEC-81D4-506452157810}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{6BC447E7-3158-4FEC-81D4-506452157810}.Debug|x64.Build.0 = Debug|Any CPU
+		{6BC447E7-3158-4FEC-81D4-506452157810}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{6BC447E7-3158-4FEC-81D4-506452157810}.Debug|x86.Build.0 = Debug|Any CPU
+		{6BC447E7-3158-4FEC-81D4-506452157810}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6BC447E7-3158-4FEC-81D4-506452157810}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6BC447E7-3158-4FEC-81D4-506452157810}.Release|x64.ActiveCfg = Release|Any CPU
+		{6BC447E7-3158-4FEC-81D4-506452157810}.Release|x64.Build.0 = Release|Any CPU
+		{6BC447E7-3158-4FEC-81D4-506452157810}.Release|x86.ActiveCfg = Release|Any CPU
+		{6BC447E7-3158-4FEC-81D4-506452157810}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{6BC447E7-3158-4FEC-81D4-506452157810} = {07C2787E-EAC7-C090-1BA3-A61EC2A24D84}
 	EndGlobalSection
 EndGlobal
