@@ -1,5 +1,5 @@
 DorkNet — Rec Room Private Server
-Copyright (C) 2026 Alexa <https://github.com/Alexa-RR/Dorknet>
+Copyright (C) 2026 DorkSquad <https://github.com/DorkSquad/Dorknet>
 
 This program is free software: you can redistribute it and/or modify it
 under the terms of the GNU Affero General Public License as published
@@ -28,7 +28,7 @@ covered by AGPL §13 — you must:
   2. Preserve this NOTICE file in your distribution.
 
   3. Credit the upstream project visibly. At minimum:
-       "Based on DorkNet (https://github.com/Alexa-RR/Dorknet) by Alexa,
+       "Based on DorkNet (https://github.com/DorkSquad/Dorknet) by DorkSquad,
         licensed AGPL-3.0."
      Acceptable placements: README, server console banner, in-game
      credits screen, or web-facing footer of any deployment dashboard.
