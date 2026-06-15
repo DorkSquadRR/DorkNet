@@ -126,10 +126,10 @@ jobs:
             -c Release \
             -r "${{ matrix.rid }}" \
             --self-contained true \
-            /p:Version="$v" \
-            /p:AssemblyVersion="${v}.0" \
-            /p:FileVersion="${v}.0" \
-            /p:InformationalVersion="$v"
+            -p:Version="$v" \
+            -p:AssemblyVersion="${v}.0" \
+            -p:FileVersion="${v}.0" \
+            -p:InformationalVersion="$v"
 
       - name: Package
         shell: bash
