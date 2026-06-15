@@ -14,8 +14,15 @@ public static class Program
 {
     public static async Task<int> Main(string[] args)
     {
+        // --help / -h (and a bare invocation) print usage and exit cleanly.
+        if (args.Length == 0 || args.Contains("--help") || args.Contains("-h"))
+        {
+            PrintHelp();
+            return 0;
+        }
+
         var parsed = ParseArgs(args);
-        if (parsed is null) return 1; // ParseArgs already wrote --help or an error.
+        if (parsed is null) return 1; // ParseArgs already wrote the error.
 
         // Validate required values up front so the user sees the
         // failure before any download / process spin-up.
@@ -216,50 +223,52 @@ public static class Program
 
     private static ParsedArgs? ParseArgs(string[] args)
     {
-        if (args.Length == 0 || args.Contains("--help") || args.Contains("-h"))
-        {
-            PrintHelp();
-            return null;
-        }
-
         string photon = "", voice = "", region = "us";
         string mode = "localtunnel", apex = "", name = "DorkNet Server";
         string versionKey = "march_2020_03_10";
         string? serverDir = null;
 
-        for (int i = 0; i < args.Length; i++)
+        try
         {
-            string Next()
+            for (int i = 0; i < args.Length; i++)
             {
-                if (i + 1 >= args.Length)
-                    throw new ArgumentException($"missing value for {args[i]}");
-                return args[++i];
+                string Next()
+                {
+                    if (i + 1 >= args.Length)
+                        throw new ArgumentException($"missing value for {args[i]}");
+                    return args[++i];
+                }
+                switch (args[i])
+                {
+                    case "--photon-id":     photon = Next(); break;
+                    case "--voice-id":      voice = Next(); break;
+                    case "--region":        region = Next(); break;
+                    case "--mode":          mode = Next(); break;
+                    case "--apex":          apex = Next(); break;
+                    case "--name":          name = Next(); break;
+                    case "--version":       versionKey = Next(); break;
+                    case "--server-dir":    serverDir = Next(); break;
+                    default:
+                        Console.Error.WriteLine($"error: unknown arg '{args[i]}' (try --help)");
+                        return null;
+                }
             }
-            switch (args[i])
+
+            HostingMode parsedMode = mode.ToLowerInvariant() switch
             {
-                case "--photon-id":     photon = Next(); break;
-                case "--voice-id":      voice = Next(); break;
-                case "--region":        region = Next(); break;
-                case "--mode":          mode = Next(); break;
-                case "--apex":          apex = Next(); break;
-                case "--name":          name = Next(); break;
-                case "--version":       versionKey = Next(); break;
-                case "--server-dir":    serverDir = Next(); break;
-                default:
-                    Console.Error.WriteLine($"error: unknown arg '{args[i]}' (try --help)");
-                    return null;
-            }
+                "localtunnel" or "lt" or "internet" or "tunnel" => HostingMode.SingleOriginTunnel,
+                "wildcard" or "remote" or "tunnelto"            => HostingMode.RemoteWildcard,
+                "lan" or "local" or "wifi"                      => HostingMode.LocalNetwork,
+                _ => throw new ArgumentException($"unknown --mode '{mode}' (try localtunnel, wildcard, lan)"),
+            };
+
+            return new ParsedArgs(photon, voice, region, parsedMode, apex, name, versionKey, serverDir);
         }
-
-        HostingMode parsedMode = mode.ToLowerInvariant() switch
+        catch (ArgumentException ex)
         {
-            "localtunnel" or "lt" or "internet" or "tunnel" => HostingMode.SingleOriginTunnel,
-            "wildcard" or "remote" or "tunnelto"            => HostingMode.RemoteWildcard,
-            "lan" or "local" or "wifi"                      => HostingMode.LocalNetwork,
-            _ => throw new ArgumentException($"unknown --mode '{mode}' (try localtunnel, wildcard, lan)"),
-        };
-
-        return new ParsedArgs(photon, voice, region, parsedMode, apex, name, versionKey, serverDir);
+            Console.Error.WriteLine($"error: {ex.Message} (try --help)");
+            return null;
+        }
     }
 
     private static void PrintHelp()
