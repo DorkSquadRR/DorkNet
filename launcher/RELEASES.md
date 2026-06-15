@@ -1,13 +1,13 @@
 # Release artifact contract
 
-The DorkNet Launcher (on `main`) reads
+The launcher on `main` reads
 [`/versions.json`](../versions.json) to find every supported per-version
-branch, then fetches release artifacts from each branch's GitHub
+branch, then fetches release files from each branch's GitHub
 Releases.
 
-Per-version branches must publish releases that follow this contract,
-otherwise the launcher reports "no release found" / "manifest missing"
-to users on host / join.
+Per-version branches need releases that follow this contract. If the
+assets are missing or named differently, users will see "no release
+found" or "manifest missing" when they host or join.
 
 ## Tag naming
 

@@ -1,8 +1,8 @@
 # Branches
 
-DorkNet maintains a long-lived branch per supported Rec Room client
-build. Each branch is an independent fork of the server + client patcher
-tuned to that build's wire protocol. Pick the one matching your install.
+DorkNet keeps one long-lived branch for each supported Rec Room client
+build. Each branch carries the server and client patcher for that
+build's wire protocol. Pick the branch that matches your install.
 
 ## Active branches
 
@@ -27,8 +27,9 @@ tuned to that build's wire protocol. Pick the one matching your install.
   - Diverges from `december-2020-12-18` by ~170 files; cannot be
     unified with the plugin abstraction alone.
 
-Setup for either is the same — see [docs/advanced-setup.md](docs/advanced-setup.md)
-(starts with a "pick your branch" step).
+Setup starts the same way for both branches: pick the branch, then
+follow that branch's own deploy notes. See
+[docs/advanced-setup.md](docs/advanced-setup.md).
 
 ## How to pick
 
@@ -44,8 +45,8 @@ If you don't know which Rec Room build you have, check:
 ## Machine-readable manifest
 
 [`versions.json`](versions.json) carries the same information in a
-format the Easy launcher and install scripts can consume directly. Add
-new versions there too when a new branch lands.
+format the Easy launcher and install scripts can read directly. When a
+new version branch lands, add it there too.
 
 ## Adding a new version branch
 
