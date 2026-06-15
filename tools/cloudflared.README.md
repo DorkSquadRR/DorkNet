@@ -1,11 +1,19 @@
-# Cloudflare Tunnel for `localhost`
+# Cloudflare Tunnel
 
-Stand up a Cloudflare Tunnel that exposes your local DorkNet server
-on `*.localhost` for public testing — without opening port 443 on your
-firewall, and using Cloudflare's real Let's-Encrypt-equivalent cert
-edge-side so visitors don't need your mkcert CA installed.
+Cloudflare Tunnel is used in two DorkNet workflows:
 
-## When to use this
+- Local standalone testing, where cloudflared forwards `*.localhost`
+  traffic to a locally running `DorkNet.Server`.
+- Dokploy production microservices, where the compose sidecar forwards
+  the apex and wildcard hostnames to `http://gateway:8080`.
+
+Both avoid opening ports directly on the host and let Cloudflare serve a
+public TLS certificate at the edge.
+
+## Local Standalone Tunnel
+
+Use this when you are running the standalone server locally and want
+friends to reach it through Cloudflare.
 
 - You want a friend to play the patched 2020 Rec Room client against
   your server, but they're not on your LAN and don't want to install
@@ -18,7 +26,7 @@ edge-side so visitors don't need your mkcert CA installed.
 1. **`localhost` is on a Cloudflare account you control.** The DNS
    nameservers for the domain need to be Cloudflare's. Check at
    <https://dash.cloudflare.com/> — the zone should be Active.
-2. **Local server running** on `0.0.0.0:443` with the wildcard cert
+2. **Local standalone server running** on `0.0.0.0:443` with the wildcard cert
    that covers `*.localhost` (re-run `tools/patch-client.ps1` if your
    cert is still the `+1` rec.net-only one — it'll regenerate as
    `+3` covering both domains).
@@ -59,7 +67,7 @@ Or install as a Windows service so it survives reboots:
 cloudflared service install
 ```
 
-## Dokploy sidecar
+## Dokploy Microservices Sidecar
 
 For Dokploy microservices, use
 `docker-compose.microservices.dokploy.yml`. It starts `cloudflared` in
@@ -80,24 +88,36 @@ yourdomain.com      -> http://gateway:8080
 Do not add these domains in Dokploy's domain modal for this compose
 stack; Cloudflare owns the public hostname routing.
 
-## What happens at request time
+## What Happens At Request Time
+
+Local standalone tunnel:
 
 ```
-visitor → https://api.localhost/api/versioncheck/v4
-        → Cloudflare edge (real LE cert, validated)
-        → cloudflared tunnel
-        → cloudflared (running on your machine)
-        → http://gateway:8080  (Host preserved)
-        → DorkNet.Gateway reverse proxy
-        → dedicated service slice / monolith fallback
+visitor -> https://api.localhost/api/versioncheck/v4
+        -> Cloudflare edge
+        -> cloudflared tunnel
+        -> cloudflared running on your machine
+        -> https://localhost:443  (Host preserved)
+        -> DorkNet.Server
 ```
 
-The leg from cloudflared → localhost has `noTLSVerify: true` because
-the local server's cert is from mkcert (private CA only trusted on
-your machine). The Cloudflare-edge → cloudflared leg is still
-TLS-encrypted with their cert, so this isn't a security weakening
-— it's just acknowledging that "127.0.0.1 with self-trusted cert" is
-where the trust chain ends.
+Dokploy microservices tunnel:
+
+```
+visitor -> https://api.yourdomain.com/api/versioncheck/v4
+        -> Cloudflare edge
+        -> cloudflared sidecar
+        -> http://gateway:8080  (Host preserved)
+        -> DorkNet.Gateway reverse proxy
+        -> dedicated service slice or monolith fallback
+```
+
+For the local standalone template, the leg from cloudflared to localhost
+has `noTLSVerify: true` because the local server's cert is from mkcert
+(private CA only trusted on your machine). The Cloudflare-edge to
+cloudflared leg is still TLS-encrypted with Cloudflare's cert. In the
+Dokploy microservices stack, the tunnel sidecar uses plain HTTP on the
+private Compose network and sends everything to the gateway.
 
 ## Tearing down
 
