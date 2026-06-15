@@ -14,7 +14,7 @@ files in this folder.
 
 ```
 DorkNet.sln
-├── DorkNet.Server             ASP.NET Core 9 backend — full public API today
+├── DorkNet.Server             Shared ASP.NET Core backend + monolith fallback
 ├── DorkNet.Models             Shared DTO + serialization types
 ├── DorkNet.Contracts          Shared service contracts for the service split
 ├── DorkNet.ServiceDefaults    Shared service-host setup
@@ -33,7 +33,7 @@ DorkNet.sln
 
 | Project | Responsibility | Target |
 |---|---|---|
-| `DorkNet.Server` | REST API, SignalR hub, admin SPA host, static-site host, image CDN, matchmaking, persistence | .NET 9 |
+| `DorkNet.Server` | Shared REST/controller/service stack, database bootstrap, standalone fallback, monolith fallback | .NET 9 |
 | `DorkNet.Models` | DTOs the wire protocol speaks. No project dependencies. | .NET 9 |
 | `DorkNet.Contracts` | Service names, route ownership, service-map options, health responses, probe responses | .NET 9 |
 | `DorkNet.ServiceDefaults` | Common service health checks, JSON defaults, HTTP clients, service identity, route guard | .NET 9 |
@@ -78,12 +78,13 @@ DorkNet.Server/
 
 ## Runtime topology
 
-`DorkNet.Server` remains the compatibility fallback and full standalone
-runtime. It can still run by itself, serving the full public
-Rec Room-compatible HTTP surface, SignalR hub, static hosts, database
-bootstrap, Redis-backed ephemeral state, and S3-backed blob storage.
+The production runtime is the gateway-fronted service split.
+`DorkNet.Server` remains available as the shared compatibility runtime
+and as a standalone debug/fallback image. In the compose stack it runs as
+`monolith` behind the gateway for route families that have not been
+assigned to a dedicated service yet.
 
-The microservice shape is a gateway-fronted split:
+The service split works like this:
 
 - `DorkNet.Gateway` reverse-proxies public requests by host/path.
 - `DorkNet.Services.Identity`, `DorkNet.Services.Rooms`,
@@ -93,9 +94,6 @@ The microservice shape is a gateway-fronted split:
   `DorkNet.Services.Web` run the shared server stack behind a route
   ownership guard. That keeps response shapes identical while moving
   traffic by domain/path slice.
-- `DorkNet.Server` runs as `monolith` behind the gateway for unknown
-  route families that are not assigned to a dedicated service yet.
-
 - `DorkNet.Gateway` exposes `/internal/services` and
   `/internal/services/health`, plus `/internal/routes` for the active
   proxy table.
@@ -108,12 +106,18 @@ The microservice shape is a gateway-fronted split:
 
 `docker-compose.microservices.yml` starts gateway, all dedicated service
 slices, the monolith fallback, and Compose-managed Postgres and Redis for
-local testing.
-`docker-compose.microservices.dokploy.yml` is the Dokploy shape: it adds
-a `cloudflared` sidecar that joins the same Compose network and forwards
-Cloudflare Tunnel traffic to `http://gateway:8080`. Object storage is
-external S3-compatible storage configured with `DORKNET_S3_*`
-environment variables; the compose files do not run MinIO or Garage.
+local testing. `docker-compose.microservices.dokploy.yml` is the Dokploy
+production shape: it adds a `cloudflared` sidecar that joins the same
+Compose network and forwards Cloudflare Tunnel traffic to
+`http://gateway:8080`. Object storage is external S3-compatible storage
+configured with `DORKNET_S3_*` environment variables; the compose files
+do not run MinIO or Garage.
+
+`Dockerfile.service` is the reusable service image. It accepts
+`PROJECT_PATH` and `APP_DLL` build args, rebuilds the admin/site Vite
+SPAs for service images that need static assets, publishes the selected
+.NET project, and runs that DLL in the runtime image. The root
+`Dockerfile` builds only the standalone/fallback `DorkNet.Server` image.
 
 ### Controllers/ groupings
 
@@ -254,11 +258,14 @@ Two providers, switched by `Database:Provider` config:
 - **SQLite** — default for local dev. File at `bin/<config>/data/dorknet.db`.
 - **Postgres** — production. Connection string from `ConnectionStrings:Default`.
 
-Schema lives in `Data/Entities/*` and `Data/DorkNetDbContext.cs`. EF
-migrations under `Data/Migrations/` apply via `Database.Migrate()` on
-boot. Data transforms that can't be expressed as schema migrations
-(seed renames, computed backfills) go in `Data/LegacyUpgrades.cs` as
-idempotent methods registered in `RunAsync()`. See
+Schema lives in `Data/Entities/*` and `Data/DorkNetDbContext.cs`.
+SQLite dev DBs apply EF migrations under `Data/Migrations/` via
+`Database.Migrate()`. The production Postgres path still uses
+`EnsureCreated()` plus idempotent bootstrap work under the same
+advisory-lock discipline. Data transforms that can't be expressed as
+schema migrations (seed renames, computed backfills) go in
+`Data/LegacyUpgrades.cs` as idempotent methods registered in `RunAsync()`.
+See
 [`Data/MIGRATIONS.md`](../DorkNet.Server/Data/MIGRATIONS.md) for the
 discipline: one release = one migration; everything else is
 `LegacyUpgrades`.
@@ -280,9 +287,11 @@ If you've never touched this codebase, the most approachable path:
 4. Look at one **`Cpp2IL`-cited line** in a controller to see how
    wire shapes are pinned to decompiled provenance.
 
-When in doubt: open `DorkNet.Server/Program.cs` and the
+When in doubt: open `DorkNet.Contracts/DorkNetRouteOwnership.cs`,
+`DorkNet.Gateway/Program.cs`, `DorkNet.Server/Program.cs`, and the
 `Versions/Late2020/Late2020VersionPlugin.cs` summary doc-comment.
-Between them they explain 80% of the cross-cutting decisions.
+Together they explain route ownership, proxying, the shared server
+pipeline, and version compatibility.
 
 ---
 

@@ -1,78 +1,154 @@
 # DorkNet Deployment
 
-This branch has two deployable shapes:
+The recommended production shape is the gateway-fronted microservices
+compose stack. The standalone `DorkNet.Server` image still exists for
+local debugging and emergency single-container fallback, but new Dokploy
+deployments should use `docker-compose.microservices.dokploy.yml`.
 
-- **Production/full API:** build the root `Dockerfile`, which runs
-  `DorkNet.Server`. This is still the runtime that serves every public
-  Rec Room-compatible endpoint.
-- **Microservices:** deploy `docker-compose.microservices.yml`
-  for local testing or `docker-compose.microservices.dokploy.yml` on
-  Dokploy. Both start `DorkNet.Gateway`, the dedicated service slices,
-  the `DorkNet.Server` monolith fallback, Postgres, and Redis. The
-  gateway routes public traffic to owned service slices and sends
-  unknown route families to the fallback.
-
-Object storage is always a **separate S3-compatible instance**. The
-microservices compose files do not start MinIO/Garage.
+Object storage is always a separate S3-compatible service. The compose
+files start Postgres and Redis, but they do not start MinIO, Garage, or
+any other object-storage emulator.
 
 ---
 
-## Dokploy: full server
+## Production Topology
 
-Use this for a real server today.
+Public traffic enters at `DorkNet.Gateway`. The gateway preserves the
+original Host header, routes owned host/path families to dedicated
+service hosts, and sends unassigned route families to the `monolith`
+fallback. That lets the 2020 client keep using the same public URLs
+while route slices move out of the fallback server.
 
-Create a Dokploy **Application**:
-
-| Field | Value |
+| Service | Purpose |
 |---|---|
-| Source | This GitHub repo / branch |
-| Build type | Dockerfile |
-| Dockerfile path | `Dockerfile` |
-| Context | `.` |
-| Container port | `8080` |
+| `gateway` | Edge reverse proxy, service map, route table, and service health probes |
+| `identity` | Auth, accounts, platform login, JWT issuance |
+| `rooms` | Rooms, room keys, playlists, matchmaking, discovery |
+| `notify` | Notify, messages/chat, SignalR, notification fan-out |
+| `content` | CDN paths, uploads, images, photos, room blobs, storage APIs |
+| `social` | Clubs, groups, announcements, player events, subscriptions |
+| `commerce` | Catalog, storefronts, econ, inventory, inventions |
+| `platform` | Service directory, config, version checks, geo, strings |
+| `moderation` | Bug reports, player reports, sanitize, admin API, testcase routes |
+| `web` | Apex/www/admin/feed static hosts and site API |
+| `monolith` | Fallback shared server for route families not split yet |
+| `postgres` | Bundled Postgres for the compose network |
+| `redis` | Bundled Redis for ephemeral state and fan-out |
+| `cloudflared` | Cloudflare Tunnel sidecar in the Dokploy compose file |
 
-Set application environment variables:
+Every backend service uses the same database, Redis, S3, Photon, domain,
+JWT, and version-gate settings. The dedicated slices currently reuse the
+shared `DorkNet.Server` controller/service stack behind route ownership
+guards, so response contracts stay identical while the architecture is
+split.
+
+---
+
+## Dokploy Microservices
+
+Create a Dokploy **Compose** service from:
+
+```text
+docker-compose.microservices.dokploy.yml
+```
+
+Use the GitHub repo/branch as the source and keep the build context at
+the repository root. Do not add Dokploy domain rows for this compose
+stack when using the Cloudflare Tunnel sidecar; public hostname routing
+belongs to Cloudflare.
+
+Set these Dokploy Compose environment variables:
 
 ```env
-ASPNETCORE_ENVIRONMENT=Production
-ASPNETCORE_URLS=http://0.0.0.0:8080
-DOTNET_RUNNING_IN_CONTAINER=true
-
 DORKNET_DOMAIN=yourdomain.com
 DORKNET_JWT_SECRET=replace-with-at-least-64-random-characters
+CLOUDFLARE_TUNNEL_TOKEN=<token from Cloudflare Zero Trust tunnel>
 
-Database__Provider=postgres
-ConnectionStrings__Default=Host=<postgres-host>;Port=5432;Database=dorknet;Username=<user>;Password=<password>
-ConnectionStrings__Redis=redis://<redis-host>:6379
+# Bundled compose Postgres. Optional when DORKNET_POSTGRES_CONNECTION_STRING is set.
+POSTGRES_PASSWORD=replace-with-a-random-db-password
 
-S3__Endpoint=https://your-s3-api-endpoint
-S3__AccessKey=your-access-key
-S3__SecretKey=your-secret-key
-S3__Region=garage
+# External object storage. Required for production.
+DORKNET_S3_ENDPOINT=https://your-s3-api-endpoint
+DORKNET_S3_ACCESS_KEY=your-access-key
+DORKNET_S3_SECRET_KEY=your-secret-key
+DORKNET_S3_REGION=garage
 
+# Photon Cloud.
 Photon__AppId=your-photon-realtime-app-id
 Photon__VoiceAppId=your-photon-voice-app-id
 Photon__CloudRegion=eu
-DorkNet__DefaultClientVersion=december_2020_12_18
-DorkNet__SupportedVersions__0=december_2020_12_18
-DorkNet__BuildIdToVersionKey__20201210=december_2020_12_18
+
+# December 2020 client version gate.
+DORKNET_DEFAULT_CLIENT_VERSION=december_2020_12_18
+DORKNET_SUPPORTED_VERSION=december_2020_12_18
+DORKNET_DECEMBER_BUILD_VERSION_KEY=december_2020_12_18
 ```
 
-If Postgres and Redis are Dokploy-managed services in the same project,
-use the internal service hostnames Dokploy gives you. For a Compose-style
-network the values usually look like:
+The compose file maps the `DORKNET_S3_*` values into `S3__*` for every
+backend service, and maps the version variables into `DorkNet__*`
+configuration keys. `Photon__*` is passed directly to each service.
+
+### Database Options
+
+By default, service containers connect to the bundled compose Postgres:
 
 ```env
-ConnectionStrings__Default=Host=postgres;Port=5432;Database=dorknet;Username=dorknet;Password=dorknet_dev
-ConnectionStrings__Redis=redis://redis:6379
+Host=postgres;Port=5432;Database=dorknet;Username=dorknet;Password=${POSTGRES_PASSWORD}
 ```
 
-### Domains
+To use a Dokploy-managed or external Postgres instead, set a full
+connection string:
 
-Point DNS at the Dokploy server, then add domains to the same
-application. Every host routes to container port `8080`.
+```env
+DORKNET_POSTGRES_CONNECTION_STRING=Host=<postgres-host>;Port=5432;Database=dorknet;Username=<user>;Password=<password>
+```
 
-Add these hosts for full client compatibility:
+For hosted Postgres that requires TLS:
+
+```env
+DORKNET_POSTGRES_CONNECTION_STRING=Host=<postgres-host>;Port=5432;Database=dorknet;Username=<user>;Password=<password>;SSL Mode=Require;Trust Server Certificate=true
+```
+
+`docker-compose.microservices.dokploy.yml` attaches every backend service
+that opens database connections to both the stack's default network and
+Dokploy's external `dokploy-network`. If you use another Dokploy-managed
+database service, the hostname in `DORKNET_POSTGRES_CONNECTION_STRING`
+must resolve to a Docker-network address from inside a DorkNet service:
+
+```bash
+docker exec <web-or-platform-container> getent hosts <postgres-host>
+```
+
+That should return a container/network IP, not `127.0.0.1`.
+
+If you use the bundled compose Postgres, `POSTGRES_PASSWORD` must match
+the password that initialized the existing Postgres volume. Changing
+`POSTGRES_PASSWORD` later does not update the already-created `dorknet`
+database user. Restore the original password, reset it inside Postgres,
+or recreate the Postgres volume.
+
+### Cloudflare Tunnel
+
+In Cloudflare Zero Trust, configure two public hostnames:
+
+```text
+yourdomain.com      -> http://gateway:8080
+*.yourdomain.com    -> http://gateway:8080
+```
+
+The wildcard covers `api`, `auth`, `rooms`, `notify`, `cdn`, `clubs`,
+`commerce`, and the other client-facing subdomains. The apex rule is
+separate because wildcard DNS does not cover the root domain. Let
+Cloudflare create the tunnel DNS records, or create CNAME records to the
+tunnel target Cloudflare gives you.
+
+Do not point the tunnel at individual service containers. All public
+traffic should go to `http://gateway:8080`.
+
+### Public Hosts
+
+The client service map and the browser surfaces expect these hosts to
+reach the gateway:
 
 ```text
 yourdomain.com
@@ -116,150 +192,154 @@ thorn.yourdomain.com
 videos.yourdomain.com
 ```
 
-All of these point to the same `DorkNet.Server` application/container
-port today. `admin` and `feed` serve static hosts; the rest are the
-service URLs returned to the client by `ConfigService`.
+With Cloudflare Tunnel, the apex and wildcard hostname rules cover the
+list. If you deploy without a tunnel, every host must route to the
+gateway container on port `8080`.
 
----
+### Smoke Checks
 
-## Dokploy: microservices
-
-Use this to run the gateway/service-host layout.
-
-Create a Dokploy **Compose** service from one of these files:
-
-| Compose file | Use |
-|---|---|
-| `docker-compose.microservices.yml` | Local/dev-style compose |
-| `docker-compose.microservices.dokploy.yml` | Dokploy compose with a Cloudflare Tunnel sidecar |
-
-Both compose files provide:
-
-| Service | Purpose |
-|---|---|
-| `gateway` | Edge reverse proxy; service map, route table, and service health probes |
-| `identity` | Auth, accounts, and platform-login route slice |
-| `rooms` | Rooms, room keys, playlists, matchmaking, and discovery route slice |
-| `notify` | Notify, messages/chat, SignalR, and notification route slice |
-| `content` | CDN paths, uploads, images, photos, room blobs, and storage route slice |
-| `social` | Clubs, groups, announcements, player events, subscriptions route slice |
-| `commerce` | Catalog, storefronts, econ, inventory, inventions route slice |
-| `platform` | Service directory, config, version checks, geo, strings, and platform route slice |
-| `moderation` | Bug reporting, player reporting, sanitize, admin API, and testcase route slice |
-| `web` | Apex/www/admin/feed static hosts and site API route slice |
-| `monolith` | Fallback full server for unknown route families not assigned to a service yet |
-| `postgres` | Internal Postgres for the service network |
-| `redis` | Internal Redis for ephemeral state and fan-out |
-| `cloudflared` | Cloudflare Tunnel sidecar; Dokploy file only |
-
-### Cloudflare Tunnel domains
-
-Use `docker-compose.microservices.dokploy.yml` with Cloudflare Tunnel.
-Do not add Dokploy domain rows for this compose stack; public traffic
-enters through the `cloudflared` sidecar instead of Dokploy's Traefik
-router.
-
-Set these Dokploy Compose environment variables:
-
-```env
-DORKNET_DOMAIN=yourdomain.com
-DORKNET_JWT_SECRET=replace-with-at-least-64-random-characters
-POSTGRES_PASSWORD=replace-with-a-random-db-password
-CLOUDFLARE_TUNNEL_TOKEN=<token from Cloudflare Zero Trust tunnel>
-Photon__AppId=your-photon-realtime-app-id
-Photon__VoiceAppId=your-photon-voice-app-id
-Photon__CloudRegion=eu
-DORKNET_DEFAULT_CLIENT_VERSION=december_2020_12_18
-DORKNET_SUPPORTED_VERSION=december_2020_12_18
-DORKNET_DECEMBER_BUILD_VERSION_KEY=december_2020_12_18
-```
-
-By default the service containers connect to the bundled compose
-Postgres service:
-
-```env
-Host=postgres;Port=5432;Database=dorknet;Username=dorknet;Password=${POSTGRES_PASSWORD}
-```
-
-To use a Dokploy-managed or external Postgres instead, set a full
-connection string and the compose services will use it instead of the
-bundled `postgres` hostname:
-
-```env
-DORKNET_POSTGRES_CONNECTION_STRING=Host=<postgres-host>;Port=5432;Database=dorknet;Username=<user>;Password=<password>
-```
-
-`docker-compose.microservices.dokploy.yml` attaches every backend
-service that opens database connections to both the stack's default
-network and Dokploy's external `dokploy-network`. Use the managed
-Postgres service's real internal Docker/Dokploy hostname in
-`DORKNET_POSTGRES_CONNECTION_STRING`; inside a DorkNet service container,
-`getent hosts <postgres-host>` should return a Docker IP, not
-`127.0.0.1`.
-
-For hosted Postgres that requires TLS, include the Npgsql SSL options:
-
-```env
-DORKNET_POSTGRES_CONNECTION_STRING=Host=<postgres-host>;Port=5432;Database=dorknet;Username=<user>;Password=<password>;SSL Mode=Require;Trust Server Certificate=true
-```
-
-If you use the bundled compose Postgres, `POSTGRES_PASSWORD` must match
-the password that initialized the existing Postgres volume. Changing
-`POSTGRES_PASSWORD` later does not change the already-created `dorknet`
-database user; either restore the original password, reset it inside
-Postgres, or recreate the Postgres volume.
-
-In Cloudflare Zero Trust, configure the tunnel with two public hostnames:
-
-```text
-yourdomain.com      -> http://gateway:8080
-*.yourdomain.com    -> http://gateway:8080
-```
-
-The wildcard covers `api`, `auth`, `rooms`, `notify`, `cdn`, `clubs`,
-`commerce`, and the other client-facing subdomains. The apex rule is
-separate because wildcard DNS does not cover the root domain. Let
-Cloudflare create the tunnel DNS records, or create CNAME records to the
-tunnel target Cloudflare gives you.
-
-Every public DorkNet domain listed above should point to the gateway.
-The gateway preserves the original Host header so service code still sees
-`auth.yourdomain.com`, `rooms.yourdomain.com`, and the other client
-hosts.
-
-Set these Compose environment variables in Dokploy:
-
-```env
-DORKNET_S3_ENDPOINT=https://your-s3-api-endpoint
-DORKNET_S3_ACCESS_KEY=your-access-key
-DORKNET_S3_SECRET_KEY=your-secret-key
-DORKNET_S3_REGION=garage
-```
-
-The compose services already refer to Postgres as `postgres` and Redis as
-`redis` on the internal Compose network. Do not add an `object-storage`
-service unless you intentionally want a local dev-only S3 emulator.
-
-Useful smoke checks after deploy:
+After Dokploy finishes rebuilding, verify the gateway and service map:
 
 ```bash
 curl https://api.yourdomain.com/healthz
 curl https://api.yourdomain.com/internal/services
 curl https://api.yourdomain.com/internal/services/health
 curl https://api.yourdomain.com/internal/routes
+curl https://api.yourdomain.com/api/versioncheck/v4?v=20201210
+```
+
+The version check should return:
+
+```json
+{"VersionStatus":0}
+```
+
+Browser hosts should route to `web` and return static files:
+
+```bash
+curl -I https://yourdomain.com/
+curl -I https://admin.yourdomain.com/
+curl -I https://feed.yourdomain.com/
+```
+
+Inside the running web container, these files must exist:
+
+```bash
+docker exec <web-container> sh -lc 'ls -la /app/wwwroot/admin /app/wwwroot/site /app/wwwroot/feed'
+```
+
+Expected key files:
+
+```text
+/app/wwwroot/admin/index.html
+/app/wwwroot/site/index.html
+/app/wwwroot/feed/index.html
 ```
 
 `/internal/routes` shows which host/path patterns route to each service
-slice or the monolith fallback. `/internal/services/health` reports
-gateway-visible health for every backend service.
+slice or to the monolith fallback. `/internal/services/health` reports
+gateway-visible health for each backend service.
+
+### Useful Logs
+
+```bash
+docker logs <stack>-gateway-1 --tail=200
+docker logs <stack>-web-1 --tail=200
+docker logs <stack>-platform-1 --tail=200
+docker logs <stack>-cloudflared-1 --tail=200
+```
+
+If `admin.<domain>` or the apex returns 404, check the `web` logs for
+static-host probes such as:
+
+```text
+probe="/app/wwwroot/admin/index.html" exists=False
+```
+
+That means the `web` image did not include the built SPA assets or the
+old container is still running. Force a clean Dokploy rebuild on the
+latest branch commit.
 
 ---
 
-## S3 storage
+## Local Microservices
 
-DorkNet uses S3-compatible storage for room blobs, profile images,
-camera photos, and CDN/image pipeline backing data. Create these buckets
-before production cutover:
+For local service-split testing without Dokploy:
+
+```bash
+docker compose -f docker-compose.microservices.yml up --build
+```
+
+This starts the gateway on host port `8080`, all service slices, the
+monolith fallback, Postgres, and Redis. The local compose file does not
+start `cloudflared`; direct local testing uses Host headers:
+
+```bash
+curl -H 'Host: api.localhost' http://localhost:8080/healthz
+curl -H 'Host: admin.localhost' http://localhost:8080/
+curl -H 'Host: localhost' http://localhost:8080/
+```
+
+Set `DORKNET_S3_*` if you need blob/image features locally. Leaving S3
+blank is fine for API smoke tests that do not touch object storage.
+
+---
+
+## Standalone Server Fallback
+
+The root `Dockerfile` builds the standalone `DorkNet.Server` image. Use
+it for local debugging, narrow rollback tests, or a temporary
+single-container deployment. The current production docs and Dokploy
+workflow assume the microservices compose stack instead.
+
+Create a Dokploy **Application** only if you intentionally want the
+single-container fallback:
+
+| Field | Value |
+|---|---|
+| Source | This GitHub repo / branch |
+| Build type | Dockerfile |
+| Dockerfile path | `Dockerfile` |
+| Context | `.` |
+| Container port | `8080` |
+
+Standalone environment variables use the direct .NET configuration keys:
+
+```env
+ASPNETCORE_ENVIRONMENT=Production
+ASPNETCORE_URLS=http://0.0.0.0:8080
+DOTNET_RUNNING_IN_CONTAINER=true
+
+DORKNET_DOMAIN=yourdomain.com
+DORKNET_JWT_SECRET=replace-with-at-least-64-random-characters
+
+Database__Provider=postgres
+ConnectionStrings__Default=Host=<postgres-host>;Port=5432;Database=dorknet;Username=<user>;Password=<password>
+ConnectionStrings__Redis=redis://<redis-host>:6379
+
+S3__Endpoint=https://your-s3-api-endpoint
+S3__AccessKey=your-access-key
+S3__SecretKey=your-secret-key
+S3__Region=garage
+
+Photon__AppId=your-photon-realtime-app-id
+Photon__VoiceAppId=your-photon-voice-app-id
+Photon__CloudRegion=eu
+DorkNet__DefaultClientVersion=december_2020_12_18
+DorkNet__SupportedVersions__0=december_2020_12_18
+DorkNet__BuildIdToVersionKey__20201210=december_2020_12_18
+```
+
+Every public host listed above must route to this single container when
+running standalone.
+
+---
+
+## S3 Storage
+
+DorkNet uses S3-compatible storage for room blobs, profile images, camera
+photos, and CDN/image pipeline backing data. Create these buckets before
+production cutover:
 
 ```text
 profile-images
@@ -287,41 +367,24 @@ S3__MaxErrorRetry=1
 S3__TimeoutSeconds=300
 ```
 
-For the microservices compose file, use the `DORKNET_S3_*` equivalents;
-Compose maps them into `S3__*` for the service containers.
-
-The microservices compose files also map `Photon__AppId`,
-`Photon__VoiceAppId`, and `Photon__CloudRegion` into every backend
-service. Missing or wrong Photon values show up in the 2020 client as
-NameServer/region connection failures after the boot version check.
-
-They also map the December 2020 build ID into the version gate. A quick
-check for the 2020 client should return `{"VersionStatus":0}`:
-
-```bash
-curl https://api.yourdomain.com/api/versioncheck/v4?v=20201210
-```
-
-If `admin.<domain>` or `feed.<domain>` returns the NameServer JSON
-instead of the static site, verify the `web` container contains
-`/app/wwwroot/admin/index.html` and `/app/wwwroot/feed/index.html`.
-Those hosts should resolve through the gateway to the `web` service, not
-the `ns` service or monolith fallback.
+For the microservices compose files, use the `DORKNET_S3_*`
+equivalents; compose maps them into `S3__*` for the service containers.
 
 ---
 
-## First-time cutover from SQLite
+## First-Time Cutover From SQLite
 
 1. Stop the local server so the SQLite source stops accepting writes.
 2. Snapshot the SQLite database.
-3. Provision Postgres, Redis, and the separate S3-compatible storage.
+3. Provision Postgres, Redis, and separate S3-compatible storage.
 4. Run the migration/import tooling against the new Postgres and S3
    targets.
-5. Deploy the full `DorkNet.Server` application.
-6. Verify `/healthz` returns 200 before sending players to the new host.
+5. Deploy the microservices compose stack.
+6. Verify `/healthz`, `/internal/services/health`, versioncheck, and
+   the browser static hosts before sending players to the new host.
 
-The server uses an advisory-lock guarded startup path for Postgres so
-multiple replicas can start without racing schema/bootstrap work.
+The database bootstrap path uses advisory locking so multiple service
+containers can start without racing schema/bootstrap work.
 
 Rollback before players write to Postgres is simple: stop the deploy and
 return to the SQLite snapshot. After players write to Postgres, rollback
@@ -352,7 +415,7 @@ is updated to send `userid` and `LoginLock`.
 
 ---
 
-## Future schema changes
+## Future Schema Changes
 
 SQLite dev DBs apply EF migrations. The production Postgres path is still
 based on `EnsureCreated()` plus idempotent bootstrap steps. Until that is
@@ -362,7 +425,7 @@ schema changes as explicit deployment work:
 1. Add or update the entity model.
 2. Add the migration for SQLite/dev.
 3. Add any needed idempotent Postgres bootstrap SQL.
-4. Deploy and verify `/healthz`.
+4. Deploy and verify `/healthz` and `/internal/services/health`.
 
 See [`../DorkNet.Server/Data/MIGRATIONS.md`](../DorkNet.Server/Data/MIGRATIONS.md)
 for the detailed migration discipline.
