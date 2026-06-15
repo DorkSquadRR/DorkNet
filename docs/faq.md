@@ -17,22 +17,22 @@ from DMCA. We minimize friction by never distributing Rec Room IP, never
 interfering with their live servers, and being explicit that this is for
 educational / private use only.
 
-### Why the 2020 build specifically? Will newer versions work?
+### Why old 2020 builds specifically? Will newer versions work?
 
-2020.03.10 is the last build before Rec Room shipped server-side
-ObscuredInt anti-cheat changes that would require deeper client patching.
-It's old enough to be effectively abandonware on Rec Room's roadmap, new
-enough to have most of the features people remember.
+DorkNet targets old 2020 clients because their network protocol is still
+small enough to reimplement cleanly. Newer Rec Room builds changed more
+of the auth, protocol, and client-side assumptions, so each later build
+would need real reverse-engineering work instead of a quick version bump.
 
-Newer builds (any Rec Room from late 2020 onward) aren't supported and
-won't be without significant additional reverse-engineering. PRs that
-add support for newer builds are welcome but expect scope creep.
+The supported builds are listed in [BRANCHES.md](../BRANCHES.md). Builds
+outside that table will not work unless someone adds a matching branch.
 
 ### Can I run a public server that anyone can join?
 
-Technically yes (just disable signup-disabled in admin settings). Legally
-risky — see the C&D answer above. Realistically, "public" private
-servers attract attention and shorten the project's lifespan.
+Technically yes, if you allow open signups in admin settings. It is
+legally risky, though; see the shutdown/legal answer above. Realistically,
+"public" private servers attract attention and shorten the project's
+lifespan.
 
 We recommend keeping servers small (friends + community), private
 (invite-only signups), and not advertised.
@@ -95,5 +95,5 @@ Most common causes, in order:
 4. **Localtunnel interstitial.** First time a joiner's machine hits a
    given `*.loca.lt` URL, Localtunnel may show a one-time "Click to
    Continue" page. Open the URL once in any browser and retry.
-4. **Junior account / accessibility settings.** Server settings → relax
+5. **Junior account / accessibility settings.** Server settings → relax
    moderation gates if friends are on accounts with parental controls.

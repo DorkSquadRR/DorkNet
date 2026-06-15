@@ -2,7 +2,7 @@
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│  Rec Room 2020.03.10 client (patched)                            │
+│  Supported 2020 Rec Room client (patched)                         │
 │  ┌────────────────────┐    ┌──────────────────────────────────┐  │
 │  │  IL2CPP game code  │    │  MelonLoader + client-mod        │  │
 │  │  • set_BaseUri     │←───│  • rewrites *.rec.net hosts      │  │
@@ -13,7 +13,7 @@
              │ HTTPS to *.your-server.example.com
              ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│  DorkNet server (ASP.NET Core)                                   │
+│  DorkNet server from the matching version branch (ASP.NET Core)   │
 │                                                                  │
 │  Subdomain-multiplexed routing:                                  │
 │    api.*       → REST endpoints (rooms, players, store, etc.)    │

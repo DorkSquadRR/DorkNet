@@ -20,8 +20,9 @@ single Windows app that:
 ## What you'll need
 
 - Windows 10 or 11 (Mac and Linux support are not planned)
-- A copy of **Rec Room 2020.03.10** — the specific old build DorkNet
-  targets. You acquire this yourself; see
+- A copy of a **supported 2020 Rec Room build**. The launcher can host
+  March 2020 or December 2020, and it will try to detect which one you
+  have. You acquire the game yourself; see
   [Getting the 2020 client](#getting-the-2020-client) below.
 - A free Photon Cloud account — the launcher walks you through this on
   first run.
@@ -75,9 +76,9 @@ once; future launches drop you straight into the main view.
 
 ## The setup wizard
 
-Five steps, top stepper shows your progress. **Back** and **Next** sit
-in the bottom bar; the choice cards on the first step auto-advance when
-clicked.
+The wizard has five steps. The stepper at the top shows where you are,
+and **Back** / **Next** stay in the bottom bar. On the first step, the
+choice cards move forward as soon as you click one.
 
 ### Step 1 — Pick a mode
 
@@ -234,8 +235,8 @@ patcher.
 
 ## Launching the game
 
-Once your server is live, the **LAUNCH REC ROOM** button (teal, sits
-next to **STOP**) becomes visible. Click it; the launcher starts your
+Once your server is live, the teal **LAUNCH REC ROOM** button appears
+next to **STOP**. Click it; the launcher starts your
 patched copy with the right command-line args. Toggle **Screen mode**
 in the header first if you want desktop play.
 
@@ -283,25 +284,26 @@ See [joining-a-server.md](joining-a-server.md) for the join-side flow.
 | Friends anywhere · Localtunnel | public HTTPS, anonymous | `https://<random>.loca.lt` | Default — friends connect from anywhere with just the join code |
 | Same WiFi only · sslip.io | no | `<lan-ip>.sslip.io` | LAN games, lowest latency, no internet exposure |
 
-Default mode is the right pick for >95% of cases. LAN mode is for when
+Default mode is the right pick for most people. LAN mode is for when
 everyone's in the same room and you do not want a public URL.
 
 ---
 
 ## Getting the 2020 client
 
-DorkNet doesn't ship the Rec Room game itself — that's Rec Room Inc.'s
+DorkNet doesn't ship the Rec Room game itself. That's Rec Room Inc.'s
 intellectual property. You acquire your own copy through legal means.
 
 Common paths:
-- If you bought Rec Room on Steam before 2020, you can use SteamDB depot
-  tools to download the old build (manifest `4651244957411961725` for
-  `Recroom_Release_Data`).
+- If you own Rec Room on Steam, SteamDB depot tools can download old
+  depots. Use the build that matches the branch you want to play:
+  March 2020 or December 2020.
 - Friends who already have a 2020 install can share files with you under
   whatever license terms apply on their end.
 
 DorkNet's authors can't help you obtain the game. Search the web for
-"Steam depot 2020.03.10 Rec Room" if you need pointers.
+"Steam depot Rec Room 2020.12.18" or "Steam depot Rec Room 2020.03.10"
+if you need pointers.
 
 ---
 

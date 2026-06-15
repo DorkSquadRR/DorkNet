@@ -4,8 +4,8 @@
 > on Windows still use the [Windows launcher](easy-setup.md) to apply
 > the patch to their copy of Rec Room.
 
-`dorknet-server` is a small command-line tool that does the host side
-of what the Windows launcher does: downloads the server build, opens a
+`dorknet-server` is a small command-line tool for hosting without the
+Windows launcher. It downloads the server build, opens a
 [Localtunnel](https://localtunnel.github.io/www/) HTTPS URL (or binds
 on the LAN), runs the server, and prints a join code. It runs on Linux,
 macOS, and Windows.
@@ -71,10 +71,13 @@ only).
 
 ## Usage
 
-The minimum invocation is just your Photon AppId:
+The minimum invocation is just your Photon AppId. For a predictable
+setup, pass the client build you want with `--version`:
 
 ```sh
-dorknet-server --photon-id 12345678-aaaa-bbbb-cccc-1234567890ab
+dorknet-server \
+  --photon-id 12345678-aaaa-bbbb-cccc-1234567890ab \
+  --version december_2020_12_18
 ```
 
 The CLI prints progress, then a join code:
@@ -88,7 +91,7 @@ DorkNet server CLI · v0.1.0
 
 [server] downloading…
             54.2%  (27.1 / 50.0 MB)
-[server] cached at /home/alex/.local/share/DorkNet/servers/march_2020_03_10
+[server] cached at /home/alex/.local/share/DorkNet/servers/december_2020_12_18
 [tunnel] starting localtunnel…
 [tunnel] live at https://lucky-pelican-42.loca.lt
 [server] starting…
@@ -129,8 +132,9 @@ down cleanly.
                        lan                   — same WiFi only, no tunnel
 --apex <hostname>      Wildcard apex. Required for --mode wildcard.
                        Example: dorknet.example.tunnelto.me
---version <key>        Rec Room version key. Default: march_2020_03_10
-                       (the only branch currently supported).
+--version <key>        Rec Room version key. Current CLI default:
+                       march_2020_03_10. Pass december_2020_12_18
+                       when hosting December clients.
 --server-dir <path>    Skip download — use a local build at this path.
                        Useful for dev work on the server itself.
 ```
