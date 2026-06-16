@@ -11,6 +11,9 @@ on:
     tags:
       - 'v1-december-*'
 
+permissions:
+  contents: write   # create the GitHub release + upload assets
+
 jobs:
   release:
     runs-on: windows-latest
