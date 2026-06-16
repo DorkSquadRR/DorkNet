@@ -29,8 +29,6 @@ Go to **[dashboard.photonengine.com](https://dashboard.photonengine.com/)**
 and click "Sign up". Email + password; the free tier doesn't ask for a
 card.
 
-![photon dashboard signup screen](images/photon-1-signup.png)
-
 > If you already have an account from another project, log in instead.
 > Multiple DorkNet servers can share the same Photon account, but each
 > server needs its own AppId pair so concurrent player counts don't
@@ -49,14 +47,10 @@ for:
 
 Click **CREATE**.
 
-![photon "Create a new app" form, Photon SDK selected](images/photon-2-create-realtime.png)
-
 ## Step 3 — Copy the Realtime AppId
 
 You land back on the dashboard with your new app at the top. The AppId
 is the long string under the app name — click it to copy.
-
-![photon app card with AppId highlighted](images/photon-3-realtime-appid.png)
 
 That's your **Realtime AppId**. Paste it into:
 
@@ -68,8 +62,6 @@ That's your **Realtime AppId**. Paste it into:
 
 If you want in-game voice chat, repeat Step 2 with **Photon Voice**
 selected instead of Realtime. Same flow.
-
-![photon "Create a new app" form, Voice selected](images/photon-4-create-voice.png)
 
 Copy the Voice AppId from the dashboard the same way as Step 3 and
 paste it into:
