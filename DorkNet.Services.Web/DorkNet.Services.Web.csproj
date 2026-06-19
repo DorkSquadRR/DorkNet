@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DorkNet.Contracts\DorkNet.Contracts.csproj" />
+    <ProjectReference Include="..\DorkNet.ServiceDefaults\DorkNet.ServiceDefaults.csproj" />
+    <ProjectReference Include="..\DorkNet.Server\DorkNet.Server.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <DorkNetServerWebAsset Include="..\DorkNet.Server\wwwroot\**\*" />
+  </ItemGroup>
+
+  <Target Name="CopyDorkNetServerWebAssets"
+          AfterTargets="Publish"
+          Condition="'$(DorkNetServiceContainerPublish)' == 'true'">
+    <Copy SourceFiles="@(DorkNetServerWebAsset)"
+          DestinationFiles="@(DorkNetServerWebAsset->'$(PublishDir)wwwroot/%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>

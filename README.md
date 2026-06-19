@@ -23,6 +23,7 @@ main also auto-detects your install.
 | **Version key** (sent as `X-DorkNet-Version` header) | `december_2020_12_18` |
 | **Version plugin** | `DorkNet.Server/Versions/Late2020/Late2020VersionPlugin.cs` |
 | **Schema** | One EF `Initial` migration; SQLite + Postgres both work |
+| **Runtime topology** | Gateway-fronted microservices with dedicated service slices and a monolith fallback |
 | **Diverges from `march-2020-03-10` by** | ~170 files |
 
 Subsystems present on this branch that the March branch doesn't have:
@@ -58,7 +59,7 @@ cd DorkNet
 
 | Config key | Env var | Required | Notes |
 |---|---|---|---|
-| `Jwt:Secret` | `Jwt__Secret` | yes | ≥64 random chars |
+| `Jwt:Secret` | `DORKNET_JWT_SECRET` or `Jwt__Secret` | yes | >=64 random chars |
 | `Photon:AppId` | `Photon__AppId` | yes | Photon Realtime AppId (free at dashboard.photonengine.com) |
 | `Photon:VoiceAppId` | `Photon__VoiceAppId` | no | only if voice chat |
 | `Photon:CloudRegion` | `Photon__CloudRegion` | no | defaults to `us` |
@@ -66,8 +67,12 @@ cd DorkNet
 | `ConnectionStrings:Default` | `ConnectionStrings__Default` | postgres-only | full Npgsql connection string |
 | `ConnectionStrings:Redis` | `ConnectionStrings__Redis` | no | enables SignalR backplane |
 | `Domain:Apex` | `DORKNET_DOMAIN` | no | defaults to `localhost`; set for production |
+| `S3:Endpoint` | `S3__Endpoint` | production | S3-compatible API endpoint for blobs/images |
+| `S3:AccessKey` | `S3__AccessKey` | production | S3 access key |
+| `S3:SecretKey` | `S3__SecretKey` | production | S3 secret key |
+| `S3:Region` | `S3__Region` | no | defaults to `garage`; use `auto` for R2 |
 
-**4. Boot:**
+**4. Boot a local standalone server:**
 
 ```pwsh
 dotnet run --project DorkNet.Server
@@ -79,8 +84,9 @@ categories / playlists, and starts listening. You should see
 `Application started.` in the log; `curl http://localhost:8080/healthz`
 returns 200.
 
-For a full Docker / VPS deploy, see
-[main's Advanced setup guide](../../blob/main/docs/advanced-setup.md).
+For the production microservices stack, Docker, and Dokploy deploy
+notes, see
+[docs/deploy.md](docs/deploy.md).
 
 ---
 
@@ -194,14 +200,53 @@ Default `0` (off).
 
 | Folder | Purpose |
 |---|---|
-| `DorkNet.Server/` | ASP.NET Core backend (controllers, services, data, hubs, middleware) |
+| `DorkNet.Server/` | Shared ASP.NET Core controller/service stack, standalone fallback, monolith fallback |
 | `DorkNet.Models/` | DTOs shared between server and client mod |
+| `DorkNet.Contracts/` | Shared service names, route ownership, service-map options, and health/probe contracts |
+| `DorkNet.ServiceDefaults/` | Shared service health, JSON, HTTP client, service identity, and route-guard setup |
+| `DorkNet.Gateway/` | Edge reverse proxy with service-map, route-table, and service-health endpoints |
+| `DorkNet.Services.*` | Gateway-fronted service hosts for identity, rooms, notify, content, social, commerce, platform, moderation, and web |
 | `DorkNet.ClientMod/` | MelonLoader IL2CPP mod — the client patcher |
 | `tools/` | Installers (`install-melon.ps1`, `install-legacy-client.ps1`, `remove-eac.ps1`), Cloudflare tunnel templates |
+| `Dockerfile`, `Dockerfile.service`, `docker-compose.microservices*.yml` | Standalone fallback image, reusable service image, and local/Dokploy microservices entrypoints |
 
 See [docs/architecture.md](docs/architecture.md) for the full mental
 model (project layout, request lifecycle, watch-mirror controller
 pattern, where to start contributing).
+
+### Microservices
+
+The production topology is the gateway-fronted compose stack.
+`docker-compose.microservices.yml` starts the gateway, identity, rooms,
+notify, content, social, commerce, platform, moderation, web, and
+monolith fallback service hosts plus Compose-managed Postgres and Redis
+for local testing. `docker-compose.microservices.dokploy.yml` is the
+Dokploy version; it adds a `cloudflared` sidecar so Cloudflare Tunnel
+can route the apex and wildcard hostnames to the gateway without Dokploy
+domain rows.
+
+The gateway routes owned host/path slices to the dedicated service hosts.
+The `web` service owns the apex, `www`, `admin`, and `feed` static hosts.
+The monolith fallback is still present for unknown route families, so
+public client URLs remain stable while the split continues.
+
+The compose file intentionally does not start object storage. Point it at
+your separate S3-compatible instance:
+
+```pwsh
+$env:DORKNET_S3_ENDPOINT="https://your-s3-endpoint"
+$env:DORKNET_S3_ACCESS_KEY="..."
+$env:DORKNET_S3_SECRET_KEY="..."
+$env:DORKNET_S3_REGION="garage" # or auto for R2
+docker compose -f docker-compose.microservices.yml up --build
+```
+
+For deployment details, including Dokploy env vars, Cloudflare Tunnel
+routing, external Postgres, and S3 setup, see
+[docs/deploy.md](docs/deploy.md).
+
+For the browser admin console, its routes, auth model, and production
+troubleshooting, see [docs/admin.md](docs/admin.md).
 
 ---
 

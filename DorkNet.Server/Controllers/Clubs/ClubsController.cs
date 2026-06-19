@@ -668,11 +668,14 @@ public class ClubsController(ClubService clubs) : ControllerBase
     [HttpPost("/members/bulk")]
     public async Task<IActionResult> MembersBulk()
     {
+        var form = Request.HasFormContentType ? Request.Form : null;
         if (!long.TryParse(Request.Query["clubId"].ToString(), out var clubId)
-            && !long.TryParse(Request.Form["clubId"].ToString(), out clubId))
+            && (form is null || !long.TryParse(form["clubId"].ToString(), out clubId)))
             return BadRequest(new { error = "missing_club_id" });
 
-        var idsRaw = Request.Query["playerIds"].Concat(Request.Form["playerIds"]);
+        var idsRaw = form is null
+            ? Request.Query["playerIds"].AsEnumerable()
+            : Request.Query["playerIds"].Concat(form["playerIds"]);
         var ids = idsRaw
             .SelectMany(v => (v ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .Select(s => long.TryParse(s, out var n) ? n : 0)
