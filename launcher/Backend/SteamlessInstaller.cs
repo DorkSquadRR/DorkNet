@@ -22,9 +22,12 @@ namespace DorkNet.Launcher.Backend;
 public static class SteamlessInstaller
 {
     private const string PinnedVersion = "v3.1.0.5";
+    // Upstream names the asset "Steamless.{ver}.-.by.atom0s.zip" — NOT
+    // "Steamless.{ver}.zip". Getting this wrong is a 404 at the
+    // "Unlock Rec Room from Steam" step.
     private const string ZipUrl =
         "https://github.com/atom0s/Steamless/releases/download/" +
-        PinnedVersion + "/Steamless." + PinnedVersion + ".zip";
+        PinnedVersion + "/Steamless." + PinnedVersion + ".-.by.atom0s.zip";
 
     private static readonly HttpClient Http = new()
     {
