@@ -75,6 +75,15 @@
     <ProjectReference Include="..\DorkNet.Models\DorkNet.Models.csproj" />
   </ItemGroup>
 
+  <!-- Service-slice containers reference DorkNet.Server for shared controllers
+       and services, but each slice owns its own appsettings.json. Without this
+       guard, dotnet publish sees both files targeting appsettings.json in the
+       same publish root and fails NETSDK1152. -->
+  <ItemGroup Condition="'$(DorkNetServiceContainerPublish)' == 'true'">
+    <Content Update="appsettings*.json" CopyToPublishDirectory="Never" />
+    <None Update="appsettings*.json" CopyToPublishDirectory="Never" />
+  </ItemGroup>
+
   <!-- Vite admin SPA build. Source at admin-ui/, output goes to
        wwwroot/admin/ which the per-host static file middleware
        already serves on admin.rec.net / admin.localhost.

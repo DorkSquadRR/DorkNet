@@ -2,6 +2,13 @@
 
 Generated: 2026-05-09. Source: client URLs from `Cpp2IL_ISIL` ISIL dump (curated list provided to this report); server routes harvested via grep of `[HttpGet]`/`[HttpPost]`/`[HttpPut]`/`[HttpDelete]`/`[Route]` attributes across `Controllers/**/*.cs` plus the namespace-wildcard fall-throughs in `ApiNamespaceStubsController` and the global `ApiCatchAllController` / `GlobalCatchAllController`.
 
+> Snapshot scope: this file is a historical controller-coverage matrix,
+> not the live gateway route table. The dedicated microservice hosts
+> still reuse the shared controller stack behind route guards, so the
+> endpoint shape notes remain useful. For current service ownership, use
+> `DorkNet.Contracts/DorkNetRouteOwnership.cs` or the gateway
+> `/internal/routes` endpoint.
+
 ## How this matrix is built
 
 Each client URL is matched against the server's full route table. ASP.NET Core routes resolve "specific wins over wildcard", so a route literally registered as `api/foo/v1/bar` always wins over `api/foo/{*path}`. The `Status` column reflects the route that actually wins:

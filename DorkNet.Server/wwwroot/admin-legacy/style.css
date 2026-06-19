@@ -6,7 +6,7 @@
     color-scheme: dark;
 
     --bg: #0a0c10;
-    --bg-grad: radial-gradient(circle at 20% 0%, #16204a 0%, #0a0c10 60%);
+    --bg-grad: radial-gradient(circle at 18% -8%, rgba(11, 149, 199, 0.22) 0%, rgba(10, 12, 16, 0) 42%), linear-gradient(135deg, #0a0c10 0%, #0d1d25 48%, #0a0c10 100%);
     --panel: rgba(22, 26, 35, 0.85);
     --panel-solid: #161a23;
     --panel-2: #1d2230;
@@ -17,10 +17,10 @@
     --text-dim: #b3b9c9;
     --muted: #7a8195;
 
-    --accent: #7aa9ff;
-    --accent-2: #b48cff;
-    --accent-grad: linear-gradient(135deg, #7aa9ff 0%, #b48cff 100%);
-    --accent-hover: #93b9ff;
+    --accent: #33ebff;
+    --accent-2: #0b95c7;
+    --accent-grad: linear-gradient(135deg, #33ebff 0%, #0b95c7 100%);
+    --accent-hover: #c8f3ff;
 
     --good: #4ad28b;
     --good-bg: rgba(74, 210, 139, 0.12);
@@ -28,7 +28,7 @@
     --warn-bg: rgba(255, 206, 91, 0.12);
     --danger: #ff6f7d;
     --danger-bg: rgba(255, 111, 125, 0.12);
-    --info-bg: rgba(122, 169, 255, 0.12);
+    --info-bg: rgba(11, 149, 199, 0.12);
 
     --radius: 10px;
     --radius-lg: 14px;
@@ -107,10 +107,10 @@ button[type="submit"], button.primary {
     border-color: transparent;
     color: #0a0c10;
     font-weight: 600;
-    box-shadow: 0 4px 14px rgba(122, 169, 255, 0.25);
+    box-shadow: 0 4px 14px rgba(11, 149, 199, 0.28);
 }
 button[type="submit"]:hover, button.primary:hover {
-    box-shadow: 0 6px 20px rgba(122, 169, 255, 0.4);
+    box-shadow: 0 6px 20px rgba(51, 235, 255, 0.28);
 }
 
 button.danger {
@@ -158,7 +158,7 @@ input:hover, textarea:hover, select:hover { border-color: #3a425a; }
 input:focus, textarea:focus, select:focus {
     outline: none;
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgba(122, 169, 255, 0.15);
+    box-shadow: 0 0 0 3px rgba(11, 149, 199, 0.2);
 }
 input[type="checkbox"] {
     width: 16px;
@@ -214,6 +214,27 @@ label > select {
 }
 #login p { margin: 0 0 22px; }
 #login button[type="submit"] { width: 100%; padding: 10px; font-size: 14px; }
+
+.brand-lockup {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 4px;
+}
+.logo-mark {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: #0a0c10;
+    border: 1px solid rgba(51, 235, 255, 0.28);
+    box-shadow: 0 6px 18px rgba(11, 149, 199, 0.34);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    flex: 0 0 auto;
+}
+.logo-mark img { width: 100%; height: 100%; object-fit: contain; padding: 1px; }
 
 @keyframes fadeUp {
     from { opacity: 0; transform: translateY(12px); }
@@ -280,7 +301,7 @@ nav .tab:hover { color: var(--text-dim); transform: none; background: var(--pane
 nav .tab.active {
     background: var(--info-bg);
     color: var(--accent);
-    border-color: rgba(122, 169, 255, 0.25);
+    border-color: rgba(51, 235, 255, 0.24);
 }
 
 .tab-panel {
@@ -382,7 +403,7 @@ nav .tab.active {
 }
 .table tr:last-child td { border-bottom: none; }
 .table tr { transition: background var(--t); }
-.table tbody tr:hover td { background: rgba(122, 169, 255, 0.04); }
+.table tbody tr:hover td { background: rgba(11, 149, 199, 0.06); }
 
 .table .actions {
     display: flex;
@@ -419,7 +440,7 @@ nav .tab.active {
 .badge.no-dot::before { display: none; }
 .badge.online { background: var(--good-bg); color: var(--good); border-color: rgba(74, 210, 139, 0.2); }
 .badge.offline { background: rgba(139, 145, 158, 0.08); color: var(--muted); border-color: rgba(139, 145, 158, 0.18); }
-.badge.admin { background: var(--info-bg); color: var(--accent); border-color: rgba(122, 169, 255, 0.2); }
+.badge.admin { background: var(--info-bg); color: var(--accent); border-color: rgba(51, 235, 255, 0.2); }
 .badge.banned { background: var(--danger-bg); color: var(--danger); border-color: rgba(255, 111, 125, 0.2); }
 
 .badge-row { display: inline-flex; gap: 4px; flex-wrap: wrap; }

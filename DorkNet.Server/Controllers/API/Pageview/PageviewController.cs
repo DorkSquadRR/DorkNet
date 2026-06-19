@@ -41,9 +41,9 @@ public class PageviewController(ILogger<PageviewController> logger) : Controller
     /// intentionally return an empty url + a 1-hour freshness — the
     /// private server has no in-app deep-link system, so there's
     /// nothing to navigate to and no reason to be polled more often.</summary>
-    [HttpPost("pageview/consume")]
+    [HttpPost("pageview/consume", Order = 10)]
     [HttpPost("/pageview/consume")]
-    [HttpGet("pageview/consume")]
+    [HttpGet("pageview/consume", Order = 10)]
     [HttpGet("/pageview/consume")]
     public IActionResult Consume()
     {
