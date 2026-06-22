@@ -1,6 +1,20 @@
 import { clearSession, getToken, notifyAuthChange } from './auth';
 
-const API_BASE = '/api/admin/v1';
+const API_BASE = adminApiBase();
+
+function adminApiBase(): string {
+  if (typeof window === 'undefined') return '/api/admin/v1';
+
+  const marker = '/__dn/admin';
+  const path = window.location.pathname;
+  const lower = path.toLowerCase();
+  const markerAt = lower.indexOf(marker);
+  if (markerAt >= 0) {
+    return path.slice(0, markerAt + marker.length) + '/api/admin/v1';
+  }
+
+  return '/api/admin/v1';
+}
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public body?: unknown) {
