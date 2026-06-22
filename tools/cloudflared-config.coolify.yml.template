@@ -1,7 +1,7 @@
 # DorkNet Cloudflare Tunnel config — Coolify production target.
 # ────────────────────────────────────────────────────────────────────
-# Routes every localhost subdomain through the tunnel into the server
-# container running on Coolify. The tunnel runs as its own Coolify
+# Routes only DorkNet's known service subdomains through the tunnel
+# into the server container running on Coolify. The tunnel runs as its own Coolify
 # service (or as a sidecar in the same project) and reaches the
 # server over the internal Docker network.
 #
@@ -49,24 +49,93 @@ originRequest:
   keepAliveTimeout: 10m
   noHappyEyeballs: false
 
-# Ingress rules are evaluated top-down. The wildcard catches every
-# subdomain we don't list explicitly, so when the 2020 Rec Room client
-# (post-domain-patch) hits a niche subdomain like roomieintegrations.
-# localhost, the request still reaches the server.
+# Ingress rules are evaluated top-down. Replace localhost below with
+# your DORKNET_DOMAIN when installing this as a static cloudflared
+# config. Do not use a wildcard hostname: only these known client-facing
+# hosts should reach the gateway.
 ingress:
   - hostname: localhost
     service: {{UPSTREAM}}
     originRequest:
       httpHostHeader: localhost
 
-  - hostname: "*.localhost"
+  - hostname: admin.localhost
     service: {{UPSTREAM}}
-    # cloudflared forwards the original Host header by default, which
-    # is what the server's [Host("api.localhost")] etc. attributes match
-    # against. No explicit httpHostHeader here so wildcards stay
-    # transparent.
+  - hostname: api.localhost
+    service: {{UPSTREAM}}
+  - hostname: accounts.localhost
+    service: {{UPSTREAM}}
+  - hostname: auth.localhost
+    service: {{UPSTREAM}}
+  - hostname: bugreporting.localhost
+    service: {{UPSTREAM}}
+  - hostname: cards.localhost
+    service: {{UPSTREAM}}
+  - hostname: cdn.localhost
+    service: {{UPSTREAM}}
+  - hostname: chat.localhost
+    service: {{UPSTREAM}}
+  - hostname: clubs.localhost
+    service: {{UPSTREAM}}
+  - hostname: cms.localhost
+    service: {{UPSTREAM}}
+  - hostname: commerce.localhost
+    service: {{UPSTREAM}}
+  - hostname: data.localhost
+    service: {{UPSTREAM}}
+  - hostname: datacollection.localhost
+    service: {{UPSTREAM}}
+  - hostname: discovery.localhost
+    service: {{UPSTREAM}}
+  - hostname: econ.localhost
+    service: {{UPSTREAM}}
+  - hostname: feed.localhost
+    service: {{UPSTREAM}}
+  - hostname: gamelogs.localhost
+    service: {{UPSTREAM}}
+  - hostname: geo.localhost
+    service: {{UPSTREAM}}
+  - hostname: img.localhost
+    service: {{UPSTREAM}}
+  - hostname: leaderboard.localhost
+    service: {{UPSTREAM}}
+  - hostname: link.localhost
+    service: {{UPSTREAM}}
+  - hostname: lists.localhost
+    service: {{UPSTREAM}}
+  - hostname: match.localhost
+    service: {{UPSTREAM}}
+  - hostname: moderation.localhost
+    service: {{UPSTREAM}}
+  - hostname: ns.localhost
+    service: {{UPSTREAM}}
+  - hostname: notify.localhost
+    service: {{UPSTREAM}}
+  - hostname: platformnotifications.localhost
+    service: {{UPSTREAM}}
+  - hostname: playersettings.localhost
+    service: {{UPSTREAM}}
+  - hostname: roomcomments.localhost
+    service: {{UPSTREAM}}
+  - hostname: roomieintegrations.localhost
+    service: {{UPSTREAM}}
+  - hostname: rooms.localhost
+    service: {{UPSTREAM}}
+  - hostname: storage.localhost
+    service: {{UPSTREAM}}
+  - hostname: strings.localhost
+    service: {{UPSTREAM}}
+  - hostname: strings-cdn.localhost
+    service: {{UPSTREAM}}
+  - hostname: studio.localhost
+    service: {{UPSTREAM}}
+  - hostname: thorn.localhost
+    service: {{UPSTREAM}}
+  - hostname: videos.localhost
+    service: {{UPSTREAM}}
+  - hostname: www.localhost
+    service: {{UPSTREAM}}
 
   # Catch-all rejects anything that didn't match (defensive — the
-  # tunnel only routes traffic for hostnames we've added DNS records
-  # for, so this is rarely reached).
+  # tunnel only routes traffic for hostnames listed above).
   - service: http_status:404
