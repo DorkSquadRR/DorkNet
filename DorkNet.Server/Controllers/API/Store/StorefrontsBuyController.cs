@@ -205,6 +205,7 @@ public class StorefrontsBuyController(
     /// persisted room key. The 2020.12 client sends roomKeyId and the
     /// price it displayed so we reject stale-price purchases.</summary>
     [HttpGet("api/storefronts/v1/buyRoomKey")]
+    [HttpGet("api/storefronts/v1/PurchaseRoomKeyWithCurrency")]
     public async Task<IActionResult> BuyRoomKey(
         [FromQuery] long roomKeyId,
         [FromQuery] int requestedPrice)
@@ -240,6 +241,95 @@ public class StorefrontsBuyController(
             await level.GrantCurrencyAsync(key.CreatorPlayerId, 2, key.Price, $"sellRoomKey:{key.Id}");
 
         return Ok(RoomKeyPurchaseResponse(RoomKeyStatus.Success, key, newBalance));
+    }
+
+    [HttpPost("api/storefronts/v2/buyInvention")]
+    [HttpGet("api/storefronts/v2/buyInvention")]
+    public async Task<IActionResult> BuyInvention([FromQuery] long inventionId, [FromQuery] int currencyType = 2)
+    {
+        var pid = Me;
+        var inv = await db.Inventions.FirstOrDefaultAsync(i => i.Id == inventionId && !i.IsDeleted && i.IsPublished);
+        if (inv is null) return NotFound();
+        var price = Math.Max(0, inv.Price);
+        var balance = await level.GetBalanceAsync(pid, currencyType);
+        if (balance < price) return Ok(BalanceUpdateResponse(balance, currencyType));
+        var newBalance = price == 0
+            ? balance
+            : await level.GrantCurrencyAsync(pid, currencyType, -price, $"buyInvention:{inv.Id}");
+        var key = $"invention_purchase:{inv.Id}";
+        if (!await db.ObjectiveProgress.AnyAsync(o => o.PlayerId == pid && o.Key == key))
+        {
+            db.ObjectiveProgress.Add(new ObjectiveProgressEntity
+            {
+                PlayerId = pid,
+                Key = key,
+                IsCompleted = true,
+                ClearedAt = DateTime.UtcNow,
+            });
+            await db.SaveChangesAsync();
+        }
+        return Ok(BalanceUpdateResponse(newBalance, currencyType, null, null));
+    }
+
+    [HttpPost("api/storefronts/v1/buyForFreeGiftButton")]
+    [HttpGet("api/storefronts/v1/buyForFreeGiftButton")]
+    public async Task<IActionResult> BuyForFreeGiftButton([FromQuery] int currencyType = 2, [FromQuery] int price = 0)
+    {
+        var pid = Me;
+        var balance = await level.GetBalanceAsync(pid, currencyType);
+        if (balance < price) return Ok(BalanceUpdateResponse(balance, currencyType));
+        var newBalance = price == 0
+            ? balance
+            : await level.GrantCurrencyAsync(pid, currencyType, -price, "freeGiftButton");
+        db.GiftPackages.Add(new GiftPackageEntity
+        {
+            RecipientPlayerId = pid,
+            CurrencyType = 2,
+            Currency = 25,
+            Level = 1,
+            PackageVariant = "FreeGiftButton",
+            PackageMaterial = string.Empty,
+            IsValid = true,
+            SupportsCurrentPlatform = true,
+        });
+        await db.SaveChangesAsync();
+        return Ok(BalanceUpdateResponse(newBalance, currencyType));
+    }
+
+    [HttpPost("api/storefronts/v1/buyProgressionEventXpBoost")]
+    [HttpGet("api/storefronts/v1/buyProgressionEventXpBoost")]
+    public async Task<IActionResult> BuyProgressionEventXpBoost([FromQuery] int currencyType = 2, [FromQuery] int price = 0)
+    {
+        var pid = Me;
+        var balance = await level.GetBalanceAsync(pid, currencyType);
+        if (balance < price) return Ok(BalanceUpdateResponse(balance, currencyType));
+        var newBalance = price == 0
+            ? balance
+            : await level.GrantCurrencyAsync(pid, currencyType, -price, "progressionEventXpBoost");
+        db.ObjectiveProgress.Add(new ObjectiveProgressEntity
+        {
+            PlayerId = pid,
+            Key = $"progressionEvent:xpBoost:{Guid.NewGuid():N}",
+            IsCompleted = true,
+            ClearedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+        return Ok(BalanceUpdateResponse(newBalance, currencyType));
+    }
+
+    [HttpPost("api/storefronts/v1/buyPurchaseReminder")]
+    [HttpGet("api/storefronts/v1/buyPurchaseReminder")]
+    public async Task<IActionResult> BuyPurchaseReminder()
+    {
+        db.ObjectiveProgress.Add(new ObjectiveProgressEntity
+        {
+            PlayerId = Me,
+            Key = $"purchaseReminder:{Guid.NewGuid():N}",
+            IsCompleted = true,
+            ClearedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+        return Ok(new { Success = true });
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

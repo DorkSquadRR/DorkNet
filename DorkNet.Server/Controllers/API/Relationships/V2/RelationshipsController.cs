@@ -451,7 +451,75 @@ public class RelationshipsController(DorkNetDbContext db, NotificationService no
         return Ok(new { Imported = added });
     }
 
+    [HttpGet("api/relationships/mutualfriends")]
+    public async Task<IActionResult> MutualFriends([FromQuery] long playerId)
+    {
+        var me = CurrentPlayerId;
+        if (playerId <= 0 || playerId == me) return Ok(Array.Empty<object>());
+        var mine = await FriendIdsAsync(me);
+        var theirs = await FriendIdsAsync(playerId);
+        var mutualIds = mine.Intersect(theirs).Take(100).ToList();
+        var players = await db.Players
+            .Where(p => mutualIds.Contains(p.Id))
+            .Select(p => new
+            {
+                AccountId = (int)p.Id,
+                p.Username,
+                p.DisplayName,
+                ProfileImage = p.ProfileImageName ?? string.Empty,
+            })
+            .ToListAsync();
+        return Ok(players);
+    }
+
+    [HttpPost("api/relationships/sendfriendintroductions")]
+    public async Task<IActionResult> SendFriendIntroductions(
+        [FromForm] long playerId,
+        [FromForm] long introducedPlayerId)
+    {
+        var me = CurrentPlayerId;
+        if (playerId <= 0 || introducedPlayerId <= 0)
+            return BadRequest("missing_player");
+        db.Messages.Add(new MessageEntity
+        {
+            SenderPlayerId = me,
+            RecipientPlayerId = playerId,
+            Type = 30,
+            Body = $"Friend introduction:{introducedPlayerId}",
+        });
+        await db.SaveChangesAsync();
+        return Ok(new { Success = true });
+    }
+
+    [HttpPost("api/relationships/v1/addfriendwithcode")]
+    [HttpGet("api/relationships/v1/addfriendwithcode")]
+    public async Task<ActionResult> AddFriendWithCode([FromQuery] string? code, [FromForm] string? formCode)
+    {
+        var raw = (code ?? formCode ?? string.Empty).Trim();
+        if (raw.Length == 0) return Ok(EmptyRelationship(0));
+        long? id = long.TryParse(raw, out var parsed) ? parsed : null;
+        if (id is null)
+        {
+            id = await db.Players
+                .Where(p => p.Username == raw)
+                .Select(p => (long?)p.Id)
+                .FirstOrDefaultAsync();
+        }
+        if (id is not long playerId) return Ok(EmptyRelationship(0));
+        return await AddFriend(playerId);
+    }
+
     // ── helpers ──────────────────────────────────────────────────────
+
+    private async Task<HashSet<long>> FriendIdsAsync(long playerId)
+    {
+        var rows = await db.Relationships
+            .Where(r => r.Status == EntityStatus.Friend
+                        && (r.RequesterId == playerId || r.TargetId == playerId))
+            .Select(r => r.RequesterId == playerId ? r.TargetId : r.RequesterId)
+            .ToListAsync();
+        return rows.ToHashSet();
+    }
 
     /// <summary>Map a storage row to the watch's wire RelationshipType
     /// from <paramref name="me"/>'s perspective. PendingSent flips

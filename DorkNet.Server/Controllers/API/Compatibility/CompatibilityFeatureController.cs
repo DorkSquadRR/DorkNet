@@ -73,6 +73,11 @@ public class CompatibilityFeatureController(DorkNetDbContext db) : ControllerBas
         });
     }
 
+    [HttpGet("api/CampusCard/PS5RecRoomPlusEnabledForAllPlayers")]
+    [AllowAnonymous]
+    public IActionResult Ps5RecRoomPlusEnabledForAllPlayers()
+        => Content("true", "application/json");
+
     [HttpPost("api/clubreporting/v1/report")]
     [Authorize]
     [Consumes("application/json", "application/x-www-form-urlencoded", "multipart/form-data")]

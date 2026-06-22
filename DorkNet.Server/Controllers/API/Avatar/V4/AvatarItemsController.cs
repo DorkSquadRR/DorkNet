@@ -186,6 +186,22 @@ public class AvatarItemsController(DorkNetDbContext db, IConfiguration config) :
         return Ok(result);
     }
 
+    [HttpGet("api/avatar/v1/defaultbaseavataritems")]
+    [AllowAnonymous]
+    public IActionResult DefaultBaseAvatarItems()
+    {
+        var rows = _catalog.Value.Items.Values
+            .OrderBy(i => i.AvatarItemType)
+            .ThenBy(i => i.FriendlyName)
+            .Take(100)
+            .ToList();
+        return Ok(rows);
+    }
+
+    [HttpGet("api/avatar/v1/defaultunlocked")]
+    [AllowAnonymous]
+    public Task<ActionResult<List<UnlockedAvatarItemDto>>> DefaultUnlocked() => Get();
+
     /// <summary>The set of GUIDs the bundled
     /// <c>AvatarItemWardrobeRuntimeConfig.avatarItemDataLookup</c>
     /// contains. Exposed so other controllers (StoreService seed,

@@ -71,6 +71,38 @@ public class EconController(DorkNetDbContext db, LevelService level) : Controlle
             .ToListAsync();
         return Ok(rows);
     }
+
+    [HttpGet("/econ/customAvatarItems")]
+    [HttpGet("/econ/customAvatarItems/v1/owned")]
+    public async Task<IActionResult> GetOwnedCustomAvatarItems()
+    {
+        var pid = this.RequireCurrentPlayerId();
+        var rows = await db.CustomAvatarItemOwnership
+            .Where(o => o.PlayerId == pid)
+            .Join(db.CustomAvatarItems, o => o.CustomAvatarItemId, i => i.Id, (o, i) => i)
+            .OrderByDescending(i => i.UpdatedAt)
+            .ToListAsync();
+        return Ok(rows.Select(i => new
+        {
+            CustomAvatarItemId = i.PublicId,
+            Id = i.PublicId,
+            CreatorPlayerId = (int)i.CreatorPlayerId,
+            i.Name,
+            i.Description,
+            i.Price,
+            i.ItemType,
+            i.ImageName,
+            i.AssetName,
+            i.Color,
+        }));
+    }
+
+    [HttpGet("/econ/customAvatarItems/v1/itemOwnershipLimit")]
+    public IActionResult CustomAvatarItemOwnershipLimit() => Ok(new
+    {
+        Limit = 1000,
+        ItemOwnershipLimit = 1000,
+    });
 }
 
 public class TokenBalance

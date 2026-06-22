@@ -1,0 +1,161 @@
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
+using DorkNet.Server.Auth;
+using DorkNet.Server.Data;
+using DorkNet.Server.Data.Entities;
+using DorkNet.Server.Services;
+
+namespace DorkNet.Server.Controllers.API.Keepsakes;
+
+[ApiController]
+[Route("api/keepsakes")]
+[Authorize]
+public class KeepsakesController(DorkNetDbContext db, DomainConfig domain) : ControllerBase
+{
+    private long Me => this.RequireCurrentPlayerId();
+
+    [HttpGet]
+    public async Task<IActionResult> Mine()
+    {
+        await EnsureLoginKeepsakeAsync(Me);
+        var rows = await db.Keepsakes
+            .Where(k => k.PlayerId == Me)
+            .OrderByDescending(k => k.EarnedAt)
+            .ToListAsync();
+        return Ok(rows.Select(ToWire));
+    }
+
+    [HttpGet("categories")]
+    [AllowAnonymous]
+    public IActionResult Categories() => Ok(new[]
+    {
+        new { Category = "account", DisplayName = "Account" },
+        new { Category = "event", DisplayName = "Events" },
+        new { Category = "room", DisplayName = "Rooms" },
+    });
+
+    [HttpGet("events")]
+    public async Task<IActionResult> Events()
+    {
+        var rows = await db.Keepsakes
+            .Where(k => k.PlayerId == Me && k.Category == "event")
+            .OrderByDescending(k => k.EarnedAt)
+            .ToListAsync();
+        return Ok(rows.Select(ToWire));
+    }
+
+    [HttpGet("globalconfig")]
+    [AllowAnonymous]
+    public IActionResult GlobalConfig() => Ok(new
+    {
+        Enabled = true,
+        Categories = new[] { "account", "event", "room" },
+        CdnBaseUrl = $"https://{domain.Sub("cdn")}/",
+    });
+
+    [HttpPost]
+    public async Task<IActionResult> Create()
+    {
+        var req = await ReadRequestAsync();
+        var key = Trim(req.EventKey, 128);
+        if (key.Length == 0) key = $"manual:{Guid.NewGuid():N}";
+        var category = Trim(req.Category, 64);
+        if (category.Length == 0) category = "event";
+
+        var existing = await db.Keepsakes.FirstOrDefaultAsync(k =>
+            k.PlayerId == Me && k.EventKey == key);
+        if (existing is null)
+        {
+            existing = new KeepsakeEntity
+            {
+                PlayerId = Me,
+                EventKey = key,
+            };
+            db.Keepsakes.Add(existing);
+        }
+
+        existing.Category = category;
+        existing.Title = Trim(req.Title, 128);
+        existing.Description = Trim(req.Description, 1024);
+        existing.ImageName = Trim(req.ImageName, 256);
+        existing.EarnedAt = req.EarnedAt ?? DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return Ok(ToWire(existing));
+    }
+
+    private async Task EnsureLoginKeepsakeAsync(long playerId)
+    {
+        const string key = "first-login";
+        if (await db.Keepsakes.AnyAsync(k => k.PlayerId == playerId && k.EventKey == key))
+            return;
+        db.Keepsakes.Add(new KeepsakeEntity
+        {
+            PlayerId = playerId,
+            Category = "account",
+            EventKey = key,
+            Title = "First Login",
+            Description = "Joined this server.",
+        });
+        await db.SaveChangesAsync();
+    }
+
+    private async Task<KeepsakeRequest> ReadRequestAsync()
+    {
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync();
+            return new KeepsakeRequest
+            {
+                Category = form["category"].FirstOrDefault() ?? form["Category"].FirstOrDefault(),
+                EventKey = form["eventKey"].FirstOrDefault() ?? form["EventKey"].FirstOrDefault(),
+                Title = form["title"].FirstOrDefault() ?? form["Title"].FirstOrDefault(),
+                Description = form["description"].FirstOrDefault() ?? form["Description"].FirstOrDefault(),
+                ImageName = form["imageName"].FirstOrDefault() ?? form["ImageName"].FirstOrDefault(),
+                EarnedAt = DateTime.TryParse(form["earnedAt"].FirstOrDefault() ?? form["EarnedAt"].FirstOrDefault(), out var earned) ? earned : null,
+            };
+        }
+
+        try
+        {
+            return await JsonSerializer.DeserializeAsync<KeepsakeRequest>(
+                Request.Body,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                   ?? new KeepsakeRequest();
+        }
+        catch (JsonException)
+        {
+            return new KeepsakeRequest();
+        }
+    }
+
+    private object ToWire(KeepsakeEntity row) => new
+    {
+        row.Id,
+        row.PlayerId,
+        row.Category,
+        row.EventKey,
+        row.Title,
+        row.Description,
+        row.ImageName,
+        ImageUrl = string.IsNullOrWhiteSpace(row.ImageName) ? string.Empty : $"https://{domain.Sub("cdn")}/{row.ImageName}",
+        row.EarnedAt,
+    };
+
+    private static string Trim(string? value, int max)
+    {
+        var s = (value ?? string.Empty).Trim();
+        return s.Length <= max ? s : s[..max];
+    }
+
+    public sealed class KeepsakeRequest
+    {
+        public string? Category { get; set; }
+        public string? EventKey { get; set; }
+        public string? Title { get; set; }
+        public string? Description { get; set; }
+        public string? ImageName { get; set; }
+        public DateTime? EarnedAt { get; set; }
+    }
+}

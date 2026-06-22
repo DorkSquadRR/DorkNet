@@ -3,7 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace DorkNet.Server.Controllers.Auth;
 
-/// <summary>The boot-time client-version gate the 2020.12 watch hits
+/// <summary>The boot-time client-version gate the 2023.03.21 client hits
 /// at startup as <c>GET api/versioncheck/v4?v={build}&amp;p={platform}</c>.
 ///
 /// <para>Verified against the watch's <c>KMDHPCHFADM.VerifyGameVersion</c>
@@ -20,10 +20,9 @@ namespace DorkNet.Server.Controllers.Auth;
 /// front door — the watch has dedicated UX for it, no custom client
 /// mod work needed.</para>
 ///
-/// <para>The <c>v</c> query param is the raw build identifier the watch
-/// reads from <c>KMJJGELKNAP.MCFMPCNNEBH</c> — for the December build
-/// that's the literal string <c>"20201210"</c>. We map raw build IDs
-/// to our internal <see cref="ClientVersion.Key"/>s via the
+/// <para>The <c>v</c> query param is the raw build identifier supplied
+/// by the client. We map raw build IDs to our internal
+/// <see cref="ClientVersion.Key"/>s via the
 /// <c>DorkNet:BuildIdToVersionKey</c> config map; any build ID we
 /// don't recognise OR that maps to a key not in
 /// <see cref="VersionRegistry.SupportedVersionKeys"/> gets
@@ -49,7 +48,8 @@ public class VersionCheckController(
     private static readonly IReadOnlyDictionary<string, string> BuiltInBuildIdToVersionKey =
         new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["20201210"] = "december_2020_12_18",
+            ["20230317"] = "march_2023_03_21",
+            ["20230321"] = "march_2023_03_21",
         };
 
     [HttpGet("/api/versioncheck/v4")]
@@ -66,8 +66,7 @@ public class VersionCheckController(
         // Map raw build ID → ClientVersion key via config. Format:
         //     "DorkNet": {
         //       "BuildIdToVersionKey": {
-        //         "20201210": "december_2020_12_18",
-        //         "20200310": "march_2020_03_10"
+        //         "20230321": "march_2023_03_21"
         //       }
         //     }
         // Mapping ABSENT → unknown build → UpdateRequired.

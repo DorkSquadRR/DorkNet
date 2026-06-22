@@ -9,6 +9,8 @@ namespace DorkNet.Server.Services;
 
 public class AuthService(IConfiguration config, DorkNetDbContext db)
 {
+    public const string AccessCookieName = "dorknet_access_token";
+
     // Resolution order MUST match Program.cs's JwtBearer validator setup —
     // env var first, config key second — otherwise tokens are signed with
     // one secret and validated against another and every authenticated
@@ -56,13 +58,22 @@ public class AuthService(IConfiguration config, DorkNetDbContext db)
         var claims = new List<Claim>
         {
             new(ClaimTypes.NameIdentifier, playerId.ToString()),
+            new(JwtRegisteredClaimNames.Sub, playerId.ToString()),
+            new("accountId", playerId.ToString()),
+            new("account_id", playerId.ToString()),
+            new("accountid", playerId.ToString()),
             new(ClaimTypes.Role, "gameClient"),
+            new("roles", "gameClient"),
             new("token_type", tokenType),
         };
         // Multiple Role claims become a JSON array on the wire — the
         // watch's HasRole helper handles both string and List<string>
         // forms.
-        if (isDev) claims.Add(new Claim(ClaimTypes.Role, "developer"));
+        if (isDev)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, "developer"));
+            claims.Add(new Claim("roles", "developer"));
+        }
 
         var descriptor = new SecurityTokenDescriptor
         {

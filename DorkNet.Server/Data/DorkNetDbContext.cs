@@ -74,6 +74,14 @@ public class DorkNetDbContext(DbContextOptions<DorkNetDbContext> options) : DbCo
     public DbSet<ClubSubscriptionEntity> ClubSubscriptions => Set<ClubSubscriptionEntity>();
     public DbSet<SignupCodeEntity> SignupCodes => Set<SignupCodeEntity>();
     public DbSet<PendingDeviceEntity> PendingDevices => Set<PendingDeviceEntity>();
+    public DbSet<CustomAvatarItemEntity> CustomAvatarItems => Set<CustomAvatarItemEntity>();
+    public DbSet<CustomAvatarItemOwnershipEntity> CustomAvatarItemOwnership => Set<CustomAvatarItemOwnershipEntity>();
+    public DbSet<ItemWishlistEntity> ItemWishlists => Set<ItemWishlistEntity>();
+    public DbSet<KeepsakeEntity> Keepsakes => Set<KeepsakeEntity>();
+    public DbSet<RoomCurrencyEntity> RoomCurrencies => Set<RoomCurrencyEntity>();
+    public DbSet<RoomCurrencyBalanceEntity> RoomCurrencyBalances => Set<RoomCurrencyBalanceEntity>();
+    public DbSet<RoomCurrencyPurchaseOfferEntity> RoomCurrencyPurchaseOffers => Set<RoomCurrencyPurchaseOfferEntity>();
+    public DbSet<UgcPurchasableEntity> UgcPurchasables => Set<UgcPurchasableEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -678,6 +686,65 @@ public class DorkNetDbContext(DbContextOptions<DorkNetDbContext> options) : DbCo
             // identified by (RoomId, Channel), not the channel alone.
             e.HasKey(c => new { c.RoomId, c.Channel });
             e.HasIndex(c => c.RoomId);
+        });
+
+        modelBuilder.Entity<CustomAvatarItemEntity>(e =>
+        {
+            e.HasKey(i => i.Id);
+            e.HasIndex(i => i.PublicId).IsUnique();
+            e.HasIndex(i => i.CreatorPlayerId);
+            e.HasIndex(i => i.IsPublic);
+            e.HasIndex(i => i.IsFeatured);
+        });
+
+        modelBuilder.Entity<CustomAvatarItemOwnershipEntity>(e =>
+        {
+            e.HasKey(o => o.Id);
+            e.HasIndex(o => new { o.PlayerId, o.CustomAvatarItemId }).IsUnique();
+            e.HasIndex(o => o.CustomAvatarItemId);
+        });
+
+        modelBuilder.Entity<ItemWishlistEntity>(e =>
+        {
+            e.HasKey(w => w.Id);
+            e.HasIndex(w => new { w.PlayerId, w.ItemKey, w.ItemType }).IsUnique();
+        });
+
+        modelBuilder.Entity<KeepsakeEntity>(e =>
+        {
+            e.HasKey(k => k.Id);
+            e.HasIndex(k => k.PlayerId);
+            e.HasIndex(k => new { k.PlayerId, k.EventKey });
+        });
+
+        modelBuilder.Entity<RoomCurrencyEntity>(e =>
+        {
+            e.HasKey(c => c.Id);
+            e.HasIndex(c => c.PublicId).IsUnique();
+            e.HasIndex(c => c.RoomId);
+            e.HasIndex(c => c.CreatorPlayerId);
+        });
+
+        modelBuilder.Entity<RoomCurrencyBalanceEntity>(e =>
+        {
+            e.HasKey(b => b.Id);
+            e.HasIndex(b => new { b.PlayerId, b.RoomCurrencyId }).IsUnique();
+            e.HasIndex(b => b.RoomCurrencyId);
+        });
+
+        modelBuilder.Entity<RoomCurrencyPurchaseOfferEntity>(e =>
+        {
+            e.HasKey(o => o.Id);
+            e.HasIndex(o => o.PublicId).IsUnique();
+            e.HasIndex(o => o.RoomCurrencyId);
+        });
+
+        modelBuilder.Entity<UgcPurchasableEntity>(e =>
+        {
+            e.HasKey(p => p.Id);
+            e.HasIndex(p => p.PublicId).IsUnique();
+            e.HasIndex(p => p.RoomId);
+            e.HasIndex(p => p.CreatorPlayerId);
         });
     }
 }

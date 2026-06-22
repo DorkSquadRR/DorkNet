@@ -42,6 +42,22 @@ public class RoomKeysController(DorkNetDbContext db) : ControllerBase
         return Ok(rows.Select(ToWire));
     }
 
+    [HttpGet("api/roomkeys")]
+    [HttpGet("api/roomkeys/v1")]
+    public async Task<IActionResult> List([FromQuery] long? roomId = null)
+    {
+        var rows = db.RoomKeys.Where(k => !k.IsDeleted);
+        if (roomId is long id && id > 0)
+            rows = rows.Where(k => k.RoomId == id);
+
+        var result = await rows
+            .OrderBy(k => k.RoomId)
+            .ThenBy(k => k.Price)
+            .Take(200)
+            .ToListAsync();
+        return Ok(result.Select(ToWire));
+    }
+
     [HttpPost("api/roomkeys/v1/create")]
     public async Task<IActionResult> Create()
     {
@@ -132,6 +148,29 @@ public class RoomKeysController(DorkNetDbContext db) : ControllerBase
         return Content(owns ? "true" : "false", "application/json");
     }
 
+    [HttpGet("api/roomkeys/v1/owns")]
+    public async Task<IActionResult> Owns([FromQuery] long roomKeyId)
+    {
+        var pid = Me;
+        var owns = await db.RoomKeyPurchases.AnyAsync(p => p.RoomKeyId == roomKeyId && p.PlayerId == pid);
+        return Content(owns ? "true" : "false", "application/json");
+    }
+
+    [HttpGet("api/roomkeys/v1/owns/bulk")]
+    [HttpPost("api/roomkeys/v1/owns/bulk")]
+    public async Task<IActionResult> OwnsBulk()
+    {
+        var ids = await ReadRoomKeyIdsAsync();
+        if (ids.Count == 0) return Ok(Array.Empty<object>());
+        var pid = Me;
+        var owned = await db.RoomKeyPurchases
+            .Where(p => p.PlayerId == pid && ids.Contains(p.RoomKeyId))
+            .Select(p => p.RoomKeyId)
+            .ToListAsync();
+        var ownedSet = owned.ToHashSet();
+        return Ok(ids.Select(id => new { RoomKeyId = id, Owns = ownedSet.Contains(id) }).ToList());
+    }
+
     public static object RoomKeyResponse(RoomKeyStatus status, RoomKeyEntity? key) => new
     {
         Status = (int)status,
@@ -171,6 +210,25 @@ public class RoomKeysController(DorkNetDbContext db) : ControllerBase
             .Where(p => p.Id == playerId)
             .Select(p => p.IsAdmin)
             .FirstOrDefaultAsync();
+    }
+
+    private async Task<List<long>> ReadRoomKeyIdsAsync()
+    {
+        var ids = new List<long>();
+        foreach (var value in Request.Query.SelectMany(q => q.Value))
+        foreach (var part in (value ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            if (long.TryParse(part, out var id) && id > 0) ids.Add(id);
+
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync();
+            foreach (var key in new[] { "roomKeyIds", "RoomKeyIds", "ids", "Ids" })
+            foreach (var value in form[key])
+            foreach (var part in (value ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                if (long.TryParse(part, out var id) && id > 0) ids.Add(id);
+        }
+
+        return ids.Distinct().Take(200).ToList();
     }
 
     private async Task<T> ReadBodyAsync<T>() where T : new()

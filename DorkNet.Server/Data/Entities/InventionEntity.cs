@@ -85,6 +85,7 @@ public class InventionEntity
 
     public int CheerCount { get; set; } = 0;
     public int SpawnCount { get; set; } = 0;
+    public int Price { get; set; } = 0;
 
     /// <summary>Soft-delete flag. When set, the row is hidden from
     /// browse / search / detail endpoints but stays in the table so

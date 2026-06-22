@@ -128,14 +128,15 @@ public static class RequestTracingExtensions
                 var trimmedRequest = safeRequest is null ? null
                     : (safeRequest.Length > 200 ? safeRequest[..200] + "..." : safeRequest);
                 var trimmedResponse = safeResponse.Length > 300 ? safeResponse[..300] + "..." : safeResponse;
+                var authPresence = DescribeAuthPresence(ctx.Request);
                 var level = thrown is not null || status >= 500 ? LogLevel.Error
                           : status >= 400 ? LogLevel.Warning
                           : LogLevel.Information;
 
                 reqLogger.Log(level, thrown,
-                    "[req] {Status} {Method} {Host}{Path}{Query} {ElapsedMs}ms contentType={ContentType} contentLength={ContentLength} req={ReqBody} resp={RespBody}",
+                    "[req] {Status} {Method} {Host}{Path}{Query} {ElapsedMs}ms auth={AuthPresence} contentType={ContentType} contentLength={ContentLength} req={ReqBody} resp={RespBody}",
                     status, ctx.Request.Method, ctx.Request.Host, ctx.Request.Path,
-                    ctx.Request.QueryString.Value ?? "", sw.ElapsedMilliseconds,
+                    ctx.Request.QueryString.Value ?? "", sw.ElapsedMilliseconds, authPresence,
                     ctx.Request.ContentType ?? "", ctx.Request.ContentLength,
                     trimmedRequest ?? "", trimmedResponse);
 
@@ -169,6 +170,15 @@ public static class RequestTracingExtensions
     private const string SecretKeys =
         "password|passwd|pwd|passwordhash|token|accesstoken|refreshtoken|idtoken|" +
         "secret|clientsecret|apikey|api_key|authorization|deviceauth|sessionkey";
+
+    private static string DescribeAuthPresence(HttpRequest request)
+    {
+        var hasAuthHeader = request.Headers.ContainsKey("Authorization");
+        var hasBearer = request.Headers.Authorization.ToString()
+            .StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase);
+        var hasAccessCookie = request.Cookies.ContainsKey(AuthService.AccessCookieName);
+        return $"header={hasAuthHeader};bearer={hasBearer};cookie={hasAccessCookie}";
+    }
 
     private static readonly Regex JsonSecretRegex = new(
         "(\"(?:" + SecretKeys + ")\"\\s*:\\s*)\"(?:[^\"\\\\]|\\\\.)*\"",

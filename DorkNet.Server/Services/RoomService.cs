@@ -1016,6 +1016,9 @@ public class RoomService(DorkNetDbContext db)
             // showed up that the admin couldn't purge.)
             IsAGRoom = false,
             IsDormRoom = false,
+            IsStudioRoom = source.IsStudioRoom,
+            IsRoomLinkedToRecRoomStudio = source.IsRoomLinkedToRecRoomStudio,
+            StudioSessionId = source.StudioSessionId,
             CloningAllowed = source.CloningAllowed,
             SupportsVRLow = source.SupportsVRLow,
             SupportsMobile = source.SupportsMobile,
@@ -1070,6 +1073,9 @@ public class RoomService(DorkNetDbContext db)
         // ignored by both clients.
         IsDorm = r.IsDormRoom,
         IsDormRoom = r.IsDormRoom,
+        IsStudioRoom = r.IsStudioRoom,
+        IsRoomLinkedToRecRoomStudio = r.IsRoomLinkedToRecRoomStudio,
+        StudioSessionId = r.StudioSessionId,
         CloningAllowed = r.CloningAllowed,
         SupportsVRLow = r.SupportsVRLow,
         SupportsMobile = r.SupportsMobile,

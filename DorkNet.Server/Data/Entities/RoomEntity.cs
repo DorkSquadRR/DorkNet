@@ -47,6 +47,12 @@ public class RoomEntity
     public bool IsAGRoom { get; set; } = true;
 
     public bool IsDormRoom { get; set; } = false;
+    public bool IsStudioRoom { get; set; } = false;
+    public bool IsRoomLinkedToRecRoomStudio { get; set; } = false;
+
+    [MaxLength(128)]
+    public string StudioSessionId { get; set; } = string.Empty;
+
     public bool CloningAllowed { get; set; } = false;
     public bool SupportsVRLow { get; set; } = true;
     public bool SupportsMobile { get; set; } = false;
