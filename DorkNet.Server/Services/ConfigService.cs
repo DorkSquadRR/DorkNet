@@ -25,9 +25,9 @@ public class ConfigService(IConfiguration config, DomainConfig domain)
         return new RecRoomConfig
         {
             MessageOfTheDay = config["Server:MOTD"] ?? "Welcome to the private server!",
-            CdnBaseUri = $"https://{domain.Sub("cdn")}",
+            CdnBaseUri = domain.Url("cdn"),
             PhotonConfig = photon,
-            ServiceUrls = BuildServiceUrlMap(apex),
+            ServiceUrls = BuildServiceUrlMap(domain),
             ConfigTable = new Dictionary<string, string>
             {
                 // Season keys the 2019/2020 client checks at startup
@@ -110,12 +110,14 @@ public class ConfigService(IConfiguration config, DomainConfig domain)
     /// <see cref="DomainConfig.Apex"/>) so the map stays a single
     /// source of truth.</summary>
     public static Dictionary<string, string> BuildServiceUrlMap(string apex)
+        => BuildServiceUrlMap(new DomainConfig(apex));
+
+    public static Dictionary<string, string> BuildServiceUrlMap(DomainConfig domain)
     {
         var map = new Dictionary<string, string>(ServiceSubdomains.Length);
         foreach (var (service, sub) in ServiceSubdomains)
         {
-            var host = string.IsNullOrEmpty(sub) ? apex : $"{sub}.{apex}";
-            map[service] = $"https://{host}";
+            map[service] = domain.Url(sub);
         }
         return map;
     }
