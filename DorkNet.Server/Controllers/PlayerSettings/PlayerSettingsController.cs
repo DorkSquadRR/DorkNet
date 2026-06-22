@@ -19,12 +19,13 @@ public class PlayerSettingsController(DorkNetDbContext db) : ControllerBase
     private long CurrentPlayerId => this.RequireCurrentPlayerId();
 
     [HttpGet("/playersettings")]
-    public async Task<ActionResult<Dictionary<string, string>>> GetMine()
+    public async Task<ActionResult<List<SettingDto>>> GetMine()
     {
         var accountId = CurrentPlayerId;
         var settings = await db.PlayerSettings
             .Where(s => s.PlayerId == accountId)
-            .ToDictionaryAsync(s => s.Key, s => s.Value);
+            .Select(s => new SettingDto { Key = s.Key, Value = s.Value })
+            .ToListAsync();
         return Ok(settings);
     }
 
