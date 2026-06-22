@@ -36,6 +36,7 @@ public class PlayerStateController(
     // values from PlayerEntity.Level / .XP. Default 1/0 when the
     // account hasn't been seen yet (synthetic ids passed in queries).
     [HttpGet("api/players/v1/progression/{accountId:long}")]
+    [HttpGet("api/players/v2/progression/{accountId:long}")]
     public async Task<ActionResult<Progression>> GetProgression(long accountId)
     {
         var p = await db.Players
@@ -51,12 +52,25 @@ public class PlayerStateController(
     }
 
     [HttpPost("api/players/v1/progression/bulk")]
+    [HttpPost("api/players/v2/progression/bulk")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
     public async Task<ActionResult<List<Progression>>> GetProgressionBulk(
         [FromForm(Name = "Ids")] string? ids)
     {
         var idList = ParseIds(ids).Select(i => (long)i).ToList();
-        if (idList.Count == 0) return Ok(new List<Progression>());
+        return Ok(await BuildProgressionBulkAsync(idList));
+    }
+
+    [HttpGet("api/players/v2/progression/bulk")]
+    public async Task<ActionResult<List<Progression>>> GetProgressionBulkV2Get()
+    {
+        var idList = ParseQueryIds().ToList();
+        return Ok(await BuildProgressionBulkAsync(idList));
+    }
+
+    private async Task<List<Progression>> BuildProgressionBulkAsync(IReadOnlyCollection<long> idList)
+    {
+        if (idList.Count == 0) return new List<Progression>();
         var rows = await db.Players
             .Where(p => idList.Contains(p.Id))
             .Select(p => new Progression
@@ -72,26 +86,40 @@ public class PlayerStateController(
         rows.AddRange(idList
             .Where(id => !found.Contains((int)id))
             .Select(id => new Progression { PlayerId = (int)id }));
-        return Ok(rows);
+        return rows;
     }
 
     // RecNet.Reputations.GetReputationById — aggregates CheerEntity
     // by category. Each Cheer* count is the sum of distinct cheers
     // received from other players in that category.
     [HttpGet("api/playerReputation/v1/{accountId:long}")]
+    [HttpGet("api/playerReputation/v2/{accountId:long}")]
     public async Task<ActionResult<Reputation>> GetReputation(long accountId) =>
         Ok(await BuildReputationAsync(accountId));
 
     [HttpPost("api/playerReputation/v1/bulk")]
+    [HttpPost("api/playerReputation/v2/bulk")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
     public async Task<ActionResult<List<Reputation>>> GetReputationBulk(
         [FromForm(Name = "Ids")] string? ids)
     {
         var idList = ParseIds(ids).Select(i => (long)i).ToList();
+        return Ok(await BuildReputationBulkAsync(idList));
+    }
+
+    [HttpGet("api/playerReputation/v2/bulk")]
+    public async Task<ActionResult<List<Reputation>>> GetReputationBulkV2Get()
+    {
+        var idList = ParseQueryIds().ToList();
+        return Ok(await BuildReputationBulkAsync(idList));
+    }
+
+    private async Task<List<Reputation>> BuildReputationBulkAsync(IReadOnlyCollection<long> idList)
+    {
         var result = new List<Reputation>(idList.Count);
         foreach (var id in idList)
             result.Add(await BuildReputationAsync(id));
-        return Ok(result);
+        return result;
     }
 
     /// <summary>POST api/playerReputation/v1/cheer/{playerId} — cheer
@@ -215,6 +243,23 @@ public class PlayerStateController(
             : ids.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                  .Select(s => int.TryParse(s, out var v) ? v : 0)
                  .Where(v => v != 0);
+
+    private IEnumerable<long> ParseQueryIds()
+    {
+        foreach (var (key, values) in Request.Query)
+        {
+            if (long.TryParse(key, out var keyId) && keyId > 0)
+                yield return keyId;
+            foreach (var value in values)
+            {
+                if (long.TryParse(value, out var valueId) && valueId > 0)
+                    yield return valueId;
+                foreach (var part in value.ToString().Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                    if (long.TryParse(part, out var partId) && partId > 0)
+                        yield return partId;
+            }
+        }
+    }
 
     // RecNet.PlayerReporting.GetModerationBlockDetails
     // IMPORTANT: returns a single object, not an array. Defaults indicate

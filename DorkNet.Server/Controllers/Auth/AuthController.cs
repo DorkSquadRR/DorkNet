@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using DorkNet.Models.Auth;
@@ -32,24 +33,33 @@ public class AuthController(
             await level.AwardXpAsync(playerId, LevelService.FirstLoginXp, "first_login_today");
     }
 
-    private static Dictionary<string, object> BuildTokenResponse(string accessToken, string refreshToken) => new()
+    private static Dictionary<string, object> BuildTokenResponse(string accessToken, string refreshToken)
     {
-        ["access_token"] = accessToken,
-        ["accessToken"] = accessToken,
-        ["AccessToken"] = accessToken,
-        ["token"] = accessToken,
-        ["Token"] = accessToken,
-        ["token_type"] = "Bearer",
-        ["tokenType"] = "Bearer",
-        ["TokenType"] = "Bearer",
-        ["expires_in"] = 43200,
-        ["expiresIn"] = 43200,
-        ["ExpiresIn"] = 43200,
-        ["refresh_token"] = refreshToken,
-        ["refreshToken"] = refreshToken,
-        ["RefreshToken"] = refreshToken,
-        ["scope"] = "openid profile",
-    };
+        var signingKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+
+        return new()
+        {
+            ["access_token"] = accessToken,
+            ["Access_token"] = accessToken,
+            ["accessToken"] = accessToken,
+            ["AccessToken"] = accessToken,
+            ["token"] = accessToken,
+            ["Token"] = accessToken,
+            ["token_type"] = "Bearer",
+            ["tokenType"] = "Bearer",
+            ["TokenType"] = "Bearer",
+            ["expires_in"] = 43200,
+            ["expiresIn"] = 43200,
+            ["ExpiresIn"] = 43200,
+            ["refresh_token"] = refreshToken,
+            ["Refresh_token"] = refreshToken,
+            ["refreshToken"] = refreshToken,
+            ["RefreshToken"] = refreshToken,
+            ["key"] = signingKey,
+            ["Key"] = signingKey,
+            ["scope"] = "openid profile",
+        };
+    }
 
     private IActionResult TokenOk(string accessToken, string refreshToken)
     {

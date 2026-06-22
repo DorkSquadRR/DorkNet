@@ -251,6 +251,15 @@ public class ClubService(DorkNetDbContext db)
     public Task<int> PlayerSubscriberCountAsync(long playerId) =>
         db.Subscriptions.CountAsync(s => s.TargetPlayerId == playerId);
 
+    /// <summary>How many player/profile subscriptions this account has
+    /// made.</summary>
+    public Task<int> PlayerSubscribedCountAsync(long playerId) =>
+        db.Subscriptions.CountAsync(s => s.SubscriberPlayerId == playerId);
+
+    public Task<bool> IsSubscribedToPlayerAsync(long subscriberId, long targetPlayerId) =>
+        db.Subscriptions.AnyAsync(s => s.SubscriberPlayerId == subscriberId
+                                    && s.TargetPlayerId == targetPlayerId);
+
     /// <summary>
     /// Bulk member-count lookup so the controller can project a list
     /// of clubs in one round-trip. Returns a dict keyed by ClubId; any
