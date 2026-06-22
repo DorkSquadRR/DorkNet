@@ -179,5 +179,5 @@ public class PlayerPresenceDto
     public bool IsOnline { get; set; } = true;
 
     [JsonPropertyName("appVersion")]
-    public int AppVersion { get; set; } = 20201210;
+    public string AppVersion { get; set; } = "20201210";
 }

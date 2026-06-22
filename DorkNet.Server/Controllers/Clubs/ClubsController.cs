@@ -191,6 +191,23 @@ public class ClubsController(ClubService clubs) : ControllerBase
         return Ok(playerSubs + clubSubs);
     }
 
+    [HttpGet("/subscription/details/{accountId:long}")]
+    public async Task<IActionResult> SubscriptionDetails(long accountId)
+    {
+        var viewerId = this.CurrentPlayerId();
+        var subscriberCount = await clubs.PlayerSubscriberCountAsync(accountId);
+        var subscribedCount = await clubs.PlayerSubscribedCountAsync(accountId);
+        var isSubscribed = viewerId is long viewer
+            && await clubs.IsSubscribedToPlayerAsync(viewer, accountId);
+        return Ok(new
+        {
+            accountId,
+            subscriberCount,
+            subscribedCount,
+            isSubscribed,
+        });
+    }
+
     /// <summary>
     /// POST endpoint the watch hits when the player taps "mark read".
     /// Idempotent — the upsert in the service quietly returns if a

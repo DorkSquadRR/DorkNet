@@ -74,27 +74,28 @@ public class EconController(DorkNetDbContext db, LevelService level) : Controlle
 
     [HttpGet("/econ/customAvatarItems")]
     [HttpGet("/econ/customAvatarItems/v1/owned")]
-    public async Task<IActionResult> GetOwnedCustomAvatarItems()
+    public async Task<IActionResult> GetOwnedCustomAvatarItems([FromQuery] int skip = 0, [FromQuery] int take = 100)
     {
         var pid = this.RequireCurrentPlayerId();
-        var rows = await db.CustomAvatarItemOwnership
+        skip = Math.Max(0, skip);
+        take = Math.Clamp(take, 1, 100);
+
+        var query = db.CustomAvatarItemOwnership
             .Where(o => o.PlayerId == pid)
             .Join(db.CustomAvatarItems, o => o.CustomAvatarItemId, i => i.Id, (o, i) => i)
-            .OrderByDescending(i => i.UpdatedAt)
+            .OrderByDescending(i => i.UpdatedAt);
+
+        var total = await query.CountAsync();
+        var rows = await query
+            .Skip(skip)
+            .Take(take)
             .ToListAsync();
-        return Ok(rows.Select(i => new
+
+        return Ok(new
         {
-            CustomAvatarItemId = i.PublicId,
-            Id = i.PublicId,
-            CreatorPlayerId = (int)i.CreatorPlayerId,
-            i.Name,
-            i.Description,
-            i.Price,
-            i.ItemType,
-            i.ImageName,
-            i.AssetName,
-            i.Color,
-        }));
+            Results = rows.Select(ToCustomAvatarItemWire),
+            TotalResults = total,
+        });
     }
 
     [HttpGet("/econ/customAvatarItems/v1/itemOwnershipLimit")]
@@ -103,6 +104,20 @@ public class EconController(DorkNetDbContext db, LevelService level) : Controlle
         Limit = 1000,
         ItemOwnershipLimit = 1000,
     });
+
+    private static object ToCustomAvatarItemWire(DorkNet.Server.Data.Entities.CustomAvatarItemEntity i) => new
+    {
+        CustomAvatarItemId = i.PublicId,
+        Id = i.PublicId,
+        CreatorPlayerId = (int)i.CreatorPlayerId,
+        i.Name,
+        i.Description,
+        i.Price,
+        i.ItemType,
+        i.ImageName,
+        i.AssetName,
+        i.Color,
+    };
 }
 
 public class TokenBalance

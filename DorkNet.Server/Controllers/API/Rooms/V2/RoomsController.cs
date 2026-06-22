@@ -187,15 +187,29 @@ public class RoomsController(
     }
 
     /// <summary>
-    /// `Rooms.GetById(roomId)` — same shape as ByName.
+    /// `Rooms.GetById(roomId)` — same flat shape as ByName.
     /// </summary>
     [HttpGet("api/rooms/v2/{roomId:long}")]
     [HttpGet("api/rooms/v3/{roomId:long}")]
-    [HttpGet("rooms/{roomId:long}")]
     public async Task<IActionResult> ById(long roomId)
     {
         var r = await rooms.GetByIdAsync(roomId);
         return Ok(RoomService.ToWireRoom(r ?? Synthetic($"Room_{roomId}", roomId)));
+    }
+
+    [HttpGet("rooms/{roomId:long}")]
+    public async Task<IActionResult> RoomServerById(long roomId)
+    {
+        var room = await rooms.GetByIdAsync(roomId) ?? Synthetic($"Room_{roomId}", roomId);
+        var sceneRows = await db.RoomScenes
+            .Where(s => s.RoomId == room.Id)
+            .OrderBy(s => s.OrderIndex)
+            .ToListAsync();
+        var roles = await db.RoomRoles
+            .Where(r => r.RoomId == room.Id)
+            .ToListAsync();
+
+        return Ok(BuildRoomServerDetails(room, sceneRows, roles: roles));
     }
 
     // ── RoomDetails (the boot-critical one) ─────────────────────────────

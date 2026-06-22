@@ -72,6 +72,7 @@ public class Mod : MelonMod
         public static string PhotonCloudRegion   = "eu";
         // Photon Custom Auth injector parked 2026-05-28; see
         // attic/AuthValuesInjector.cs.attic for the code + restore notes.
+        public static bool   BypassPhotonCustomAuth = false;
         public static bool   EnableTlsTrustBypass = true;
         // Log-only trace for the stuck first-dorm "Change Username?"
         // dialog. When true, RegistrationPatches hooks the dorm
@@ -200,6 +201,21 @@ public class Mod : MelonMod
         // proxy uses without compile-error.
         TryPatchByName("PUNNetworkManager",   "OnCustomAuthenticationFailed",
                        prefix: nameof(PhotonPatches.OnCustomAuthenticationFailed_Prefix));
+        TryPatchByName("DFPKLPCMNEK", "OnCustomAuthenticationFailed",
+                       prefix: nameof(PhotonPatches.OnCustomAuthenticationFailed_Prefix),
+                       logMiss: false);
+        TryPatchByName("LOPBLNLAEKB", "OnCustomAuthenticationFailed",
+                       prefix: nameof(PhotonPatches.OnCustomAuthenticationFailed_Prefix),
+                       logMiss: false);
+        TryPatchByName("LOPBLNLAEKB", "OnDisconnected",
+                       prefix: nameof(PhotonPatches.OnDisconnected_Prefix),
+                       logMiss: false);
+        TryPatchByName("OLPEMKMGEHE", "OnDisconnected",
+                       prefix: nameof(PhotonPatches.OnDisconnected_Prefix),
+                       logMiss: false);
+        TryPatchByName("DFPKLPCMNEK", "OnDisconnected",
+                       prefix: nameof(PhotonPatches.OnDisconnected_Prefix),
+                       logMiss: false);
         TryPatchByName("RecRoom.AntiCheat.EACManager",
                        "GenerateChallengeResponse",
                        args: new[] { typeof(string) },
@@ -713,6 +729,7 @@ public class Mod : MelonMod
             if (TryGetConfigValue(r, "PhotonAppId", out v))              Cfg.PhotonAppId = v.GetString() ?? Cfg.PhotonAppId;
             if (TryGetConfigValue(r, "PhotonVoiceAppId", out v))         Cfg.PhotonVoiceAppId = v.GetString() ?? Cfg.PhotonVoiceAppId;
             if (TryGetConfigValue(r, "PhotonCloudRegion", out v))        Cfg.PhotonCloudRegion = v.GetString() ?? Cfg.PhotonCloudRegion;
+            if (TryGetConfigValue(r, "BypassPhotonCustomAuth", out v))    Cfg.BypassPhotonCustomAuth = v.GetBoolean();
             if (TryGetConfigValue(r, "EnableTlsTrustBypass", out v))     Cfg.EnableTlsTrustBypass = v.GetBoolean();
             if (TryGetConfigValue(r, "TraceRegistrationDialog", out v))  Cfg.TraceRegistrationDialog = v.GetBoolean();
             if (TryGetConfigValue(r, "EnableDebugConsole", out v))       Cfg.EnableDebugConsole = v.GetBoolean();
@@ -2531,6 +2548,10 @@ internal static class PhotonPatches
                 return;
             }
             var t = __result.GetType();
+            if (Mod.Cfg.BypassPhotonCustomAuth)
+            {
+                DisableCustomAuthValues(__result, t);
+            }
             string Read(string name) => t.GetProperty(name)?.GetValue(__result)?.ToString() ?? "<null>";
             var authType = Read("AuthType");
             var userId   = Read("UserId");
@@ -2546,6 +2567,56 @@ internal static class PhotonPatches
         catch (Exception ex) { Mod.Log.Warning($"[photon-diag] LogAuthValues failed: {ex.Message}"); }
     }
 
+    private static void DisableCustomAuthValues(object authValues, Type t)
+    {
+        try
+        {
+            SetMember(t, authValues, "AuthType", type => AuthTypeNoneValue(type));
+            SetMember(t, authValues, "AuthGetParameters", type => type == typeof(string) ? string.Empty : null);
+            SetMember(t, authValues, "AuthPostData", _ => null);
+            SetMember(t, authValues, "Token", type => type == typeof(string) ? string.Empty : null);
+            Mod.Log.Msg("[photon-auth] custom auth bypass enabled for this launch");
+        }
+        catch (Exception ex)
+        {
+            Mod.Log.Warning($"[photon-auth] custom auth bypass failed: {ex.Message}");
+        }
+    }
+
+    private static object? AuthTypeNoneValue(Type type)
+    {
+        if (type.IsEnum) return Enum.ToObject(type, 255);
+        if (type == typeof(byte)) return byte.MaxValue;
+        if (type == typeof(sbyte)) return (sbyte)-1;
+        if (type == typeof(short)) return (short)255;
+        if (type == typeof(ushort)) return (ushort)255;
+        if (type == typeof(int)) return 255;
+        if (type == typeof(uint)) return 255u;
+        if (type == typeof(long)) return 255L;
+        if (type == typeof(ulong)) return 255UL;
+        return Convert.ChangeType(255, type);
+    }
+
+    private static bool SetMember(Type type, object instance, string name, Func<Type, object?> valueFactory)
+    {
+        const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly;
+        var prop = type.GetProperty(name, flags);
+        if (prop is not null && prop.CanWrite)
+        {
+            prop.SetValue(instance, valueFactory(prop.PropertyType));
+            return true;
+        }
+
+        var field = type.GetField(name, flags);
+        if (field is not null)
+        {
+            field.SetValue(instance, valueFactory(field.FieldType));
+            return true;
+        }
+
+        return false;
+    }
+
     /// <summary>Prefix on <c>PUNNetworkManager.OnCustomAuthenticationFailed</c>
     /// — the watch's UI-error formatter only logs a truncated Unity-
     /// stringified version of the debugMessage. Capturing the raw
@@ -2553,13 +2624,18 @@ internal static class PhotonPatches
     /// Photon error including the URL Photon Cloud actually tried to
     /// call (which is the smoking-gun answer to "is the dashboard URL
     /// saved or is Photon hitting a stale one").</summary>
-    public static void OnCustomAuthenticationFailed_Prefix(object __0)
+    public static bool OnCustomAuthenticationFailed_Prefix(object __0)
     {
         try
         {
             var debugMessage = __0?.ToString() ?? "<null>";
             Mod.Log.Error("[photon-diag] OnCustomAuthenticationFailed FULL MESSAGE:");
             Mod.Log.Error(debugMessage);
+            if (Mod.Cfg.BypassPhotonCustomAuth)
+            {
+                Mod.Log.Warning("[photon-auth] custom auth failure suppressed for this launch");
+                return false;
+            }
             // Also dump current AppSettings — if Photon rejected the auth
             // we want to know what the watch's actual final config looked
             // like (post-override).
@@ -2572,6 +2648,23 @@ internal static class PhotonPatches
             }
         }
         catch (Exception ex) { Mod.Log.Warning($"[photon-diag] OnCustomAuthenticationFailed log failed: {ex.Message}"); }
+        return true;
+    }
+
+    public static bool OnDisconnected_Prefix(object __0)
+    {
+        try
+        {
+            var cause = __0?.ToString() ?? "<null>";
+            if (Mod.Cfg.BypassPhotonCustomAuth &&
+                cause.IndexOf("CustomAuthenticationFailed", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                Mod.Log.Warning("[photon-auth] CustomAuthenticationFailed disconnect suppressed for this launch");
+                return false;
+            }
+        }
+        catch (Exception ex) { Mod.Log.Warning($"[photon-auth] disconnect bypass check failed: {ex.Message}"); }
+        return true;
     }
 
     /// <summary>Logs every public field + property on <paramref name="obj"/>

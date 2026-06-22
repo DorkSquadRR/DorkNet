@@ -112,12 +112,19 @@ public class CustomAvatarItemsController(
 
     [HttpGet("me")]
     [Authorize]
-    public async Task<IActionResult> Me()
+    public async Task<IActionResult> Me([FromQuery] int skip = 0, [FromQuery] int take = 100)
     {
         var pid = this.RequireCurrentPlayerId();
-        var created = await db.CustomAvatarItems
+        skip = Math.Max(0, skip);
+        take = Math.Clamp(take, 1, 100);
+
+        var createdQuery = db.CustomAvatarItems
             .Where(i => i.CreatorPlayerId == pid)
-            .OrderByDescending(i => i.UpdatedAt)
+            .OrderByDescending(i => i.UpdatedAt);
+        var total = await createdQuery.CountAsync();
+        var created = await createdQuery
+            .Skip(skip)
+            .Take(take)
             .ToListAsync();
         var ownedIds = await db.CustomAvatarItemOwnership
             .Where(o => o.PlayerId == pid)
@@ -132,6 +139,8 @@ public class CustomAvatarItemsController(
 
         return Ok(new
         {
+            Results = created.Select(ToWire),
+            TotalResults = total,
             Created = created.Select(ToWire),
             Owned = owned.Select(ToWire),
         });
@@ -139,15 +148,26 @@ public class CustomAvatarItemsController(
 
     [HttpGet("owned")]
     [Authorize]
-    public async Task<IActionResult> Owned()
+    public async Task<IActionResult> Owned([FromQuery] int skip = 0, [FromQuery] int take = 100)
     {
         var pid = this.RequireCurrentPlayerId();
-        var rows = await db.CustomAvatarItemOwnership
+        skip = Math.Max(0, skip);
+        take = Math.Clamp(take, 1, 100);
+
+        var query = db.CustomAvatarItemOwnership
             .Where(o => o.PlayerId == pid)
             .Join(db.CustomAvatarItems, o => o.CustomAvatarItemId, i => i.Id, (o, i) => i)
-            .OrderByDescending(i => i.UpdatedAt)
+            .OrderByDescending(i => i.UpdatedAt);
+        var total = await query.CountAsync();
+        var rows = await query
+            .Skip(skip)
+            .Take(take)
             .ToListAsync();
-        return Ok(rows.Select(ToWire));
+        return Ok(new
+        {
+            Results = rows.Select(ToWire),
+            TotalResults = total,
+        });
     }
 
     [HttpGet("isCreationAllowedForAccount")]
