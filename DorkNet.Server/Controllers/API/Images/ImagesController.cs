@@ -274,6 +274,48 @@ public class ImagesController(
         return Ok(rows.Select(p => BuildImageInfo(p, pid)));
     }
 
+    public sealed class ImageBulkRequest
+    {
+        public List<long>? ImageIds { get; set; }
+        public List<long>? SavedImageIds { get; set; }
+    }
+
+    [HttpGet("api/images/v5/bulk")]
+    [HttpPost("api/images/v5/bulk")]
+    [Authorize]
+    public async Task<IActionResult> BulkImages([FromBody] ImageBulkRequest? body)
+    {
+        var pid = this.RequireCurrentPlayerId();
+        var ids = (body?.ImageIds ?? body?.SavedImageIds ?? new List<long>())
+            .Concat(Request.Query.SelectMany(q => q.Value)
+                .SelectMany(v => (v ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                .Select(v => long.TryParse(v, out var id) ? id : 0))
+            .Where(id => id > 0)
+            .Distinct()
+            .Take(200)
+            .ToList();
+        if (ids.Count == 0) return Ok(Array.Empty<object>());
+
+        var rows = await db.Photos
+            .Where(p => ids.Contains(p.Id) && p.DeletedAt == null
+                        && (p.IsPublic || p.UploaderPlayerId == pid))
+            .ToListAsync();
+        return Ok(rows.Select(p => BuildImageInfo(p, p.UploaderPlayerId)));
+    }
+
+    [HttpGet("api/images/v6")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ImagesV6([FromQuery] int take = 50)
+    {
+        take = Math.Clamp(take, 1, 100);
+        var rows = await db.Photos
+            .Where(p => p.IsPublic && p.DeletedAt == null)
+            .OrderByDescending(p => p.CreatedAt)
+            .Take(take)
+            .ToListAsync();
+        return Ok(rows.Select(p => BuildImageInfo(p, p.UploaderPlayerId)));
+    }
+
     /// <summary>GET <c>api/images/v2/named</c> — the watch's
     /// <c>Images.DownloadNamedImageMappings</c> endpoint. Returns a
     /// list of <c>NamedImageDTO</c> entries; an empty list is a valid
@@ -424,6 +466,7 @@ public class ImagesController(
     }
 
     [HttpPost("api/images/v4/cheered/bulk")]
+    [HttpPost("api/images/v5/cheered/bulk")]
     [Authorize]
     public async Task<IActionResult> CheeredBulk([FromBody] BulkCheeredRequest? body)
     {

@@ -21,6 +21,20 @@ public class PlayersController(PlayerService playerService, NotificationService 
         return Ok(PlayerService.ToProfile(player));
     }
 
+    [HttpGet("/api/players/v4/current/contact")]
+    public async Task<IActionResult> CurrentContact()
+    {
+        var player = await playerService.GetByIdAsync(CurrentPlayerId);
+        if (player is null) return NotFound();
+        return Ok(new
+        {
+            AccountId = (int)player.Id,
+            Email = player.Email ?? string.Empty,
+            Phone = player.Phone ?? string.Empty,
+            CanReceiveInvites = player.CanReceiveInvites,
+        });
+    }
+
     [HttpGet("{id:long}")]
     public async Task<ActionResult<PlayerProfile>> GetById(long id)
     {

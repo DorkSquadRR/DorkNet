@@ -40,6 +40,9 @@ public class InventionsController(
 
     // ── Browse ───────────────────────────────────────────────────────────
 
+    [HttpGet("api/inventions/v1/featured")]
+    [HttpGet("api/inventions/v1/featureddormskins")]
+    [HttpGet("api/inventions/v1/toptoday")]
     [HttpGet("api/inventions/v3/popular")]
     public async Task<ActionResult> Popular([FromQuery] int take = 50)
     {
@@ -78,6 +81,7 @@ public class InventionsController(
     public Task<ActionResult> Mine() => Saved(100);
 
     [HttpGet("api/inventions/v1/search")]
+    [HttpGet("api/inventions/v2/search")]
     public async Task<ActionResult> Search([FromQuery] string value = "")
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -127,6 +131,8 @@ public class InventionsController(
     public sealed record InventionBatchRequest(List<long> InventionIds);
 
     [HttpPost("api/inventions/v1/batch")]
+    [HttpPost("api/inventions/v2/batch")]
+    [HttpPost("api/inventions/v1/dormskinsfromids")]
     public async Task<ActionResult> Batch([FromBody] InventionBatchRequest req)
     {
         if (req?.InventionIds is null || req.InventionIds.Count == 0)
@@ -134,6 +140,27 @@ public class InventionsController(
         var ids = req.InventionIds.Take(200).ToList();
         var rows = await db.Inventions
             .Where(i => !i.IsDeleted && ids.Contains(i.Id))
+            .ToListAsync();
+        return Ok(rows.Select(ToWire));
+    }
+
+    [HttpGet("api/inventions/v1/fromcreators")]
+    public async Task<ActionResult> FromCreators()
+    {
+        var creatorIds = Request.Query
+            .SelectMany(q => q.Value)
+            .SelectMany(v => (v ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Select(v => long.TryParse(v, out var id) ? id : 0L)
+            .Where(id => id > 0)
+            .Distinct()
+            .Take(200)
+            .ToList();
+
+        if (creatorIds.Count == 0) return Ok(Array.Empty<object>());
+        var rows = await db.Inventions
+            .Where(i => !i.IsDeleted && i.IsPublished && creatorIds.Contains(i.CreatorPlayerId))
+            .OrderByDescending(i => i.UpdatedAt)
+            .Take(200)
             .ToListAsync();
         return Ok(rows.Select(ToWire));
     }
@@ -356,6 +383,7 @@ public class InventionsController(
     /// save flow. v4 wraps the new invention plus its first version in
     /// a Status/Invention/InventionVersion object.</summary>
     [HttpPost("api/inventions/v4/save")]
+    [HttpPost("api/inventions/v6/save")]
     [Authorize]
     public async Task<ActionResult> SaveV4([FromBody] SaveInventionV4Request req)
     {
@@ -426,6 +454,7 @@ public class InventionsController(
         int? InstantiationCost, int? LightsCost);
 
     [HttpPost("api/inventions/v3/addversion")]
+    [HttpPost("api/inventions/v4/addversion")]
     [Authorize]
     public async Task<ActionResult> AddVersion([FromBody] AddVersionRequest req)
     {
@@ -486,6 +515,22 @@ public class InventionsController(
             // Mirror legacy 0/1/2 column for back-compat.
             inv.Permission = inv.GeneralPermission >= 60 ? 2 : (inv.GeneralPermission >= 20 ? 1 : 0);
         }
+        inv.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return Ok(ToWire(inv));
+    }
+
+    [HttpGet("api/inventions/v1/updateprice")]
+    [Authorize]
+    public async Task<ActionResult> UpdatePrice(
+        [FromQuery] long inventionId,
+        [FromQuery] int price)
+    {
+        var pid = CurrentPlayerId;
+        var inv = await db.Inventions.FirstOrDefaultAsync(x => x.Id == inventionId && !x.IsDeleted);
+        if (inv is null) return NotFound();
+        if (inv.CreatorPlayerId != pid) return Forbid();
+        inv.Price = Math.Clamp(price, 0, 1000000);
         inv.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
         return Ok(ToWire(inv));
@@ -685,7 +730,7 @@ public class InventionsController(
         i.CreatorPermission,
         i.GeneralPermission,
         IsAGInvention = i.IsAgInvention,
-        Price = 0,
+        i.Price,
         HideFromPlayer = false,
     };
 

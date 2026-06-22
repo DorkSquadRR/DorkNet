@@ -32,6 +32,8 @@ public class StorefrontsController(
     [HttpGet("api/storefronts/v1/all")]
     [HttpGet("api/storefronts/v2/all")]
     [HttpGet("api/storefronts/v3/all")]
+    [HttpGet("api/storefronts/v1/toptoday")]
+    [HttpGet("api/storefronts/v1/adcarouselitems")]
     [AllowAnonymous]
     public async Task<IActionResult> All()
     {

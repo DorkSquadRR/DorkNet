@@ -31,6 +31,42 @@ public class AuthController(
         if (lastSeen.Date < DateTime.UtcNow.Date)
             await level.AwardXpAsync(playerId, LevelService.FirstLoginXp, "first_login_today");
     }
+
+    private static Dictionary<string, object> BuildTokenResponse(string accessToken, string refreshToken) => new()
+    {
+        ["access_token"] = accessToken,
+        ["accessToken"] = accessToken,
+        ["AccessToken"] = accessToken,
+        ["token"] = accessToken,
+        ["Token"] = accessToken,
+        ["token_type"] = "Bearer",
+        ["tokenType"] = "Bearer",
+        ["TokenType"] = "Bearer",
+        ["expires_in"] = 43200,
+        ["expiresIn"] = 43200,
+        ["ExpiresIn"] = 43200,
+        ["refresh_token"] = refreshToken,
+        ["refreshToken"] = refreshToken,
+        ["RefreshToken"] = refreshToken,
+        ["scope"] = "openid profile",
+    };
+
+    private IActionResult TokenOk(string accessToken, string refreshToken)
+    {
+        var cookie = new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = string.Equals(domain.Scheme, "https", StringComparison.OrdinalIgnoreCase),
+            SameSite = SameSiteMode.None,
+            Expires = DateTimeOffset.UtcNow.AddHours(12),
+            IsEssential = true,
+        };
+        if (domain.Apex.Contains('.'))
+            cookie.Domain = "." + domain.Apex;
+        Response.Cookies.Append(AuthService.AccessCookieName, accessToken, cookie);
+        return Ok(BuildTokenResponse(accessToken, refreshToken));
+    }
+
     // OAuth token endpoint. The 2020 client uses three grant types here:
     // - grant_type=cached_login → user clicked a remembered account on the
     //   account-selection screen. Body includes `account_id` (and platform
@@ -90,14 +126,7 @@ public class AuthController(
             await TryAwardLoginXpAsync(picked.Id);
             await playerService.TagPlatformAsync(picked.Id, platform, effPlatformId);
             var (acc1, refr1) = authService.GenerateTokenPair(picked.Id);
-            return Ok(new
-            {
-                access_token = acc1,
-                token_type = "Bearer",
-                expires_in = 43200,
-                refresh_token = refr1,
-                scope = "openid profile",
-            });
+            return TokenOk(acc1, refr1);
         }
 
         if (string.Equals(grant_type, "refresh_token", StringComparison.OrdinalIgnoreCase))
@@ -111,14 +140,7 @@ public class AuthController(
             if (existing is null)
                 return Unauthorized(new { error = "invalid_grant" });
             var (acc, refr) = authService.GenerateTokenPair(existing.Id);
-            return Ok(new
-            {
-                access_token = acc,
-                token_type = "Bearer",
-                expires_in = 43200,
-                refresh_token = refr,
-                scope = "openid profile",
-            });
+            return TokenOk(acc, refr);
         }
 
         // password grant: two paths.
@@ -150,14 +172,7 @@ public class AuthController(
             await playerService.TagPlatformAsync(byName.Id, platform, effPlatformId);
             await TryAwardLoginXpAsync(byName.Id);
             var pair = authService.GenerateTokenPair(byName.Id);
-            return Ok(new
-            {
-                access_token = pair.AccessToken,
-                token_type = "Bearer",
-                expires_in = 43200,
-                refresh_token = pair.RefreshToken,
-                scope = "openid profile",
-            });
+            return TokenOk(pair.AccessToken, pair.RefreshToken);
         }
 
         // Device-id fallback path. Prefer the real deviceId; fall back
@@ -196,14 +211,7 @@ public class AuthController(
         await TryAwardLoginXpAsync(player.Id);
         var (access, refresh) = authService.GenerateTokenPair(player.Id);
 
-        return Ok(new
-        {
-            access_token = access,
-            token_type = "Bearer",
-            expires_in = 43200,
-            refresh_token = refresh,
-            scope = "openid profile",
-        });
+        return TokenOk(access, refresh);
     }
 
     [HttpGet("/connect/userinfo")]
@@ -305,6 +313,62 @@ public class AuthController(
                 results.Add(ToCachedLogin(p, platform, pid));
         }
         return Ok(results);
+    }
+
+    [HttpGet("/cachedlogin/current")]
+    public async Task<IActionResult> CurrentCachedLogin()
+    {
+        var auth = Request.Headers.Authorization.ToString();
+        if (!auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            return Unauthorized();
+        var token = auth["Bearer ".Length..].Trim();
+        var id = authService.ValidateToken(token);
+        if (id is not long playerId) return Unauthorized();
+        var player = await playerService.GetByIdAsync(playerId);
+        if (player is null) return Unauthorized();
+        return Ok(ToCachedLogin(player, player.LastPlatform, player.LastPlatformId));
+    }
+
+    [HttpPost("/cachedlogin/migrate")]
+    public async Task<IActionResult> MigrateCachedLogin(
+        [FromForm] int platform = 0,
+        [FromForm] string? platformId = null)
+    {
+        var auth = Request.Headers.Authorization.ToString();
+        if (!auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            return Unauthorized();
+        var token = auth["Bearer ".Length..].Trim();
+        var id = authService.ValidateToken(token);
+        if (id is not long playerId) return Unauthorized();
+        await playerService.TagPlatformAsync(playerId, platform, platformId);
+        var player = await playerService.GetByIdAsync(playerId);
+        return player is null
+            ? Unauthorized()
+            : Ok(ToCachedLogin(player, platform, platformId ?? string.Empty));
+    }
+
+    [HttpPost("/connect/deviceauthorization")]
+    [HttpGet("/connect/deviceauthorization")]
+    public async Task<IActionResult> DeviceAuthorization()
+    {
+        var deviceCode = Guid.NewGuid().ToString("N");
+        var userCode = deviceCode[..8].ToUpperInvariant();
+        db.PlayerSettings.Add(new PlayerSettingEntity
+        {
+            PlayerId = RelationshipQueries.SystemAccountId,
+            Key = $"deviceauthorization:{deviceCode}",
+            Value = $"{userCode}|{DateTime.UtcNow.AddMinutes(15):O}",
+        });
+        await db.SaveChangesAsync();
+        return Ok(new
+        {
+            device_code = deviceCode,
+            user_code = userCode,
+            verification_uri = $"https://{domain.Sub("auth")}/device",
+            verification_uri_complete = $"https://{domain.Sub("auth")}/device?user_code={userCode}",
+            expires_in = 900,
+            interval = 5,
+        });
     }
 
     private static CachedLogin ToCachedLogin(PlayerEntity p, int platform, string platformId) => new()

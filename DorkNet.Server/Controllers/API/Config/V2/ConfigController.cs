@@ -5,6 +5,7 @@ using DorkNet.Server.Services;
 namespace DorkNet.Server.Controllers.API.Config.V2;
 
 [ApiController]
+[Route("api/config")]
 [Route("api/[controller]/v2")]
 public class ConfigController(ConfigService configService) : ControllerBase
 {

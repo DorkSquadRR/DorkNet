@@ -114,7 +114,18 @@ public class PlatformLoginController(
     // Login.RemoveCachedLogin → DELETE api/platformlogin/cached
     [HttpDelete("cached")]
     [HttpDelete("cachedlogins")]
-    public IActionResult RemoveCachedLogin() => Ok(new { });
+    public async Task<IActionResult> RemoveCachedLogin([FromQuery] long? accountId = null)
+    {
+        var targetId = accountId ?? this.CurrentPlayerId();
+        if (targetId is not long playerId) return Unauthorized();
+
+        var player = await db.Players.FirstOrDefaultAsync(p => p.Id == playerId);
+        if (player is null) return NotFound();
+        player.LastPlatform = 0;
+        player.LastPlatformId = string.Empty;
+        await db.SaveChangesAsync();
+        return Ok(new { Success = true, AccountId = (int)player.Id });
+    }
 
     // Login.RefreshLogin → POST api/platformlogin/refresh
     // Response is Login.RefreshLoginResponse { Token } — single field, the

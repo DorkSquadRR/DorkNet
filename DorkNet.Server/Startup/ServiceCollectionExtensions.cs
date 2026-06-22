@@ -107,14 +107,22 @@ public static class ServiceCollectionExtensions
             ?? Environment.GetEnvironmentVariable("DORKNET_DOMAIN")
             ?? "localhost";
         var scheme = builder.Configuration["Domain:Scheme"] ?? "https";
+        var allowedHosts = new List<string> { apex, $"*.{apex}", "localhost", "127.0.0.1" };
+        var bootstrapApex = builder.Configuration["Domain:BootstrapApex"];
+        if (!string.IsNullOrWhiteSpace(bootstrapApex))
+        {
+            allowedHosts.Add(bootstrapApex);
+            allowedHosts.Add($"*.{bootstrapApex}");
+        }
+
         builder.Services.AddSingleton(new DomainConfig(apex, scheme));
         builder.Services.Configure<Microsoft.AspNetCore.HostFiltering.HostFilteringOptions>(opt =>
         {
-            opt.AllowedHosts = new[] { apex, $"*.{apex}", "localhost", "127.0.0.1" };
+            opt.AllowedHosts = allowedHosts.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
             opt.AllowEmptyHosts = true;
             opt.IncludeFailureMessage = true;
         });
-        Console.WriteLine($"[domain] apex={apex}, allowedHosts=[{apex}, *.{apex}, localhost]");
+        Console.WriteLine($"[domain] apex={apex}, allowedHosts=[{string.Join(", ", allowedHosts)}]");
     }
 
     // ── Services ──────────────────────────────────────────────────────────────
@@ -174,17 +182,16 @@ public static class ServiceCollectionExtensions
         var pluginInstances = new IVersionPlugin[]
         {
             new Late2020VersionPlugin(),
-            // Add March2020 / future generations here as their plugins land.
         };
         foreach (var p in pluginInstances) p.RegisterStrategies(builder.Services);
         foreach (var p in pluginInstances)
             builder.Services.AddSingleton<IVersionPlugin>(p);
 
         var supported = (builder.Configuration.GetSection("DorkNet:SupportedVersions").Get<string[]>()
-                         ?? new[] { "december_2020_12_18" })
+                         ?? new[] { "march_2023_03_21" })
                         .ToHashSet(StringComparer.OrdinalIgnoreCase);
         var defaultKey = builder.Configuration["DorkNet:DefaultClientVersion"]
-                         ?? "december_2020_12_18";
+                         ?? "march_2023_03_21";
         builder.Services.AddSingleton(sp => new VersionRegistry(
             sp.GetServices<IVersionPlugin>(),
             supported,
@@ -285,6 +292,12 @@ public static class ServiceCollectionExtensions
                         var path = ctx.HttpContext.Request.Path;
                         if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hub"))
                             ctx.Token = accessToken;
+                        if (string.IsNullOrEmpty(ctx.Token) &&
+                            ctx.Request.Cookies.TryGetValue(AuthService.AccessCookieName, out var cookieToken) &&
+                            !string.IsNullOrWhiteSpace(cookieToken))
+                        {
+                            ctx.Token = cookieToken;
+                        }
                         return Task.CompletedTask;
                     },
                 };

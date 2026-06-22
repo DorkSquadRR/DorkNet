@@ -106,9 +106,11 @@ public class AccountApiController(
     private async Task<PlayerEntity?> GetCurrentPlayerAsync()
     {
         var auth = Request.Headers.Authorization.ToString();
-        if (!auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        var token = auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+            ? auth["Bearer ".Length..].Trim()
+            : Request.Cookies[AuthService.AccessCookieName];
+        if (string.IsNullOrWhiteSpace(token))
             return null;
-        var token = auth["Bearer ".Length..].Trim();
         var id = authService.ValidateToken(token);
         if (id is not long playerId) return null;
         return await playerService.GetByIdAsync(playerId);

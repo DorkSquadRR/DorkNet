@@ -182,6 +182,44 @@ public class InventoryController(
         return Ok(new { row.Id, Count = row.Quantity });
     }
 
+    [HttpPost("api/consumables/v1/transfer")]
+    public async Task<IActionResult> TransferConsumable(
+        [FromForm] long? id,
+        [FromForm] long? recipientPlayerId,
+        [FromForm] int quantity = 1)
+    {
+        var pid = Me;
+        var inventoryId = id ?? (long.TryParse(Request.Query["id"], out var qId) ? qId : 0);
+        var recipient = recipientPlayerId ?? (long.TryParse(Request.Query["recipientPlayerId"], out var qRecipient) ? qRecipient : 0);
+        var amount = Math.Max(1, quantity);
+        if (inventoryId <= 0 || recipient <= 0 || recipient == pid)
+            return BadRequest("invalid_transfer");
+
+        var source = await db.PlayerInventory.FirstOrDefaultAsync(p => p.PlayerId == pid && p.Id == inventoryId);
+        if (source is null || source.Quantity < amount) return NotFound();
+        var target = await db.PlayerInventory
+            .FirstOrDefaultAsync(p => p.PlayerId == recipient && p.ItemSlug == source.ItemSlug);
+        if (target is null)
+        {
+            target = new PlayerInventoryEntity
+            {
+                PlayerId = recipient,
+                ItemSlug = source.ItemSlug,
+                Quantity = 0,
+            };
+            db.PlayerInventory.Add(target);
+        }
+
+        source.Quantity -= amount;
+        target.Quantity += amount;
+        if (source.Quantity == 0) db.PlayerInventory.Remove(source);
+        await db.SaveChangesAsync();
+        await notifications.NotifyAsync(recipient,
+            PushNotificationId.ConsumableMappingAdded,
+            new { target.Id, target.ItemSlug, target.Quantity });
+        return Ok(new { Success = true, SourceCount = Math.Max(0, source.Quantity), RecipientCount = target.Quantity });
+    }
+
     public sealed class ActivateConsumableRequest
     {
         public long Id { get; set; }

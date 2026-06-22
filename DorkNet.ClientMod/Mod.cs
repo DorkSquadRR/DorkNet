@@ -24,11 +24,14 @@
 using HarmonyLib;
 using MelonLoader;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 [assembly: MelonInfo(typeof(DorkNet.ClientMod.Mod), "DorkNet ClientMod", "1.0.0", "Dork Squad")]
 [assembly: MelonGame(null, null)]
@@ -197,6 +200,13 @@ public class Mod : MelonMod
         // proxy uses without compile-error.
         TryPatchByName("PUNNetworkManager",   "OnCustomAuthenticationFailed",
                        prefix: nameof(PhotonPatches.OnCustomAuthenticationFailed_Prefix));
+        TryPatchByName("RecRoom.AntiCheat.EACManager",
+                       "GenerateChallengeResponse",
+                       args: new[] { typeof(string) },
+                       prefix: nameof(AntiCheatPatches.GenerateChallengeResponse_Prefix));
+        TryPatchByName("LBNJFPOLCDL", "JHLKGBGJKKK",
+                       args: new[] { typeof(string), typeof(string), typeof(string) },
+                       prefix: nameof(AuthPatches.CaptureTokenArgs_Prefix));
         // TLS cert-validation bypass — gated behind Cfg.EnableTlsTrustBypass.
         // Even when the prefix's return value is "let original run", the
         // detour itself still has to be JIT-installed when BouncyCastle
@@ -542,14 +552,79 @@ public class Mod : MelonMod
         complete &= TryPatch("Uri ctor (string, UriKind)", typeof(Uri), "ctor",
                  new[] { typeof(string), typeof(UriKind) },
                  prefix: nameof(UriPatches.UriStringCtor_Prefix));
+        complete &= TryPatchHttpRequestUriConstructors();
+        TryPatchByName("BestHTTP.HTTPRequest", "set_Uri",
+                 args: new[] { typeof(Uri) },
+                 prefix: nameof(UriPatches.HttpRequestSetUri_Prefix));
+        TryPatchByName("BestHTTP.HTTPRequest", "PrepareUri",
+                 args: new[] { typeof(Uri) },
+                 prefix: nameof(UriPatches.HttpRequestPrepareUri_Prefix));
         complete &= TryPatchByName("BestHTTP.HTTPRequest", "Send",
                  prefix: nameof(UriPatches.HttpRequestSend_Prefix));
+        TryPatchByName("BestHTTP.HTTPRequest", "SetHeader",
+                 args: new[] { typeof(string), typeof(string) },
+                 prefix: nameof(HttpTracePatches.HeaderSet_Prefix));
+        TryPatchByName("BestHTTP.HTTPRequest", "AddHeader",
+                 args: new[] { typeof(string), typeof(string) },
+                 prefix: nameof(HttpTracePatches.HeaderSet_Prefix));
         complete &= TryPatchHttpManagerStringSendRequestOverloads();
         complete &= TryPatchByName("BestHTTP.HTTPManager", "SendRequest",
                  args: new[] { ResolveType("BestHTTP.HTTPRequest") ?? typeof(object) },
                  prefix: nameof(UriPatches.HttpManagerSendRequestObject_Prefix));
+        TryPatchByName("GFOGGHLDJFF", "JBFGGIJPOLC",
+                 prefix: nameof(HttpTracePatches.RecNetRequestSend_Prefix));
+        TryPatchByName("DNKAJOCIFHA", "JBFGGIJPOLC",
+                 prefix: nameof(HttpTracePatches.RecNetRequestSend_Prefix));
+        TryPatchByName("GFOGGHLDJFF", "GMFJNBANJJA",
+                 args: new[] { typeof(string), typeof(string) },
+                 prefix: nameof(HttpTracePatches.HeaderSet_Prefix));
+        TryPatchByName("DNKAJOCIFHA", "GMFJNBANJJA",
+                 args: new[] { typeof(string), typeof(string) },
+                 prefix: nameof(HttpTracePatches.HeaderSet_Prefix));
+        var httpMethodsType = ResolveType("BestHTTP.HTTPMethods") ?? typeof(object);
+        var recNetServiceType = ResolveType("GJDLNNLKDIJ") ?? typeof(object);
+        TryPatchByName("BNDIAONDFFF", "ctor",
+                 args: new[] { httpMethodsType, recNetServiceType, typeof(string) },
+                 prefix: nameof(HttpTracePatches.RecNetRequestBuilderCtor_Prefix));
 
         _networkPatchesRegistered = complete;
+    }
+
+    private bool TryPatchHttpRequestUriConstructors()
+    {
+        var type = ResolveType("BestHTTP.HTTPRequest");
+        if (type is null)
+        {
+            Log.Warning("[patch-miss] BestHTTP.HTTPRequest..ctor(Uri): type not found");
+            return false;
+        }
+
+        var prefix = GetPatchMethod(nameof(UriPatches.HttpRequestCtorUri_Prefix));
+        var patched = 0;
+        foreach (var ctor in type.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+        {
+            var parameters = ctor.GetParameters();
+            if (parameters.Length == 0 || !IsUriType(parameters[0].ParameterType)) continue;
+
+            try
+            {
+                HarmonyInstance.Patch(ctor, prefix: new HarmonyMethod(prefix));
+                patched++;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[patch-fail] BestHTTP.HTTPRequest..ctor({FormatParameterTypes(parameters)}): {ex.Message}");
+            }
+        }
+
+        if (patched == 0)
+        {
+            Log.Warning("[patch-miss] BestHTTP.HTTPRequest..ctor(Uri)");
+            return false;
+        }
+
+        Log.Msg($"[patch-ok] BestHTTP.HTTPRequest..ctor(Uri first) overloads x{patched}");
+        return true;
     }
 
     private bool TryPatchHttpManagerStringSendRequestOverloads()
@@ -580,6 +655,19 @@ public class Mod : MelonMod
 
         Log.Msg($"[patch-ok] BestHTTP.HTTPManager.SendRequest(string) overloads x{patched}");
         return true;
+    }
+
+    private static bool IsUriType(Type type)
+    {
+        return type == typeof(Uri) || type.FullName == typeof(Uri).FullName || type.Name == nameof(Uri);
+    }
+
+    private static string FormatParameterTypes(ParameterInfo[] parameters)
+    {
+        var names = new List<string>();
+        foreach (var parameter in parameters)
+            names.Add(parameter.ParameterType.Name);
+        return string.Join(",", names);
     }
 
     public override void OnUpdate()
@@ -903,7 +991,7 @@ public class Mod : MelonMod
     {
         // Look in all three patch holder classes — small enough that a
         // linear scan is cheaper than per-class lookups.
-        foreach (var holder in new[] { typeof(UriPatches), typeof(PhotonPatches), typeof(TlsPatches), typeof(DiagnosticPatches), typeof(SavePatches), typeof(ChatPatches), typeof(JoinPatches), typeof(RegistrationPatches), typeof(DebugConsolePatches), typeof(ScreenSharePatches), typeof(MakerPenGiftPreviewPatches), typeof(QuestTeamSize) })
+        foreach (var holder in new[] { typeof(UriPatches), typeof(HttpTracePatches), typeof(AuthPatches), typeof(PhotonPatches), typeof(AntiCheatPatches), typeof(TlsPatches), typeof(DiagnosticPatches), typeof(SavePatches), typeof(ChatPatches), typeof(JoinPatches), typeof(RegistrationPatches), typeof(DebugConsolePatches), typeof(ScreenSharePatches), typeof(MakerPenGiftPreviewPatches), typeof(QuestTeamSize) })
         {
             var m = holder.GetMethod(name, BindingFlags.Public | BindingFlags.Static);
             if (m is not null) return m;
@@ -1720,40 +1808,434 @@ internal static class MakerPenGiftPreviewPatches
     }
 }
 
+internal static class AuthPatches
+{
+    private static string? _latestAccessToken;
+    private static int _tokenLogCount;
+
+    public static void CaptureTokenArgs_Prefix(object? __0, object? __1, object? __2)
+    {
+        try
+        {
+            var accessToken = __0?.ToString();
+            if (LooksLikeJwt(accessToken))
+                _latestAccessToken = accessToken;
+
+            if (_tokenLogCount++ < 3)
+            {
+                DiagnosticPatches.Write(
+                    "[auth-trace] token setter " +
+                    $"access={Presence(__0)} refresh={Presence(__1)} key={Presence(__2)}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Mod.Log.Warning($"[auth-trace] token capture failed: {ex.Message}");
+        }
+    }
+
+    private static bool LooksLikeJwt(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return false;
+
+        var dots = 0;
+        foreach (var ch in value)
+            if (ch == '.') dots++;
+        return dots == 2;
+    }
+
+    private static string Presence(object? value) =>
+        string.IsNullOrWhiteSpace(value?.ToString()) ? "missing" : "present";
+}
+
+internal static class HttpTracePatches
+{
+    private const int BodyPreviewBytes = 700;
+    private static readonly Regex SensitivePairRegex = new(
+        @"(?i)(password|client_secret|access_token|accessToken|refresh_token|refreshToken|authorization|token|key)=([^&\s]+)",
+        RegexOptions.Compiled);
+    private static readonly Regex BearerRegex = new(
+        @"(?i)Bearer\s+[-._~+/=A-Za-z0-9]+",
+        RegexOptions.Compiled);
+    private static int _requestId;
+    private static int _failureLogCount;
+
+    public static void RecNetRequestSend_Prefix(object __instance, MethodBase __originalMethod)
+    {
+        TraceRequestObject(__instance, $"{__originalMethod.DeclaringType?.Name}.{__originalMethod.Name}");
+    }
+
+    public static void RecNetRequestBuilderCtor_Prefix(object? __0, object? __1, object? __2)
+    {
+        var id = NextRequestId();
+        DiagnosticPatches.Write(
+            $"[http-trace] #{id} BNDIAONDFFF.ctor method={SanitizeInline(__0?.ToString() ?? "<null>")} " +
+            $"service={SanitizeInline(__1?.ToString() ?? "<null>")} path={SanitizeInline(__2?.ToString() ?? "<null>")}");
+    }
+
+    public static void HeaderSet_Prefix(object __instance, object? __0, object? __1, MethodBase __originalMethod)
+    {
+        try
+        {
+            var name = __0?.ToString() ?? "<null>";
+            var value = RedactHeaderValue(name, __1?.ToString());
+            var uri = TryReadRequestUri(__instance)?.ToString() ?? "<uri unread>";
+            DiagnosticPatches.Write(
+                $"[http-header] {__originalMethod.DeclaringType?.Name}.{__originalMethod.Name} " +
+                $"{SanitizeInline(uri)} {name}: {value}");
+        }
+        catch (Exception ex)
+        {
+            LogFailure("header", ex);
+        }
+    }
+
+    public static void TraceUrl(string? url, string source)
+    {
+        if (string.IsNullOrWhiteSpace(url)) return;
+        if (!url.StartsWith("http://", StringComparison.OrdinalIgnoreCase) &&
+            !url.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            return;
+
+        var id = NextRequestId();
+        DiagnosticPatches.Write($"[http-trace] #{id} {source} url={SanitizeInline(url)}");
+    }
+
+    public static void TraceRequestObject(object? request, string source)
+    {
+        if (request is null) return;
+
+        try
+        {
+            var id = NextRequestId();
+            var uri = TryReadRequestUri(request)?.ToString() ?? "<uri unread>";
+            var method = TryReadHttpMethod(request);
+            var headers = TryReadHeaders(request);
+            var body = TryReadBodyPreview(request);
+
+            DiagnosticPatches.Write(
+                $"[http-trace] #{id} {source} method={method} uri={SanitizeInline(uri)} " +
+                $"headers={headers} body={body}");
+        }
+        catch (Exception ex)
+        {
+            LogFailure(source, ex);
+        }
+    }
+
+    private static int NextRequestId() => System.Threading.Interlocked.Increment(ref _requestId);
+
+    private static Uri? TryReadRequestUri(object request)
+    {
+        if (TryInvokeUriMethod(request, "KPKNHFBHPHO", out var uri)) return uri;
+        if (TryInvokeUriMethod(request, "IBLHNHHBNNE", out uri)) return uri;
+
+        const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+        var type = request.GetType();
+
+        if (TryReadUriValue(type.GetProperty("Uri", flags)?.GetValue(request), out uri)) return uri;
+        if (TryReadUriValue(type.GetProperty("CurrentUri", flags)?.GetValue(request), out uri)) return uri;
+        if (TryReadUriValue(type.GetField("<Uri>k__BackingField", flags)?.GetValue(request), out uri)) return uri;
+
+        foreach (var prop in type.GetProperties(flags))
+        {
+            if (prop.Name.IndexOf("Uri", StringComparison.OrdinalIgnoreCase) < 0) continue;
+            if (!prop.CanRead || prop.GetIndexParameters().Length != 0) continue;
+            try
+            {
+                if (TryReadUriValue(prop.GetValue(request), out uri)) return uri;
+            }
+            catch { }
+        }
+
+        foreach (var field in type.GetFields(flags))
+        {
+            if (field.Name.IndexOf("Uri", StringComparison.OrdinalIgnoreCase) < 0) continue;
+            try
+            {
+                if (TryReadUriValue(field.GetValue(request), out uri)) return uri;
+            }
+            catch { }
+        }
+
+        return null;
+    }
+
+    private static bool TryInvokeUriMethod(object request, string methodName, out Uri? uri)
+    {
+        uri = null;
+        try
+        {
+            var method = AccessTools.Method(request.GetType(), methodName, Type.EmptyTypes);
+            if (method is null) return false;
+            return TryReadUriValue(method.Invoke(request, Array.Empty<object>()), out uri);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryReadUriValue(object? value, out Uri? uri)
+    {
+        uri = null;
+        if (value is null) return false;
+        if (value is Uri direct)
+        {
+            uri = direct;
+            return true;
+        }
+
+        var text = value.ToString();
+        if (Uri.TryCreate(text, UriKind.Absolute, out var parsed))
+        {
+            uri = parsed;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static string TryReadHttpMethod(object request)
+    {
+        foreach (var name in new[] { "MethodType", "Method", "LNJILMKOBIP" })
+        {
+            if (TryReadMemberValue(request, name, out var value))
+                return SanitizeInline(value?.ToString() ?? "<null>");
+        }
+
+        return "<method unread>";
+    }
+
+    private static string TryReadHeaders(object request)
+    {
+        try
+        {
+            var dump = AccessTools.Method(request.GetType(), "DumpHeaders", Type.EmptyTypes);
+            if (dump?.Invoke(request, Array.Empty<object>()) is object rawDump)
+                return SanitizeInline(rawDump.ToString() ?? "<empty>");
+        }
+        catch { }
+
+        var known = new List<string>();
+        foreach (var name in new[]
+        {
+            "Authorization", "Cookie", "X-RNSIG", "Accept-Language",
+            "Content-Type", "User-Agent"
+        })
+        {
+            var value = TryReadHeaderValue(request, name);
+            if (!string.IsNullOrWhiteSpace(value))
+                known.Add($"{name}:{RedactHeaderValue(name, value)}");
+        }
+
+        return known.Count == 0 ? "<headers unread>" : string.Join("; ", known);
+    }
+
+    private static string? TryReadHeaderValue(object request, string name)
+    {
+        foreach (var methodName in new[] { "GetFirstHeaderValue", "FKHEHIMHHBP" })
+        {
+            try
+            {
+                var method = AccessTools.Method(request.GetType(), methodName, new[] { typeof(string) });
+                var value = method?.Invoke(request, new object[] { name })?.ToString();
+                if (!string.IsNullOrWhiteSpace(value)) return value;
+            }
+            catch { }
+        }
+
+        return null;
+    }
+
+    private static string TryReadBodyPreview(object request)
+    {
+        foreach (var methodName in new[] { "BGMFJOKNJAJ", "GetEntityBody" })
+        {
+            try
+            {
+                var method = AccessTools.Method(request.GetType(), methodName, Type.EmptyTypes);
+                if (method is null) continue;
+                var body = method.Invoke(request, Array.Empty<object>());
+                var bytes = TryCopyBytes(body, BodyPreviewBytes + 1);
+                if (bytes is null) continue;
+                if (bytes.Length == 0) return "<empty>";
+
+                var shown = Math.Min(bytes.Length, BodyPreviewBytes);
+                var text = Encoding.UTF8.GetString(bytes, 0, shown);
+                var suffix = bytes.Length > BodyPreviewBytes ? "...<truncated>" : "";
+                return $"{bytes.Length} bytes \"{SanitizeInline(text)}{suffix}\"";
+            }
+            catch { }
+        }
+
+        return "<body unread>";
+    }
+
+    private static byte[]? TryCopyBytes(object? value, int limit)
+    {
+        if (value is null) return null;
+        if (value is byte[] direct)
+            return CopyLimited(direct, limit);
+
+        if (value is IEnumerable enumerable)
+        {
+            var bytes = new List<byte>();
+            foreach (var item in enumerable)
+            {
+                if (item is null) continue;
+                try { bytes.Add(Convert.ToByte(item)); }
+                catch { return null; }
+                if (bytes.Count >= limit) break;
+            }
+            return bytes.ToArray();
+        }
+
+        return null;
+    }
+
+    private static byte[] CopyLimited(byte[] source, int limit)
+    {
+        var count = Math.Min(source.Length, limit);
+        var copy = new byte[count];
+        Array.Copy(source, copy, count);
+        return copy;
+    }
+
+    private static bool TryReadMemberValue(object request, string name, out object? value)
+    {
+        value = null;
+        const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+        var type = request.GetType();
+
+        try
+        {
+            var prop = type.GetProperty(name, flags);
+            if (prop is not null && prop.CanRead && prop.GetIndexParameters().Length == 0)
+            {
+                value = prop.GetValue(request);
+                return true;
+            }
+        }
+        catch { }
+
+        try
+        {
+            var field = type.GetField(name, flags);
+            if (field is not null)
+            {
+                value = field.GetValue(request);
+                return true;
+            }
+        }
+        catch { }
+
+        try
+        {
+            var method = AccessTools.Method(type, name, Type.EmptyTypes);
+            if (method is not null)
+            {
+                value = method.Invoke(request, Array.Empty<object>());
+                return true;
+            }
+        }
+        catch { }
+
+        return false;
+    }
+
+    private static string RedactHeaderValue(string name, string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return "<empty>";
+        if (name.Equals("Authorization", StringComparison.OrdinalIgnoreCase) ||
+            name.Equals("Cookie", StringComparison.OrdinalIgnoreCase) ||
+            name.Equals("Set-Cookie", StringComparison.OrdinalIgnoreCase) ||
+            name.Equals("X-RNSIG", StringComparison.OrdinalIgnoreCase))
+        {
+            return "<redacted>";
+        }
+
+        return SanitizeInline(value);
+    }
+
+    private static string SanitizeInline(string value)
+    {
+        var redacted = SensitivePairRegex.Replace(value, "$1=<redacted>");
+        redacted = BearerRegex.Replace(redacted, "Bearer <redacted>");
+        redacted = redacted.Replace("\r", "\\r").Replace("\n", "\\n").Replace("\t", "\\t");
+        return redacted.Length <= 1200 ? redacted : redacted[..1200] + "...<truncated>";
+    }
+
+    private static void LogFailure(string source, Exception ex)
+    {
+        if (_failureLogCount++ < 10)
+            Mod.Log.Warning($"[http-trace] {source} failed: {ex.GetType().Name}: {ex.Message}");
+    }
+}
+
 internal static class UriPatches
 {
+    public static void HttpRequestCtorUri_Prefix(object __0)
+    {
+        HttpTracePatches.TraceUrl(__0?.ToString(), "BestHTTP.HTTPRequest..ctor(Uri)");
+    }
+
+    public static void HttpRequestSetUri_Prefix(ref Uri __0)
+    {
+        RewriteUriArg(ref __0, "httprequest-seturi-rewrite");
+    }
+
+    public static void HttpRequestPrepareUri_Prefix(ref Uri __0)
+    {
+        RewriteUriArg(ref __0, "httprequest-prepareuri-rewrite");
+    }
+
     public static void HttpManagerSendRequestString_Prefix(ref string url)
     {
         RewriteString(ref url, "httpmanager-rewrite");
+        HttpTracePatches.TraceUrl(url, "BestHTTP.HTTPManager.SendRequest(string)");
     }
 
     public static void HttpManagerSendRequestObject_Prefix(object request)
     {
         RewriteRequestUri(request, "httpmanager-request-rewrite");
+        HttpTracePatches.TraceRequestObject(request, "BestHTTP.HTTPManager.SendRequest(HTTPRequest)");
     }
 
     public static void UriStringCtor_Prefix(ref string uriString)
     {
         RewriteString(ref uriString, "uri-rewrite");
+        HttpTracePatches.TraceUrl(uriString, "System.Uri..ctor(string)");
     }
 
     public static void HttpRequestSend_Prefix(object __instance)
     {
         RewriteRequestUri(__instance, "http-rewrite");
+        HttpTracePatches.TraceRequestObject(__instance, "BestHTTP.HTTPRequest.Send");
     }
 
     private static void RewriteRequestUri(object request, string label)
     {
         try
         {
-            var uriProp = request.GetType().GetProperty("Uri", BindingFlags.Public | BindingFlags.Instance);
-            if (uriProp?.GetValue(request) is not Uri uri) return;
+            if (request is null) return;
+            var type = request.GetType();
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
 
-            var rewritten = RewriteUri(uri);
-            if (rewritten is null) return;
+            if (TryRewriteUriProperty(request, type.GetProperty("Uri", flags), label)) return;
+            if (TryRewriteUriField(request, type.GetField("<Uri>k__BackingField", flags), label)) return;
 
-            uriProp.SetValue(request, rewritten);
-            Mod.Log.Msg($"[{label}] {uri} → {rewritten}");
+            foreach (var prop in type.GetProperties(flags))
+            {
+                if (prop.Name.IndexOf("Uri", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                if (TryRewriteUriProperty(request, prop, label)) return;
+            }
+
+            foreach (var field in type.GetFields(flags))
+            {
+                if (field.Name.IndexOf("Uri", StringComparison.OrdinalIgnoreCase) < 0) continue;
+                if (TryRewriteUriField(request, field, label)) return;
+            }
         }
         catch (Exception ex)
         {
@@ -1761,13 +2243,53 @@ internal static class UriPatches
         }
     }
 
+    private static void RewriteUriArg(ref Uri uri, string label)
+    {
+        if (uri is null) return;
+        var rewritten = RewriteUri(uri);
+        if (rewritten is null) return;
+
+        Mod.Log.Msg($"[{label}] {uri} -> {rewritten}");
+        uri = rewritten;
+    }
+
+    private static bool TryRewriteUriProperty(object request, PropertyInfo? prop, string label)
+    {
+        if (prop is null || !prop.CanRead || !prop.CanWrite) return false;
+        if (prop.GetIndexParameters().Length != 0) return false;
+        if (prop.GetValue(request) is not Uri uri) return false;
+
+        var rewritten = RewriteUri(uri);
+        if (rewritten is null) return false;
+
+        prop.SetValue(request, rewritten);
+        Mod.Log.Msg($"[{label}] {uri} -> {rewritten}");
+        return true;
+    }
+
+    private static bool TryRewriteUriField(object request, FieldInfo? field, string label)
+    {
+        if (field is null || field.IsInitOnly) return false;
+        if (field.GetValue(request) is not Uri uri) return false;
+
+        var rewritten = RewriteUri(uri);
+        if (rewritten is null) return false;
+
+        field.SetValue(request, rewritten);
+        Mod.Log.Msg($"[{label}] {uri} -> {rewritten}");
+        return true;
+    }
+
     private static void RewriteString(ref string uriString, string label)
     {
         if (string.IsNullOrEmpty(uriString)) return;
-        var host = Mod.Cfg.ServerHost;
-        if (string.IsNullOrEmpty(host)) return;
         if (uriString.IndexOf(".rec.net", StringComparison.OrdinalIgnoreCase) < 0) return;
-        var rewritten = uriString.Replace(".rec.net", "." + host);
+        if (!Uri.TryCreate(uriString, UriKind.Absolute, out var uri)) return;
+
+        var rewrittenUri = RewriteUri(uri);
+        if (rewrittenUri is null) return;
+
+        var rewritten = rewrittenUri.ToString();
         if (rewritten == uriString) return;
         Mod.Log.Msg($"[{label}] {uriString} → {rewritten}");
         uriString = rewritten;
@@ -2362,6 +2884,16 @@ internal static class SavePatches
     }
 
     private static Type? FindGameType(string name) => Mod.ResolveType(name);
+}
+
+internal static class AntiCheatPatches
+{
+    public static bool GenerateChallengeResponse_Prefix(string FIMBPCACMKJ, ref string __result)
+    {
+        __result = "AAAAAAAAAAAAAAAAAAAAAAAA";
+        Mod.Log.Msg("[eac] using local challenge response for copied test client");
+        return false;
+    }
 }
 
 internal static class TlsPatches

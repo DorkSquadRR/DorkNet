@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using DorkNet.Models.Notification;
 using DorkNet.Server.Auth;
 using DorkNet.Server.Data;
@@ -45,12 +46,128 @@ public class PlayerEventsController(
 
     [AllowAnonymous]
     [HttpGet("api/playerevents/v2/{eventId:long}")]
+    [HttpGet("api/playerevents/v1/{eventId:long}")]
     public async Task<ActionResult> GetOne(long eventId)
     {
         var ev = await db.PlayerEvents.FirstOrDefaultAsync(e => e.Id == eventId);
         if (ev is null) return NotFound();
         return Ok(ToWire(ev));
     }
+
+    [AllowAnonymous]
+    [HttpGet("api/playerevents/v1/search")]
+    [HttpGet("api/playerevents/v1/searchlive")]
+    public async Task<ActionResult> Search(
+        [FromQuery] string? q = null,
+        [FromQuery] string? query = null,
+        [FromQuery] int skip = 0,
+        [FromQuery] int take = 50)
+    {
+        var needle = (q ?? query ?? string.Empty).Trim().ToLowerInvariant();
+        skip = Math.Max(0, skip);
+        take = Math.Clamp(take, 1, 100);
+        var rows = db.PlayerEvents
+            .Where(e => e.EndsAt > DateTime.UtcNow);
+        if (needle.Length > 0)
+        {
+            rows = rows.Where(e =>
+                e.Title.ToLower().Contains(needle) ||
+                e.Description.ToLower().Contains(needle));
+        }
+
+        var result = await rows
+            .OrderBy(e => e.StartsAt)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync();
+        return Ok(result.Select(ToWire));
+    }
+
+    [AllowAnonymous]
+    [HttpGet("api/playerevents/v1/room/{roomId:long}")]
+    public async Task<ActionResult> ForRoom(long roomId)
+    {
+        var rows = await db.PlayerEvents
+            .Where(e => e.RoomId == roomId && e.EndsAt > DateTime.UtcNow)
+            .OrderBy(e => e.StartsAt)
+            .Take(100)
+            .ToListAsync();
+        return Ok(rows.Select(ToWire));
+    }
+
+    [AllowAnonymous]
+    [HttpGet("api/playerevents/v1/club/{clubId:long}")]
+    public async Task<ActionResult> ForClub(long clubId)
+    {
+        var memberIds = await db.ClubMemberships
+            .Where(m => m.ClubId == clubId)
+            .Select(m => m.PlayerId)
+            .ToListAsync();
+        if (memberIds.Count == 0) return Ok(Array.Empty<object>());
+
+        var roomIds = await db.Rooms
+            .Where(r => memberIds.Contains(r.CreatorPlayerId))
+            .Select(r => r.Id)
+            .ToListAsync();
+        if (roomIds.Count == 0) return Ok(Array.Empty<object>());
+
+        var rows = await db.PlayerEvents
+            .Where(e => roomIds.Contains(e.RoomId) && e.EndsAt > DateTime.UtcNow)
+            .OrderBy(e => e.StartsAt)
+            .Take(100)
+            .ToListAsync();
+        return Ok(rows.Select(ToWire));
+    }
+
+    [AllowAnonymous]
+    [HttpGet("api/playerevents/v1/clubs")]
+    public async Task<ActionResult> ClubEvents([FromQuery] int take = 100)
+    {
+        take = Math.Clamp(take, 1, 200);
+        var clubPlayerIds = await db.ClubMemberships
+            .Select(m => m.PlayerId)
+            .Distinct()
+            .ToListAsync();
+        if (clubPlayerIds.Count == 0) return Ok(Array.Empty<object>());
+        var roomIds = await db.Rooms
+            .Where(r => clubPlayerIds.Contains(r.CreatorPlayerId))
+            .Select(r => r.Id)
+            .ToListAsync();
+        var rows = await db.PlayerEvents
+            .Where(e => roomIds.Contains(e.RoomId) && e.EndsAt > DateTime.UtcNow)
+            .OrderBy(e => e.StartsAt)
+            .Take(take)
+            .ToListAsync();
+        return Ok(rows.Select(ToWire));
+    }
+
+    public sealed class EventBulkRequest
+    {
+        public List<long>? PlayerEventIds { get; set; }
+        public List<long>? EventIds { get; set; }
+        public List<long>? Ids { get; set; }
+    }
+
+    [AllowAnonymous]
+    [HttpPost("api/playerevents/v1/bulk")]
+    [HttpGet("api/playerevents/v1/bulk")]
+    public async Task<ActionResult> Bulk([FromBody] EventBulkRequest? body)
+    {
+        var ids = await ReadEventIdsAsync(body);
+        if (ids.Count == 0) return Ok(Array.Empty<object>());
+        var rows = await db.PlayerEvents
+            .Where(e => ids.Contains(e.Id))
+            .ToListAsync();
+        return Ok(rows.Select(ToWire));
+    }
+
+    [AllowAnonymous]
+    [HttpGet("api/playerevents/v1/tagfilters")]
+    public IActionResult TagFilters() => Ok(new
+    {
+        PinnedFilters = new[] { "game", "social", "competition", "class", "club" },
+        PopularFilters = new[] { "game", "social", "competition", "class", "club" },
+    });
 
     /// <summary>GET <c>api/playerevents/v1/all</c> — the watch's
     /// <c>LocalPlayerEventInfo</c> fetch (caller's created + RSVP'd
@@ -81,6 +198,39 @@ public class PlayerEventsController(
 
         var responses = await db.PlayerEventResponses
             .Where(r => r.PlayerId == me)
+            .Select(r => new
+            {
+                r.Id,
+                r.EventId,
+                r.Response,
+                r.CreatedAt,
+            })
+            .ToListAsync();
+
+        return Ok(new { Created = created, Responses = responses });
+    }
+
+    [AllowAnonymous]
+    [HttpGet("api/playerevents/v1/all/{accountId:long}")]
+    public async Task<ActionResult> AllPlayerEventsForAccount(long accountId)
+    {
+        var created = await db.PlayerEvents
+            .Where(e => e.CreatorPlayerId == accountId)
+            .OrderByDescending(e => e.StartsAt)
+            .Select(e => new
+            {
+                e.Id,
+                e.Title,
+                e.Description,
+                e.RoomId,
+                e.StartsAt,
+                e.EndsAt,
+                e.Capacity,
+            })
+            .ToListAsync();
+
+        var responses = await db.PlayerEventResponses
+            .Where(r => r.PlayerId == accountId)
             .Select(r => new
             {
                 r.Id,
@@ -233,6 +383,123 @@ public class PlayerEventsController(
         return Ok(new { success = true, error = "" });
     }
 
+    [HttpPost("api/playerevents/v2/{eventId:long}/name")]
+    [HttpPut("api/playerevents/v2/{eventId:long}/name")]
+    public async Task<IActionResult> UpdateName(long eventId)
+    {
+        var evt = await GetOwnedEventAsync(eventId);
+        if (evt is null) return NotFound();
+        var value = await ReadStringFieldAsync("name", "Name", "value");
+        if (string.IsNullOrWhiteSpace(value)) return BadRequest("missing_name");
+        evt.Title = value.Trim()[..Math.Min(value.Trim().Length, 128)];
+        evt.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return Ok(ToWire(evt));
+    }
+
+    [HttpPost("api/playerevents/v2/{eventId:long}/description")]
+    [HttpPut("api/playerevents/v2/{eventId:long}/description")]
+    public async Task<IActionResult> UpdateDescription(long eventId)
+    {
+        var evt = await GetOwnedEventAsync(eventId);
+        if (evt is null) return NotFound();
+        var value = await ReadStringFieldAsync("description", "Description", "value") ?? string.Empty;
+        evt.Description = value.Trim()[..Math.Min(value.Trim().Length, 2000)];
+        evt.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return Ok(ToWire(evt));
+    }
+
+    [HttpPost("api/playerevents/v2/{eventId:long}/room")]
+    [HttpPut("api/playerevents/v2/{eventId:long}/room")]
+    public async Task<IActionResult> UpdateRoom(long eventId)
+    {
+        var evt = await GetOwnedEventAsync(eventId);
+        if (evt is null) return NotFound();
+        var roomId = await ReadLongFieldAsync("roomId", "RoomId", "value");
+        if (roomId is not long id || id <= 0) return BadRequest("missing_room");
+        if (!await db.Rooms.AnyAsync(r => r.Id == id)) return NotFound("room_not_found");
+        evt.RoomId = id;
+        evt.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return Ok(ToWire(evt));
+    }
+
+    [HttpPost("api/playerevents/v2/{eventId:long}/time")]
+    [HttpPut("api/playerevents/v2/{eventId:long}/time")]
+    public async Task<IActionResult> UpdateTime(long eventId)
+    {
+        var evt = await GetOwnedEventAsync(eventId);
+        if (evt is null) return NotFound();
+        var start = await ReadDateFieldAsync("startTime", "StartTime", "startsAt", "StartsAt");
+        var end = await ReadDateFieldAsync("endTime", "EndTime", "endsAt", "EndsAt");
+        if (start is DateTime s) evt.StartsAt = s;
+        if (end is DateTime e) evt.EndsAt = e > evt.StartsAt ? e : evt.StartsAt.AddHours(1);
+        if (start is null && end is null) return BadRequest("missing_time");
+        evt.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return Ok(ToWire(evt));
+    }
+
+    [HttpPost("api/playerevents/v2/{eventId:long}/image")]
+    [HttpPut("api/playerevents/v2/{eventId:long}/image")]
+    public async Task<IActionResult> UpdateImage(long eventId)
+    {
+        var evt = await GetOwnedEventAsync(eventId);
+        if (evt is null) return NotFound();
+        var value = await ReadStringFieldAsync("imageName", "ImageName", "value") ?? string.Empty;
+        await SetEventSettingAsync(evt, "image", value.Trim());
+        return Ok(ToWire(evt));
+    }
+
+    [HttpPost("api/playerevents/v2/{eventId:long}/accessibility")]
+    [HttpPut("api/playerevents/v2/{eventId:long}/accessibility")]
+    public async Task<IActionResult> UpdateAccessibility(long eventId)
+    {
+        var evt = await GetOwnedEventAsync(eventId);
+        if (evt is null) return NotFound();
+        var value = await ReadIntFieldAsync("accessibility", "Accessibility", "value");
+        if (value is not int accessibility) return BadRequest("missing_accessibility");
+        await SetEventSettingAsync(evt, "accessibility", accessibility.ToString());
+        return Ok(ToWire(evt));
+    }
+
+    [HttpPost("api/playerevents/v2/{eventId:long}/tags")]
+    [HttpPut("api/playerevents/v2/{eventId:long}/tags")]
+    public async Task<IActionResult> UpdateTags(long eventId)
+    {
+        var evt = await GetOwnedEventAsync(eventId);
+        if (evt is null) return NotFound();
+        var value = await ReadStringFieldAsync("tags", "Tags", "value") ?? string.Empty;
+        await SetEventSettingAsync(evt, "tags", value.Trim());
+        return Ok(ToWire(evt));
+    }
+
+    [HttpPost("api/playerevents/v2/{eventId:long}/multiinstance")]
+    [HttpPut("api/playerevents/v2/{eventId:long}/multiinstance")]
+    public async Task<IActionResult> UpdateMultiInstance(long eventId)
+    {
+        var evt = await GetOwnedEventAsync(eventId);
+        if (evt is null) return NotFound();
+        var value = await ReadBoolFieldAsync("multiInstance", "MultiInstance", "value");
+        await SetEventSettingAsync(evt, "multiinstance", (value ?? false) ? "true" : "false");
+        return Ok(ToWire(evt));
+    }
+
+    [HttpPost("api/playerevents/v2/{eventId:long}/club")]
+    [HttpPut("api/playerevents/v2/{eventId:long}/club")]
+    public async Task<IActionResult> UpdateClub(long eventId)
+    {
+        var evt = await GetOwnedEventAsync(eventId);
+        if (evt is null) return NotFound();
+        var clubId = await ReadLongFieldAsync("clubId", "ClubId", "value");
+        if (clubId is not long id || id <= 0) return BadRequest("missing_club");
+        if (!await db.ClubMemberships.AnyAsync(m => m.ClubId == id && m.PlayerId == Me))
+            return Forbid();
+        await SetEventSettingAsync(evt, "club", id.ToString());
+        return Ok(ToWire(evt));
+    }
+
     [HttpDelete("api/playerevents/v1/{eventId:long}")]
     public async Task<ActionResult> Delete(long eventId)
     {
@@ -297,6 +564,44 @@ public class PlayerEventsController(
         return Ok(new { FailedInvites = failed, Result = 0 });
     }
 
+    public sealed class BroadcastRequest
+    {
+        public long PlayerEventId { get; set; }
+        public string? Message { get; set; }
+    }
+
+    [HttpPost("api/playerevents/v1/broadcast")]
+    public async Task<IActionResult> Broadcast([FromBody] BroadcastRequest req)
+    {
+        var ev = await db.PlayerEvents.FirstOrDefaultAsync(e => e.Id == req.PlayerEventId);
+        if (ev is null) return NotFound();
+        if (ev.CreatorPlayerId != Me) return Forbid();
+
+        var recipients = await db.PlayerEventResponses
+            .Where(r => r.EventId == ev.Id && r.Response != 2)
+            .Select(r => r.PlayerId)
+            .Distinct()
+            .ToListAsync();
+        var body = string.IsNullOrWhiteSpace(req.Message)
+            ? $"Update for '{ev.Title}'"
+            : req.Message.Trim();
+        foreach (var playerId in recipients.Where(id => id != Me))
+        {
+            db.Messages.Add(new MessageEntity
+            {
+                SenderPlayerId = Me,
+                RecipientPlayerId = playerId,
+                Body = body,
+            });
+            await notifications.NotifyAsync(playerId,
+                PushNotificationId.PlayerEventResponseChanged,
+                new { ev.Id, ev.Title, Message = body });
+        }
+
+        await db.SaveChangesAsync();
+        return Ok(new { Success = true, Sent = recipients.Count });
+    }
+
     // ── Report (Phase 8) ─────────────────────────────────────────────────
 
     public sealed class PlayerEventReportRequest
@@ -304,6 +609,130 @@ public class PlayerEventsController(
         public int ReportCategory { get; set; }
         public long PlayerEventId { get; set; }
         public string? Details { get; set; }
+    }
+
+    private async Task<PlayerEventEntity?> GetOwnedEventAsync(long eventId)
+        => await db.PlayerEvents.FirstOrDefaultAsync(e => e.Id == eventId && e.CreatorPlayerId == Me);
+
+    private async Task<List<long>> ReadEventIdsAsync(EventBulkRequest? body)
+    {
+        var ids = new List<long>();
+        if (body?.PlayerEventIds is { Count: > 0 }) ids.AddRange(body.PlayerEventIds);
+        if (body?.EventIds is { Count: > 0 }) ids.AddRange(body.EventIds);
+        if (body?.Ids is { Count: > 0 }) ids.AddRange(body.Ids);
+
+        foreach (var value in Request.Query.SelectMany(q => q.Value))
+        foreach (var part in (value ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            if (long.TryParse(part, out var id) && id > 0) ids.Add(id);
+
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync();
+            foreach (var key in new[] { "playerEventIds", "PlayerEventIds", "eventIds", "EventIds", "ids", "Ids" })
+            foreach (var value in form[key])
+            foreach (var part in (value ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                if (long.TryParse(part, out var id) && id > 0) ids.Add(id);
+        }
+
+        return ids.Distinct().Take(200).ToList();
+    }
+
+    private async Task<string?> ReadStringFieldAsync(params string[] names)
+    {
+        var fields = await ReadRequestFieldsAsync();
+        foreach (var name in names)
+            if (fields.TryGetValue(name, out var value))
+                return value;
+        return null;
+    }
+
+    private async Task<long?> ReadLongFieldAsync(params string[] names)
+    {
+        var value = await ReadStringFieldAsync(names);
+        return long.TryParse(value, out var parsed) ? parsed : null;
+    }
+
+    private async Task<int?> ReadIntFieldAsync(params string[] names)
+    {
+        var value = await ReadStringFieldAsync(names);
+        return int.TryParse(value, out var parsed) ? parsed : null;
+    }
+
+    private async Task<bool?> ReadBoolFieldAsync(params string[] names)
+    {
+        var value = await ReadStringFieldAsync(names);
+        return bool.TryParse(value, out var parsed) ? parsed : null;
+    }
+
+    private async Task<DateTime?> ReadDateFieldAsync(params string[] names)
+    {
+        var value = await ReadStringFieldAsync(names);
+        return DateTime.TryParse(value, out var parsed) ? parsed : null;
+    }
+
+    private async Task<Dictionary<string, string>> ReadRequestFieldsAsync()
+    {
+        const string itemKey = "__playerevent_fields";
+        if (HttpContext.Items.TryGetValue(itemKey, out var cached)
+            && cached is Dictionary<string, string> existing)
+        {
+            return existing;
+        }
+
+        var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var pair in Request.Query)
+            fields[pair.Key] = pair.Value.FirstOrDefault() ?? string.Empty;
+
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync();
+            foreach (var pair in form)
+                fields[pair.Key] = pair.Value.FirstOrDefault() ?? string.Empty;
+        }
+        else if ((Request.ContentLength ?? 0) > 0
+                 && Request.ContentType?.Contains("json", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            try
+            {
+                using var doc = await JsonDocument.ParseAsync(Request.Body);
+                if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var prop in doc.RootElement.EnumerateObject())
+                        fields[prop.Name] = prop.Value.ValueKind == JsonValueKind.String
+                            ? prop.Value.GetString() ?? string.Empty
+                            : prop.Value.GetRawText();
+                }
+            }
+            catch (JsonException)
+            {
+            }
+        }
+
+        HttpContext.Items[itemKey] = fields;
+        return fields;
+    }
+
+    private async Task SetEventSettingAsync(PlayerEventEntity evt, string key, string value)
+    {
+        var settingKey = $"playerevent:{evt.Id}:{key}";
+        var row = await db.PlayerSettings
+            .FirstOrDefaultAsync(s => s.PlayerId == evt.CreatorPlayerId && s.Key == settingKey);
+        if (row is null)
+        {
+            db.PlayerSettings.Add(new PlayerSettingEntity
+            {
+                PlayerId = evt.CreatorPlayerId,
+                Key = settingKey,
+                Value = value,
+            });
+        }
+        else
+        {
+            row.Value = value;
+        }
+
+        evt.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
     }
 
     /// <summary>POST <c>api/playerevents/v1/report</c> — file a

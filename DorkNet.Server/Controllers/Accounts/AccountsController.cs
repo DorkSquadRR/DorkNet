@@ -73,9 +73,11 @@ public class AccountsController(
     private async Task<Data.Entities.PlayerEntity?> GetCurrentPlayerAsync()
     {
         var auth = Request.Headers.Authorization.ToString();
-        if (!auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+        var token = auth.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+            ? auth["Bearer ".Length..].Trim()
+            : Request.Cookies[AuthService.AccessCookieName];
+        if (string.IsNullOrWhiteSpace(token))
             return null;
-        var token = auth["Bearer ".Length..].Trim();
         var id = authService.ValidateToken(token);
         if (id is not long playerId) return null;
         return await playerService.GetByIdAsync(playerId);
@@ -170,6 +172,7 @@ public class AccountsController(
     // Accounts.SearchForAccounts — used by the watch's typeahead AND the
     // localhost public site's account search. Anonymous-safe (no JWT
     // required) so the front-facing site can call it directly.
+    [HttpGet("/account/search")]
     [HttpGet("/account/v1/search")]
     [Microsoft.AspNetCore.Authorization.AllowAnonymous]
     public async Task<IActionResult> Search([FromQuery] string? query, [FromQuery] int take = 20)
@@ -405,6 +408,26 @@ public class AccountsController(
         return age;
     }
 
+    private async Task SetPlayerSettingAsync(long playerId, string key, string value)
+    {
+        var row = await db.PlayerSettings.FirstOrDefaultAsync(s => s.PlayerId == playerId && s.Key == key);
+        if (row is null)
+        {
+            db.PlayerSettings.Add(new PlayerSettingEntity
+            {
+                PlayerId = playerId,
+                Key = key,
+                Value = value,
+            });
+        }
+        else
+        {
+            row.Value = value;
+        }
+
+        await db.SaveChangesAsync();
+    }
+
     // Everyone is a dev for now — exposes the in-game debug console + dev
     // tools. Per user request: easier debugging while iterating on the
     // private server. Flip back to false later if you want shipping behavior.
@@ -508,6 +531,120 @@ public class AccountsController(
 
     [HttpGet("/account/v1/me/disallowiap")]
     public IActionResult DisallowIap() => Ok(new { Disallow = false });
+
+    [HttpGet("/account/isactivecreator/me")]
+    public async Task<IActionResult> IsActiveCreator()
+    {
+        var pid = this.CurrentPlayerId();
+        if (pid is not long me)
+            return Content("false", "application/json");
+
+        var active = await db.Rooms.AnyAsync(r => r.CreatorPlayerId == me)
+            || await db.Inventions.AnyAsync(i => i.CreatorPlayerId == me && !i.IsDeleted)
+            || await db.CustomAvatarItems.AnyAsync(i => i.CreatorPlayerId == me);
+        return Content(active ? "true" : "false", "application/json");
+    }
+
+    [HttpPost("/account/me/createlogintoken")]
+    [HttpGet("/account/me/createlogintoken")]
+    public async Task<IActionResult> CreateLoginToken()
+    {
+        var player = await GetCurrentPlayerAsync();
+        if (player is null) return Unauthorized();
+
+        var token = Guid.NewGuid().ToString("N");
+        var expiresAt = DateTime.UtcNow.AddMinutes(10);
+        await SetPlayerSettingAsync(player.Id, "remote_login_token", $"{token}|{expiresAt:O}");
+        return Ok(new
+        {
+            Success = true,
+            Error = string.Empty,
+            Token = token,
+            LoginToken = token,
+            ExpiresAt = expiresAt,
+        });
+    }
+
+    [HttpPost("/account/me/remoteauth")]
+    [HttpGet("/account/me/remoteauth")]
+    public async Task<IActionResult> RemoteAuth()
+    {
+        var token = Request.Query["token"].FirstOrDefault()
+                    ?? Request.Query["loginToken"].FirstOrDefault()
+                    ?? Request.Query["code"].FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(token) && Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync();
+            token = form["token"].FirstOrDefault()
+                    ?? form["loginToken"].FirstOrDefault()
+                    ?? form["code"].FirstOrDefault();
+        }
+
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            var player = await GetCurrentPlayerAsync();
+            if (player is null) return Unauthorized();
+            var pair = authService.GenerateTokenPair(player.Id);
+            return Ok(new LoginResponse
+            {
+                AccessToken = pair.AccessToken,
+                RefreshToken = pair.RefreshToken,
+            });
+        }
+
+        var prefix = token.Trim() + "|";
+        var row = await db.PlayerSettings
+            .Where(s => s.Key == "remote_login_token" && s.Value.StartsWith(prefix))
+            .OrderByDescending(s => s.Id)
+            .FirstOrDefaultAsync();
+        if (row is null) return Unauthorized();
+
+        var rawExpiry = row.Value[prefix.Length..];
+        if (!DateTime.TryParse(rawExpiry, out var expiresAt) || expiresAt < DateTime.UtcNow)
+            return Unauthorized();
+
+        db.PlayerSettings.Remove(row);
+        await db.SaveChangesAsync();
+        var (access, refresh) = authService.GenerateTokenPair(row.PlayerId);
+        return Ok(new LoginResponse
+        {
+            AccessToken = access,
+            RefreshToken = refresh,
+        });
+    }
+
+    [HttpPost("/account/recoverpassword")]
+    [HttpGet("/account/recoverpassword")]
+    [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    public async Task<IActionResult> RecoverPassword(
+        [FromForm] string? username,
+        [FromForm] string? email)
+    {
+        var nameOrEmail = username
+                          ?? email
+                          ?? Request.Query["username"].FirstOrDefault()
+                          ?? Request.Query["email"].FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(nameOrEmail))
+            return Ok(new RecNetResult { Success = false, Error = "missing_account" });
+
+        var needle = nameOrEmail.Trim().ToLowerInvariant();
+        var player = await db.Players
+            .FirstOrDefaultAsync(p => p.Username.ToLower() == needle
+                                      || (p.Email != null && p.Email.ToLower() == needle));
+        if (player is null)
+            return Ok(new RecNetResult { Success = false, Error = "unknown_account" });
+
+        var code = Random.Shared.Next(100000, 999999).ToString();
+        var expiresAt = DateTime.UtcNow.AddMinutes(30);
+        await SetPlayerSettingAsync(player.Id, "password_recovery_code", $"{code}|{expiresAt:O}");
+        return Ok(new
+        {
+            Success = true,
+            Error = string.Empty,
+            Code = code,
+            ExpiresAt = expiresAt,
+        });
+    }
 
     /// <summary>GET /account/{id}/bio — public bio lookup. Watch URL
     /// from <c>Cpp2IL_ISIL/.../RecNet/Accounts.txt</c> line 5686:
