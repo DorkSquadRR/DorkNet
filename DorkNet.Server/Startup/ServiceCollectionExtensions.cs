@@ -106,7 +106,8 @@ public static class ServiceCollectionExtensions
             builder.Configuration["Domain:Apex"]
             ?? Environment.GetEnvironmentVariable("DORKNET_DOMAIN")
             ?? "localhost";
-        builder.Services.AddSingleton(new DomainConfig(apex));
+        var scheme = builder.Configuration["Domain:Scheme"] ?? "https";
+        builder.Services.AddSingleton(new DomainConfig(apex, scheme));
         builder.Services.Configure<Microsoft.AspNetCore.HostFiltering.HostFilteringOptions>(opt =>
         {
             opt.AllowedHosts = new[] { apex, $"*.{apex}", "localhost", "127.0.0.1" };

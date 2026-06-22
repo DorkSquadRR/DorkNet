@@ -16,7 +16,7 @@ public class NotificationController(DomainConfig domain) : ControllerBase
     public IActionResult Connect() => StatusCode(StatusCodes.Status410Gone, new
     {
         error = "use_signalr_hub",
-        hint = $"connect to {domain.Sub("notify")}/hub/v1 instead",
+        hint = $"connect to {domain.Url("notify", "/hub/v1")} instead",
     });
 
     /// <summary>GET <c>api/notification/hub/v1</c> — returns the
@@ -27,7 +27,7 @@ public class NotificationController(DomainConfig domain) : ControllerBase
     [HttpGet("/api/notification/hub/v1")]
     public IActionResult HubInfo() => Ok(new
     {
-        Url = $"https://{domain.Sub("notify")}/hub/v1",
+        Url = domain.Url("notify", "/hub/v1"),
         Protocol = "signalr",
         Version = 1,
     });
