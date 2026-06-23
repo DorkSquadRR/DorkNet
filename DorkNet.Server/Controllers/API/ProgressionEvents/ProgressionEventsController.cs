@@ -74,6 +74,38 @@ public class ProgressionEventsController(DorkNetDbContext db, ServerSettingsServ
     [AllowAnonymous]
     public IActionResult Active() => Ok(CurrentProgressionEventId());
 
+    /// <summary>
+    /// The current player's progress record for a given progression event.
+    /// The 2023 client fetches this during InitialRoomLoad
+    /// (<c>api/progressionEvents/record/{id}</c>, where <c>{id}</c> is the
+    /// <c>yyyyMMdd</c> event id). A 404 here faults the room-load coroutine
+    /// with a NullReferenceException and traps the client in a dorm
+    /// matchmaking loop, so we always return a non-null record.
+    /// </summary>
+    [HttpGet("api/progressionEvents/record/{progressionEventId:long}")]
+    [Authorize]
+    public async Task<IActionResult> Record(long progressionEventId)
+    {
+        var me = this.RequireCurrentPlayerId();
+
+        // Count this player's completed progression-event objectives so the
+        // record reflects real progress rather than a flat zero.
+        var completed = await db.ObjectiveProgress
+            .CountAsync(o => o.PlayerId == me
+                && o.IsCompleted
+                && o.Key.StartsWith("progressionEvent:"));
+
+        return Ok(new
+        {
+            ProgressionEventId = progressionEventId,
+            Xp = 0,
+            ClaimedRewardIndex = completed > 0 ? completed - 1 : -1,
+            PurchasedXpBoostCount = 0,
+            DailyBoostGameplayMinutes = 0,
+            XpBoostExpiresAt = (DateTime?)null,
+        });
+    }
+
     private static long CurrentProgressionEventId()
     {
         var (start, _) = CurrentWeekWindow();

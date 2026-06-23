@@ -20,6 +20,8 @@
 // Il2CppAssemblies directory just to write the source.
 
 using HarmonyLib;
+using Il2CppInterop.Runtime;
+using Il2CppInterop.Runtime.InteropTypes;
 using MelonLoader;
 using System;
 using System.Collections;
@@ -30,6 +32,7 @@ using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 
 [assembly: MelonInfo(typeof(DorkNet.ClientMod.Mod), "DorkNet ClientMod", "1.0.0", "Dork Squad")]
 [assembly: MelonGame(null, null)]
@@ -49,6 +52,7 @@ public class Mod : MelonMod
     private bool _diagnosticGameComplete;
     private int _diagnosticRetryFrame;
     private bool _firstUpdateLogged;
+    private bool _processExceptionHandlersRegistered;
 
     // Config backed by a plain JSON file under MelonLoader/UserData.
     // The defaults below match the recommended install, so dropping this
@@ -143,6 +147,7 @@ public class Mod : MelonMod
         Instance = this;
         Log.Msg("=== DorkNet ClientMod loading ===");
         LoadConfig();
+        RegisterProcessExceptionHandlers();
         RegisterNetworkPatches();
         DiagnosticPatches.Write("[lifecycle] OnInitializeMelon");
     }
@@ -577,6 +582,9 @@ public class Mod : MelonMod
         TryPatchByName("BestHTTP.HTTPRequest", "AddHeader",
                  args: new[] { typeof(string), typeof(string) },
                  prefix: nameof(HttpTracePatches.HeaderSet_Prefix));
+        TryPatchByName("BestHTTP.HTTPRequest", "CallCallback",
+                 prefix: nameof(HttpTracePatches.CallCallback_Prefix),
+                 postfix: nameof(HttpTracePatches.CallCallback_Postfix));
         complete &= TryPatchHttpManagerStringSendRequestOverloads();
         complete &= TryPatchByName("BestHTTP.HTTPManager", "SendRequest",
                  args: new[] { ResolveType("BestHTTP.HTTPRequest") ?? typeof(object) },
@@ -595,7 +603,11 @@ public class Mod : MelonMod
         var recNetServiceType = ResolveType("GJDLNNLKDIJ") ?? typeof(object);
         TryPatchByName("BNDIAONDFFF", "ctor",
                  args: new[] { httpMethodsType, recNetServiceType, typeof(string) },
-                 prefix: nameof(HttpTracePatches.RecNetRequestBuilderCtor_Prefix));
+                 prefix: nameof(HttpTracePatches.RecNetRequestBuilderCtor_Prefix),
+                 postfix: nameof(HttpTracePatches.RecNetRequestBuilderCtor_Postfix));
+        TryPatchByName("BNDIAONDFFF", "FGHNOKLDOKO",
+                 prefix: nameof(HttpTracePatches.RecNetResponseTuple_Prefix),
+                 postfix: nameof(HttpTracePatches.RecNetResponseTuple_Postfix));
 
         _networkPatchesRegistered = complete;
     }
@@ -1002,7 +1014,7 @@ public class Mod : MelonMod
     {
         // Look in all three patch holder classes — small enough that a
         // linear scan is cheaper than per-class lookups.
-        foreach (var holder in new[] { typeof(UriPatches), typeof(HttpTracePatches), typeof(AuthPatches), typeof(AntiCheatPatches), typeof(FileHashCheckerPatches), typeof(TlsPatches), typeof(DiagnosticPatches), typeof(SavePatches), typeof(ChatPatches), typeof(JoinPatches), typeof(RegistrationPatches), typeof(DebugConsolePatches), typeof(ScreenSharePatches), typeof(MakerPenGiftPreviewPatches), typeof(QuestTeamSize) })
+        foreach (var holder in new[] { typeof(UriPatches), typeof(HttpTracePatches), typeof(AuthPatches), typeof(AntiCheatPatches), typeof(FileHashCheckerPatches), typeof(TlsPatches), typeof(DiagnosticPatches), typeof(RoomLoadDiagnostics), typeof(SavePatches), typeof(ChatPatches), typeof(JoinPatches), typeof(RegistrationPatches), typeof(DebugConsolePatches), typeof(ScreenSharePatches), typeof(MakerPenGiftPreviewPatches), typeof(QuestTeamSize) })
         {
             var m = holder.GetMethod(name, BindingFlags.Public | BindingFlags.Static);
             if (m is not null) return m;
@@ -1028,8 +1040,6 @@ public class Mod : MelonMod
 
     private bool RegisterGameDiagnostics(bool logMisses)
     {
-        var complete = true;
-
         // CheatManager fires these when its anti-cheat heuristics trip —
         // logging them surfaces "client thinks it's been tampered with",
         // a common cause of silent dorm-drops / kicks on a modded client.
@@ -1046,22 +1056,26 @@ public class Mod : MelonMod
             "OnAdvancedMovementCheatDetected",
         })
         {
-            complete &= TryPatchDiagnosticByName("CheatManager", method,
-                                                 prefix: nameof(DiagnosticPatches.AnalyticsCheat_Prefix),
-                                                 logMiss: logMisses);
+            TryPatchDiagnosticByName("CheatManager", method,
+                                      prefix: nameof(DiagnosticPatches.AnalyticsCheat_Prefix),
+                                      logMiss: logMisses);
         }
 
-        complete &= TryPatchDiagnosticByName("SessionManager", "TryApplicationQuit",
-                                             prefix: nameof(DiagnosticPatches.SessionManagerTryApplicationQuit_Prefix),
-                                             logMiss: logMisses);
-        complete &= TryPatchDiagnosticByName("SessionManager", "TryApplicationQuit",
-                                             args: new[] { typeof(int) },
-                                             prefix: nameof(DiagnosticPatches.SessionManagerTryApplicationQuitInt_Prefix),
-                                             logMiss: logMisses);
-        complete &= TryPatchDiagnosticByName("SessionManager", "FatalApplicationQuit",
-                                             args: new[] { typeof(int), typeof(string) },
-                                             prefix: nameof(DiagnosticPatches.SessionManagerFatalApplicationQuit_Prefix),
-                                             logMiss: logMisses);
+        TryPatchDiagnosticByName("SessionManager", "TryApplicationQuit",
+                                 prefix: nameof(DiagnosticPatches.SessionManagerTryApplicationQuit_Prefix),
+                                 logMiss: logMisses);
+        TryPatchDiagnosticByName("SessionManager", "TryApplicationQuit",
+                                 args: new[] { typeof(int) },
+                                 prefix: nameof(DiagnosticPatches.SessionManagerTryApplicationQuitInt_Prefix),
+                                 logMiss: logMisses);
+        TryPatchDiagnosticByName("SessionManager", "FatalApplicationQuit",
+                                 args: new[] { typeof(int), typeof(string) },
+                                 prefix: nameof(DiagnosticPatches.SessionManagerFatalApplicationQuit_Prefix),
+                                 logMiss: logMisses);
+        TryPatchDiagnosticAllOverloads("BNDIAONDFFF", "FGHNOKLDOKO",
+                                       finalizer: nameof(HttpTracePatches.RecNetResponseTuple_Finalizer),
+                                       logMiss: logMisses);
+        RegisterDeepRoomDiagnostics(logMisses);
         // SteamManager.Awake + SteamPlatformManager.*LoginInitialize were
         // pure-logging diagnostics that fired during Unity's very first
         // wake-up tick. On december (EAC build, IL2CPP wrapped Steam
@@ -1070,7 +1084,7 @@ public class Mod : MelonMod
         // hooks gave us no behavioral leverage — only a `[call] …` log
         // line — so they're disabled. If anyone needs Steam-side visibility
         // later, route it through the game's own log lines instead.
-        return complete;
+        return true;
     }
 
     private bool TryPatchDiagnosticByName(string typeName, string methodName,
@@ -1087,12 +1101,418 @@ public class Mod : MelonMod
         _diagnosticPatchLabels.Add(label);
         return true;
     }
+
+    private bool TryPatchDiagnosticAllOverloads(string typeName, string methodName,
+                                                string? prefix = null, string? postfix = null,
+                                                string? finalizer = null, bool logMiss = true)
+    {
+        var label = $"{typeName}.{methodName}(*)";
+        if (_diagnosticPatchLabels.Contains(label))
+            return true;
+
+        var type = ResolveType(typeName);
+        if (type is null)
+        {
+            if (logMiss) Log.Warning($"[patch-miss] {label}: type not found");
+            return false;
+        }
+
+        var patched = 0;
+        foreach (var method in AccessTools.GetDeclaredMethods(type))
+        {
+            if (method.Name != methodName) continue;
+            if (method.IsAbstract || method.ContainsGenericParameters) continue;
+            try
+            {
+                HarmonyInstance.Patch(method,
+                    prefix: prefix is null ? null : new HarmonyMethod(GetPatchMethod(prefix)),
+                    postfix: postfix is null ? null : new HarmonyMethod(GetPatchMethod(postfix)),
+                    finalizer: finalizer is null ? null : new HarmonyMethod(GetPatchMethod(finalizer)));
+                patched++;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[patch-fail] {type.FullName}.{method.Name}: {ex.Message}");
+            }
+        }
+
+        if (patched == 0)
+        {
+            if (logMiss) Log.Warning($"[patch-miss] {label}: no overloads matched");
+            return false;
+        }
+
+        _diagnosticPatchLabels.Add(label);
+        Log.Msg($"[patch-ok] {label} x{patched}");
+        return true;
+    }
+
+    private bool RegisterDeepRoomDiagnostics(bool logMisses)
+    {
+        var complete = true;
+
+        complete &= TryPatchDiagnosticByName("UnityEngine.Debug", "LogError",
+                                             args: new[] { typeof(object) },
+                                             prefix: nameof(RoomLoadDiagnostics.LogError_Prefix),
+                                             logMiss: logMisses);
+        complete &= TryPatchDiagnosticByName("UnityEngine.Debug", "LogException",
+                                             args: new[] { typeof(Exception) },
+                                             prefix: nameof(RoomLoadDiagnostics.LogException_Prefix),
+                                             logMiss: logMisses);
+
+        foreach (var method in new[]
+        {
+            "ConnectUsingSettings",
+            "ConnectToRegion",
+            "JoinRoom",
+            "JoinOrCreateRoom",
+            "CreateRoom",
+            "LeaveRoom",
+            "Disconnect",
+        })
+        {
+            complete &= TryPatchDiagnosticAllOverloads("PhotonNetwork", method,
+                                                       prefix: nameof(RoomLoadDiagnostics.NamedCall_Prefix),
+                                                       finalizer: nameof(RoomLoadDiagnostics.NamedCall_Finalizer),
+                                                       logMiss: logMisses);
+        }
+
+        foreach (var item in new (string Type, string Method)[]
+        {
+            ("CMMIJKCDKPL", "CDNPLAGEDBK"),
+            ("KGHEDLNPANK", "CDNPLAGEDBK"),
+            ("HMPNINFEDFB", "IJIOJAIBPKE"),
+            ("PhotonNetwork", "Disconnect"),
+        })
+        {
+            complete &= TryPatchDiagnosticAllOverloads(item.Type, item.Method,
+                                                       prefix: nameof(RoomLoadDiagnostics.NamedCall_Prefix),
+                                                       finalizer: nameof(RoomLoadDiagnostics.NamedCall_Finalizer),
+                                                       logMiss: logMisses);
+        }
+
+        complete &= PatchKnownRoomLoadMoveNext(logMisses);
+        return true;
+    }
+
+    private bool PatchKnownRoomLoadMoveNext(bool logMiss)
+    {
+        const string label = "room-load-state-machines.MoveNext";
+        if (_diagnosticPatchLabels.Contains(label))
+            return true;
+
+        var nameNeedles = new[]
+        {
+            "OMJKHJLFOCO", "AFMPFLKGABO",
+            "AOEBBIFGIKI", "FINJCCNPHEP", "FDDFOKNJIFL", "GMNHJNAHAAI",
+            "MHDOLJJPEAD", "LFGLDJCMJDN", "PFDIKJHMBDI", "ICAGCHKPIOM",
+            "JEBACILNLJI", "DINBAFNHLPJ", "HLHPNABABME", "PAPLNIPKAMG",
+            "IBEOONPEELF", "JHPHMNGOFLB", "NLDBPDCNNCF", "LONOBOBHMJL",
+            "BNDIAONDFFF", "HOONLPFFADG", "PHODPEHLHGM",
+        };
+
+        var patched = 0;
+        foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            foreach (var type in GetLoadableTypes(asm))
+            {
+                var fullName = type.FullName ?? type.Name;
+                var match = false;
+                foreach (var needle in nameNeedles)
+                {
+                    if (fullName.IndexOf(needle, StringComparison.Ordinal) >= 0)
+                    {
+                        match = true;
+                        break;
+                    }
+                }
+                if (!match) continue;
+
+                IEnumerable<MethodInfo> methods;
+                try { methods = AccessTools.GetDeclaredMethods(type); }
+                catch { continue; }
+
+                foreach (var method in methods)
+                {
+                    if (method.Name != "MoveNext") continue;
+                    if (method.IsAbstract || method.ContainsGenericParameters) continue;
+                    try
+                    {
+                        HarmonyInstance.Patch(method,
+                            finalizer: new HarmonyMethod(GetPatchMethod(nameof(RoomLoadDiagnostics.MoveNext_Finalizer))));
+                        patched++;
+                        Log.Msg($"[patch-ok] room-load MoveNext {type.FullName}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning($"[patch-fail] room-load MoveNext {type.FullName}: {ex.Message}");
+                    }
+                }
+            }
+        }
+
+        if (patched == 0)
+        {
+            if (logMiss) Log.Warning("[patch-miss] room-load state-machine MoveNext hooks");
+            return false;
+        }
+
+        _diagnosticPatchLabels.Add(label);
+        return true;
+    }
+
+    private void RegisterProcessExceptionHandlers()
+    {
+        if (_processExceptionHandlersRegistered) return;
+        _processExceptionHandlersRegistered = true;
+
+        AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+        {
+            try
+            {
+                var ex = e.ExceptionObject as Exception;
+                DiagnosticPatches.Write($"[process-exception] unhandled terminating={e.IsTerminating} {RoomLoadDiagnostics.FormatException(ex, e.ExceptionObject)}");
+            }
+            catch { }
+        };
+
+        TaskScheduler.UnobservedTaskException += (_, e) =>
+        {
+            try
+            {
+                DiagnosticPatches.Write($"[process-exception] unobserved-task {RoomLoadDiagnostics.FormatException(e.Exception, e.Exception)}");
+            }
+            catch { }
+        };
+    }
 }
 
 // ── Patch holders ─────────────────────────────────────────────────────
 // Each holder is a static class with public static Prefix methods that
 // Harmony invokes. Kept separate from Mod for readability and so the
 // reflection lookup in GetPatchMethod stays simple.
+
+internal static class RoomLoadDiagnostics
+{
+    private static readonly Dictionary<string, int> Counts = new();
+    private static int _globalCount;
+
+    public static void LogError_Prefix(object? message)
+    {
+        DiagnosticPatches.Write($"[unity-error] LogError {Sanitize(message?.ToString() ?? "<null>", 1600)}");
+        WriteStack("unity-error");
+    }
+
+    public static void LogException_Prefix(Exception exception)
+    {
+        DiagnosticPatches.Write($"[unity-exception] {FormatException(exception, exception)}");
+        WriteStack("unity-exception");
+    }
+
+    public static void NamedCall_Prefix(MethodBase __originalMethod)
+    {
+        var name = FullMethodName(__originalMethod);
+        if (!ShouldLog("call:" + name, 80)) return;
+
+        DiagnosticPatches.Write($"[runtime-call] ENTER {name} [{Signature(__originalMethod)}]");
+        if (IsImportantCall(name))
+            WriteStack("runtime-call");
+    }
+
+    public static Exception? NamedCall_Finalizer(Exception? __exception, MethodBase __originalMethod)
+    {
+        if (__exception is not null)
+        {
+            DiagnosticPatches.Write($"[runtime-call] EXCEPTION {FullMethodName(__originalMethod)} {FormatException(__exception, __exception)}");
+            WriteStack("runtime-call-exception");
+        }
+        return __exception;
+    }
+
+    public static void MoveNext_Prefix(object __instance, MethodBase __originalMethod)
+    {
+        var name = FullMethodName(__originalMethod);
+        if (!ShouldLog("enter:" + name, 120)) return;
+        DiagnosticPatches.Write($"[room-load] ENTER {name} state={DumpInstanceFields(__instance, 28)}");
+    }
+
+    public static void MoveNext_Postfix(object __instance, MethodBase __originalMethod)
+    {
+        var name = FullMethodName(__originalMethod);
+        if (!ShouldLog("exit:" + name, 120)) return;
+        DiagnosticPatches.Write($"[room-load] EXIT {name} state={DumpInstanceFields(__instance, 28)}");
+    }
+
+    public static Exception? MoveNext_Finalizer(Exception? __exception, object __instance, MethodBase __originalMethod)
+    {
+        if (__exception is not null)
+        {
+            DiagnosticPatches.Write(
+                $"[room-load] EXCEPTION {FullMethodName(__originalMethod)} " +
+                $"{FormatException(__exception, __exception)} state={DumpInstanceFields(__instance, 40)}");
+            WriteStack("room-load-exception");
+        }
+        return __exception;
+    }
+
+    public static string FormatException(Exception? ex, object? fallback)
+    {
+        if (ex is null) return fallback?.ToString() ?? "<null>";
+        var builder = new StringBuilder();
+        AppendException(builder, ex, 0);
+        return Sanitize(builder.ToString(), 5000);
+    }
+
+    private static void AppendException(StringBuilder builder, Exception ex, int depth)
+    {
+        if (depth > 4) return;
+        if (builder.Length > 0) builder.Append(" | ");
+        builder.Append(ex.GetType().FullName).Append(": ").Append(ex.Message);
+        if (!string.IsNullOrWhiteSpace(ex.StackTrace))
+            builder.Append(" stack=").Append(ex.StackTrace);
+        if (ex is AggregateException aggregate)
+        {
+            foreach (var inner in aggregate.InnerExceptions)
+                AppendException(builder, inner, depth + 1);
+        }
+        else if (ex.InnerException is not null)
+        {
+            AppendException(builder, ex.InnerException, depth + 1);
+        }
+    }
+
+    private static bool ShouldLog(string key, int perKeyLimit)
+    {
+        lock (Counts)
+        {
+            _globalCount++;
+            if (_globalCount > 12000)
+                return false;
+
+            Counts.TryGetValue(key, out var count);
+            if (count >= perKeyLimit)
+                return false;
+
+            Counts[key] = count + 1;
+            return true;
+        }
+    }
+
+    private static string DumpInstanceFields(object? instance, int maxFields)
+    {
+        if (instance is null) return "<null>";
+        try
+        {
+            var type = instance.GetType();
+            var parts = new List<string>();
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+            foreach (var field in type.GetFields(flags))
+            {
+                if (parts.Count >= maxFields)
+                {
+                    parts.Add("...");
+                    break;
+                }
+
+                object? value;
+                try { value = field.GetValue(instance); }
+                catch (Exception ex)
+                {
+                    parts.Add($"{field.Name}=<read failed {ex.GetType().Name}>");
+                    continue;
+                }
+
+                parts.Add($"{field.Name}={DescribeValue(value, 400)}");
+            }
+
+            return $"{type.FullName} {{{string.Join("; ", parts)}}}";
+        }
+        catch (Exception ex)
+        {
+            return $"<dump failed {ex.GetType().Name}: {Sanitize(ex.Message, 400)}>";
+        }
+    }
+
+    private static string DescribeValue(object? value, int limit)
+    {
+        if (value is null) return "null";
+
+        var type = value.GetType();
+        if (value is string text) return "\"" + Sanitize(text, limit) + "\"";
+        if (value is Exception ex) return FormatException(ex, ex);
+        if (type.IsPrimitive || type.IsEnum || value is decimal)
+            return Sanitize(value.ToString() ?? "<null>", limit);
+        if (value is IEnumerable enumerable && value is not string)
+            return DescribeEnumerable(enumerable, type, limit);
+
+        var rendered = value.ToString();
+        if (string.IsNullOrWhiteSpace(rendered) || rendered == type.FullName)
+            return "<" + type.FullName + ">";
+        return "<" + type.FullName + " " + Sanitize(rendered, limit) + ">";
+    }
+
+    private static string DescribeEnumerable(IEnumerable enumerable, Type type, int limit)
+    {
+        var parts = new List<string>();
+        var count = 0;
+        foreach (var item in enumerable)
+        {
+            if (count++ >= 6)
+            {
+                parts.Add("...");
+                break;
+            }
+            parts.Add(DescribeValue(item, 120));
+        }
+        return "<" + type.FullName + " [" + Sanitize(string.Join(", ", parts), limit) + "]>";
+    }
+
+    private static string Signature(MethodBase method)
+    {
+        try
+        {
+            var parameters = method.GetParameters();
+            var parts = new List<string>(parameters.Length);
+            foreach (var parameter in parameters)
+                parts.Add(parameter.ParameterType.FullName ?? parameter.ParameterType.Name);
+            return string.Join(", ", parts);
+        }
+        catch
+        {
+            return "<signature unread>";
+        }
+    }
+
+    private static string FullMethodName(MethodBase method) =>
+        $"{method.DeclaringType?.FullName ?? "<null>"}.{method.Name}";
+
+    private static bool IsImportantCall(string name) =>
+        name.IndexOf("Disconnect", StringComparison.OrdinalIgnoreCase) >= 0 ||
+        name.IndexOf("Join", StringComparison.OrdinalIgnoreCase) >= 0 ||
+        name.IndexOf("Photon", StringComparison.OrdinalIgnoreCase) >= 0 ||
+        name.IndexOf("CDNPLAGEDBK", StringComparison.Ordinal) >= 0 ||
+        name.IndexOf("IJIOJAIBPKE", StringComparison.Ordinal) >= 0;
+
+    private static void WriteStack(string tag)
+    {
+        try
+        {
+            DiagnosticPatches.Write($"[{tag}-stack] " + new StackTrace(skipFrames: 2, fNeedFileInfo: false));
+        }
+        catch (Exception ex)
+        {
+            DiagnosticPatches.Write($"[{tag}-stack] failed: {ex.Message}");
+        }
+    }
+
+    private static string Sanitize(string value, int limit)
+    {
+        var redacted = Regex.Replace(value, @"(?i)(Bearer\s+)[-._~+/=A-Za-z0-9]+", "$1<redacted>");
+        redacted = Regex.Replace(redacted, @"(?i)(access_token|accessToken|refresh_token|refreshToken|authorization|token|key)=([^&\s]+)", "$1=<redacted>");
+        redacted = redacted.Replace("\r", "\\r").Replace("\n", "\\n").Replace("\t", "\\t");
+        return redacted.Length <= limit ? redacted : redacted[..limit] + "...<truncated>";
+    }
+}
 
 // ── Debug console access ───────────────────────────────────────────────
 // The 2020 client ships RecRoom.Debugging.DebugConsole — a real in-game
@@ -1876,8 +2296,12 @@ internal static class HttpTracePatches
     private static readonly Regex BearerRegex = new(
         @"(?i)Bearer\s+[-._~+/=A-Za-z0-9]+",
         RegexOptions.Compiled);
+    private static readonly Regex SensitiveHeaderRegex = new(
+        @"(?im)^(Authorization|Cookie|Set-Cookie|X-RNSIG):\s*[^\r\n]+",
+        RegexOptions.Compiled);
     private static int _requestId;
     private static int _failureLogCount;
+    private static int _responseTupleLogCount;
 
     public static void RecNetRequestSend_Prefix(object __instance, MethodBase __originalMethod)
     {
@@ -1890,6 +2314,49 @@ internal static class HttpTracePatches
         DiagnosticPatches.Write(
             $"[http-trace] #{id} BNDIAONDFFF.ctor method={SanitizeInline(__0?.ToString() ?? "<null>")} " +
             $"service={SanitizeInline(__1?.ToString() ?? "<null>")} path={SanitizeInline(__2?.ToString() ?? "<null>")}");
+    }
+
+    public static void RecNetResponseTuple_Prefix(object __instance, MethodBase __originalMethod)
+    {
+        if (System.Threading.Interlocked.Increment(ref _responseTupleLogCount) > 80) return;
+
+        try
+        {
+            DiagnosticPatches.Write(
+                $"[recnet-response-map] ENTER {__originalMethod.DeclaringType?.FullName}.{__originalMethod.Name} " +
+                DumpObjectFields(__instance, 20, 600));
+        }
+        catch (Exception ex)
+        {
+            LogFailure("recnet-response-map-enter", ex);
+        }
+    }
+
+    public static void RecNetResponseTuple_Postfix(object __instance, MethodBase __originalMethod)
+    {
+        if (_responseTupleLogCount > 80) return;
+
+        try
+        {
+            DiagnosticPatches.Write(
+                $"[recnet-response-map] EXIT {__originalMethod.DeclaringType?.FullName}.{__originalMethod.Name} " +
+                DumpObjectFields(__instance, 20, 600));
+        }
+        catch (Exception ex)
+        {
+            LogFailure("recnet-response-map-exit", ex);
+        }
+    }
+
+    public static Exception? RecNetResponseTuple_Finalizer(Exception? __exception, object __instance, MethodBase __originalMethod)
+    {
+        if (__exception is not null)
+        {
+            DiagnosticPatches.Write(
+                $"[recnet-response-map] EXCEPTION {__originalMethod.DeclaringType?.FullName}.{__originalMethod.Name} " +
+                $"{RoomLoadDiagnostics.FormatException(__exception, __exception)} state={DumpObjectFields(__instance, 36, 1200)}");
+        }
+        return __exception;
     }
 
     public static void HeaderSet_Prefix(object __instance, object? __0, object? __1, MethodBase __originalMethod)
@@ -1906,6 +2373,34 @@ internal static class HttpTracePatches
         catch (Exception ex)
         {
             LogFailure("header", ex);
+        }
+    }
+
+    public static void CallCallback_Prefix(object __instance, MethodBase __originalMethod)
+    {
+        try
+        {
+            DiagnosticPatches.Write(
+                $"[http-callback] ENTER {__originalMethod.DeclaringType?.FullName}.{__originalMethod.Name} " +
+                $"{DescribeRequestAndResponse(__instance)}");
+        }
+        catch (Exception ex)
+        {
+            LogFailure("callback-enter", ex);
+        }
+    }
+
+    public static void CallCallback_Postfix(object __instance, MethodBase __originalMethod)
+    {
+        try
+        {
+            DiagnosticPatches.Write(
+                $"[http-callback] EXIT {__originalMethod.DeclaringType?.FullName}.{__originalMethod.Name} " +
+                $"{DescribeRequestAndResponse(__instance)}");
+        }
+        catch (Exception ex)
+        {
+            LogFailure("callback-exit", ex);
         }
     }
 
@@ -2091,6 +2586,134 @@ internal static class HttpTracePatches
         return "<body unread>";
     }
 
+    private static string DescribeRequestAndResponse(object request)
+    {
+        var uri = TryReadRequestUri(request)?.ToString() ?? "<uri unread>";
+        var method = TryReadHttpMethod(request);
+        var response = TryReadResponseObject(request);
+        var responseText = response is null ? "<response unread>" : DescribeResponseObject(response);
+        var requestState = DescribeKnownMembers(request, "State", "Exception", "Error", "IsCancellationRequested");
+        return $"method={method} uri={SanitizeInline(uri)} request={requestState} response={responseText}";
+    }
+
+    private static object? TryReadResponseObject(object request)
+    {
+        foreach (var name in new[] { "Response", "response", "_response", "<Response>k__BackingField" })
+        {
+            if (TryReadMemberValue(request, name, out var value) && value is not null)
+                return value;
+        }
+
+        const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+        foreach (var prop in request.GetType().GetProperties(flags))
+        {
+            if (prop.Name.IndexOf("Response", StringComparison.OrdinalIgnoreCase) < 0) continue;
+            if (!prop.CanRead || prop.GetIndexParameters().Length != 0) continue;
+            try
+            {
+                var value = prop.GetValue(request);
+                if (value is not null) return value;
+            }
+            catch { }
+        }
+
+        foreach (var field in request.GetType().GetFields(flags))
+        {
+            if (field.Name.IndexOf("Response", StringComparison.OrdinalIgnoreCase) < 0) continue;
+            try
+            {
+                var value = field.GetValue(request);
+                if (value is not null) return value;
+            }
+            catch { }
+        }
+
+        return null;
+    }
+
+    private static string DescribeResponseObject(object response)
+    {
+        var known = DescribeKnownMembers(response,
+            "StatusCode", "Message", "IsSuccess", "DataAsText", "Data", "Exception", "Error");
+        return $"{response.GetType().FullName} {{{known}}}";
+    }
+
+    private static string DescribeKnownMembers(object obj, params string[] names)
+    {
+        var parts = new List<string>();
+        foreach (var name in names)
+        {
+            if (!TryReadMemberValue(obj, name, out var value)) continue;
+            parts.Add($"{name}={FormatValue(value, 700)}");
+        }
+        return parts.Count == 0 ? "<no known members>" : string.Join("; ", parts);
+    }
+
+    private static string FormatValue(object? value, int limit)
+    {
+        if (value is null) return "null";
+        if (value is byte[] bytes)
+            return $"byte[{bytes.Length}]";
+        if (value is IEnumerable enumerable && value is not string)
+            return FormatEnumerable(enumerable, value.GetType(), limit);
+        var text = value is Exception ex
+            ? $"{ex.GetType().Name}: {ex.Message}"
+            : value.ToString() ?? "<null>";
+        text = SanitizeInline(text);
+        return text.Length <= limit ? text : text[..limit] + "...<truncated>";
+    }
+
+    private static string FormatEnumerable(IEnumerable enumerable, Type type, int limit)
+    {
+        try
+        {
+            var parts = new List<string>();
+            var countText = TryReadEnumerableCount(enumerable, out var count) ? count.ToString() : "?";
+            var shown = 0;
+
+            foreach (var item in enumerable)
+            {
+                if (shown++ >= 6)
+                {
+                    parts.Add("...");
+                    break;
+                }
+
+                parts.Add(FormatValue(item, 180));
+            }
+
+            var rendered = $"{type.FullName} count={countText} [{string.Join(", ", parts)}]";
+            return rendered.Length <= limit ? rendered : rendered[..limit] + "...<truncated>";
+        }
+        catch (Exception ex)
+        {
+            return $"{type.FullName} <enumeration failed {ex.GetType().Name}: {SanitizeInline(ex.Message)}>";
+        }
+    }
+
+    private static bool TryReadEnumerableCount(IEnumerable enumerable, out int count)
+    {
+        count = 0;
+        if (enumerable is ICollection collection)
+        {
+            count = collection.Count;
+            return true;
+        }
+
+        try
+        {
+            var prop = enumerable.GetType().GetProperty("Count", BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+            if (prop?.GetValue(enumerable) is int value)
+            {
+                count = value;
+                return true;
+            }
+        }
+        catch { }
+
+        return false;
+    }
+
     private static byte[]? TryCopyBytes(object? value, int limit)
     {
         if (value is null) return null;
@@ -2163,6 +2786,43 @@ internal static class HttpTracePatches
         return false;
     }
 
+    private static string DumpObjectFields(object? instance, int maxFields, int valueLimit)
+    {
+        if (instance is null) return "<null>";
+
+        try
+        {
+            var type = instance.GetType();
+            var parts = new List<string>();
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+
+            foreach (var field in type.GetFields(flags))
+            {
+                if (parts.Count >= maxFields)
+                {
+                    parts.Add("...");
+                    break;
+                }
+
+                object? value;
+                try { value = field.GetValue(instance); }
+                catch (Exception ex)
+                {
+                    parts.Add($"{field.Name}=<read failed {ex.GetType().Name}>");
+                    continue;
+                }
+
+                parts.Add($"{field.Name}={FormatValue(value, valueLimit)}");
+            }
+
+            return $"{type.FullName} {{{string.Join("; ", parts)}}}";
+        }
+        catch (Exception ex)
+        {
+            return $"<field dump failed {ex.GetType().Name}: {SanitizeInline(ex.Message)}>";
+        }
+    }
+
     private static string RedactHeaderValue(string name, string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return "<empty>";
@@ -2181,6 +2841,7 @@ internal static class HttpTracePatches
     {
         var redacted = SensitivePairRegex.Replace(value, "$1=<redacted>");
         redacted = BearerRegex.Replace(redacted, "Bearer <redacted>");
+        redacted = SensitiveHeaderRegex.Replace(redacted, "$1: <redacted>");
         redacted = redacted.Replace("\r", "\\r").Replace("\n", "\\n").Replace("\t", "\\t");
         return redacted.Length <= 1200 ? redacted : redacted[..1200] + "...<truncated>";
     }

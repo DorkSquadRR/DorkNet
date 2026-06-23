@@ -150,6 +150,13 @@
       <Link>data\%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <!-- Real captured PersistedRoomData served as the default room blob
+         (RoomDataBlobService.GetDefaultBlob). The hand-built synthetic blob
+         is too thin for the 2023 client's room-load apply path. -->
+    <None Include="Data\*.room">
+      <Link>data\%(Filename)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Include="Data\images\*.png" Exclude="Data\images\image_*.png">
       <Link>data\images\%(Filename)%(Extension)</Link>
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

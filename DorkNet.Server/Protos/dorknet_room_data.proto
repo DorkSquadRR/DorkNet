@@ -37,8 +37,8 @@ message OverridableListStringData {
 
 // ── Per-role permission grants (rec_room/player_roles/player_room_role_data.proto)
 //
-// Field numbers verified against the dump's `*FieldNumber` constants
-// (TypeDefIndex 15953-ish in the 2020 build) and against the 2026 .proto.
+// Field numbers verified against the 2023 WriteTo disassembly in
+// C:\tmp\recroom-2023-03-21-isil\IsilDump\RecRoom.Protobuf.Runtime.
 
 message PlayerRoomRoleData {
   reserved 15;
@@ -70,14 +70,17 @@ message PlayerRoomRoleData {
   OverridableBoolData disable_mic_auto_mute = 25;
   OverridableBoolData can_use_share_cam = 26;
   string role_guid = 27;
+  OverridableBoolData unknown_permission_20 = 28;
+  OverridableBoolData unknown_permission_21 = 29;
+  OverridableBoolData unknown_permission_22 = 30;
+  OverridableBoolData unknown_permission_23 = 31;
 }
 
 // ── Role collection (rec_room/player_roles/room_role_collection_data.proto)
 
 message RoomRoleCollectionData {
   repeated PlayerRoomRoleData room_roles = 1;
-  // field 2 (rec_net_migration_version) intentionally omitted — its enum
-  // type doesn't exist in the 2020 build, and proto3 default 0 is fine.
+  int32 rec_net_migration_version = 2;
 }
 
 // ── PersistedRoomData top-level (rec_room/persistence/persisted_room_data.proto)

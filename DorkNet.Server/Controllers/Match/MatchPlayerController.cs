@@ -434,10 +434,7 @@ public class MatchPlayerController(
 
         if (!string.IsNullOrWhiteSpace(room.CurrentDataBlobName)) return room.CurrentDataBlobName;
 
-        if (room.IsDormRoom) return string.Empty;
-
-        var customisable = room.CreatorPlayerId != 1;
-        return customisable ? $"room_{room.Id}_v1.dat" : string.Empty;
+        return $"room_{room.Id}_v1.dat";
     }
 }
 

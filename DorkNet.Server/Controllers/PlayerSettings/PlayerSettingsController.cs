@@ -14,7 +14,7 @@ namespace DorkNet.Server.Controllers.PlayerSettings;
 /// </summary>
 [ApiController]
 [Authorize]
-public class PlayerSettingsController(DorkNetDbContext db) : ControllerBase
+public class PlayerSettingsController(DorkNetDbContext db, ILogger<PlayerSettingsController> logger) : ControllerBase
 {
     private long CurrentPlayerId => this.RequireCurrentPlayerId();
 
@@ -64,7 +64,7 @@ public class PlayerSettingsController(DorkNetDbContext db) : ControllerBase
         foreach (var (key, value) in updates)
             await UpsertSettingAsync(accountId, key, value, save: false);
 
-        await db.SaveChangesAsync();
+        await SaveSettingsChangesAsync();
         return Ok();
     }
 
@@ -78,7 +78,7 @@ public class PlayerSettingsController(DorkNetDbContext db) : ControllerBase
         if (setting is null) return NotFound();
 
         db.PlayerSettings.Remove(setting);
-        await db.SaveChangesAsync();
+        await SaveSettingsChangesAsync();
         return Ok();
     }
 
@@ -91,7 +91,20 @@ public class PlayerSettingsController(DorkNetDbContext db) : ControllerBase
         else
             existing.Value = value;
 
-        if (save) await db.SaveChangesAsync();
+        if (save) await SaveSettingsChangesAsync();
+    }
+
+    private async Task SaveSettingsChangesAsync()
+    {
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (SqliteErrors.IsBusy(ex))
+        {
+            db.ChangeTracker.Clear();
+            logger.LogWarning(ex, "[playersettings] dropping low-priority setting write because sqlite is busy");
+        }
     }
 
     private async Task<(string? Key, string? Value)> ReadSettingKeyValueAsync()

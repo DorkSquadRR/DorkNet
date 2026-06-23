@@ -23,7 +23,7 @@ namespace DorkNet.Server.Controllers.API.PlayerReporting;
 /// </summary>
 [ApiController]
 [Authorize]
-public class ReportsController(DorkNetDbContext db) : ControllerBase
+public class ReportsController(DorkNetDbContext db, ILogger<ReportsController> logger) : ControllerBase
 {
     [HttpGet("api/PlayerReporting/v1/voteToKickReasons")]
     [AllowAnonymous]
@@ -215,7 +215,15 @@ public class ReportsController(DorkNetDbContext db) : ControllerBase
             GameSessionId = gameSessionId ?? 0,
             Category = "hile",
         });
-        await db.SaveChangesAsync();
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException ex) when (SqliteErrors.IsBusy(ex))
+        {
+            db.ChangeTracker.Clear();
+            logger.LogWarning(ex, "[hile] dropping low-priority hile heartbeat because sqlite is busy");
+        }
         return HileResult();
     }
 

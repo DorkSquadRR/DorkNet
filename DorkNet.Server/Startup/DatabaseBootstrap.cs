@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 using DorkNet.Server.Data;
 using DorkNet.Server.Services;
 using Serilog;
@@ -36,6 +37,7 @@ public static class DatabaseBootstrap
 
         if (db.Database.IsSqlite())
         {
+            await ConfigureSqliteForLocalConcurrencyAsync(db);
             BaselineExistingSchemaIfNeeded(db);
             db.Database.Migrate();
         }
@@ -169,6 +171,27 @@ public static class DatabaseBootstrap
         // deploy holds traffic at the LB until this flips and /healthz
         // returns 200.
         Controllers.Health.HealthController.MigrationsComplete = true;
+    }
+
+    private static async Task ConfigureSqliteForLocalConcurrencyAsync(DorkNetDbContext db)
+    {
+        var conn = db.Database.GetDbConnection();
+        var closeAfter = conn.State != ConnectionState.Open;
+        if (closeAfter) await conn.OpenAsync();
+
+        try
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = "PRAGMA journal_mode=WAL;";
+            await cmd.ExecuteScalarAsync();
+
+            cmd.CommandText = "PRAGMA busy_timeout=30000;";
+            await cmd.ExecuteNonQueryAsync();
+        }
+        finally
+        {
+            if (closeAfter) await conn.CloseAsync();
+        }
     }
 
     /// <summary>Idempotently create the SignupCodes + PendingDevices

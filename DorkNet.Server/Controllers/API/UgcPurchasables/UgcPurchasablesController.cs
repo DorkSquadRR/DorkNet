@@ -100,14 +100,131 @@ public class UgcPurchasablesController(DorkNetDbContext db) : ControllerBase
     [AllowAnonymous]
     public async Task<IActionResult> Bulk()
     {
-        var fields = await ReadFieldsAsync();
-        var ids = ReadGuidList(fields, "ids", "Ids", "itemIds", "ItemIds", "ugcPurchasableIds", "UgcPurchasableIds");
-        if (ids.Count == 0) return Ok(Array.Empty<object>());
+        // The 2023 client posts {"RoomId":N,"Ids":[{"itemType":1,
+        // "itemId":"<guid>"}]} — Ids is an array of OBJECTS, not flat guid
+        // strings. The generic field-flattener collapses each object to its
+        // JSON text, so the old ReadGuidList parsed ZERO guids and this
+        // endpoint always returned [] — the client's UGC resolver then
+        // re-queried the same ids forever (the growing-list flood in the
+        // server log), the referenced items never resolved, and the online
+        // player/avatar spawn null-reffed on an unresolved custom item
+        // (reportjoinresult FailedToSpawnPlayer → infinite dorm bounce).
+        var requested = await ReadBulkIdsAsync();
+        if (requested.Count == 0) return Ok(Array.Empty<object>());
+
+        var ids = requested.Select(r => r.Id).ToList();
         var rows = await db.UgcPurchasables
             .Where(i => !i.IsDeleted && ids.Contains(i.PublicId))
             .ToListAsync();
-        return Ok(rows.Select(ToWire));
+        var byId = rows.ToDictionary(r => r.PublicId);
+
+        // Return an entry for EVERY requested id, in request order. Items not
+        // in our DB (custom UGC the player owns from real Rec Room that we
+        // never ingested) get a synthetic placeholder so the client treats
+        // the reference as resolved instead of spinning.
+        var result = requested
+            .Select(r => byId.TryGetValue(r.Id, out var row) ? ToWire(row) : SyntheticWire(r.Id, r.ItemType))
+            .ToList();
+        return Ok(result);
     }
+
+    /// <summary>Parse the bulk request's item ids. Handles the 2023 client's
+    /// JSON object-array shape (<c>Ids:[{itemType,itemId}]</c>) as well as
+    /// flat guid lists in the body/form/query for older callers.</summary>
+    private async Task<List<(Guid Id, int ItemType)>> ReadBulkIdsAsync()
+    {
+        var list = new List<(Guid, int)>();
+        var seen = new HashSet<Guid>();
+        void Add(Guid id, int itemType)
+        {
+            if (id != Guid.Empty && seen.Add(id)) list.Add((id, itemType));
+        }
+
+        if ((Request.ContentLength ?? 0) > 0
+            && Request.ContentType?.Contains("json", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            try
+            {
+                using var doc = await JsonDocument.ParseAsync(Request.Body);
+                var root = doc.RootElement;
+                if (root.ValueKind == JsonValueKind.Object
+                    && (TryGetPropertyCI(root, "Ids", out var idsEl)
+                        || TryGetPropertyCI(root, "itemIds", out idsEl)
+                        || TryGetPropertyCI(root, "ugcPurchasableIds", out idsEl))
+                    && idsEl.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var el in idsEl.EnumerateArray())
+                    {
+                        if (el.ValueKind == JsonValueKind.String && Guid.TryParse(el.GetString(), out var flat))
+                        {
+                            Add(flat, 0);
+                        }
+                        else if (el.ValueKind == JsonValueKind.Object)
+                        {
+                            var itemType = TryGetPropertyCI(el, "itemType", out var it) && it.TryGetInt32(out var n) ? n : 0;
+                            if ((TryGetPropertyCI(el, "itemId", out var idEl)
+                                 || TryGetPropertyCI(el, "id", out idEl)
+                                 || TryGetPropertyCI(el, "ugcPurchasableId", out idEl))
+                                && Guid.TryParse(idEl.GetString(), out var guid))
+                            {
+                                Add(guid, itemType);
+                            }
+                        }
+                    }
+                }
+            }
+            catch (JsonException)
+            {
+            }
+        }
+
+        // Fallback: flat guid lists in form/query (older callers).
+        if (list.Count == 0)
+        {
+            var fields = await ReadFieldsAsync();
+            foreach (var id in ReadGuidList(fields, "ids", "Ids", "itemIds", "ItemIds", "ugcPurchasableIds", "UgcPurchasableIds"))
+                Add(id, 0);
+        }
+
+        return list.Take(200).ToList();
+    }
+
+    private static bool TryGetPropertyCI(JsonElement obj, string name, out JsonElement value)
+    {
+        foreach (var prop in obj.EnumerateObject())
+        {
+            if (string.Equals(prop.Name, name, StringComparison.OrdinalIgnoreCase))
+            {
+                value = prop.Value;
+                return true;
+            }
+        }
+        value = default;
+        return false;
+    }
+
+    /// <summary>Minimal placeholder for a requested ugc item we don't have a
+    /// row for. Same wire shape as <see cref="ToWire"/> so the client's
+    /// deserializer resolves the reference; zero price / empty metadata.</summary>
+    private static object SyntheticWire(Guid id, int itemType) => new
+    {
+        UgcPurchasableId = id,
+        PurchasableItemId = id,
+        Id = id,
+        InternalId = 0L,
+        RoomId = 0L,
+        CreatorPlayerId = 0,
+        Name = string.Empty,
+        Description = string.Empty,
+        ImageName = string.Empty,
+        Price = 0,
+        CurrencyType = 2,
+        ItemType = itemType,
+        IsFeatured = false,
+        SortOrder = 0,
+        CreatedAt = DateTime.UtcNow,
+        UpdatedAt = DateTime.UtcNow,
+    };
 
     private async Task<UgcPurchasableEntity?> FindItemAsync(Dictionary<string, string> fields)
     {

@@ -17,14 +17,10 @@ public sealed class ImageSignatureService
             ?? Environment.GetEnvironmentVariable("DORKNET_IMAGE_SIGNING_KEY_ID")
             ?? "p1");
 
-        // `.rec.net` in the client's `KEY:RSA:p1.rec.net` literal gets byte-rewritten
-        // by patch-client.ps1 to match the server domain (e.g. `.localhost`). The
-        // header suffix we emit has to match that, or the client errors as
-        // "Signature malformed". By default we derive the suffix from the request
-        // Host, which works for the standard same-domain patcher setup. Override
-        // with ImageSigning:KeyIdHostSuffix if your client metadata was patched to
-        // a different value than the server's host (e.g. running the server at
-        // `dorknet.example` while the client metadata still says `localhost`).
+        // 2023 compares Content-Signature's key-id against the embedded
+        // KEY:RSA:p1.rec.net / d1.rec.net literals. If a specific client build
+        // is bytepatched to another suffix, ImageSigning:KeyIdHostSuffix can
+        // override this default.
         configuredKeyIdHostSuffix =
             config["ImageSigning:KeyIdHostSuffix"]
             ?? Environment.GetEnvironmentVariable("DORKNET_IMAGE_SIGNING_KEY_ID_SUFFIX");
@@ -272,17 +268,10 @@ public sealed class ImageSignatureService
 
         var suffix = configuredKeyIdHostSuffix is { Length: > 0 }
             ? configuredKeyIdHostSuffix
-            : ExtractParentDomain(response.HttpContext.Request.Host.Host);
+            : "rec.net";
 
         response.Headers["Content-Signature"] =
             $"key-id=KEY:RSA:{headerKeyId}.{suffix}; data={Convert.ToBase64String(signature)}";
-    }
-
-    private static string ExtractParentDomain(string host)
-    {
-        if (string.IsNullOrEmpty(host)) return "rec.net";
-        var dot = host.IndexOf('.');
-        return dot > 0 && dot < host.Length - 1 ? host[(dot + 1)..] : host;
     }
 
     private static byte[] PlaceholderSignature(byte[] bytes)
