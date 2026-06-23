@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using DorkNet.Server.Auth;
 using DorkNet.Server.Data;
@@ -29,12 +31,20 @@ public class KeepsakesController(DorkNetDbContext db, DomainConfig domain) : Con
 
     [HttpGet("categories")]
     [AllowAnonymous]
-    public IActionResult Categories() => Ok(new[]
+    public IActionResult Categories()
     {
-        new { Category = "account", DisplayName = "Account" },
-        new { Category = "event", DisplayName = "Events" },
-        new { Category = "room", DisplayName = "Rooms" },
-    });
+        var results = new[]
+        {
+            new { KeepsakeCategoryId = 0, VisualId = "account", LimitPerRoom = 0, XpValue = 0, IconOutlineImageName = string.Empty, IconFilledImageName = string.Empty },
+            new { KeepsakeCategoryId = 1, VisualId = "event", LimitPerRoom = 0, XpValue = 0, IconOutlineImageName = string.Empty, IconFilledImageName = string.Empty },
+            new { KeepsakeCategoryId = 2, VisualId = "room", LimitPerRoom = 64, XpValue = 0, IconOutlineImageName = string.Empty, IconFilledImageName = string.Empty },
+        };
+        return Ok(new
+        {
+            Results = results,
+            TotalResults = results.Length,
+        });
+    }
 
     [HttpGet("events")]
     public async Task<IActionResult> Events()
@@ -62,16 +72,22 @@ public class KeepsakesController(DorkNetDbContext db, DomainConfig domain) : Con
                     || EF.Functions.Like(k.EventKey, $"room/{roomIdText}/%")))
             .OrderByDescending(k => k.EarnedAt)
             .ToListAsync();
-        return Ok(rows.Select(ToWire));
+        var instances = rows.Select(row => ToRoomInstanceWire(row, roomId)).ToList();
+        return Ok(new
+        {
+            Instances = instances,
+            CollectionRecords = Array.Empty<object>(),
+            KeepsakeProgressionEventIds = Array.Empty<long>(),
+        });
     }
 
     [HttpGet("globalconfig")]
     [AllowAnonymous]
     public IActionResult GlobalConfig() => Ok(new
     {
-        Enabled = true,
-        Categories = new[] { "account", "event", "room" },
-        CdnBaseUrl = $"https://{domain.Sub("cdn")}/",
+        KeepsakeFeatureEnabled = true,
+        KeepsakeRoomLimit = 64,
+        SocialXpBoostEnabled = false,
     });
 
     [HttpPost]
@@ -161,6 +177,32 @@ public class KeepsakesController(DorkNetDbContext db, DomainConfig domain) : Con
         ImageUrl = string.IsNullOrWhiteSpace(row.ImageName) ? string.Empty : $"https://{domain.Sub("cdn")}/{row.ImageName}",
         row.EarnedAt,
     };
+
+    private static object ToRoomInstanceWire(KeepsakeEntity row, long roomId)
+    {
+        var placedByAccountId = row.PlayerId is > 0 and <= int.MaxValue
+            ? (int)row.PlayerId
+            : 0;
+        return new
+        {
+            KeepsakeInstanceId = StableKeepsakeInstanceId(row.Id).ToString("D"),
+            KeepsakeCategoryConfigId = CategoryId(row.Category),
+            PlacedByAccountId = placedByAccountId,
+            RoomId = roomId,
+            SubRoomId = (long?)null,
+        };
+    }
+
+    private static int CategoryId(string? category) =>
+        string.Equals(category, "event", StringComparison.OrdinalIgnoreCase) ? 1 :
+        string.Equals(category, "room", StringComparison.OrdinalIgnoreCase) ? 2 :
+        0;
+
+    private static Guid StableKeepsakeInstanceId(long id)
+    {
+        var hash = MD5.HashData(Encoding.UTF8.GetBytes($"keepsakeInstance:{id}"));
+        return new Guid(hash);
+    }
 
     private static string Trim(string? value, int max)
     {

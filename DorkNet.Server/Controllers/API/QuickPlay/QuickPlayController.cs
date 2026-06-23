@@ -25,15 +25,29 @@ public class QuickPlayController(DorkNetDbContext db) : ControllerBase
     /// immediately teleports — that's WHY users were randomly
     /// spawning in Paddleball etc.
     ///
-    /// Correct behaviour: return empty {} unless we actually have a
-    /// queued match for the caller. The /set endpoint is what
-    /// queues; getandclear is the consume.
+    /// Correct behaviour: return the full no-target launch DTO unless
+    /// we actually have a queued match for the caller. The /set endpoint
+    /// is what queues; getandclear is the consume.
     ///
     /// We don't persist queue state on a single-region private
     /// server (no real matchmaking pool), so always return empty.</summary>
     [HttpGet("api/quickPlay/v1/getandclear")]
     [HttpGet("api/quickPlay/v2/getandclear")]
-    public IActionResult GetAndClear() => Ok(new { });
+    public IActionResult GetAndClear() => Ok(QuickPlayLaunchTarget.Empty);
+
+    private sealed class QuickPlayLaunchTarget
+    {
+        public static readonly QuickPlayLaunchTarget Empty = new();
+
+        public bool OKCGKFJELAC { get; init; }
+        public string INMKAFBAOPC { get; init; } = string.Empty;
+        public int? FIOPJIIOCGA { get; init; }
+        public string ICKOEFDNOPM { get; init; } = string.Empty;
+        public int? KLDCJBLLDKN { get; init; }
+        public bool OFBMKDAONNE { get; init; }
+        public object? FMKHKNCEBCN { get; init; }
+        public long? EEFNKAFLPLG { get; init; }
+    }
 
     public sealed class SetQuickPlayRequest
     {

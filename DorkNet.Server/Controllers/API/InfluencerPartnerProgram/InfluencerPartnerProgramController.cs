@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using DorkNet.Models.Auth;
 using DorkNet.Server.Auth;
 using DorkNet.Server.Data;
 using DorkNet.Server.Data.Entities;
@@ -25,7 +26,14 @@ public class InfluencerPartnerProgramController(DorkNetDbContext db) : Controlle
             .Where(p => creatorIds.Contains(p.Id))
             .OrderBy(p => p.Username)
             .ToListAsync();
-        return Ok(players.Select(ToInfluencerWire));
+        var influencers = players.Select(ToInfluencerWire).ToList();
+        return Ok(new Dictionary<string, object>
+        {
+            ["Influencers"] = influencers,
+            ["influencers"] = influencers,
+            ["Accounts"] = influencers,
+            ["accounts"] = influencers,
+        });
     }
 
     [HttpGet("api/influencerpartnerprogram/influencer")]
@@ -92,18 +100,16 @@ public class InfluencerPartnerProgramController(DorkNetDbContext db) : Controlle
         return Ok(new { Success = true });
     }
 
-    private static object ToInfluencerWire(PlayerEntity player) => new
+    private static RecNetAccount ToInfluencerWire(PlayerEntity player) => new()
     {
         AccountId = (int)player.Id,
         RawUsername = player.Username,
-        player.Username,
+        Username = player.Username,
         DisplayName = player.DisplayName ?? player.Username,
         ProfileImage = player.ProfileImageName ?? string.Empty,
         TreatAsJunior = false,
         HasBirthday = true,
         Platforms = 1,
-        IsInfluencer = true,
-        SupportedInfluencerId = (int?)null,
-        LocalSupportedInfluencerId = (int?)null,
+        CreatedAt = player.CreatedAt == default ? DateTime.UtcNow : player.CreatedAt,
     };
 }

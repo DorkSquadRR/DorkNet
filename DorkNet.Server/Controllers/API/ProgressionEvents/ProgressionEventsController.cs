@@ -3,11 +3,12 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using DorkNet.Server.Auth;
 using DorkNet.Server.Data;
+using DorkNet.Server.Services;
 
 namespace DorkNet.Server.Controllers.API.ProgressionEvents;
 
 [ApiController]
-public class ProgressionEventsController(DorkNetDbContext db) : ControllerBase
+public class ProgressionEventsController(DorkNetDbContext db, ServerSettingsService serverSettings) : ControllerBase
 {
     [HttpGet("api/progressionEvents")]
     [Authorize]
@@ -28,19 +29,60 @@ public class ProgressionEventsController(DorkNetDbContext db) : ControllerBase
         return Ok(rows);
     }
 
-    [HttpGet("api/progressionEvents/active")]
+    [HttpGet("api/progressionEvents/event/{eventId:long}")]
     [AllowAnonymous]
-    public IActionResult Active()
+    public async Task<IActionResult> Event(long eventId)
     {
-        var start = DateTime.UtcNow.Date.AddDays(-(int)DateTime.UtcNow.DayOfWeek);
-        var end = start.AddDays(7);
+        var activeId = CurrentProgressionEventId();
+        if (eventId != activeId)
+            return NotFound();
+
+        var weekly = await serverSettings.GetWeeklyChallengesAsync();
+        var (start, end) = CurrentWeekWindow();
         return Ok(new
         {
-            EventKey = $"weekly:{start:yyyyMMdd}",
+            ProgressionEventId = activeId,
             Name = "Weekly Progression",
-            StartAt = start,
-            EndAt = end,
-            Active = true,
+            Rewards = new[]
+            {
+                new
+                {
+                    ProgressionEventRewardId = activeId * 1000L,
+                    GiftDropId = weekly.Reward.GiftDropId != 0 ? weekly.Reward.GiftDropId : activeId,
+                    ImageName = string.Empty,
+                    Xp = weekly.Reward.Xp,
+                    RewardIndex = 0,
+                    IsBonus = false,
+                },
+            },
+            KeepsakeRoomLists = Array.Empty<object>(),
+            StartTime = start,
+            EndTime = end,
+            CollectionEndTime = end,
+            UsesBoost = false,
+            BoostDailyGameplayMinutesLimit = 0,
+            BoostXpMultiplier = 1.0,
+            PurchasableXpBoostId = (Guid?)null,
+            ActiveExperiment = string.Empty,
+            ChallengesIconImageName = string.Empty,
+            RewardsPipImageName = string.Empty,
+            EventInfoImageName = string.Empty,
         });
+    }
+
+    [HttpGet("api/progressionEvents/active")]
+    [AllowAnonymous]
+    public IActionResult Active() => Ok(CurrentProgressionEventId());
+
+    private static long CurrentProgressionEventId()
+    {
+        var (start, _) = CurrentWeekWindow();
+        return long.Parse(start.ToString("yyyyMMdd"));
+    }
+
+    private static (DateTime Start, DateTime End) CurrentWeekWindow()
+    {
+        var start = DateTime.UtcNow.Date.AddDays(-(int)DateTime.UtcNow.DayOfWeek);
+        return (start, start.AddDays(7));
     }
 }
