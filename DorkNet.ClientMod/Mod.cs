@@ -29,6 +29,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -50,7 +51,6 @@ public class Mod : MelonMod
     private bool _joinTracePatchesRegistered;
     private bool _diagnosticCoreRegistered;
     private bool _diagnosticGameComplete;
-    private int _diagnosticRetryFrame;
     private bool _firstUpdateLogged;
     private bool _processExceptionHandlersRegistered;
 
@@ -147,14 +147,11 @@ public class Mod : MelonMod
         Instance = this;
         Log.Msg("=== DorkNet ClientMod loading ===");
         LoadConfig();
-        RegisterProcessExceptionHandlers();
         RegisterNetworkPatches();
-        DiagnosticPatches.Write("[lifecycle] OnInitializeMelon");
     }
 
     public override void OnLateInitializeMelon()
     {
-        DiagnosticPatches.Write("[lifecycle] OnLateInitializeMelon");
         Log.Msg("=== Registering client patches ===");
         RegisterNetworkPatches();
         TryPatchByName("RecRoom.AntiCheat.EACManager",
@@ -270,57 +267,6 @@ public class Mod : MelonMod
                        args: new[] { typeof(string) },
                        prefix: nameof(ChatPatches.RpcChatEmote_Prefix));
 
-        // Diagnostic trace for the stuck first-dorm "Change Username?"
-        // dialog (new accounts can't get past it; "Okay" highlights but
-        // never dismisses the modal, on every device). This is LOG-ONLY —
-        // no behaviour change. It bisects the failure for a brand-new
-        // account that reproduces the freeze, writing to
-        // MelonLoader/UserData/dorknet-diagnostics.log:
-        //
-        //   1. RegistrationModel.IsFullyRegistered() return value — if
-        //      false, the dorm prompt path runs; if true, no prompt (so a
-        //      freeze here would be something else entirely).
-        //   2. DormroomSceneManager.<PromptForRegistration>b__6_* lambdas —
-        //      which prompt branch executed (b__6_1 = a dialog was raised).
-        //   3. ConfirmUIDialog.Button_Affirmative/Negative/NotNow/Cancel —
-        //      whether the click actually reaches the dialog's button
-        //      handler when the user taps Okay. If these FIRE but the modal
-        //      stays, the break is in the resolve/hide completer
-        //      (UIDialog`1.KHKDGPHPIND's guard); if they DON'T fire, the
-        //      click never routes to the button (input/raycast) and the fix
-        //      is elsewhere. Either way the next step is unambiguous.
-        if (Cfg.TraceRegistrationDialog)
-        {
-            TryPatchByName("RRUI.Data.NUX.RegistrationModel",
-                           "IsFullyRegistered",
-                           args: Type.EmptyTypes,
-                           postfix: nameof(RegistrationPatches.IsFullyRegistered_Postfix));
-
-            // The two registration dialogs are raised from
-            // DormroomSceneManager's PromptForRegistration via its
-            // compiler-generated <>c lambdas (b__6_0..b__6_3). Reuse the
-            // same nested-lambda patcher the join trace uses.
-            PatchNestedLambdas("DormroomSceneManager", "PromptForRegistration",
-                               nameof(RegistrationPatches.PromptLambda_Prefix));
-
-            // The confirm-dialog buttons. Clean, non-generic, no-arg names
-            // on AGUI.StackedUI.Dialog.ConfirmUIDialog — Okay maps to
-            // Button_Affirmative, the screenshot's only button.
-            foreach (var (method, label) in new[]
-            {
-                ("Button_Affirmative", nameof(RegistrationPatches.ButtonAffirmative_Prefix)),
-                ("Button_Negative",    nameof(RegistrationPatches.ButtonNegative_Prefix)),
-                ("Button_NotNow",      nameof(RegistrationPatches.ButtonNotNow_Prefix)),
-                ("Button_Cancel",      nameof(RegistrationPatches.ButtonCancel_Prefix)),
-            })
-            {
-                TryPatchByName("AGUI.StackedUI.Dialog.ConfirmUIDialog",
-                               method, args: Type.EmptyTypes, prefix: label);
-            }
-        }
-
-        RegisterJoinTracePatches();
-
         // Desktop Screen Sharing FPS override. Only register when a target
         // is set; the postfix on the gadget's Awake rewrites the baked
         // refresh-frequency field (and, if enabled, raises the Photon
@@ -360,8 +306,6 @@ public class Mod : MelonMod
                            postfix: nameof(QuestTeamSize.RelaxEmptySpawnFilter_Postfix));
             Log.Msg($"[questsize] armed: target {Cfg.QuestMaxTeamSize} for [{string.Join(", ", Cfg.QuestMaxTeamSizeRooms)}]");
         }
-
-        RegisterDiagnostics();
         Log.Msg("=== Client patches registered ===");
     }
 
@@ -576,38 +520,10 @@ public class Mod : MelonMod
                  prefix: nameof(UriPatches.HttpRequestPrepareUri_Prefix));
         complete &= TryPatchByName("BestHTTP.HTTPRequest", "Send",
                  prefix: nameof(UriPatches.HttpRequestSend_Prefix));
-        TryPatchByName("BestHTTP.HTTPRequest", "SetHeader",
-                 args: new[] { typeof(string), typeof(string) },
-                 prefix: nameof(HttpTracePatches.HeaderSet_Prefix));
-        TryPatchByName("BestHTTP.HTTPRequest", "AddHeader",
-                 args: new[] { typeof(string), typeof(string) },
-                 prefix: nameof(HttpTracePatches.HeaderSet_Prefix));
-        TryPatchByName("BestHTTP.HTTPRequest", "CallCallback",
-                 prefix: nameof(HttpTracePatches.CallCallback_Prefix),
-                 postfix: nameof(HttpTracePatches.CallCallback_Postfix));
         complete &= TryPatchHttpManagerStringSendRequestOverloads();
         complete &= TryPatchByName("BestHTTP.HTTPManager", "SendRequest",
                  args: new[] { ResolveType("BestHTTP.HTTPRequest") ?? typeof(object) },
                  prefix: nameof(UriPatches.HttpManagerSendRequestObject_Prefix));
-        TryPatchByName("GFOGGHLDJFF", "JBFGGIJPOLC",
-                 prefix: nameof(HttpTracePatches.RecNetRequestSend_Prefix));
-        TryPatchByName("DNKAJOCIFHA", "JBFGGIJPOLC",
-                 prefix: nameof(HttpTracePatches.RecNetRequestSend_Prefix));
-        TryPatchByName("GFOGGHLDJFF", "GMFJNBANJJA",
-                 args: new[] { typeof(string), typeof(string) },
-                 prefix: nameof(HttpTracePatches.HeaderSet_Prefix));
-        TryPatchByName("DNKAJOCIFHA", "GMFJNBANJJA",
-                 args: new[] { typeof(string), typeof(string) },
-                 prefix: nameof(HttpTracePatches.HeaderSet_Prefix));
-        var httpMethodsType = ResolveType("BestHTTP.HTTPMethods") ?? typeof(object);
-        var recNetServiceType = ResolveType("GJDLNNLKDIJ") ?? typeof(object);
-        TryPatchByName("BNDIAONDFFF", "ctor",
-                 args: new[] { httpMethodsType, recNetServiceType, typeof(string) },
-                 prefix: nameof(HttpTracePatches.RecNetRequestBuilderCtor_Prefix),
-                 postfix: nameof(HttpTracePatches.RecNetRequestBuilderCtor_Postfix));
-        TryPatchByName("BNDIAONDFFF", "FGHNOKLDOKO",
-                 prefix: nameof(HttpTracePatches.RecNetResponseTuple_Prefix),
-                 postfix: nameof(HttpTracePatches.RecNetResponseTuple_Postfix));
 
         _networkPatchesRegistered = complete;
     }
@@ -700,19 +616,10 @@ public class Mod : MelonMod
             Log.Msg("[lifecycle] first OnUpdate tick (Unity frame loop is live)");
         }
 
-        if (_diagnosticGameComplete) return;
-        if (_diagnosticRetryFrame++ > 3600) return;
-        if ((_diagnosticRetryFrame % 60) != 0) return;
-
-        var logMisses = (_diagnosticRetryFrame % 300) == 0;
-        _diagnosticGameComplete = RegisterGameDiagnostics(logMisses);
-        if (_diagnosticGameComplete)
-            DiagnosticPatches.Write("[diagnostics] all game-side diagnostic hooks registered");
     }
 
     public override void OnApplicationQuit()
     {
-        DiagnosticPatches.Write("[lifecycle] OnApplicationQuit");
     }
 
     // ── Config ────────────────────────────────────────────────────────
@@ -1072,9 +979,6 @@ public class Mod : MelonMod
                                  args: new[] { typeof(int), typeof(string) },
                                  prefix: nameof(DiagnosticPatches.SessionManagerFatalApplicationQuit_Prefix),
                                  logMiss: logMisses);
-        TryPatchDiagnosticAllOverloads("BNDIAONDFFF", "FGHNOKLDOKO",
-                                       finalizer: nameof(HttpTracePatches.RecNetResponseTuple_Finalizer),
-                                       logMiss: logMisses);
         RegisterDeepRoomDiagnostics(logMisses);
         // SteamManager.Awake + SteamPlatformManager.*LoginInitialize were
         // pure-logging diagnostics that fired during Unity's very first
@@ -2299,9 +2203,14 @@ internal static class HttpTracePatches
     private static readonly Regex SensitiveHeaderRegex = new(
         @"(?im)^(Authorization|Cookie|Set-Cookie|X-RNSIG):\s*[^\r\n]+",
         RegexOptions.Compiled);
+    private static readonly Regex SensitiveJsonStringRegex = new(
+        @"(?i)""([^""]*(?:access_token|accessToken|refresh_token|refreshToken|authorization|token|secret|client_secret|key)[^""]*)""\s*:\s*""[^""]*""",
+        RegexOptions.Compiled);
+    private static readonly Dictionary<IntPtr, string> RecNetRequestInfoByPtr = new();
     private static int _requestId;
     private static int _failureLogCount;
     private static int _responseTupleLogCount;
+    private static int _builderSendLogCount;
 
     public static void RecNetRequestSend_Prefix(object __instance, MethodBase __originalMethod)
     {
@@ -2316,6 +2225,63 @@ internal static class HttpTracePatches
             $"service={SanitizeInline(__1?.ToString() ?? "<null>")} path={SanitizeInline(__2?.ToString() ?? "<null>")}");
     }
 
+    public static void RecNetRequestBuilderCtor_Postfix(object __instance, object? __0, object? __1, object? __2)
+    {
+        try
+        {
+            var ptr = TryGetIl2CppPtr(__instance);
+            if (ptr == IntPtr.Zero) return;
+
+            var info =
+                $"ptr=0x{ptr.ToInt64():X} method={SanitizeInline(__0?.ToString() ?? "<null>")} " +
+                $"service={SanitizeInline(__1?.ToString() ?? "<null>")} path={SanitizeInline(__2?.ToString() ?? "<null>")}";
+            lock (RecNetRequestInfoByPtr)
+            {
+                RecNetRequestInfoByPtr[ptr] = info;
+                if (RecNetRequestInfoByPtr.Count > 256)
+                    RecNetRequestInfoByPtr.Clear();
+            }
+
+            DiagnosticPatches.Write($"[recnet-request-map] {info}");
+        }
+        catch (Exception ex)
+        {
+            LogFailure("recnet-request-map", ex);
+        }
+    }
+
+    public static void RecNetBuilderSend_Prefix(object __instance, MethodBase __originalMethod)
+    {
+        if (System.Threading.Interlocked.Increment(ref _builderSendLogCount) > 120) return;
+
+        try
+        {
+            DiagnosticPatches.Write(
+                $"[recnet-send] ENTER {__originalMethod.DeclaringType?.FullName}.{__originalMethod.Name} " +
+                $"{LookupRecNetRequestInfo(__instance)} {DumpBndNativeFields(__instance)}");
+        }
+        catch (Exception ex)
+        {
+            LogFailure("recnet-send-enter", ex);
+        }
+    }
+
+    public static void RecNetBuilderSend_Postfix(object __instance, MethodBase __originalMethod)
+    {
+        if (_builderSendLogCount > 120) return;
+
+        try
+        {
+            DiagnosticPatches.Write(
+                $"[recnet-send] EXIT {__originalMethod.DeclaringType?.FullName}.{__originalMethod.Name} " +
+                $"{LookupRecNetRequestInfo(__instance)} {DumpBndNativeFields(__instance)}");
+        }
+        catch (Exception ex)
+        {
+            LogFailure("recnet-send-exit", ex);
+        }
+    }
+
     public static void RecNetResponseTuple_Prefix(object __instance, MethodBase __originalMethod)
     {
         if (System.Threading.Interlocked.Increment(ref _responseTupleLogCount) > 80) return;
@@ -2324,7 +2290,7 @@ internal static class HttpTracePatches
         {
             DiagnosticPatches.Write(
                 $"[recnet-response-map] ENTER {__originalMethod.DeclaringType?.FullName}.{__originalMethod.Name} " +
-                DumpObjectFields(__instance, 20, 600));
+                $"{LookupRecNetRequestInfo(__instance)} {DumpBndNativeFields(__instance)} {DumpObjectFields(__instance, 20, 600)}");
         }
         catch (Exception ex)
         {
@@ -2340,7 +2306,7 @@ internal static class HttpTracePatches
         {
             DiagnosticPatches.Write(
                 $"[recnet-response-map] EXIT {__originalMethod.DeclaringType?.FullName}.{__originalMethod.Name} " +
-                DumpObjectFields(__instance, 20, 600));
+                $"{LookupRecNetRequestInfo(__instance)} {DumpBndNativeFields(__instance)} {DumpObjectFields(__instance, 20, 600)}");
         }
         catch (Exception ex)
         {
@@ -2354,7 +2320,8 @@ internal static class HttpTracePatches
         {
             DiagnosticPatches.Write(
                 $"[recnet-response-map] EXCEPTION {__originalMethod.DeclaringType?.FullName}.{__originalMethod.Name} " +
-                $"{RoomLoadDiagnostics.FormatException(__exception, __exception)} state={DumpObjectFields(__instance, 36, 1200)}");
+                $"{LookupRecNetRequestInfo(__instance)} {DumpBndNativeFields(__instance)} {RoomLoadDiagnostics.FormatException(__exception, __exception)} " +
+                $"state={DumpObjectFields(__instance, 36, 1200)}");
         }
         return __exception;
     }
@@ -2823,6 +2790,78 @@ internal static class HttpTracePatches
         }
     }
 
+    private static string LookupRecNetRequestInfo(object instance)
+    {
+        var ptr = TryGetIl2CppPtr(instance);
+        if (ptr == IntPtr.Zero) return "ptr=<unread>";
+
+        lock (RecNetRequestInfoByPtr)
+        {
+            return RecNetRequestInfoByPtr.TryGetValue(ptr, out var info)
+                ? info
+                : $"ptr=0x{ptr.ToInt64():X} request=<unmapped>";
+        }
+    }
+
+    private static string DumpBndNativeFields(object? instance)
+    {
+        var ptr = TryGetIl2CppPtr(instance);
+        if (ptr == IntPtr.Zero) return "native=<unread>";
+
+        try
+        {
+            var method = Marshal.ReadByte(ptr, 16);
+            var service = Marshal.ReadInt32(ptr, 20);
+            var pathPtr = Marshal.ReadIntPtr(ptr, 24);
+            var fieldsPtr = Marshal.ReadIntPtr(ptr, 32);
+            var filesPtr = Marshal.ReadIntPtr(ptr, 40);
+            var objectFieldsPtr = Marshal.ReadIntPtr(ptr, 48);
+            var bodyKind = Marshal.ReadInt32(ptr, 56);
+            var callbackPtr = Marshal.ReadIntPtr(ptr, 64);
+            var path = ReadIl2CppString(pathPtr);
+
+            return
+                "native={" +
+                $"method={method}; service={service}; path={SanitizeInline(path)}; " +
+                $"pathPtr=0x{pathPtr.ToInt64():X}; fieldsPtr=0x{fieldsPtr.ToInt64():X}; " +
+                $"filesPtr=0x{filesPtr.ToInt64():X}; objectFieldsPtr=0x{objectFieldsPtr.ToInt64():X}; " +
+                $"bodyKind={bodyKind}; callbackPtr=0x{callbackPtr.ToInt64():X}" +
+                "}";
+        }
+        catch (Exception ex)
+        {
+            return $"native=<dump failed {ex.GetType().Name}: {SanitizeInline(ex.Message)}>";
+        }
+    }
+
+    private static string ReadIl2CppString(IntPtr ptr)
+    {
+        if (ptr == IntPtr.Zero) return "<null>";
+
+        try
+        {
+            return IL2CPP.Il2CppStringToManaged(ptr) ?? "<null>";
+        }
+        catch (Exception ex)
+        {
+            return $"<string read failed 0x{ptr.ToInt64():X} {ex.GetType().Name}>";
+        }
+    }
+
+    private static IntPtr TryGetIl2CppPtr(object? instance)
+    {
+        try
+        {
+            return instance is Il2CppObjectBase il2CppObject
+                ? IL2CPP.Il2CppObjectBaseToPtrNotNull(il2CppObject)
+                : IntPtr.Zero;
+        }
+        catch
+        {
+            return IntPtr.Zero;
+        }
+    }
+
     private static string RedactHeaderValue(string name, string? value)
     {
         if (string.IsNullOrWhiteSpace(value)) return "<empty>";
@@ -2842,6 +2881,7 @@ internal static class HttpTracePatches
         var redacted = SensitivePairRegex.Replace(value, "$1=<redacted>");
         redacted = BearerRegex.Replace(redacted, "Bearer <redacted>");
         redacted = SensitiveHeaderRegex.Replace(redacted, "$1: <redacted>");
+        redacted = SensitiveJsonStringRegex.Replace(redacted, "\"$1\":\"<redacted>\"");
         redacted = redacted.Replace("\r", "\\r").Replace("\n", "\\n").Replace("\t", "\\t");
         return redacted.Length <= 1200 ? redacted : redacted[..1200] + "...<truncated>";
     }
@@ -2879,7 +2919,6 @@ internal static class UriPatches
     public static void HttpManagerSendRequestObject_Prefix(object request)
     {
         RewriteRequestUri(request, "httpmanager-request-rewrite");
-        HttpTracePatches.TraceRequestObject(request, "BestHTTP.HTTPManager.SendRequest(HTTPRequest)");
     }
 
     public static void UriStringCtor_Prefix(ref string uriString)
@@ -2891,7 +2930,6 @@ internal static class UriPatches
     public static void HttpRequestSend_Prefix(object __instance)
     {
         RewriteRequestUri(__instance, "http-rewrite");
-        HttpTracePatches.TraceRequestObject(__instance, "BestHTTP.HTTPRequest.Send");
     }
 
     private static void RewriteRequestUri(object request, string label)
