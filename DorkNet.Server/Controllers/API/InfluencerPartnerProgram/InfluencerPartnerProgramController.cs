@@ -95,8 +95,15 @@ public class InfluencerPartnerProgramController(DorkNetDbContext db) : Controlle
     private static object ToInfluencerWire(PlayerEntity player) => new
     {
         AccountId = (int)player.Id,
+        RawUsername = player.Username,
         player.Username,
-        DisplayName = player.DisplayName,
+        DisplayName = player.DisplayName ?? player.Username,
         ProfileImage = player.ProfileImageName ?? string.Empty,
+        TreatAsJunior = false,
+        HasBirthday = true,
+        Platforms = 1,
+        IsInfluencer = true,
+        SupportedInfluencerId = (int?)null,
+        LocalSupportedInfluencerId = (int?)null,
     };
 }

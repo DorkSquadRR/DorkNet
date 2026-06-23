@@ -10,9 +10,9 @@
        against MelonLoader's generated Il2CppAssemblies.
     3. Drops the built DLL into <RecRoomInstall>\Mods\ and writes
        <RecRoomInstall>\MelonLoader\UserData\dorknet-clientmod.json
-       with the user-supplied Photon AppId / server host / etc.
+       with the server host and runtime toggles.
     4. Calls tools\patch-client.ps1 to apply the static byte patches
-       (Photon AppId in resources.assets, image signing public key,
+       (Photon AppIds in GameAssembly.dll, image signing public key,
        image signature verifier, and the CodeStage Anti-Cheat Toolkit
        neutraliser).
 
@@ -99,16 +99,12 @@ param(
     [Parameter(ParameterSetName = 'Install')]
     [string]$PhotonVoiceAppId,
 
-    [Parameter(ParameterSetName = 'Install')]
-    [ValidateSet('us','eu','asia','jp','au','usw','sa','cae','kr','in','ru','rue')]
-    [string]$PhotonCloudRegion = 'us',
-
-    # Read PhotonAppId / VoiceAppId / CloudRegion from the DorkNet.Server
+    # Read PhotonAppId / VoiceAppId from the DorkNet.Server
     # appsettings file at this path. Use the value from
     # `DorkNet.Server\appsettings.Local.json` (falls back to
     # `appsettings.json`) so you don't have to retype the GUIDs you
     # already configured on the server side. Any explicit -PhotonAppId /
-    # -PhotonVoiceAppId / -PhotonCloudRegion override the file values.
+    # -PhotonVoiceAppId override the file values.
     [Parameter(ParameterSetName = 'Install')]
     [string]$FromServerConfig,
 
@@ -334,13 +330,9 @@ if ($PSCmdlet.ParameterSetName -eq 'Install') {
         if (-not $cfg) { continue }
         if (-not $PhotonAppId        -and $cfg.AppId)       { $PhotonAppId        = $cfg.AppId }
         if (-not $PhotonVoiceAppId   -and $cfg.VoiceAppId)  { $PhotonVoiceAppId   = $cfg.VoiceAppId }
-        if (-not $PSBoundParameters.ContainsKey('PhotonCloudRegion') -and $cfg.CloudRegion) {
-            $PhotonCloudRegion = $cfg.CloudRegion
-        }
         Write-OK ("Loaded Photon config from $($cfg.Source) " +
                   "(AppId=$(if($cfg.AppId){'<set>'}else{'<unset>'}), " +
-                  "VoiceAppId=$(if($cfg.VoiceAppId){'<set>'}else{'<unset>'}), " +
-                  "CloudRegion=$(if($cfg.CloudRegion){$cfg.CloudRegion}else{'<unset>'}))")
+                  "VoiceAppId=$(if($cfg.VoiceAppId){'<set>'}else{'<unset>'}))")
         break
     }
 
@@ -435,10 +427,6 @@ New-Item -ItemType Directory -Path $ModsDir     -Force | Out-Null
 $cfgPath = Join-Path $UserDataDir 'dorknet-clientmod.json'
 $cfg = [ordered]@{
     ServerHost           = $ServerHost
-    PhotonAppId          = $PhotonAppId
-    PhotonVoiceAppId     = if ($PhotonVoiceAppId) { $PhotonVoiceAppId } else { '' }
-    PhotonCloudRegion    = $PhotonCloudRegion
-    InjectAuthValues     = $true
     EnableTlsTrustBypass = $true
     # Opt-in: force-enable the client's built-in debug console (dev gate
     # bypassed) + silence CheatManager so SetTimeScale / Fly / Teleport etc.

@@ -1532,6 +1532,144 @@ public class RoomsController(
     [HttpGet("api/rooms/v2/myrecent")]
     public IActionResult MyOtherTabs() => Ok(Array.Empty<object>());
 
+    [HttpGet("rooms/{roomId:long}/playerdata/me")]
+    [Authorize]
+    public async Task<IActionResult> PlayerDataForMe(long roomId)
+    {
+        var pid = CurrentPlayerId;
+        if (pid is null) return Unauthorized();
+
+        var room = await db.Rooms.AsNoTracking()
+            .Where(r => r.Id == roomId)
+            .Select(r => new { r.Id, r.VisitCount, r.CheerCount, r.FavoriteCount })
+            .FirstOrDefaultAsync();
+        if (room is null) return NotFound();
+
+        var favorited = await db.RoomBookmarks
+            .AnyAsync(b => b.RoomId == roomId && b.PlayerId == pid.Value);
+        var cheered = await db.Cheers
+            .AnyAsync(c => c.TargetRoomId == roomId && c.FromPlayerId == pid.Value);
+        var visit = await db.RoomVisits.AsNoTracking()
+            .Where(v => v.RoomId == roomId && v.PlayerId == pid.Value)
+            .Select(v => new { v.VisitCount, v.FirstVisitAt, v.LastVisitAt })
+            .FirstOrDefaultAsync();
+
+        return Ok(new
+        {
+            RoomId = room.Id,
+            PlayerId = pid.Value,
+            Favorite = favorited,
+            Favorited = favorited,
+            IsFavorite = favorited,
+            Cheer = cheered,
+            Cheered = cheered,
+            IsCheered = cheered,
+            IsBookmarked = favorited,
+            IsCheering = cheered,
+            VisitCount = visit?.VisitCount ?? 0,
+            FirstVisitedAt = visit?.FirstVisitAt,
+            LastVisitedAt = visit?.LastVisitAt,
+            RoomVisitCount = room.VisitCount,
+            RoomCheerCount = room.CheerCount,
+            RoomFavoriteCount = room.FavoriteCount,
+        });
+    }
+
+    [HttpGet("rooms/requiring/{restriction}")]
+    [HttpGet("roomserver/rooms/requiring/{restriction}")]
+    [Authorize]
+    public async Task<IActionResult> RoomsRequiring(string restriction)
+    {
+        var key = (restriction ?? string.Empty).Trim().TrimStart('#').ToLowerInvariant();
+        if (key.Length == 0) return Ok(new List<object>());
+
+        IQueryable<RoomEntity> query = db.Rooms.AsNoTracking()
+            .Where(r => !r.HiddenFromBrowse && r.State == 0);
+
+        query = key switch
+        {
+            "developer" or "studio" or "rrstudio" => query.Where(r =>
+                r.IsStudioRoom
+                || r.IsRoomLinkedToRecRoomStudio
+                || EF.Functions.Like(r.TagsCsv, "%developer%")
+                || EF.Functions.Like(r.TagsCsv, "%studio%")),
+            "rrplus" or "recroomplus" => query.Where(r =>
+                EF.Functions.Like(r.TagsCsv, "%rrplus%")
+                || EF.Functions.Like(r.TagsCsv, "%recroomplus%")),
+            _ => query.Where(r => EF.Functions.Like(r.TagsCsv, $"%{key}%")),
+        };
+
+        var rows = await query
+            .OrderByDescending(r => r.HotScore)
+            .ThenBy(r => r.Name)
+            .Take(100)
+            .ToListAsync();
+        return Ok(rows.Select(RoomService.ToWireRoom).ToList());
+    }
+
+    [HttpGet("rooms/curated_playlists")]
+    [HttpGet("roomserver/rooms/curated_playlists")]
+    [Authorize]
+    public async Task<IActionResult> CuratedPlaylistsCompat()
+    {
+        var curated = await playlists.CuratedAsync();
+        return Ok(curated.Select(BuildPlaylistUnionEntry).ToList());
+    }
+
+    [HttpGet("clubhousesearch/mostactivenow")]
+    [HttpGet("roomserver/clubhousesearch/mostactivenow")]
+    [Authorize]
+    public async Task<IActionResult> MostActiveClubhouses()
+    {
+        var rows = await db.Clubs.AsNoTracking()
+            .Where(c => c.State == 0 && c.ClubhouseRoomId != null)
+            .GroupJoin(
+                db.ClubMemberships.AsNoTracking(),
+                c => c.Id,
+                m => m.ClubId,
+                (club, memberships) => new
+                {
+                    Club = club,
+                    MemberCount = memberships.Count(),
+                })
+            .Join(
+                db.Rooms.AsNoTracking(),
+                c => c.Club.ClubhouseRoomId!.Value,
+                r => r.Id,
+                (c, room) => new
+                {
+                    c.Club,
+                    c.MemberCount,
+                    Room = room,
+                })
+            .OrderByDescending(x => x.MemberCount)
+            .ThenByDescending(x => x.Room.HotScore)
+            .Take(50)
+            .ToListAsync();
+
+        return Ok(rows.Select(x => new
+        {
+            ClubId = x.Club.Id,
+            x.Club.Name,
+            x.Club.Description,
+            MainImageName = x.Club.ImageName,
+            ImageName = x.Club.ImageName,
+            State = x.Club.State,
+            CreatorAccountId = x.Club.CreatorPlayerId,
+            Category = x.Club.Category,
+            Visibility = x.Club.Visibility,
+            Joinability = x.Club.Joinability,
+            x.Club.AllowJuniors,
+            MemberCount = x.MemberCount,
+            x.Club.IsRRO,
+            x.Club.ClubhouseRoomId,
+            x.Club.ClubType,
+            Room = RoomService.ToWireRoom(x.Room),
+            RoomId = x.Room.Id,
+            RoomName = x.Room.Name,
+        }).ToList());
+    }
+
     // ── Bookmark mutations ───────────────────────────────────────────────
 
     [HttpPost("api/rooms/v1/bookmark/{roomId:long}")]

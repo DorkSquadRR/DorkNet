@@ -202,7 +202,7 @@ public class ReportsController(DorkNetDbContext db) : ControllerBase
     private async Task<IActionResult> SaveHileAsync(string? rawDetail, int? type, long? gameSessionId)
     {
         var pid = this.CurrentPlayerId();
-        if (pid is not long me) return Ok(new { success = true });
+        if (pid is not long me) return HileResult();
         var detail = (rawDetail ?? string.Empty).Trim();
         if (type is int hileType)
             detail = detail.Length == 0 ? $"Type={hileType}" : $"Type={hileType}; {detail}";
@@ -216,6 +216,13 @@ public class ReportsController(DorkNetDbContext db) : ControllerBase
             Category = "hile",
         });
         await db.SaveChangesAsync();
-        return Ok(new { success = true });
+        return HileResult();
     }
+
+    private static IActionResult HileResult() => new ContentResult
+    {
+        Content = "true",
+        ContentType = "application/json",
+        StatusCode = StatusCodes.Status200OK,
+    };
 }

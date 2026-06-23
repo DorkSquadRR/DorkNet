@@ -7,7 +7,7 @@
   install made by tools/install-plugin.ps1, then runs tools/patch-client.ps1
   in its legacy mode:
 
-    - byte-patches Photon Realtime/Voice AppIds in resources.assets;
+    - byte-patches Photon Realtime/Voice AppIds in GameAssembly.dll;
     - byte-patches the native BestHTTP/BouncyCastle TLS certificate
       verifier return in GameAssembly.dll;
     - points *.rec.net at the DorkNet server through the hosts file;
@@ -169,7 +169,7 @@ if (-not $KeepBepInEx) {
     Write-Warn 'Keeping BepInEx because -KeepBepInEx was supplied.'
 }
 
-Write-Step 'Applying legacy resources.assets/hosts/cert patch'
+Write-Step 'Applying legacy GameAssembly/hosts/cert patch'
 if ($CertPath -and $DryRun) {
     & $patchClient -RecRoomPath $RecRoomPath -PhotonAppId $PhotonAppId -PhotonVoiceAppId $PhotonVoiceAppId -ServerIp $ServerIp -CertPath $CertPath -DryRun
 } elseif ($CertPath) {

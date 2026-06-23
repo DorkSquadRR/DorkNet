@@ -46,6 +46,25 @@ public class KeepsakesController(DorkNetDbContext db, DomainConfig domain) : Con
         return Ok(rows.Select(ToWire));
     }
 
+    [HttpGet("rooms/{roomId:long}")]
+    public async Task<IActionResult> RoomKeepsakes(long roomId)
+    {
+        var roomExists = await db.Rooms.AsNoTracking().AnyAsync(r => r.Id == roomId);
+        if (!roomExists) return NotFound();
+
+        var roomIdText = roomId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var rows = await db.Keepsakes
+            .Where(k => k.Category == "room"
+                && (k.EventKey == $"room:{roomIdText}"
+                    || k.EventKey == $"room/{roomIdText}"
+                    || k.EventKey == roomIdText
+                    || EF.Functions.Like(k.EventKey, $"room:{roomIdText}:%")
+                    || EF.Functions.Like(k.EventKey, $"room/{roomIdText}/%")))
+            .OrderByDescending(k => k.EarnedAt)
+            .ToListAsync();
+        return Ok(rows.Select(ToWire));
+    }
+
     [HttpGet("globalconfig")]
     [AllowAnonymous]
     public IActionResult GlobalConfig() => Ok(new
