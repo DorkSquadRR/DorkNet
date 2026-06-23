@@ -377,6 +377,10 @@ These all live on `match.rec.net` (locally: `match.localhost`).
 | POST | `goto/player/{playerId}` | REAL | `Match.GoToController.GoToPlayer` — uses `PlayerPresenceService` to find where the target is and routes the caller there |
 | POST | `goto/instance/{instanceId}` | REAL | `Match.GoToController.GoToInstance` — direct join to a specific room instance |
 | POST | `goto/invite/{inviteId}` | REAL | `Match.GoToController.GoToInvite` — resolves an invite to its target room/instance |
+| POST/GET | `matchmake/room/{roomId}` | REAL | `Match.GoToController.MatchmakeRoom` — the 2023 client's "join this public room" call (navigates by numeric id, not name). Reuses `BuildResponseAsync`; without it every public-room join 404s and the player bounces to dorm |
+| POST/GET | `matchmake/room/{roomId}/{subRoomId}` | REAL | `Match.GoToController.MatchmakeSubRoom` — sub-room form; resolves the `RoomScenes` row by `OrderIndex` |
+| POST | `matchmake/dorm` | REAL | `Match.MatchController.MatchmakeDorm` — builds the caller's personal-dorm `RoomInstance` |
+| POST | `matchmake/none` | REAL | `Match.MatchController.MatchmakeNone` — returns the caller's current room (or dorm) without changing it |
 | POST | `player/heartbeat` | REAL | `Match.MatchPlayerController.Heartbeat` — refreshes the caller's `PlayerPresenceService` entry; also has a duplicate in `ApiNamespaceStubsController.Heartbeat` for the api-host case |
 
 ## Catch-all wildcards (informational)

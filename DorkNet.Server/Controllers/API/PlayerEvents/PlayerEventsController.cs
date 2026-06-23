@@ -151,9 +151,9 @@ public class PlayerEventsController(
     [AllowAnonymous]
     [HttpPost("api/playerevents/v1/bulk")]
     [HttpGet("api/playerevents/v1/bulk")]
-    public async Task<ActionResult> Bulk([FromBody] EventBulkRequest? body)
+    public async Task<ActionResult> Bulk()
     {
-        var ids = await ReadEventIdsAsync(body);
+        var ids = await ReadEventIdsAsync();
         if (ids.Count == 0) return Ok(Array.Empty<object>());
         var rows = await db.PlayerEvents
             .Where(e => ids.Contains(e.Id))
@@ -614,27 +614,71 @@ public class PlayerEventsController(
     private async Task<PlayerEventEntity?> GetOwnedEventAsync(long eventId)
         => await db.PlayerEvents.FirstOrDefaultAsync(e => e.Id == eventId && e.CreatorPlayerId == Me);
 
-    private async Task<List<long>> ReadEventIdsAsync(EventBulkRequest? body)
+    private async Task<List<long>> ReadEventIdsAsync()
     {
         var ids = new List<long>();
-        if (body?.PlayerEventIds is { Count: > 0 }) ids.AddRange(body.PlayerEventIds);
-        if (body?.EventIds is { Count: > 0 }) ids.AddRange(body.EventIds);
-        if (body?.Ids is { Count: > 0 }) ids.AddRange(body.Ids);
 
         foreach (var value in Request.Query.SelectMany(q => q.Value))
-        foreach (var part in (value ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            if (long.TryParse(part, out var id) && id > 0) ids.Add(id);
+            AddDelimitedIds(ids, value);
 
         if (Request.HasFormContentType)
         {
             var form = await Request.ReadFormAsync();
             foreach (var key in new[] { "playerEventIds", "PlayerEventIds", "eventIds", "EventIds", "ids", "Ids" })
             foreach (var value in form[key])
-            foreach (var part in (value ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                if (long.TryParse(part, out var id) && id > 0) ids.Add(id);
+                AddDelimitedIds(ids, value);
+        }
+        else if ((Request.ContentLength ?? 0) > 0
+                 && Request.ContentType?.Contains("json", StringComparison.OrdinalIgnoreCase) == true)
+        {
+            try
+            {
+                using var doc = await JsonDocument.ParseAsync(Request.Body);
+                if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var key in new[] { "playerEventIds", "PlayerEventIds", "eventIds", "EventIds", "ids", "Ids" })
+                    {
+                        if (doc.RootElement.TryGetProperty(key, out var prop))
+                            AddJsonIds(ids, prop);
+                    }
+                }
+                else
+                {
+                    AddJsonIds(ids, doc.RootElement);
+                }
+            }
+            catch (JsonException)
+            {
+            }
         }
 
         return ids.Distinct().Take(200).ToList();
+    }
+
+    private static void AddDelimitedIds(List<long> ids, string? value)
+    {
+        foreach (var part in (value ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (long.TryParse(part, out var id) && id > 0) ids.Add(id);
+        }
+    }
+
+    private static void AddJsonIds(List<long> ids, JsonElement element)
+    {
+        switch (element.ValueKind)
+        {
+            case JsonValueKind.Array:
+                foreach (var item in element.EnumerateArray())
+                    AddJsonIds(ids, item);
+                break;
+            case JsonValueKind.Number:
+                if (element.TryGetInt64(out var id) && id > 0) ids.Add(id);
+                break;
+            case JsonValueKind.String:
+                AddDelimitedIds(ids, element.GetString());
+                break;
+        }
     }
 
     private async Task<string?> ReadStringFieldAsync(params string[] names)

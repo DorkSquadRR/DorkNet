@@ -1,3 +1,4 @@
+using System.IO;
 using Google.Protobuf;
 using RecRoom.Protobuf;
 
@@ -5,39 +6,114 @@ namespace DorkNet.Server.Services;
 
 /// <summary>
 /// Builds the binary `PersistedRoomData` protobuf the client downloads when
-/// it loads a room scene. The 2020 RecRoom client gates the Maker Pen,
-/// invention spawning, room-role editing and a dozen other tools behind
-/// `RoomRoleCollectionData.RoomRoles[i].CanUseMakerPen.InnerValue` etc.,
-/// all of which default to `false` if the bytes we serve are empty.
-///
-/// We emit a minimal blob with one PlayerRoomRoleData entry that flips
-/// every relevant `OverridableBoolData` to `(overrides=true, inner_value=true)`,
-/// which the client picks up regardless of which RoomRoleId the local
-/// player ends up assigned to. Net result: the room's creator (and
-/// everyone else, since this is a private server) gets all build/admin
-/// tools the moment they spawn into the scene.
-///
-/// Wire compatibility: our trimmed .proto only defines the messages and
-/// field numbers we set — the 2020 client's full PersistedRoomData has
-/// many more fields, but proto3 silently ignores unknown wire entries and
-/// defaults missing ones, so the bytes we generate deserialize cleanly.
+/// it loads a room scene. When a real room blob is missing, serve captured
+/// root room data with saved objects stripped and a 2023-compatible role
+/// collection instead of fabricating saved objects into the scene.
 /// </summary>
 public class RoomDataBlobService
 {
     private const int December2020PersistenceVersion = 26;
 
-    /// <summary>
-    /// Cached bytes of the "all-permissions-on" blob. Identical for every
-    /// room — there's no per-room state we vary yet, so building once at
-    /// startup beats rebuilding on every download request.
-    /// </summary>
-    private readonly byte[] _allPermsBlob = BuildAllPermsBlob();
     private readonly RoomRoleCollectionData _allPermsRoleData = BuildAllPermsRoleData();
     private readonly byte[] _rroEditableBlob = BuildRroEditableBlob();
     private readonly RoomRoleCollectionData _rroEditableRoleData = BuildRroEditableRoleData();
 
-    public byte[] GetDefaultBlob() => _allPermsBlob;
+    /// <summary>The blob served when a room_&lt;id&gt;_v1.dat misses S3
+    /// (unsaved dorms / fresh customisable rooms). Uses the captured
+    /// <c>data/default_room.room</c> as an input, but strips top-level
+    /// persistence_views before serving it. Those views can reference
+    /// prefabs absent from older clients and crash spawn with
+    /// "Invalid Prefab Name: \"\""; room-role data uses the 2023 migration
+    /// marker so the client does not re-run the legacy role importer.</summary>
+    private readonly byte[] _defaultBlob;
+
+    public RoomDataBlobService()
+    {
+        _defaultBlob = LoadDefaultBlob();
+    }
+
+    public byte[] GetDefaultBlob() => _defaultBlob;
     public byte[] GetRroEditableBlob() => _rroEditableBlob;
+
+    private static byte[] LoadDefaultBlob()
+    {
+        try
+        {
+            var path = Path.Combine(AppContext.BaseDirectory, "data", "default_room.room");
+            if (File.Exists(path))
+            {
+                var bytes = File.ReadAllBytes(path);
+                if (bytes.Length > 0)
+                {
+                    var msg = PersistedRoomData.Parser.ParseFrom(StripTopLevelField(bytes, 2));
+                    EnsureEditablePersistenceVersion(msg);
+                    msg.RoomRoleData = BuildDefaultRoomRoleData();
+                    return msg.ToByteArray();
+                }
+            }
+        }
+        catch
+        {
+            // Fall through to a minimal valid blob — never let a missing/locked
+            // file take down room loads entirely.
+        }
+        return BuildMinimalDefaultBlob();
+    }
+
+    private static byte[] StripTopLevelField(byte[] input, int fieldNumberToStrip)
+    {
+        using var output = new MemoryStream(input.Length);
+        var pos = 0;
+        while (pos < input.Length)
+        {
+            var fieldStart = pos;
+            var tag = ReadVarint(input, ref pos);
+            var fieldNumber = (int)(tag >> 3);
+            var wireType = (int)(tag & 0x07);
+            SkipField(input, ref pos, wireType);
+            if (fieldNumber != fieldNumberToStrip)
+                output.Write(input, fieldStart, pos - fieldStart);
+        }
+        return output.ToArray();
+    }
+
+    private static ulong ReadVarint(byte[] input, ref int pos)
+    {
+        ulong value = 0;
+        var shift = 0;
+        while (pos < input.Length)
+        {
+            var b = input[pos++];
+            value |= (ulong)(b & 0x7F) << shift;
+            if ((b & 0x80) == 0) return value;
+            shift += 7;
+            if (shift > 63) throw new InvalidDataException("Invalid protobuf varint.");
+        }
+        throw new EndOfStreamException("Unexpected end of protobuf varint.");
+    }
+
+    private static void SkipField(byte[] input, ref int pos, int wireType)
+    {
+        switch (wireType)
+        {
+            case 0:
+                _ = ReadVarint(input, ref pos);
+                break;
+            case 1:
+                pos += 8;
+                break;
+            case 2:
+                pos += checked((int)ReadVarint(input, ref pos));
+                break;
+            case 5:
+                pos += 4;
+                break;
+            default:
+                throw new InvalidDataException($"Unsupported protobuf wire type {wireType}.");
+        }
+
+        if (pos > input.Length) throw new EndOfStreamException("Unexpected end of protobuf field.");
+    }
 
     public byte[] OverlayAllPermsRoleData(byte[] existingBlob)
     {
@@ -66,10 +142,35 @@ public class RoomDataBlobService
         return msg.ToByteArray();
     }
 
+    private static byte[] BuildMinimalDefaultBlob()
+    {
+        var msg = new PersistedRoomData
+        {
+            DEPRECATEDVersion = December2020PersistenceVersion,
+            RoomRoleData = BuildDefaultRoomRoleData(),
+        };
+
+        return msg.ToByteArray();
+    }
+
     private static RoomRoleCollectionData BuildAllPermsRoleData()
     {
-        var collection = new RoomRoleCollectionData();
+        var collection = new RoomRoleCollectionData
+        {
+            RecNetMigrationVersion = 1,
+        };
         collection.RoomRoles.Add(BuildPermissiveRole(0, 100, "Creator"));
+
+        return collection;
+    }
+
+    private static RoomRoleCollectionData BuildDefaultRoomRoleData()
+    {
+        var collection = new RoomRoleCollectionData
+        {
+            RecNetMigrationVersion = 1,
+        };
+        collection.RoomRoles.Add(BuildPermissiveRole(2_097_152, 100, "Creator")); // AG_CREATOR
 
         return collection;
     }
@@ -87,7 +188,10 @@ public class RoomDataBlobService
 
     private static RoomRoleCollectionData BuildRroEditableRoleData()
     {
-        var collection = new RoomRoleCollectionData();
+        var collection = new RoomRoleCollectionData
+        {
+            RecNetMigrationVersion = 1,
+        };
         collection.RoomRoles.Add(BuildPermissiveRole(2_097_152, 100, "Creator"));   // AG_CREATOR
         collection.RoomRoles.Add(BuildPermissiveRole(4_194_304, 90, "Co-owner"));   // AG_COOWNER
         collection.RoomRoles.Add(BuildPermissiveRole(8_388_608, 80, "Host"));       // AG_HOST
@@ -115,7 +219,7 @@ public class RoomDataBlobService
             DEPRECATEDIsRoleActive = true,
             DEPRECATEDIsAgRole = true,
             RoleName = name,
-            RoleVersion = 1,
+            RoleVersion = 20,
             RoleGuid = StableRoleGuid(roleId),
 
             // Display name override — keeps the watch's role-list UI from
@@ -133,6 +237,7 @@ public class RoomDataBlobService
             // perms is false.
             CanAssignRoles = OverrideTrue(),
             CanInvite = OverrideTrue(),
+            DEPRECATEDCanEditCircuits = OverrideTrue(),
             CanStartGames = OverrideTrue(),
             CanTalk = OverrideTrue(),
             CanPrintPhotos = OverrideTrue(),
@@ -145,6 +250,10 @@ public class RoomDataBlobService
             CanSaveInventions = OverrideTrue(),
             DisableMicAutoMute = OverrideTrue(),
             CanUseShareCam = OverrideTrue(),
+            UnknownPermission20 = OverrideTrue(),
+            UnknownPermission21 = OverrideTrue(),
+            UnknownPermission22 = OverrideTrue(),
+            UnknownPermission23 = OverrideTrue(),
 
             // Vote-kick permission — int field, set to a permissive value.
             // 0 = AnyoneCanVoteKickAnyone in the 2020 enum (verified via
@@ -168,7 +277,15 @@ public class RoomDataBlobService
     }
 
     private static string StableRoleGuid(int roleId) =>
-        GuidUtility.Create(GuidUtility.UrlNamespace, $"dorknet-room-role:{roleId}").ToString();
+        roleId switch
+        {
+            2_097_152 => "D8B12451-23C7-4B1D-B573-8C3717A47915",
+            4_194_304 => "88EAECE9-D885-4568-BC96-AF316AD56663",
+            8_388_608 => "BD0F2F3A-F931-419E-B50C-ECDFF3F56B52",
+            16_777_216 => "32300035-3BEA-457E-95C0-1630AFDFA6BD",
+            0 => Guid.Empty.ToString(),
+            _ => GuidUtility.Create(GuidUtility.UrlNamespace, $"dorknet-room-role:{roleId}").ToString(),
+        };
 }
 
 internal static class GuidUtility

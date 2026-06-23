@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using DorkNet.Server.Compat;
@@ -88,7 +89,14 @@ public static class ServiceCollectionExtensions
                 if (string.IsNullOrWhiteSpace(dbPath))
                     dbPath = Path.Combine(AppContext.BaseDirectory, "data", "dorknet.db");
                 Directory.CreateDirectory(Path.GetDirectoryName(dbPath)!);
-                opt.UseSqlite($"Data Source={dbPath}", lite => lite.MigrationsAssembly("DorkNet.Server"));
+                var conn = new SqliteConnectionStringBuilder
+                {
+                    DataSource = dbPath,
+                    Mode = SqliteOpenMode.ReadWriteCreate,
+                    Cache = SqliteCacheMode.Shared,
+                    DefaultTimeout = 30,
+                }.ToString();
+                opt.UseSqlite(conn, lite => lite.MigrationsAssembly("DorkNet.Server"));
             }
         });
     }

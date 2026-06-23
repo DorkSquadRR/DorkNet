@@ -1184,32 +1184,16 @@ public class RoomsController(
         // no DeserializeRoomDataBlobCoroutine, the master init
         // proceeds with default-zero permissions.
         //
-        //   • Saved dorm / customisable rooms: DataBlobName is the
-        //     latest uploaded blob name (RoomEntity.CurrentDataBlobName,
-        //     written by StorageController on /upload). Unsaved dorms
-        //     deliberately use "" so the baked DormRoom scene loads
-        //     without deserializing the synthetic all-perms blob. The
-        //     role-only default blob made December wait forever on
-        //     StandaloneShapeContainer big-data during first-dorm entry.
-        //   • AG-Original rooms: DataBlobName="" → completed-promise
-        //     short-circuit → no download → no leaked stale-blob
-        //     behaviour → master flow proceeds → spawn fires. Maker
-        //     Pen stays locked, which matches public-server semantics
-        //     (you can't edit the rec center).
-        //
-        // Heuristic: "customisable" iff it's the dorm OR a user-created
-        // room (CreatorPlayerId != 1, the seeded system account that
-        // owns AG-Originals like the rec center). User clones inherit
-        // the all-perms default blob until their first save replaces
-        // it via StorageController; the rec center / paintball / etc.
-        // serve "" so the persistence flow short-circuits.
+        // If a room has a saved blob, use it. Otherwise point at
+        // room_<id>_v1.dat, which misses S3 and is served by
+        // RoomDataBlobService.GetDefaultBlob. That default is a captured
+        // PersistedRoomData (v38); the older synthetic role-only blob and
+        // empty DataBlobName path both leave the 2023 room-permissions
+        // runtime without data it dereferences during spawn.
         var roleList = roles ?? Array.Empty<RoomRoleEntity>();
-        var editableRro = room.IsAGRoom && roleList.Any(r => r.Accepted);
-        var customisable = room.IsDormRoom || room.CreatorPlayerId != 1 || editableRro;
         var dataBlobName = !string.IsNullOrEmpty(room.CurrentDataBlobName)
             ? room.CurrentDataBlobName
-            : room.IsDormRoom ? ""
-            : customisable ? $"room_{room.Id}_v1.dat" : "";
+            : $"room_{room.Id}_v1.dat";
 
         // Multi-scene rooms (imported via tools/import-room.ps1) carry one
         // RoomSceneEntity row per sub-room. Emit the full Scenes[] array
@@ -1231,8 +1215,9 @@ public class RoomsController(
                     DataBlobName = !string.IsNullOrWhiteSpace(overrideDataBlobName) &&
                         (overrideSceneId == s.OrderIndex || sceneRows.Count == 1)
                         ? overrideDataBlobName
-                        : room.IsDormRoom ? dataBlobName
-                        : s.DataBlobName,
+                        : !string.IsNullOrWhiteSpace(s.DataBlobName)
+                            ? s.DataBlobName
+                            : dataBlobName,
                     MaxPlayers = s.MaxPlayers,
                     CanMatchmakeInto = s.CanMatchmakeInto,
                     DataModifiedAt = (s.DataModifiedAt == default ? DateTime.UtcNow : s.DataModifiedAt)
@@ -1322,12 +1307,12 @@ public class RoomsController(
         IReadOnlyList<RoomRoleEntity>? roles = null)
     {
         var roleList = roles ?? Array.Empty<RoomRoleEntity>();
-        var editableRro = room.IsAGRoom && roleList.Any(r => r.Accepted);
-        var customisable = room.IsDormRoom || room.CreatorPlayerId != 1 || editableRro;
+        // 2023's room-permissions runtime needs a real PersistedRoomData
+        // source during spawn. If no saved blob exists, use the captured
+        // default via the synthetic room_<id>_v1.dat CDN path.
         var dataBlobName = !string.IsNullOrEmpty(room.CurrentDataBlobName)
             ? room.CurrentDataBlobName
-            : room.IsDormRoom ? ""
-            : customisable ? $"room_{room.Id}_v1.dat" : "";
+            : $"room_{room.Id}_v1.dat";
         var updatedAt = (room.UpdatedAt == default ? DateTime.UtcNow : room.UpdatedAt)
             .ToString("yyyy-MM-ddTHH:mm:ssZ");
 
@@ -1339,8 +1324,9 @@ public class RoomsController(
                 Name = s.Name,
                 DataBlob = !string.IsNullOrWhiteSpace(overrideDataBlobName) && sceneRows.Count == 1
                     ? overrideDataBlobName
-                    : room.IsDormRoom ? dataBlobName
-                    : s.DataBlobName,
+                    : !string.IsNullOrWhiteSpace(s.DataBlobName)
+                        ? s.DataBlobName
+                        : dataBlobName,
                 DataSavedAt = (s.DataModifiedAt == default ? DateTime.UtcNow : s.DataModifiedAt)
                     .ToString("yyyy-MM-ddTHH:mm:ssZ"),
                 IsSandbox = s.IsSandbox,
@@ -1364,27 +1350,11 @@ public class RoomsController(
                 },
             };
 
-        static int WireRole(int role) => role switch
-        {
-            0 => 30, // CoOwner
-            1 => 20, // Moderator
-            2 => 10, // Host
-            _ => 0,
-        };
         var wireRoles = new List<object>
         {
-            new { AccountId = room.CreatorPlayerId, Role = 255, InvitedRole = 0 },
+            BuildRoomAccountRoleWire(room.CreatorPlayerId, 255),
         };
-        wireRoles.AddRange(roleList.Select(r =>
-        {
-            var role = WireRole(r.Role);
-            return (object)new
-            {
-                AccountId = r.PlayerId,
-                Role = r.Accepted ? role : 0,
-                InvitedRole = r.Accepted ? 0 : role,
-            };
-        }));
+        wireRoles.AddRange(roleList.Select(BuildRoomRoleGrantWire));
 
         var tags = string.IsNullOrEmpty(room.TagsCsv)
             ? Array.Empty<object>()
@@ -2710,9 +2680,8 @@ public class RoomsController(
 
     // ── Bare-path roles ────────────────────────────────────────────────
 
-    /// <summary>GET <c>rooms/{id}/roles</c> — accepted role grants on
-    /// the room. Owner is implicit (CreatorPlayerId) and surfaces under
-    /// Role=30; co-owner/mod/host rows come from RoomRoles.</summary>
+    /// <summary>GET <c>rooms/{id}/roles</c> — account role DTOs consumed by
+    /// 2023's EFHPLDPNGIM deserializer.</summary>
     [HttpGet("rooms/{roomId:long}/roles")]
     public async Task<IActionResult> RolesList(long roomId)
     {
@@ -2721,15 +2690,9 @@ public class RoomsController(
         var rows = await db.RoomRoles.Where(r => r.RoomId == roomId).ToListAsync();
         var list = new List<object>(rows.Count + 1)
         {
-            new { RoomId = roomId, PlayerId = (int)room.CreatorPlayerId, Role = 30 /*Owner*/, Accepted = true },
+            BuildRoomAccountRoleWire(room.CreatorPlayerId, 255),
         };
-        list.AddRange(rows.Select(r => (object)new
-        {
-            RoomId = roomId,
-            PlayerId = (int)r.PlayerId,
-            Role = r.Role,
-            Accepted = r.Accepted,
-        }));
+        list.AddRange(rows.Select(BuildRoomRoleGrantWire));
         return Ok(list);
     }
 
@@ -2739,11 +2702,11 @@ public class RoomsController(
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
         if (room is null) return NotFound();
         if (room.CreatorPlayerId == playerId)
-            return Ok(new { RoomId = roomId, PlayerId = (int)playerId, Role = 30, Accepted = true });
+            return Ok(BuildRoomAccountRoleWire(playerId, 255));
         var row = await db.RoomRoles
             .FirstOrDefaultAsync(r => r.RoomId == roomId && r.PlayerId == playerId);
         if (row is null) return NotFound();
-        return Ok(new { RoomId = roomId, PlayerId = (int)playerId, Role = row.Role, Accepted = row.Accepted });
+        return Ok(BuildRoomRoleGrantWire(row));
     }
 
     public sealed class GrantRoleRequest { public int? Role { get; set; } }
@@ -2910,6 +2873,44 @@ public class RoomsController(
         };
         return roomRole >= 0;
     }
+
+    private static object BuildRoomRoleGrantWire(RoomRoleEntity role)
+        => BuildRoomAccountRoleWire(
+            role.PlayerId,
+            ToClientRoomRole(role.Role),
+            role.Accepted,
+            role.GrantedByPlayerId);
+
+    private static object BuildRoomAccountRoleWire(
+        long accountId,
+        int role,
+        bool accepted = true,
+        long? lastChangedByAccountId = null)
+        => new
+        {
+            AccountId = ToClientAccountId(accountId),
+            Role = accepted ? role : 0,
+            LastChangedByAccountId = ToClientAccountId(lastChangedByAccountId),
+            InvitedRole = accepted ? 0 : role,
+        };
+
+    private static int ToClientRoomRole(int roomRole) => roomRole switch
+    {
+        0 => 30, // CoOwner
+        1 => 20, // Moderator
+        2 => 10, // Host
+        _ => 0,
+    };
+
+    private static int ToClientAccountId(long accountId)
+        => accountId > int.MaxValue
+            ? int.MaxValue
+            : accountId < int.MinValue
+                ? int.MinValue
+                : (int)accountId;
+
+    private static int? ToClientAccountId(long? accountId)
+        => accountId.HasValue ? ToClientAccountId(accountId.Value) : null;
 
     private async Task<object> BuildRoomServerDetailsWithRolesAsync(long roomId)
     {

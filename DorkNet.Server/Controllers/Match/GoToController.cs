@@ -215,19 +215,7 @@ public class GoToController(
         // (roomInstanceId differs → reset state machine) plus "new
         // photon match" (photonRoomId differs → leave/rejoin →
         // SceneLoaded events that ultimately dismiss the dialog).
-        resp.RoomInstance.RoomInstanceId = resp.RoomInstance.RoomId * 100_000L + subId;
-        resp.RoomInstance.PhotonRoomId = $"{resp.RoomInstance.PhotonRoomId}_sub{subId}";
-        resp.RoomInstance.Name = subRoomName;
-        resp.RoomInstance.SubRoomId = subId;
-        if (subLocation is not null) resp.RoomInstance.Location = subLocation;
-        // dataBlob on the matchmaking response tells the client which
-        // PersistedRoomData blob to download for the entered scene.
-        // RoomInstance.Deserialize at RVA 0x114DAB0 reads it via the
-        // string-with-default reader (call 0x180EE6210), so empty is
-        // technically legal — but if it's empty the watch falls back
-        // to the parent room's RoomDataBlobName, which is the lobby's
-        // blob, so the sub-scene visually never changes.
-        if (!string.IsNullOrEmpty(subDataBlob)) resp.RoomInstance.DataBlob = subDataBlob;
+        ApplySubRoomMutation(resp, subId, subRoomName, subLocation, subDataBlob);
 
         // Private/new-instance mutation goes AFTER sub-room mutation so the
         // PhotonRoomId we register includes the _sub{N} suffix as its
@@ -235,6 +223,135 @@ public class GoToController(
         // exact same sub-room photon match, not the lobby's.
         await ApplyNewInstanceAsync(resp, subRoomId: subId, createPrivateInstance, joinMode);
 
+        await RecordResponseAsync(resp);
+        await NotifyAdditionalPlayersAsync(additionalPlayerIds, resp);
+        return Ok(resp);
+    }
+
+    /// <summary>Mutate <paramref name="resp"/> in place so it represents
+    /// the given sub-scene of its parent room. Both PhotonRoomId AND
+    /// RoomInstanceId must differ from the lobby's or the watch's
+    /// transition state machine never fires:
+    ///   • Same photon + same roomInstanceId → the new dataBlob downloads
+    ///     but the watch never transitions; "Going to X" hangs forever.
+    ///   • Different photon + same roomInstanceId → the watch sees the id
+    ///     unchanged, treats the response as a no-op presence update and
+    ///     skips the join flow entirely.
+    /// Folding subId into RoomInstanceId AND forking PhotonRoomId gives
+    /// the watch both signals it needs ("new instance" + "new photon
+    /// match"). dataBlob tells the client which PersistedRoomData to
+    /// download for the scene (RoomInstance.Deserialize, RVA 0x114DAB0,
+    /// reads it with a string-with-default reader so empty is legal) —
+    /// but an empty blob makes the watch fall back to the parent room's
+    /// lobby blob, so the sub-scene never changes visually. Only override
+    /// location/blob when we actually resolved one.</summary>
+    private static void ApplySubRoomMutation(
+        MatchmakingResponseDto resp, long subId, string subRoomName,
+        string? subLocation, string? subDataBlob)
+    {
+        resp.RoomInstance.RoomInstanceId = resp.RoomInstance.RoomId * 100_000L + subId;
+        resp.RoomInstance.PhotonRoomId = $"{resp.RoomInstance.PhotonRoomId}_sub{subId}";
+        resp.RoomInstance.Name = subRoomName;
+        resp.RoomInstance.SubRoomId = subId;
+        if (subLocation is not null) resp.RoomInstance.Location = subLocation;
+        if (!string.IsNullOrEmpty(subDataBlob)) resp.RoomInstance.DataBlob = subDataBlob;
+    }
+
+    /// <summary>POST <c>match.*/matchmake/room/{roomId}</c> — the 2023
+    /// client's primary "join this public room" call
+    /// (<c>RecNet.Matchmaking</c>, format string <c>"matchmake/room/{0}"</c>,
+    /// same sender <c>HHJFFJEHLOB</c> as the working <c>matchmake/dorm</c>,
+    /// so it's a POST returning <see cref="MatchmakingResponseDto"/>).
+    /// It navigates by NUMERIC roomId straight from the room tile, NOT by
+    /// name like the older <c>/goto/room/{name}</c> path. With no route
+    /// here every public-room join 404s and the watch bounces the player
+    /// back to their dorm ("Matchmaking request failed
+    /// (matchmake/room/N): HTTP Error 404"). We resolve the id to its
+    /// room and reuse <see cref="BuildResponseAsync"/> so dorm/private/
+    /// dataBlob/JoinMode handling stays identical to <see cref="GoToRoom"/>.
+    /// GET is accepted too as cheap insurance against a verb mismatch.</summary>
+    [HttpPost("/matchmake/room/{roomId:long}")]
+    [HttpGet("/matchmake/room/{roomId:long}")]
+    public async Task<ActionResult<MatchmakingResponseDto>> MatchmakeRoom(
+        long roomId,
+        [FromForm(Name = "CreatePrivateInstance")] bool createPrivateInstance = false,
+        [FromForm(Name = "JoinMode")] int joinMode = 0,
+        [FromForm(Name = "AdditionalPlayerIds")] List<long>? additionalPlayerIds = null)
+    {
+        var room = await rooms.GetByIdAsync(roomId);
+        if (room is null)
+        {
+            logger.LogWarning("[matchmake-room] unknown roomId={RoomId} — returning RoomDoesNotExist", roomId);
+            // 4 = RoomDoesNotExist (CreateModifyRoomStatus); watch shows
+            // its standard "room not found" toast instead of softlocking.
+            return Ok(new MatchmakingResponseDto { ErrorCode = 4, RoomInstance = null });
+        }
+
+        var resp = await BuildResponseAsync(room.Name);
+        await ApplyNewInstanceAsync(resp, subRoomId: 0, createPrivateInstance, joinMode);
+        await RecordResponseAsync(resp);
+        await NotifyAdditionalPlayersAsync(additionalPlayerIds, resp);
+        logger.LogInformation(
+            "[matchmake-room] player={Player} roomId={RoomId} name={Name} instance={Instance} photon={Photon}",
+            this.CurrentPlayerId(), roomId, room.Name,
+            resp.RoomInstance?.RoomInstanceId, resp.RoomInstance?.PhotonRoomId);
+        return Ok(resp);
+    }
+
+    /// <summary>POST <c>match.*/matchmake/room/{roomId}/{subRoomId}</c> —
+    /// sub-room form (<c>RecNet.Matchmaking</c> "matchmake/room/{0}/{1}").
+    /// Unlike <see cref="GoToSubRoom"/> (which takes a sub-room NAME and
+    /// fuzzy-matches it) the sub-room arrives here as a numeric
+    /// <see cref="RoomSceneEntity.OrderIndex"/>, so we resolve the scene
+    /// row by OrderIndex directly. subRoomId 0 is the lobby/entry scene —
+    /// the base response already represents it, so we skip the
+    /// mutation.</summary>
+    [HttpPost("/matchmake/room/{roomId:long}/{subRoomId:long}")]
+    [HttpGet("/matchmake/room/{roomId:long}/{subRoomId:long}")]
+    public async Task<ActionResult<MatchmakingResponseDto>> MatchmakeSubRoom(
+        long roomId, long subRoomId,
+        [FromForm(Name = "CreatePrivateInstance")] bool createPrivateInstance = false,
+        [FromForm(Name = "JoinMode")] int joinMode = 0,
+        [FromForm(Name = "AdditionalPlayerIds")] List<long>? additionalPlayerIds = null)
+    {
+        var room = await rooms.GetByIdAsync(roomId);
+        if (room is null)
+        {
+            logger.LogWarning(
+                "[matchmake-room] unknown roomId={RoomId} (sub={Sub}) — returning RoomDoesNotExist",
+                roomId, subRoomId);
+            return Ok(new MatchmakingResponseDto { ErrorCode = 4, RoomInstance = null });
+        }
+
+        var resp = await BuildResponseAsync(room.Name);
+
+        if (subRoomId != 0)
+        {
+            var scene = await db.RoomScenes.AsNoTracking()
+                .Where(s => s.RoomId == resp.RoomInstance.RoomId && s.OrderIndex == subRoomId)
+                .Select(s => new { s.Name, s.RoomSceneLocationId, s.DataBlobName })
+                .FirstOrDefaultAsync();
+            if (scene is not null)
+            {
+                logger.LogInformation(
+                    "[matchmake-subroom] {Room}/{Sub} → scene '{Name}' loc={Loc} blob={Blob}",
+                    roomId, subRoomId, scene.Name, scene.RoomSceneLocationId, scene.DataBlobName);
+                ApplySubRoomMutation(resp, subRoomId, scene.Name, scene.RoomSceneLocationId, scene.DataBlobName);
+            }
+            else
+            {
+                logger.LogWarning(
+                    "[matchmake-subroom] {Room}/{Sub} — no RoomScenes row with that OrderIndex; " +
+                    "forking ids onto the lobby scene so the watch still transitions",
+                    roomId, subRoomId);
+                // Reuse the lobby location/blob (sub-scene won't differ
+                // visually) but still fold subId in so the watch leaves
+                // the current match instead of softlocking.
+                ApplySubRoomMutation(resp, subRoomId, resp.RoomInstance.Name, null, null);
+            }
+        }
+
+        await ApplyNewInstanceAsync(resp, subRoomId: subRoomId, createPrivateInstance, joinMode);
         await RecordResponseAsync(resp);
         await NotifyAdditionalPlayersAsync(additionalPlayerIds, resp);
         return Ok(resp);
@@ -1172,10 +1289,7 @@ public class GoToController(
 
         if (!string.IsNullOrWhiteSpace(room.CurrentDataBlobName)) return room.CurrentDataBlobName;
 
-        if (room.IsDormRoom) return string.Empty;
-
-        var customisable = room.CreatorPlayerId != 1;
-        return customisable ? $"room_{room.Id}_v1.dat" : string.Empty;
+        return $"room_{room.Id}_v1.dat";
     }
 
     /// <summary>
