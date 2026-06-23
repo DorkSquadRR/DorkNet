@@ -187,11 +187,11 @@ public class CustomAvatarItemsController(
 
     [HttpGet("isCreationEnabled")]
     [AllowAnonymous]
-    public IActionResult IsCreationEnabled() => Ok(new { IsCreationEnabled = true, Enabled = true });
+    public IActionResult IsCreationEnabled() => Content("true", "application/json");
 
     [HttpGet("isRenderingEnabled")]
     [AllowAnonymous]
-    public IActionResult IsRenderingEnabled() => Ok(new { IsRenderingEnabled = true, Enabled = true });
+    public IActionResult IsRenderingEnabled() => Content("true", "application/json");
 
     [HttpGet("minPriceForPublicItem")]
     [AllowAnonymous]

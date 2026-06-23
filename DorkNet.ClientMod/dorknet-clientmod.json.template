@@ -1,8 +1,5 @@
 {
   "ServerHost": "{HOST}",
-  "PhotonAppId": "{PHOTON_APPID}",
-  "PhotonVoiceAppId": "{PHOTON_VOICE_APPID}",
-  "PhotonCloudRegion": "{PHOTON_REGION}",
   "EnableTlsTrustBypass": {ENABLE_TLS_TRUST_BYPASS},
   "QuestMaxTeamSize": 0,
   "QuestMaxTeamSizeRooms": [

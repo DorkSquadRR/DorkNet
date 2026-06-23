@@ -21,6 +21,102 @@ public class ConfigController(ConfigService configService) : ControllerBase
     [HttpGet("amplitude")]
     public ActionResult<object> GetAmplitude() => Ok(new { AmplitudeKey = string.Empty });
 
+    /// <summary>
+    /// GET <c>api/config/v1/backtrace</c> — 2023 boot downloads this before
+    /// audio/core initialization. Returning 404 leaves the static backtrace
+    /// config null and later crashes <c>ConfigSettings</c> consumers. Keep
+    /// crash upload/deobfuscation disabled locally while preserving the
+    /// object shape and readable config keys the client inspects.
+    /// </summary>
+    [HttpGet("backtrace")]
+    public ActionResult<object> GetBacktrace(
+        [FromQuery(Name = "platformType")] string? platformType,
+        [FromQuery(Name = "allocate")] bool? allocate)
+    {
+        var baseUrl = $"{Request.Scheme}://{Request.Host}";
+        var submissionUrl = $"{baseUrl}/backtrace/submit";
+        var minidumpSubmissionUrl = $"{baseUrl}/backtrace/minidump";
+        var config = new Dictionary<string, object>
+        {
+            ["Backtrace.SampleRate"] = 0.0,
+            ["Backtrace.ReportBudget"] = 0,
+            ["Backtrace.deobfuscationRate"] = 0.0,
+            ["Backtrace.Deobfuscate"] = false,
+            ["Backtrace.DeobfuscationUrl"] = string.Empty,
+            ["Backtrace.Enabled"] = false,
+            ["Backtrace.PlatformType"] = platformType ?? string.Empty,
+            ["Backtrace.Allocate"] = allocate ?? false,
+        };
+
+        return Ok(new Dictionary<string, object>
+        {
+            ["MaxMessagesPerMinute"] = 0,
+            ["MaxReportsPerMinute"] = 0,
+            ["SampleRate"] = 0.0,
+            ["ReportBudget"] = 0,
+            ["ErrorReportBudget"] = 0,
+            ["WarningReportBudget"] = 0,
+            ["LogReportBudget"] = 0,
+            ["SubmissionUrl"] = submissionUrl,
+            ["MinidumpSubmissionUrl"] = minidumpSubmissionUrl,
+            ["ServerUrl"] = submissionUrl,
+            ["DatabasePath"] = "backtrace/database",
+            ["Config"] = config,
+            ["maxMessagesPerMinute"] = 0,
+            ["maxReportsPerMinute"] = 0,
+            ["sampleRate"] = 0.0,
+            ["reportBudget"] = 0,
+            ["errorReportBudget"] = 0,
+            ["warningReportBudget"] = 0,
+            ["logReportBudget"] = 0,
+            ["submissionUrl"] = submissionUrl,
+            ["minidumpSubmissionUrl"] = minidumpSubmissionUrl,
+            ["serverUrl"] = submissionUrl,
+            ["databasePath"] = "backtrace/database",
+            ["config"] = config,
+        });
+    }
+
+    [HttpGet("azurespeech")]
+    public IActionResult GetAzureSpeech()
+    {
+        return Ok(new Dictionary<string, object>
+        {
+            ["Enabled"] = false,
+            ["SpeechRecognitionEnabled"] = false,
+            ["SpeechSynthesisEnabled"] = false,
+            ["Region"] = string.Empty,
+            ["SubscriptionKey"] = string.Empty,
+            ["TokenEndpoint"] = string.Empty,
+            ["SpeechRecognitionEndpoint"] = string.Empty,
+            ["SpeechSynthesisEndpoint"] = string.Empty,
+            ["enabled"] = false,
+            ["speechRecognitionEnabled"] = false,
+            ["speechSynthesisEnabled"] = false,
+            ["region"] = string.Empty,
+            ["subscriptionKey"] = string.Empty,
+            ["tokenEndpoint"] = string.Empty,
+            ["speechRecognitionEndpoint"] = string.Empty,
+            ["speechSynthesisEndpoint"] = string.Empty,
+        });
+    }
+
+    [HttpGet("/voice/config")]
+    public IActionResult GetVoiceConfig()
+    {
+        return Ok(new Dictionary<string, object>
+        {
+            ["ToxMod.Enabled"] = false,
+            ["ToxMod.SampleRate"] = 0.0,
+            ["ToxMod.SessionRecordingEnabled"] = false,
+            ["ToxMod.Endpoint"] = string.Empty,
+            ["ToxMod.ApiKey"] = string.Empty,
+            ["Enabled"] = false,
+            ["enabled"] = false,
+            ["toxModEnabled"] = false,
+        });
+    }
+
     /// <summary>GET <c>api/config/v1/freegiftbutton</c> — the
     /// 2020.12 client deserializes this endpoint as a raw Boolean.
     /// This server does not run the timed free-gift campaign, so the

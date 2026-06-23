@@ -100,6 +100,11 @@ public class CdnController(
     // String.Concat("/invention/", filename). Same byte-fetch flow as
     // /room/, routed to S3 via BlobRouter on the filename.
     [Route("/invention/{*path:minlength(1)}")]
+    // 2023 builds a CDN URL as `/sigs/<signature-set-id>` during boot
+    // file-hash verification. The original Rec Room CDN no longer
+    // serves the embedded 2023 id, so keep this on a dedicated path and
+    // fail soft instead of letting the request 404.
+    [Route("/sigs/{*path:minlength(1)}")]
     // ASP.NET route templates treat `[` / `]` as token markers
     // (e.g. `[controller]`). To use them as literals inside a regex
     // constraint they must be doubled — so `[^/]` becomes `[[^/]]`.
@@ -266,6 +271,17 @@ public class CdnController(
     // ── CDN serve path (cdn.*, storage.*, data.*, apex) ────────────────
     private async Task<IActionResult> ServeCdn(string? path)
     {
+        if (!string.IsNullOrEmpty(path) &&
+            path.StartsWith("sigs/", StringComparison.OrdinalIgnoreCase))
+        {
+            logger.LogWarning("[cdn] signature set MISS host={Host} path={Path} -> empty signature payload",
+                Request.Host.Host, path);
+            var payload = Array.Empty<byte>();
+            Response.Headers.CacheControl = "public, max-age=60";
+            signatures.AddContentSignature(Response, payload);
+            return new FileContentResult(payload, "application/octet-stream");
+        }
+
         if (string.Equals(path, "config/LoadingScreenTipData", StringComparison.OrdinalIgnoreCase))
         {
             // Tips live in the LoadingScreenTips DB table; admins

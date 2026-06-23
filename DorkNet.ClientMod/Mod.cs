@@ -3,9 +3,7 @@
 // server:
 //
 //   1. URI rewrite      — `.rec.net` → user-configured host
-//   2. Photon AppId     — override the baked-in Photon Cloud AppId
-//   3. AuthValues       — inject `userid` + `LoginLock` for /photon/customauth
-//   4. TLS trust bypass — make BouncyCastle never reject server certs
+//   2. TLS trust bypass — make BouncyCastle never reject server certs
 //
 // Config lives in <MelonLoader>\UserData\dorknet-clientmod.json. The
 // install-melon.ps1 wrapper writes that file on install; you can also
@@ -58,21 +56,6 @@ public class Mod : MelonMod
     public static class Cfg
     {
         public static string ServerHost          = "localhost";
-        public static string PhotonAppId         = "";
-        public static string PhotonVoiceAppId    = "";
-        // Forced PhotonServerSettings.PreferredRegion (with HostType
-        // switched to PhotonCloud) so two watches don't auto-ping
-        // themselves into different "best" regions and end up in
-        // parallel Photon rooms sharing only a name. PhotonPatches
-        // .ApplyForcedRegion prefers the server-told region from
-        // Matchmaking.LocalRoomInstance.PhotonRegionId when available
-        // and falls back to this config value on initial boot before
-        // any /goto has returned. Default matches the server's
-        // appsettings.json Photon:CloudRegion ("eu").
-        public static string PhotonCloudRegion   = "eu";
-        // Photon Custom Auth injector parked 2026-05-28; see
-        // attic/AuthValuesInjector.cs.attic for the code + restore notes.
-        public static bool   BypassPhotonCustomAuth = false;
         public static bool   EnableTlsTrustBypass = true;
         // Log-only trace for the stuck first-dorm "Change Username?"
         // dialog. When true, RegistrationPatches hooks the dorm
@@ -169,53 +152,6 @@ public class Mod : MelonMod
         DiagnosticPatches.Write("[lifecycle] OnLateInitializeMelon");
         Log.Msg("=== Registering client patches ===");
         RegisterNetworkPatches();
-        TryPatchByName("PhotonNetwork",       "ConnectUsingSettings",
-                       prefix: nameof(PhotonPatches.PhotonAppIdOverride_Prefix));
-        // Hook the watch's own AppSettings + AuthValues builders directly.
-        // Both are private PUNNetworkManager methods with obfuscated 2020.12
-        // names — we know they always run before any Photon connect because
-        // ConnectUsingSettings reads their return values. Postfix logs them
-        // after construction.
-        //
-        //   FJOLIPKKIBE returns Photon.Realtime.AppSettings — verified at
-        //     PUNNetworkManager.txt:7046. One bool arg (DOJLKMCEFFB — likely
-        //     "for voice"). Two call paths in the binary.
-        //   EMGGKBALALH returns Photon.Realtime.AuthenticationValues —
-        //     verified at PUNNetworkManager.txt:7560. Builds AuthValues with
-        //     environment + accessToken AuthGetParameters.
-        //
-        // Quest-Dec uses the same obfuscation seed as PC-Dec, but discover by
-        // return type first so a future platform/reseed does not make these
-        // two critical hooks depend on the private method names.
-        TryPatchDeclaredMethodByReturnType("PUNNetworkManager", "AppSettings",
-                                           fallbackMethodName: "FJOLIPKKIBE",
-                                           postfix: nameof(PhotonPatches.LogAppSettings_Postfix));
-        TryPatchDeclaredMethodByReturnType("PUNNetworkManager", "AuthenticationValues",
-                                           fallbackMethodName: "EMGGKBALALH",
-                                           postfix: nameof(PhotonPatches.LogAuthValues_Postfix));
-        // PUNNetworkManager.OnCustomAuthenticationFailed — accepts whatever
-        // string-like arg the IL2CPP method takes (declared `string` in
-        // dump.cs but Il2CppInterop wraps it in a way that breaks
-        // Harmony's IL emit when we declare `string` directly). Using
-        // `object` lets Harmony pass through whatever wrapper the IL2CPP
-        // proxy uses without compile-error.
-        TryPatchByName("PUNNetworkManager",   "OnCustomAuthenticationFailed",
-                       prefix: nameof(PhotonPatches.OnCustomAuthenticationFailed_Prefix));
-        TryPatchByName("DFPKLPCMNEK", "OnCustomAuthenticationFailed",
-                       prefix: nameof(PhotonPatches.OnCustomAuthenticationFailed_Prefix),
-                       logMiss: false);
-        TryPatchByName("LOPBLNLAEKB", "OnCustomAuthenticationFailed",
-                       prefix: nameof(PhotonPatches.OnCustomAuthenticationFailed_Prefix),
-                       logMiss: false);
-        TryPatchByName("LOPBLNLAEKB", "OnDisconnected",
-                       prefix: nameof(PhotonPatches.OnDisconnected_Prefix),
-                       logMiss: false);
-        TryPatchByName("OLPEMKMGEHE", "OnDisconnected",
-                       prefix: nameof(PhotonPatches.OnDisconnected_Prefix),
-                       logMiss: false);
-        TryPatchByName("DFPKLPCMNEK", "OnDisconnected",
-                       prefix: nameof(PhotonPatches.OnDisconnected_Prefix),
-                       logMiss: false);
         TryPatchByName("RecRoom.AntiCheat.EACManager",
                        "GenerateChallengeResponse",
                        args: new[] { typeof(string) },
@@ -240,6 +176,7 @@ public class Mod : MelonMod
                            "NotifyServerCertificate",
                            prefix: nameof(TlsPatches.NotifyServerCertificate_Prefix));
         }
+        PatchFileHashCheckerCallback();
         // Post-save blob-name refresh. The 2020 watch's
         // RoomPersistenceManager.RoomDataBlobName is only ever set by
         // /goto-driven flows — neither the SubscriptionUpdateRoom push
@@ -557,6 +494,63 @@ public class Mod : MelonMod
         return patched > 0;
     }
 
+    private bool PatchFileHashCheckerCallback()
+    {
+        var prefixMethod = GetPatchMethod(nameof(FileHashCheckerPatches.InitializeCallback_Prefix));
+        var patched = 0;
+
+        foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            foreach (var type in GetLoadableTypes(asm))
+            {
+                if (!MatchesFileHashCheckerCallbackType(type)) continue;
+                foreach (var method in AccessTools.GetDeclaredMethods(type))
+                {
+                    if (method.IsAbstract || method.ContainsGenericParameters) continue;
+                    if (!MatchesFileHashCheckerCallbackMethod(method)) continue;
+                    try
+                    {
+                        HarmonyInstance.Patch(method, prefix: new HarmonyMethod(prefixMethod));
+                        patched++;
+                        Log.Msg($"[patch-ok] file hash checker callback {type.FullName}.{method.Name}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning($"[patch-fail] file hash checker callback {type.FullName}.{method.Name}: {ex.Message}");
+                    }
+                }
+            }
+        }
+
+        if (patched == 0)
+        {
+            Log.Warning("[patch-miss] file hash checker callback");
+            return false;
+        }
+
+        return true;
+    }
+
+    private static bool MatchesFileHashCheckerCallbackType(Type type)
+    {
+        var fullName = type.FullName ?? type.Name;
+        return fullName.Contains("BEPEAHOOLDB", StringComparison.Ordinal)
+            && fullName.Contains("PBENKLNHBHL", StringComparison.Ordinal);
+    }
+
+    private static bool MatchesFileHashCheckerCallbackMethod(MethodInfo method)
+    {
+        if (method.ReturnType != typeof(void)) return false;
+        var parameters = method.GetParameters();
+        if (parameters.Length != 1) return false;
+
+        var name = method.Name;
+        if (name == "<InitializeFileHashChecker>b__0") return true;
+        if (name == "_InitializeFileHashChecker_b__0") return true;
+        return name.Contains("InitializeFileHashChecker", StringComparison.Ordinal)
+            && name.Contains("b__0", StringComparison.Ordinal);
+    }
+
     private void RegisterNetworkPatches()
     {
         if (_networkPatchesRegistered) return;
@@ -726,10 +720,6 @@ public class Mod : MelonMod
             var doc = JsonDocument.Parse(File.ReadAllText(path));
             var r = doc.RootElement;
             if (TryGetConfigValue(r, "ServerHost", out var v))           Cfg.ServerHost = v.GetString() ?? Cfg.ServerHost;
-            if (TryGetConfigValue(r, "PhotonAppId", out v))              Cfg.PhotonAppId = v.GetString() ?? Cfg.PhotonAppId;
-            if (TryGetConfigValue(r, "PhotonVoiceAppId", out v))         Cfg.PhotonVoiceAppId = v.GetString() ?? Cfg.PhotonVoiceAppId;
-            if (TryGetConfigValue(r, "PhotonCloudRegion", out v))        Cfg.PhotonCloudRegion = v.GetString() ?? Cfg.PhotonCloudRegion;
-            if (TryGetConfigValue(r, "BypassPhotonCustomAuth", out v))    Cfg.BypassPhotonCustomAuth = v.GetBoolean();
             if (TryGetConfigValue(r, "EnableTlsTrustBypass", out v))     Cfg.EnableTlsTrustBypass = v.GetBoolean();
             if (TryGetConfigValue(r, "TraceRegistrationDialog", out v))  Cfg.TraceRegistrationDialog = v.GetBoolean();
             if (TryGetConfigValue(r, "EnableDebugConsole", out v))       Cfg.EnableDebugConsole = v.GetBoolean();
@@ -759,9 +749,7 @@ public class Mod : MelonMod
                 }
                 if (list.Count > 0) Cfg.DevCommands = list.ToArray();
             }
-            // "InjectAuthValues" key in the template is now ignored —
-            // see attic/AuthValuesInjector.cs.attic.
-            Log.Msg($"[config] loaded from {path}: ServerHost={Cfg.ServerHost}, PhotonAppId={(string.IsNullOrEmpty(Cfg.PhotonAppId) ? "<unset>" : "<set>")}, " +
+            Log.Msg($"[config] loaded from {path}: ServerHost={Cfg.ServerHost}, " +
                     $"EnableTlsTrustBypass={Cfg.EnableTlsTrustBypass}");
         }
         catch (Exception ex)
@@ -925,6 +913,8 @@ public class Mod : MelonMod
             {
                 var t = asm.GetType(name, throwOnError: false);
                 if (t is not null) return CacheResolvedType(name, t);
+                var dottedPrefixed = asm.GetType("Il2Cpp." + name, throwOnError: false);
+                if (dottedPrefixed is not null) return CacheResolvedType(name, dottedPrefixed);
                 var prefixed = asm.GetType("Il2Cpp" + name, throwOnError: false);
                 if (prefixed is not null) return CacheResolvedType(name, prefixed);
                 // For namespaced types like "RecNet.Core", also try with
@@ -980,18 +970,22 @@ public class Mod : MelonMod
     private static bool MatchesRequestedType(Type type, string requested)
     {
         var prefixed = "Il2Cpp" + requested;
-        if (type.FullName == requested || type.FullName == prefixed) return true;
+        var dottedPrefixed = "Il2Cpp." + requested;
+        if (type.FullName == requested || type.FullName == prefixed || type.FullName == dottedPrefixed) return true;
         if (type.Name == requested || type.Name == prefixed) return true;
         return type.FullName?.EndsWith("." + requested, StringComparison.Ordinal) == true ||
+               type.FullName?.EndsWith(".Il2Cpp." + requested, StringComparison.Ordinal) == true ||
                type.FullName?.EndsWith(".Il2Cpp" + requested, StringComparison.Ordinal) == true;
     }
 
     private static bool ReturnTypeMatches(Type type, string requested)
     {
         var prefixed = "Il2Cpp" + requested;
-        if (type.FullName == requested || type.FullName == prefixed) return true;
+        var dottedPrefixed = "Il2Cpp." + requested;
+        if (type.FullName == requested || type.FullName == prefixed || type.FullName == dottedPrefixed) return true;
         if (type.Name == requested || type.Name == prefixed) return true;
         return type.FullName?.EndsWith("." + requested, StringComparison.Ordinal) == true ||
+               type.FullName?.EndsWith(".Il2Cpp." + requested, StringComparison.Ordinal) == true ||
                type.FullName?.EndsWith(".Il2Cpp" + requested, StringComparison.Ordinal) == true;
     }
 
@@ -1008,7 +1002,7 @@ public class Mod : MelonMod
     {
         // Look in all three patch holder classes — small enough that a
         // linear scan is cheaper than per-class lookups.
-        foreach (var holder in new[] { typeof(UriPatches), typeof(HttpTracePatches), typeof(AuthPatches), typeof(PhotonPatches), typeof(AntiCheatPatches), typeof(TlsPatches), typeof(DiagnosticPatches), typeof(SavePatches), typeof(ChatPatches), typeof(JoinPatches), typeof(RegistrationPatches), typeof(DebugConsolePatches), typeof(ScreenSharePatches), typeof(MakerPenGiftPreviewPatches), typeof(QuestTeamSize) })
+        foreach (var holder in new[] { typeof(UriPatches), typeof(HttpTracePatches), typeof(AuthPatches), typeof(AntiCheatPatches), typeof(FileHashCheckerPatches), typeof(TlsPatches), typeof(DiagnosticPatches), typeof(SavePatches), typeof(ChatPatches), typeof(JoinPatches), typeof(RegistrationPatches), typeof(DebugConsolePatches), typeof(ScreenSharePatches), typeof(MakerPenGiftPreviewPatches), typeof(QuestTeamSize) })
         {
             var m = holder.GetMethod(name, BindingFlags.Public | BindingFlags.Static);
             if (m is not null) return m;
@@ -1059,6 +1053,14 @@ public class Mod : MelonMod
 
         complete &= TryPatchDiagnosticByName("SessionManager", "TryApplicationQuit",
                                              prefix: nameof(DiagnosticPatches.SessionManagerTryApplicationQuit_Prefix),
+                                             logMiss: logMisses);
+        complete &= TryPatchDiagnosticByName("SessionManager", "TryApplicationQuit",
+                                             args: new[] { typeof(int) },
+                                             prefix: nameof(DiagnosticPatches.SessionManagerTryApplicationQuitInt_Prefix),
+                                             logMiss: logMisses);
+        complete &= TryPatchDiagnosticByName("SessionManager", "FatalApplicationQuit",
+                                             args: new[] { typeof(int), typeof(string) },
+                                             prefix: nameof(DiagnosticPatches.SessionManagerFatalApplicationQuit_Prefix),
                                              logMiss: logMisses);
         // SteamManager.Awake + SteamPlatformManager.*LoginInitialize were
         // pure-logging diagnostics that fired during Unity's very first
@@ -2328,409 +2330,6 @@ internal static class UriPatches
     }
 }
 
-internal static class PhotonPatches
-{
-    public static void PhotonAppIdOverride_Prefix()
-    {
-        if (string.IsNullOrEmpty(Mod.Cfg.PhotonAppId)) return;
-        try
-        {
-            // PhotonNetwork.PhotonServerSettings — accessed via reflection
-            // so the type-name resolution stays in one place. Mutating the
-            // ScriptableObject in-place is what the BepInEx plugin does
-            // too; the Photon Connect path reads AppID / VoiceAppID off
-            // this object immediately after.
-            var photonNetwork = Mod.Instance is null ? null : FindGameType("PhotonNetwork");
-            if (photonNetwork is null) return;
-            var settingsProp = photonNetwork.GetProperty("PhotonServerSettings", BindingFlags.Public | BindingFlags.Static);
-            var settings = settingsProp?.GetValue(null);
-            if (settings is null) return;
-
-            var settingsType = settings.GetType();
-            var appIdProp = settingsType.GetProperty("AppID") ?? settingsType.GetProperty("AppId");
-            var voiceProp = settingsType.GetProperty("VoiceAppID") ?? settingsType.GetProperty("VoiceAppId");
-
-            var newId = Mod.Cfg.PhotonAppId;
-            var newVoice = string.IsNullOrEmpty(Mod.Cfg.PhotonVoiceAppId) ? newId : Mod.Cfg.PhotonVoiceAppId;
-
-            // Diagnostic: dump every readable AppSettings field before
-            // we mutate, so a Photon Custom Auth failure on first connect
-            // is debuggable from a single log dump. Lists every public
-            // property + field on PhotonServerSettings (Server, Port,
-            // NameServer, AuthMode, HostType, PreferredRegion, AppID,
-            // VoiceAppID, BestRegionSummary, etc.) — covers both 2020.03
-            // (Server/Port) and 2020.12 (AppSettings) layouts.
-            Mod.Log.Msg("[photon-diag] PhotonServerSettings BEFORE override:");
-            DumpSettings(settings, settingsType, indent: "  ");
-
-            appIdProp?.SetValue(settings, newId);
-            voiceProp?.SetValue(settings, newVoice);
-            Mod.Log.Msg($"[photon-appid] override AppID/VoiceAppID → {newId} / {newVoice}");
-
-            // Force a deterministic Photon region so two watches running
-            // this mod end up on the same Photon master and "JoinByName"
-            // produces ONE shared room (not two parallel ones in eu/us
-            // because each watch auto-picked a different best region).
-            //
-            // The 2020 watch's default HostType is BestRegion(4) — every
-            // launch pings all Photon Cloud regions and picks the lowest
-            // latency. Two players geographically apart hit different
-            // "best" regions; same room name, two regions = two rooms.
-            // Server-side our matchmaking response carries
-            // `photonRegionId` but the watch's Photon code never reads
-            // it; the only consumer is Matchmaking.SetPhotonRegionPings
-            // which only reports pings *back* to the server.
-            //
-            // Strategy: switch HostType to PhotonCloud(1) and set
-            // PreferredRegion. Prefer the server-told region (the most
-            // recent Matchmaking.LocalRoomInstance.PhotonRegionId, if
-            // any) over the config default — that way a server-side
-            // region change propagates without redeploying the mod.
-            ApplyForcedRegion(settings, settingsType);
-        }
-        catch (Exception ex) { Mod.Log.Warning($"[photon-appid] override failed: {ex.Message}"); }
-    }
-
-    /// <summary>Forces <c>PhotonServerSettings.HostType = PhotonCloud</c>
-    /// and writes <c>PreferredRegion</c>. Honors any region the server
-    /// has handed us in <c>Matchmaking.LocalRoomInstance.PhotonRegionId</c>
-    /// first; falls back to <c>Cfg.PhotonCloudRegion</c> when no room
-    /// instance has been received yet (initial boot).</summary>
-    private static void ApplyForcedRegion(object settings, Type settingsType)
-    {
-        try
-        {
-            var hostTypeProp = settingsType.GetField("HostType")
-                ?? (System.Reflection.MemberInfo?)settingsType.GetProperty("HostType");
-            var preferredProp = settingsType.GetField("PreferredRegion")
-                ?? (System.Reflection.MemberInfo?)settingsType.GetProperty("PreferredRegion");
-            if (hostTypeProp is null || preferredProp is null)
-            {
-                Mod.Log.Warning("[photon-region] PhotonServerSettings.HostType/PreferredRegion not found");
-                return;
-            }
-
-            // ServerSettings.HostingOption.PhotonCloud = 1 (verified in
-            // Cpp2IL_CS/.../ServerSettings.cs:8). Resolve the actual enum
-            // type from the field/property so we don't depend on a
-            // specific Il2Cpp proxy namespace.
-            Type? hostTypeEnum = (hostTypeProp as FieldInfo)?.FieldType
-                                 ?? ((PropertyInfo)hostTypeProp).PropertyType;
-            Type? regionEnum   = (preferredProp as FieldInfo)?.FieldType
-                                 ?? ((PropertyInfo)preferredProp).PropertyType;
-
-            // Prefer server-provided region over config. We read it via
-            // the same reflection style as the existing patches so the
-            // Il2Cpp type-name suffix doesn't bite us.
-            string region = ReadServerProvidedRegion() ?? Mod.Cfg.PhotonCloudRegion ?? "us";
-
-            object hostValue = Enum.ToObject(hostTypeEnum!, 1); // PhotonCloud
-            object regionValue;
-            try { regionValue = Enum.Parse(regionEnum!, region.ToLowerInvariant(), ignoreCase: true); }
-            catch
-            {
-                Mod.Log.Warning($"[photon-region] '{region}' is not a CloudRegionCode enum value; defaulting to us");
-                regionValue = Enum.ToObject(regionEnum!, 1); // CloudRegionCode.us = 1
-                region = "us";
-            }
-
-            if (hostTypeProp is FieldInfo hostField) hostField.SetValue(settings, hostValue);
-            else ((PropertyInfo)hostTypeProp).SetValue(settings, hostValue);
-            if (preferredProp is FieldInfo prefField) prefField.SetValue(settings, regionValue);
-            else ((PropertyInfo)preferredProp).SetValue(settings, regionValue);
-
-            Mod.Log.Msg($"[photon-region] forced HostType=PhotonCloud PreferredRegion={region}");
-        }
-        catch (Exception ex) { Mod.Log.Warning($"[photon-region] apply failed: {ex.Message}"); }
-    }
-
-    /// <summary>Reads
-    /// <c>RecNet.Matchmaking.LocalRoomInstance.PhotonRegionId</c> as a
-    /// lowercase enum name (eu, us, asia, …). Returns null if no room
-    /// instance has been received yet, or if any link in the chain is
-    /// null. Server-told region wins over the static config default
-    /// because the server is authoritative about which Photon region
-    /// hosts the room the watch is about to join.</summary>
-    private static string? ReadServerProvidedRegion()
-    {
-        try
-        {
-            var matchmaking = FindGameType("RecNet.Matchmaking");
-            var localRoom = matchmaking?.GetProperty("LocalRoomInstance", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
-            if (localRoom is null) return null;
-            var regionObj = localRoom.GetType().GetProperty("PhotonRegionId")?.GetValue(localRoom);
-            if (regionObj is null) return null;
-            // CloudRegionCode enum.ToString() gives the lowercase region
-            // name (eu, us, asia, …) — see CloudRegionCode.cs.
-            return regionObj.ToString();
-        }
-        catch { return null; }
-    }
-
-    // AuthValuesInjector_Prefix parked 2026-05-28 — never wired to a
-    // harmony hook in this branch anyway. See
-    // attic/AuthValuesInjector.cs.attic.
-
-    /// <summary>Postfix on <c>PUNNetworkManager.FJOLIPKKIBE</c> — the
-    /// 2020.12 watch's private AppSettings builder. <c>__result</c> is the
-    /// <c>Photon.Realtime.AppSettings</c> it just built.
-    ///
-    /// **CRITICAL OVERRIDE**: replaces <c>AppIdRealtime</c> and
-    /// <c>AppIdVoice</c> with our configured values before the AppSettings
-    /// reaches <c>PhotonNetwork.ConnectUsingSettings</c>. The 2020.12
-    /// watch hardcodes Rec Room's official AppIds as IL2CPP string
-    /// literals (verified at <c>PUNNetworkManager.txt:7205,7208</c>:
-    /// <c>"9372aa8d-..."</c> and <c>"e93ae440-..."</c>). Patching
-    /// resources.assets at offsets 0x7962480 / 0x79624ac doesn't help —
-    /// those are unrelated leftover strings, NOT the AppIds the SDK
-    /// actually reads. The only reliable swap point is here, after
-    /// FJOLIPKKIBE constructs the AppSettings object but before the
-    /// LoadBalancingClient consumes it.
-    ///
-    /// Then dumps every readable field/property for diagnostics.</summary>
-    public static void LogAppSettings_Postfix(object __result)
-    {
-        try
-        {
-            if (__result is null) { Mod.Log.Msg("[photon-diag] FJOLIPKKIBE returned null AppSettings"); return; }
-
-            // ── AppId injection ────────────────────────────────────────
-            var t = __result.GetType();
-            var newPun   = string.IsNullOrEmpty(Mod.Cfg.PhotonAppId) ? null : Mod.Cfg.PhotonAppId;
-            var newVoice = string.IsNullOrEmpty(Mod.Cfg.PhotonVoiceAppId)
-                ? (newPun ?? null)
-                : Mod.Cfg.PhotonVoiceAppId;
-            if (newPun is not null)
-            {
-                var realtimeProp = t.GetProperty("AppIdRealtime") ?? t.GetProperty("AppIdFusion");
-                var oldPun = realtimeProp?.GetValue(__result) as string;
-                realtimeProp?.SetValue(__result, newPun);
-                Mod.Log.Msg($"[photon-override] AppIdRealtime: {oldPun} → {newPun}");
-            }
-            if (newVoice is not null)
-            {
-                var voiceProp = t.GetProperty("AppIdVoice");
-                var oldVoice = voiceProp?.GetValue(__result) as string;
-                voiceProp?.SetValue(__result, newVoice);
-                Mod.Log.Msg($"[photon-override] AppIdVoice: {oldVoice} → {newVoice}");
-            }
-            // Also force FixedRegion to the configured region so two clients
-            // never end up on different regions of the same room name.
-            if (!string.IsNullOrEmpty(Mod.Cfg.PhotonCloudRegion))
-            {
-                var fixedRegionProp = t.GetProperty("FixedRegion");
-                if (fixedRegionProp is not null && fixedRegionProp.CanWrite)
-                {
-                    fixedRegionProp.SetValue(__result, Mod.Cfg.PhotonCloudRegion);
-                    Mod.Log.Msg($"[photon-override] FixedRegion → {Mod.Cfg.PhotonCloudRegion}");
-                }
-            }
-
-            Mod.Log.Msg("[photon-diag] FJOLIPKKIBE built AppSettings (post-override):");
-            DumpSettings(__result, t, indent: "  ");
-        }
-        catch (Exception ex) { Mod.Log.Warning($"[photon-diag] LogAppSettings/override failed: {ex.Message}"); }
-    }
-
-    /// <summary>Postfix on <c>PUNNetworkManager.EMGGKBALALH</c> — the
-    /// 2020.12 watch's private AuthenticationValues builder. <c>__result</c>
-    /// is the AuthValues it just built with environment + accessToken
-    /// AuthGetParameters. Logs AuthType, UserId, and the full
-    /// AuthGetParameters / AuthPostData payload that Photon Cloud will
-    /// forward to the configured Custom Auth URL.</summary>
-    public static void LogAuthValues_Postfix(object __result)
-    {
-        try
-        {
-            if (__result is null)
-            {
-                Mod.Log.Msg("[photon-diag] EMGGKBALALH returned null AuthValues (anonymous connect)");
-                return;
-            }
-            var t = __result.GetType();
-            if (Mod.Cfg.BypassPhotonCustomAuth)
-            {
-                DisableCustomAuthValues(__result, t);
-            }
-            string Read(string name) => t.GetProperty(name)?.GetValue(__result)?.ToString() ?? "<null>";
-            var authType = Read("AuthType");
-            var userId   = Read("UserId");
-            var getParams = t.GetProperty("AuthGetParameters")?.GetValue(__result)?.ToString() ?? "<null>";
-            var postData = t.GetProperty("AuthPostData")?.GetValue(__result);
-            var postStr  = postData is byte[] bytes
-                ? $"<{bytes.Length} bytes: {System.Text.Encoding.UTF8.GetString(bytes)}>"
-                : postData?.ToString() ?? "<null>";
-            Mod.Log.Msg($"[photon-diag] EMGGKBALALH built AuthValues: AuthType={authType} UserId={userId}");
-            Mod.Log.Msg($"[photon-diag]   AuthGetParameters = {getParams}");
-            Mod.Log.Msg($"[photon-diag]   AuthPostData      = {postStr}");
-        }
-        catch (Exception ex) { Mod.Log.Warning($"[photon-diag] LogAuthValues failed: {ex.Message}"); }
-    }
-
-    private static void DisableCustomAuthValues(object authValues, Type t)
-    {
-        try
-        {
-            SetMember(t, authValues, "AuthType", type => AuthTypeNoneValue(type));
-            SetMember(t, authValues, "AuthGetParameters", type => type == typeof(string) ? string.Empty : null);
-            SetMember(t, authValues, "AuthPostData", _ => null);
-            SetMember(t, authValues, "Token", type => type == typeof(string) ? string.Empty : null);
-            Mod.Log.Msg("[photon-auth] custom auth bypass enabled for this launch");
-        }
-        catch (Exception ex)
-        {
-            Mod.Log.Warning($"[photon-auth] custom auth bypass failed: {ex.Message}");
-        }
-    }
-
-    private static object? AuthTypeNoneValue(Type type)
-    {
-        if (type.IsEnum) return Enum.ToObject(type, 255);
-        if (type == typeof(byte)) return byte.MaxValue;
-        if (type == typeof(sbyte)) return (sbyte)-1;
-        if (type == typeof(short)) return (short)255;
-        if (type == typeof(ushort)) return (ushort)255;
-        if (type == typeof(int)) return 255;
-        if (type == typeof(uint)) return 255u;
-        if (type == typeof(long)) return 255L;
-        if (type == typeof(ulong)) return 255UL;
-        return Convert.ChangeType(255, type);
-    }
-
-    private static bool SetMember(Type type, object instance, string name, Func<Type, object?> valueFactory)
-    {
-        const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly;
-        var prop = type.GetProperty(name, flags);
-        if (prop is not null && prop.CanWrite)
-        {
-            prop.SetValue(instance, valueFactory(prop.PropertyType));
-            return true;
-        }
-
-        var field = type.GetField(name, flags);
-        if (field is not null)
-        {
-            field.SetValue(instance, valueFactory(field.FieldType));
-            return true;
-        }
-
-        return false;
-    }
-
-    /// <summary>Prefix on <c>PUNNetworkManager.OnCustomAuthenticationFailed</c>
-    /// — the watch's UI-error formatter only logs a truncated Unity-
-    /// stringified version of the debugMessage. Capturing the raw
-    /// string before the watch's handler runs gives us the FULL
-    /// Photon error including the URL Photon Cloud actually tried to
-    /// call (which is the smoking-gun answer to "is the dashboard URL
-    /// saved or is Photon hitting a stale one").</summary>
-    public static bool OnCustomAuthenticationFailed_Prefix(object __0)
-    {
-        try
-        {
-            var debugMessage = __0?.ToString() ?? "<null>";
-            Mod.Log.Error("[photon-diag] OnCustomAuthenticationFailed FULL MESSAGE:");
-            Mod.Log.Error(debugMessage);
-            if (Mod.Cfg.BypassPhotonCustomAuth)
-            {
-                Mod.Log.Warning("[photon-auth] custom auth failure suppressed for this launch");
-                return false;
-            }
-            // Also dump current AppSettings — if Photon rejected the auth
-            // we want to know what the watch's actual final config looked
-            // like (post-override).
-            var photonNetwork = FindGameType("PhotonNetwork");
-            var settings = photonNetwork?.GetProperty("PhotonServerSettings", BindingFlags.Public | BindingFlags.Static)?.GetValue(null);
-            if (settings is not null)
-            {
-                Mod.Log.Error("[photon-diag] PhotonServerSettings at failure:");
-                DumpSettings(settings, settings.GetType(), indent: "  ");
-            }
-        }
-        catch (Exception ex) { Mod.Log.Warning($"[photon-diag] OnCustomAuthenticationFailed log failed: {ex.Message}"); }
-        return true;
-    }
-
-    public static bool OnDisconnected_Prefix(object __0)
-    {
-        try
-        {
-            var cause = __0?.ToString() ?? "<null>";
-            if (Mod.Cfg.BypassPhotonCustomAuth &&
-                cause.IndexOf("CustomAuthenticationFailed", StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                Mod.Log.Warning("[photon-auth] CustomAuthenticationFailed disconnect suppressed for this launch");
-                return false;
-            }
-        }
-        catch (Exception ex) { Mod.Log.Warning($"[photon-auth] disconnect bypass check failed: {ex.Message}"); }
-        return true;
-    }
-
-    /// <summary>Logs every public field + property on <paramref name="obj"/>
-    /// — used by the photon-diag patches above to dump AppSettings in one
-    /// pass without coupling to specific field names that differ across
-    /// PUN versions (Server/Port vs AppSettings.NameServer in newer
-    /// PUN 2.x, etc.).</summary>
-    private static void DumpSettings(object obj, Type t, string indent)
-    {
-        // DeclaredOnly so we don't walk Il2CppObjectBase's properties
-        // (ObjectClass, Pointer, WasCollected) — and, importantly, so
-        // we don't reflect over any property whose getter internally
-        // constructs a System.Uri. The Uri ctor is harmony-patched, so
-        // the FIRST call to a Uri-returning getter triggers MonoMod's
-        // lazy CompileMethodHook for the ctor, which fatal-CLRs
-        // (0x80131506) on this build. The override has already run by
-        // the time DumpSettings is called — the dump is diagnostic
-        // only, so it's safer to stay scoped to user-land properties.
-        const BindingFlags flags = BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly;
-        try
-        {
-            foreach (var p in t.GetProperties(flags))
-            {
-                if (p.GetIndexParameters().Length > 0) continue;
-                if (!p.CanRead) continue;
-                // Defensively skip any property whose declared return
-                // type is Uri (would still trigger ctor on .ToString()
-                // path even if we tried to read it).
-                if (p.PropertyType == typeof(Uri)) continue;
-                object? v;
-                try { v = p.GetValue(obj); } catch { continue; }
-                if (v is Uri) continue;
-                var str = v is null ? "<null>" : v.ToString();
-                if (v is not null && v.GetType().Name.IndexOf("AppSettings", StringComparison.Ordinal) >= 0 && indent.Length < 6)
-                {
-                    Mod.Log.Msg($"{indent}{p.Name} (nested):");
-                    DumpSettings(v, v.GetType(), indent + "  ");
-                    continue;
-                }
-                Mod.Log.Msg($"{indent}{p.Name} = {str}");
-            }
-            foreach (var f in t.GetFields(flags))
-            {
-                if (f.FieldType == typeof(Uri)) continue;
-                object? v;
-                try { v = f.GetValue(obj); } catch { continue; }
-                if (v is Uri) continue;
-                var str = v is null ? "<null>" : v.ToString();
-                if (v is not null && v.GetType().Name.IndexOf("AppSettings", StringComparison.Ordinal) >= 0 && indent.Length < 6)
-                {
-                    Mod.Log.Msg($"{indent}{f.Name} (nested):");
-                    DumpSettings(v, v.GetType(), indent + "  ");
-                    continue;
-                }
-                Mod.Log.Msg($"{indent}{f.Name} = {str}");
-            }
-        }
-        catch (Exception ex) { Mod.Log.Warning($"[photon-diag] DumpSettings failed: {ex.Message}"); }
-    }
-
-    // GetCurrentLockToken parked alongside the injector — see
-    // attic/AuthValuesInjector.cs.attic.
-
-    private static Type? FindGameType(string name) => Mod.ResolveType(name);
-}
-
 internal static class SavePatches
 {
     // Last DataBlobName parsed off a SubscriptionUpdateRoom push for
@@ -2989,6 +2588,15 @@ internal static class AntiCheatPatches
     }
 }
 
+internal static class FileHashCheckerPatches
+{
+    public static bool InitializeCallback_Prefix(object? result)
+    {
+        Mod.Log.Msg($"[filecheck] suppressed verifier callback result={result?.GetType().FullName ?? "null"}");
+        return false;
+    }
+}
+
 internal static class TlsPatches
 {
     // Both BouncyCastle TLS authenticators have the same `void
@@ -3016,16 +2624,23 @@ internal static class DiagnosticPatches
         catch { }
     }
 
-    public static void ApplicationQuit_Prefix()
+    public static bool ApplicationQuit_Prefix()
     {
         Write("[quit] UnityEngine.Application.Quit()");
         WriteStack();
+        return true;
     }
 
-    public static void ApplicationQuitInt_Prefix(int exitCode)
+    public static bool ApplicationQuitInt_Prefix(int exitCode)
     {
         Write($"[quit] UnityEngine.Application.Quit({exitCode})");
         WriteStack();
+        if (exitCode == 1550502249 || exitCode == 533223478)
+        {
+            Write($"[quit-blocked] UnityEngine.Application.Quit fatal client exit {exitCode}");
+            return false;
+        }
+        return true;
     }
 
     public static void AnalyticsCheat_Prefix(MethodBase __originalMethod)
@@ -3043,6 +2658,20 @@ internal static class DiagnosticPatches
     public static bool SessionManagerTryApplicationQuit_Prefix(MethodBase __originalMethod)
     {
         Write($"[quit-blocked] {__originalMethod.DeclaringType?.FullName}.{__originalMethod.Name}");
+        WriteStack();
+        return false;
+    }
+
+    public static bool SessionManagerTryApplicationQuitInt_Prefix(int DKOGJICFAEP, MethodBase __originalMethod)
+    {
+        Write($"[quit-blocked] {__originalMethod.DeclaringType?.FullName}.{__originalMethod.Name}({DKOGJICFAEP})");
+        WriteStack();
+        return false;
+    }
+
+    public static bool SessionManagerFatalApplicationQuit_Prefix(int DKOGJICFAEP, string EPAIMCEIMPA, MethodBase __originalMethod)
+    {
+        Write($"[quit-blocked] {__originalMethod.DeclaringType?.FullName}.{__originalMethod.Name}({DKOGJICFAEP}, {EPAIMCEIMPA})");
         WriteStack();
         return false;
     }

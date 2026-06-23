@@ -17,10 +17,12 @@ namespace DorkNet.Server.Controllers.Match;
 [ApiController]
 [Authorize]
 public class MatchController(
+    IConfiguration config,
     GameSessionService sessionService,
     PlayerPresenceService presence,
     PrivateInstanceService privateInstances,
     JoinTimeoutService joinTimeouts,
+    RoomService rooms,
     DorkNetDbContext db,
     ILogger<MatchController> logger) : ControllerBase
 {
@@ -82,6 +84,138 @@ public class MatchController(
                 pid, instanceId, code, label);
         }
         return Ok();
+    }
+
+    [HttpPost("/matchmake/none")]
+    public async Task<IActionResult> MatchmakeNone()
+    {
+        var pid = this.CurrentPlayerId() ?? 0;
+        if (pid == 0) return Unauthorized();
+
+        var current = presence.GetRoom(pid) ?? await BuildDormRoomInstanceAsync(pid);
+        presence.SetRoom(pid, current);
+        presence.MarkActive(pid);
+        logger.LogInformation("[matchmake-none] player={Player}", pid);
+        return Ok(new MatchmakingResponseDto
+        {
+            ErrorCode = 0,
+            RoomInstance = current,
+        });
+    }
+
+    [HttpPost("/matchmake/dorm")]
+    public async Task<IActionResult> MatchmakeDorm()
+    {
+        var pid = this.CurrentPlayerId() ?? 0;
+        if (pid == 0) return Unauthorized();
+
+        var room = await BuildDormRoomInstanceAsync(pid);
+        presence.SetRoom(pid, room);
+        presence.MarkActive(pid);
+        await RecordVisitAsync(pid, room.RoomId);
+        logger.LogInformation(
+            "[matchmake-dorm] player={Player} room={Room} instance={Instance} photon={Photon}",
+            pid, room.RoomId, room.RoomInstanceId, room.PhotonRoomId);
+        return Ok(new MatchmakingResponseDto
+        {
+            ErrorCode = 0,
+            RoomInstance = room,
+        });
+    }
+
+    private async Task<RoomInstanceDto> BuildDormRoomInstanceAsync(long playerId)
+    {
+        var personal = await rooms.EnsurePersonalDormAsync(playerId);
+        var dataBlob = await rooms.ResolveDormDataBlobNameAsync(playerId, personal.Id);
+        if (string.IsNullOrWhiteSpace(dataBlob))
+            dataBlob = personal.CurrentDataBlobName;
+
+        var photonRegion = (config["Photon:CloudRegion"] ?? "us").ToLowerInvariant();
+        var photonRoomId = $"^dormroom_p{playerId}";
+        var dormInstanceName = await BuildDormInstanceNameAsync(playerId);
+
+        var dorm = await privateInstances.EnsureForDormAsync(
+            ownerPlayerId: playerId,
+            roomId: personal.Id,
+            subRoomId: 0,
+            baseName: dormInstanceName,
+            location: personal.LocationReplicationId,
+            dataBlob: dataBlob ?? string.Empty,
+            photonRegion: photonRegion,
+            maxCapacity: personal.MaxCapacity,
+            photonRoomId: photonRoomId);
+
+        return new RoomInstanceDto
+        {
+            RoomInstanceId = dorm.InstanceId,
+            RoomId = personal.Id,
+            SubRoomId = 0,
+            Location = personal.LocationReplicationId,
+            PhotonRegionId = photonRegion,
+            PhotonRoomId = photonRoomId,
+            Name = dormInstanceName,
+            MaxCapacity = personal.MaxCapacity,
+            IsFull = false,
+            IsPrivate = true,
+            IsInProgress = true,
+            DataBlob = dataBlob ?? string.Empty,
+            EventId = 0,
+        };
+    }
+
+    private async Task<string> BuildDormInstanceNameAsync(long ownerPlayerId)
+    {
+        var player = await db.Players.AsNoTracking()
+            .Where(p => p.Id == ownerPlayerId)
+            .Select(p => new { p.DisplayName, p.Username })
+            .FirstOrDefaultAsync();
+        var name = !string.IsNullOrWhiteSpace(player?.DisplayName)
+            ? player!.DisplayName
+            : !string.IsNullOrWhiteSpace(player?.Username)
+                ? player!.Username
+                : $"Player{ownerPlayerId}";
+        var cleaned = new string(name
+            .Select(ch => char.IsLetterOrDigit(ch) || ch == '_' || ch == '-' ? ch : '_')
+            .ToArray()).Trim('_');
+        return string.IsNullOrWhiteSpace(cleaned) ? $"Player{ownerPlayerId}_dorm" : $"{cleaned}_dorm";
+    }
+
+    private async Task RecordVisitAsync(long playerId, long roomId)
+    {
+        var visit = await db.RoomVisits
+            .FirstOrDefaultAsync(v => v.RoomId == roomId && v.PlayerId == playerId);
+        var isFirst = visit is null;
+        if (isFirst)
+        {
+            visit = new RoomVisitEntity
+            {
+                RoomId = roomId,
+                PlayerId = playerId,
+                FirstVisitAt = DateTime.UtcNow,
+            };
+            db.RoomVisits.Add(visit);
+        }
+        visit!.LastVisitAt = DateTime.UtcNow;
+        visit.VisitCount += 1;
+
+        if (isFirst)
+        {
+            await db.Rooms
+                .Where(r => r.Id == roomId)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(r => r.VisitCount, r => r.VisitCount + 1)
+                    .SetProperty(r => r.VisitorCount, r => r.VisitorCount + 1)
+                    .SetProperty(r => r.HotScore, r => r.HotScore + 2.0));
+        }
+        else
+        {
+            await db.Rooms
+                .Where(r => r.Id == roomId)
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(r => r.VisitCount, r => r.VisitCount + 1)
+                    .SetProperty(r => r.HotScore, r => r.HotScore + 0.25));
+        }
+        await db.SaveChangesAsync();
     }
 
 

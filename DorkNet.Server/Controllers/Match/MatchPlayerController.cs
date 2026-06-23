@@ -38,6 +38,25 @@ public class MatchPlayerController(
     [HttpPost("/player/login")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
     public async Task<IActionResult> PlayerLogin([FromForm(Name = "LoginLock")] string? loginLock)
+        => await RecordLoginLockAsync(loginLock, "player-login");
+
+    /// <summary>
+    /// POST <c>/player/exclusivelogin</c> — newer clients use this instead
+    /// of <c>/player/login</c> and include a
+    /// <c>TakeOverExclusiveSession</c> form value. The lock semantics are
+    /// otherwise the same: the latest LoginLock wins for this account.
+    /// </summary>
+    [HttpPost("/player/exclusivelogin")]
+    [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
+    public async Task<IActionResult> PlayerExclusiveLogin(
+        [FromForm(Name = "LoginLock")] string? loginLock,
+        [FromForm(Name = "TakeOverExclusiveSession")] bool? takeOverExclusiveSession)
+        => await RecordLoginLockAsync(loginLock, "player-exclusive-login", takeOverExclusiveSession);
+
+    private async Task<IActionResult> RecordLoginLockAsync(
+        string? loginLock,
+        string logScope,
+        bool? takeOverExclusiveSession = null)
     {
         var playerId = TryGetCurrentPlayerId();
         if (playerId != 0 && !string.IsNullOrWhiteSpace(loginLock))
@@ -46,8 +65,8 @@ public class MatchPlayerController(
             if (replaced)
             {
                 log.LogWarning(
-                    "[player-login] concurrent session for player={PlayerId}; kicking old session(s) via ModerationKick push",
-                    playerId);
+                    "[{Scope}] concurrent session for player={PlayerId}; takeOver={TakeOver}; kicking old session(s) via ModerationKick push",
+                    logScope, playerId, takeOverExclusiveSession);
                 // The new session hasn't opened its SignalR socket yet
                 // (negotiate fires AFTER /player/login on the watch's
                 // boot sequence — verified in the live trace), so the
