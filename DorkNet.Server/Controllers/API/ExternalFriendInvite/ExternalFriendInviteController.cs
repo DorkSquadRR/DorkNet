@@ -44,6 +44,7 @@ public class ExternalFriendInviteController(DorkNetDbContext db) : ControllerBas
     }
 
     [HttpGet("api/externalfriendinvite/v1/getplatformreferrers")]
+    [HttpPost("api/externalfriendinvite/v1/getplatformreferrers")]
     public async Task<IActionResult> GetPlatformReferrers()
     {
         var rows = await db.PlayerSettings
@@ -54,6 +55,7 @@ public class ExternalFriendInviteController(DorkNetDbContext db) : ControllerBas
     }
 
     [HttpGet("api/externalfriendinvite/v1/gettextmessagereferrers")]
+    [HttpPost("api/externalfriendinvite/v1/gettextmessagereferrers")]
     public async Task<IActionResult> GetTextMessageReferrers()
     {
         var rows = await db.PlayerSettings

@@ -48,11 +48,31 @@ public class RoomsController(
     /// TagsCsv column (e.g. `#community`, `#recroomoriginal`).
     /// </summary>
     [HttpGet("api/rooms/v1/hot")]
-    [HttpGet("rooms/hot")]
-    public async Task<IActionResult> Hot(
+    public async Task<IActionResult> HotV1(
         [FromQuery] string? roomScoreType,
         [FromQuery] string? tags)
         => Ok((await rooms.HotAsync(tags)).Select(RoomService.ToWireRoom).ToList());
+
+    [HttpGet("rooms/hot")]
+    public async Task<IActionResult> HotRoomServer(
+        [FromQuery] string? tag,
+        [FromQuery] string? tags,
+        [FromQuery] int skip = 0,
+        [FromQuery] int take = 100)
+    {
+        var all = await rooms.HotAsync(tag ?? tags, take: 200);
+        var page = all
+            .Skip(Math.Max(skip, 0))
+            .Take(Math.Clamp(take, 1, 100))
+            .Select(RoomService.ToWireRoom)
+            .ToList();
+
+        return Ok(new
+        {
+            Results = page,
+            TotalResults = all.Count,
+        });
+    }
 
     /// <summary>
     /// GET <c>/roomserver/rooms/recommendations</c> — the home-tab
@@ -1543,7 +1563,6 @@ public class RoomsController(
             .Where(r => r.Id == roomId)
             .Select(r => new { r.Id, r.VisitCount, r.CheerCount, r.FavoriteCount })
             .FirstOrDefaultAsync();
-        if (room is null) return NotFound();
 
         var favorited = await db.RoomBookmarks
             .AnyAsync(b => b.RoomId == roomId && b.PlayerId == pid.Value);
@@ -1556,7 +1575,7 @@ public class RoomsController(
 
         return Ok(new
         {
-            RoomId = room.Id,
+            RoomId = room?.Id ?? roomId,
             PlayerId = pid.Value,
             Favorite = favorited,
             Favorited = favorited,
@@ -1569,9 +1588,9 @@ public class RoomsController(
             VisitCount = visit?.VisitCount ?? 0,
             FirstVisitedAt = visit?.FirstVisitAt,
             LastVisitedAt = visit?.LastVisitAt,
-            RoomVisitCount = room.VisitCount,
-            RoomCheerCount = room.CheerCount,
-            RoomFavoriteCount = room.FavoriteCount,
+            RoomVisitCount = room?.VisitCount ?? 0,
+            RoomCheerCount = room?.CheerCount ?? 0,
+            RoomFavoriteCount = room?.FavoriteCount ?? 0,
         });
     }
 
@@ -1613,7 +1632,7 @@ public class RoomsController(
     public async Task<IActionResult> CuratedPlaylistsCompat()
     {
         var curated = await playlists.CuratedAsync();
-        return Ok(curated.Select(BuildPlaylistUnionEntry).ToList());
+        return Ok(curated.Select(p => p.Id).ToList());
     }
 
     [HttpGet("clubhousesearch/mostactivenow")]
@@ -1725,17 +1744,25 @@ public class RoomsController(
     /// <see cref="Featured"/> shape here throws KeyNotFoundException on
     /// the watch's group-id lookup.</summary>
     [HttpGet("featuredrooms/current")]
-    public async Task<IActionResult> FeaturedRoomsCurrent() => Ok(new
+    public async Task<IActionResult> FeaturedRoomsCurrent()
     {
-        FeaturedRoomGroupId = 1L,
-        Name = "Featured",
-        // NMPFCIJPODA.PPGFHEDFBEA (NMPFCIJPODA.txt:100-125) reads
-        // 3 strict keys, not 2 — FeaturedRoomGroupId, Name, AND
-        // Rooms (List<PPKJFAAAGDO>). Returning without the third
-        // key throws KeyNotFoundException on the watch and the
-        // Featured carousel stays empty.
-        Rooms = await rooms.FeaturedAgRoomIdsAsync(12),
-    });
+        var ids = await rooms.FeaturedAgRoomIdsAsync(12);
+        var featuredRooms = await db.Rooms
+            .Where(r => ids.Contains(r.Id))
+            .ToListAsync();
+        var byId = featuredRooms.ToDictionary(r => r.Id);
+        var wireRooms = ids
+            .Select(id => byId.TryGetValue(id, out var room) ? RoomService.ToWireRoom(room) : null)
+            .Where(room => room is not null)
+            .Cast<object>()
+            .ToList();
+        return Ok(new
+        {
+            FeaturedRoomGroupId = 1L,
+            Name = "Featured",
+            Rooms = wireRooms,
+        });
+    }
 
     /// <summary>POST <c>api/rooms/v1/bookmark</c> — toggle bookmark
     /// state for a room. Body: <c>RoomId</c> + optional <c>Bookmark</c>

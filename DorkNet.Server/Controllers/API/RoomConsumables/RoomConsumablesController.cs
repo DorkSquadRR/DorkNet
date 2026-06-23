@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Security.Cryptography;
+using System.Text;
 using DorkNet.Server.Auth;
 using DorkNet.Server.Data;
 using DorkNet.Server.Data.Entities;
@@ -13,8 +15,9 @@ public class RoomConsumablesController(DorkNetDbContext db, LevelService level) 
 {
     [HttpGet("api/roomconsumables")]
     [HttpGet("api/roomconsumables/v1/roomConsumable")]
+    [HttpGet("api/roomconsumables/v1/roomConsumable/room/{roomId:long}")]
     [AllowAnonymous]
-    public async Task<IActionResult> List([FromQuery] long? id = null)
+    public async Task<IActionResult> List([FromRoute] long? roomId = null, [FromQuery] long? id = null)
     {
         var query = db.StoreItems
             .Where(i => i.IsActive && i.Category.ToLower() == "consumable");
@@ -25,6 +28,24 @@ public class RoomConsumablesController(DorkNetDbContext db, LevelService level) 
             .Take(200)
             .ToListAsync();
         return Ok(rows.Select(ToWire));
+    }
+
+    [HttpGet("api/roomconsumables/v1/roomConsumable/room/{roomId:long}/me")]
+    [Authorize]
+    public async Task<IActionResult> MineForRoom(long roomId)
+    {
+        var me = this.RequireCurrentPlayerId();
+        var rows = await (from inventory in db.PlayerInventory
+                          join item in db.StoreItems on inventory.ItemSlug equals item.Slug
+                          where inventory.PlayerId == me
+                              && inventory.Quantity > 0
+                              && item.IsActive
+                              && item.Category.ToLower() == "consumable"
+                          orderby item.DisplayName
+                          select new { Inventory = inventory, Item = item })
+            .Take(200)
+            .ToListAsync();
+        return Ok(rows.Select(row => ToInventoryWire(row.Item, row.Inventory)));
     }
 
     [HttpPost("api/roomconsumables/v1/roomconsumable/{itemId:long}/purchase/currency")]
@@ -73,16 +94,46 @@ public class RoomConsumablesController(DorkNetDbContext db, LevelService level) 
         });
     }
 
-    private static object ToWire(StoreItemEntity item) => new
+    private static object ToWire(StoreItemEntity item)
     {
-        RoomConsumableId = item.Id,
-        ItemId = item.Id,
-        item.Slug,
-        Name = item.DisplayName,
-        item.Description,
-        item.ImageName,
-        item.Price,
-        item.CurrencyType,
-        item.Category,
-    };
+        var roomConsumableId = StableRoomConsumableId(item.Id).ToString("D");
+        return new
+        {
+            RoomConsumableId = roomConsumableId,
+            Name = item.DisplayName,
+            item.ImageName,
+            item.Description,
+            item.Price,
+            CurrencyId = (Guid?)null,
+            CreatedAt = DateTimeOffset.UnixEpoch,
+            ItemId = item.Id,
+            item.Slug,
+            item.CurrencyType,
+            item.Category,
+        };
+    }
+
+    private static object ToInventoryWire(StoreItemEntity item, PlayerInventoryEntity inventory)
+    {
+        var createdAt = inventory.AcquiredAt == default
+            ? DateTimeOffset.UnixEpoch
+            : new DateTimeOffset(DateTime.SpecifyKind(inventory.AcquiredAt, DateTimeKind.Utc));
+        return new
+        {
+            Id = StableRoomConsumableId(item.Id).ToString("D"),
+            ConsumableItemDesc = ToWire(item),
+            Count = Math.Max(0, inventory.Quantity),
+            InitialCount = Math.Max(0, inventory.Quantity),
+            CreatedAt = createdAt,
+            ActiveDurationMinutes = 0,
+            IsActive = inventory.IsActive,
+            IsTransferable = false,
+        };
+    }
+
+    private static Guid StableRoomConsumableId(long itemId)
+    {
+        var hash = MD5.HashData(Encoding.UTF8.GetBytes($"roomConsumable:{itemId}"));
+        return new Guid(hash);
+    }
 }

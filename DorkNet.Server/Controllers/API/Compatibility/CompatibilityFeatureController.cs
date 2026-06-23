@@ -60,16 +60,34 @@ public class CompatibilityFeatureController(DorkNetDbContext db) : ControllerBas
                 .ExecuteDeleteAsync();
         }
 
-        // 2020.12 deserializer for this response expects `subscription` to be a
-        // nested OBJECT (Subscription DTO with subscriptionId/recNetPlayerId/...
-        // fields), NOT a boolean. Sending a bool throws InvalidCastException
-        // on the client ("Unable to cast object of type 'Boolean' to type
-        // 'Dictionary`2'"). Send null when there's no active subscription —
-        // the client's generic-cast helper returns default(T) which is fine.
-        return Ok(new
+        var active = targetId == pid || await db.Subscriptions.AnyAsync(s =>
+            s.SubscriberPlayerId == pid && s.TargetPlayerId == targetId);
+        var now = DateTime.UtcNow;
+        var subscriptionId = unchecked((pid * 397L) ^ targetId);
+        var subscription = new Dictionary<string, object?>
         {
-            subscription = (object?)null,
-            platformAccountSubscribedPlayerId = targetId,
+            ["subscriptionId"] = subscriptionId,
+            ["recNetPlayerId"] = pid,
+            ["platformAccountSubscribedPlayerId"] = targetId,
+            ["isActive"] = active,
+            ["startedAt"] = now,
+            ["currentPeriodEnd"] = active ? now.AddYears(10) : now,
+            ["renewalDate"] = active ? now.AddYears(10) : now,
+            ["SubscriptionId"] = subscriptionId,
+            ["RecNetPlayerId"] = pid,
+            ["PlatformAccountSubscribedPlayerId"] = targetId,
+            ["IsActive"] = active,
+            ["StartedAt"] = now,
+            ["CurrentPeriodEnd"] = active ? now.AddYears(10) : now,
+            ["RenewalDate"] = active ? now.AddYears(10) : now,
+        };
+
+        return Ok(new Dictionary<string, object?>
+        {
+            ["subscription"] = subscription,
+            ["platformAccountSubscribedPlayerId"] = targetId,
+            ["Subscription"] = subscription,
+            ["PlatformAccountSubscribedPlayerId"] = targetId,
         });
     }
 

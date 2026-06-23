@@ -103,6 +103,28 @@ public class MatchController(
         });
     }
 
+    [HttpGet("/photon_access_token")]
+    public IActionResult PhotonAccessToken()
+    {
+        var pid = this.RequireCurrentPlayerId();
+        var appId = config["Photon:AppId"] ?? string.Empty;
+        var voiceAppId = config["Photon:VoiceAppId"] ?? string.Empty;
+        var region = (config["Photon:CloudRegion"] ?? "us").ToLowerInvariant();
+        return Ok(new Dictionary<string, object>
+        {
+            ["ResultCode"] = 1,
+            ["Message"] = string.Empty,
+            ["UserId"] = pid.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            ["PhotonAppId"] = appId,
+            ["PhotonVoiceAppId"] = voiceAppId,
+            ["AppId"] = appId,
+            ["VoiceAppId"] = voiceAppId,
+            ["CloudRegion"] = region,
+            ["Region"] = region,
+            ["Token"] = string.Empty,
+        });
+    }
+
     [HttpPost("/matchmake/dorm")]
     public async Task<IActionResult> MatchmakeDorm()
     {
