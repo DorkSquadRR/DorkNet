@@ -577,7 +577,7 @@ public class RoomService(DorkNetDbContext db)
     /// Resolve the saved room-data blob for a personal dorm and repair stale
     /// pointers left by older builds. Some existing dorm rows only have the
     /// real save in RoomDataBlobs or RoomScenes while DormStates/Rooms still
-    /// point at the synthetic room_{id}_v1.dat fallback.
+    /// point at an old synthetic fallback blob.
     /// </summary>
     public async Task<string> ResolveDormDataBlobNameAsync(long playerId, long dormRoomId)
     {
@@ -627,8 +627,19 @@ public class RoomService(DorkNetDbContext db)
             return latestDormBlob;
         }
 
-        return string.Empty;
+        return SyntheticDefaultRoomDataBlobName(dormRoomId);
     }
+
+    public static string SyntheticDefaultRoomDataBlobName(long roomId) =>
+        $"room_{roomId}_dorknet_v8.dat";
+
+    public static bool IsLegacySyntheticDefaultRoomDataBlobName(long roomId, string? blobName) =>
+        string.Equals(blobName, $"room_{roomId}_v1.dat", StringComparison.OrdinalIgnoreCase);
+
+    public static string ResolveWireRoomDataBlobName(long roomId, string? blobName) =>
+        !string.IsNullOrWhiteSpace(blobName) && !IsLegacySyntheticDefaultRoomDataBlobName(roomId, blobName)
+            ? blobName
+            : SyntheticDefaultRoomDataBlobName(roomId);
 
     private async Task<bool> IsUsableDormBlobNameAsync(string? blobName, long dormRoomId)
     {

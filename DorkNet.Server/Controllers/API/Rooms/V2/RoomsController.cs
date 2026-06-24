@@ -1185,15 +1185,13 @@ public class RoomsController(
         // proceeds with default-zero permissions.
         //
         // If a room has a saved blob, use it. Otherwise point at
-        // room_<id>_v1.dat, which misses S3 and is served by
+        // a synthetic CDN key, which misses S3 and is served by
         // RoomDataBlobService.GetDefaultBlob. That default is a captured
         // PersistedRoomData (v38); the older synthetic role-only blob and
         // empty DataBlobName path both leave the 2023 room-permissions
         // runtime without data it dereferences during spawn.
         var roleList = roles ?? Array.Empty<RoomRoleEntity>();
-        var dataBlobName = !string.IsNullOrEmpty(room.CurrentDataBlobName)
-            ? room.CurrentDataBlobName
-            : $"room_{room.Id}_v1.dat";
+        var dataBlobName = CurrentOrSyntheticDataBlobName(room);
 
         // Multi-scene rooms (imported via tools/import-room.ps1) carry one
         // RoomSceneEntity row per sub-room. Emit the full Scenes[] array
@@ -1215,9 +1213,7 @@ public class RoomsController(
                     DataBlobName = !string.IsNullOrWhiteSpace(overrideDataBlobName) &&
                         (overrideSceneId == s.OrderIndex || sceneRows.Count == 1)
                         ? overrideDataBlobName
-                        : !string.IsNullOrWhiteSpace(s.DataBlobName)
-                            ? s.DataBlobName
-                            : dataBlobName,
+                        : SceneOrSyntheticDataBlobName(room, s.DataBlobName, dataBlobName),
                     MaxPlayers = s.MaxPlayers,
                     CanMatchmakeInto = s.CanMatchmakeInto,
                     DataModifiedAt = (s.DataModifiedAt == default ? DateTime.UtcNow : s.DataModifiedAt)
@@ -1309,10 +1305,8 @@ public class RoomsController(
         var roleList = roles ?? Array.Empty<RoomRoleEntity>();
         // 2023's room-permissions runtime needs a real PersistedRoomData
         // source during spawn. If no saved blob exists, use the captured
-        // default via the synthetic room_<id>_v1.dat CDN path.
-        var dataBlobName = !string.IsNullOrEmpty(room.CurrentDataBlobName)
-            ? room.CurrentDataBlobName
-            : $"room_{room.Id}_v1.dat";
+        // default via the synthetic CDN path.
+        var dataBlobName = CurrentOrSyntheticDataBlobName(room);
         var updatedAt = (room.UpdatedAt == default ? DateTime.UtcNow : room.UpdatedAt)
             .ToString("yyyy-MM-ddTHH:mm:ssZ");
 
@@ -1324,9 +1318,7 @@ public class RoomsController(
                 Name = s.Name,
                 DataBlob = !string.IsNullOrWhiteSpace(overrideDataBlobName) && sceneRows.Count == 1
                     ? overrideDataBlobName
-                    : !string.IsNullOrWhiteSpace(s.DataBlobName)
-                        ? s.DataBlobName
-                        : dataBlobName,
+                    : SceneOrSyntheticDataBlobName(room, s.DataBlobName, dataBlobName),
                 DataSavedAt = (s.DataModifiedAt == default ? DateTime.UtcNow : s.DataModifiedAt)
                     .ToString("yyyy-MM-ddTHH:mm:ssZ"),
                 IsSandbox = s.IsSandbox,
@@ -1352,7 +1344,7 @@ public class RoomsController(
 
         var wireRoles = new List<object>
         {
-            BuildRoomAccountRoleWire(room.CreatorPlayerId, 255),
+            BuildRoomAccountRoleWire(room.CreatorPlayerId, 30),
         };
         wireRoles.AddRange(roleList.Select(BuildRoomRoleGrantWire));
 
@@ -1522,6 +1514,7 @@ public class RoomsController(
     [HttpGet("api/rooms/v2/myrecent")]
     public IActionResult MyOtherTabs() => Ok(Array.Empty<object>());
 
+    [HttpGet("player_room_data/{roomId:long}")]
     [HttpGet("rooms/{roomId:long}/playerdata/me")]
     [Authorize]
     public async Task<IActionResult> PlayerDataForMe(long roomId)
@@ -1545,6 +1538,7 @@ public class RoomsController(
 
         return Ok(new
         {
+            Data = "CAE=",
             RoomId = room?.Id ?? roomId,
             PlayerId = pid.Value,
             Favorite = favorited,
@@ -2690,10 +2684,29 @@ public class RoomsController(
         var rows = await db.RoomRoles.Where(r => r.RoomId == roomId).ToListAsync();
         var list = new List<object>(rows.Count + 1)
         {
-            BuildRoomAccountRoleWire(room.CreatorPlayerId, 255),
+            BuildRoomAccountRoleWire(room.CreatorPlayerId, 30),
         };
         list.AddRange(rows.Select(BuildRoomRoleGrantWire));
         return Ok(list);
+    }
+
+    private static string CurrentOrSyntheticDataBlobName(RoomEntity room)
+    {
+        if (room.IsDormRoom)
+            return RoomService.ResolveWireRoomDataBlobName(room.Id, room.CurrentDataBlobName);
+
+        return !string.IsNullOrWhiteSpace(room.CurrentDataBlobName)
+            ? room.CurrentDataBlobName
+            : RoomService.SyntheticDefaultRoomDataBlobName(room.Id);
+    }
+
+    private static string SceneOrSyntheticDataBlobName(RoomEntity room, string? sceneBlobName, string fallbackBlobName)
+    {
+        if (!string.IsNullOrWhiteSpace(sceneBlobName) &&
+            !(room.IsDormRoom && RoomService.IsLegacySyntheticDefaultRoomDataBlobName(room.Id, sceneBlobName)))
+            return sceneBlobName;
+
+        return fallbackBlobName;
     }
 
     [HttpGet("rooms/{roomId:long}/roles/{playerId:long}")]
@@ -2702,7 +2715,7 @@ public class RoomsController(
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
         if (room is null) return NotFound();
         if (room.CreatorPlayerId == playerId)
-            return Ok(BuildRoomAccountRoleWire(playerId, 255));
+            return Ok(BuildRoomAccountRoleWire(playerId, 30));
         var row = await db.RoomRoles
             .FirstOrDefaultAsync(r => r.RoomId == roomId && r.PlayerId == playerId);
         if (row is null) return NotFound();

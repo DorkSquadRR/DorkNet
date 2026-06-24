@@ -35,6 +35,25 @@ message OverridableListStringData {
   repeated string inner_value = 2;
 }
 
+// ── Game role collection (rec_room/player_roles/game_role_collection_data.proto)
+
+message PlayerGameRoleData {
+}
+
+message GameRoleCollectionData {
+  repeated PlayerGameRoleData DEPRECATED_game_roles = 1;
+}
+
+// ── Tool tag settings (rec_room/tools/tool_tag_settings_data.proto)
+
+message TagData {
+  repeated string tags = 1;
+}
+
+message ToolTagSettingsData {
+  TagData runtime_tag_data = 1;
+}
+
 // ── Per-role permission grants (rec_room/player_roles/player_room_role_data.proto)
 //
 // Field numbers verified against the 2023 WriteTo disassembly in
@@ -70,31 +89,100 @@ message PlayerRoomRoleData {
   OverridableBoolData disable_mic_auto_mute = 25;
   OverridableBoolData can_use_share_cam = 26;
   string role_guid = 27;
-  OverridableBoolData unknown_permission_20 = 28;
-  OverridableBoolData unknown_permission_21 = 29;
-  OverridableBoolData unknown_permission_22 = 30;
-  OverridableBoolData unknown_permission_23 = 31;
+  OverridableBoolData can_spawn_inventions = 28;
+  OverridableBoolData can_spawn_consumables = 29;
+  OverridableBoolData can_use_room_reset_button = 30;
+  OverridableBoolData can_use_play_gizmos_toggle = 31;
 }
 
 // ── Role collection (rec_room/player_roles/room_role_collection_data.proto)
 
+enum MigratedToRecNetVersion {
+  NotYetMigrated = 0;
+  MigratedToRecNet = 1;
+}
+
 message RoomRoleCollectionData {
   repeated PlayerRoomRoleData room_roles = 1;
-  int32 rec_net_migration_version = 2;
+  MigratedToRecNetVersion rec_net_migration_version = 2;
 }
 
 // ── PersistedRoomData top-level (rec_room/persistence/persisted_room_data.proto)
 //
-// The full schema has many more fields — we only set the fields the
-// December 2020 client needs for an editable minimal blob. Its
-// RoomPersistenceManager checks field 1 against a minimum editable
-// persistence version of 20, so generated blobs must carry a current
-// version or room editors see the native "save data is out-of-date" prompt.
+enum DEPRECATED_RoomPersistenceVersion {
+  option allow_alias = true;
+  V0NewRoomPersistenceVersion = 0;
+  V1Initial = 1;
+  V2ExtrusionsCenterOfMass = 2;
+  V3PersistentHostSettings = 3;
+  V4RadioPersistence = 4;
+  V5ExtrusionsPhysicsMode = 5;
+  V6CustomGameSettings = 6;
+  V7NewSandboxButton = 7;
+  V8CircuitChipOrientation = 8;
+  V9NewTriggerVolume = 9;
+  V10RoomRoles = 10;
+  V11SubextrusionsPersistedIds = 11;
+  V12EverythingARoom = 12;
+  V13CreationObjectAdded = 13;
+  V14InventionPieceAdded = 14;
+  V15GameConfigurationAdded = 15;
+  V16EraserMarkersFixed = 16;
+  V17GrabbableAdded = 17;
+  V18ManualSpawnPointsAdded = 18;
+  V19StuntRunnerButtonNodeChange = 19;
+  V20GameRolesInChips = 20;
+  V21PlayerAttractorConfigurable = 21;
+  V22AutosaveValidation = 22;
+  V23TriggerVolumeNoShapeContainers = 23;
+  V24GadgetVisibilityMovedToSubroomSetting = 24;
+  V25RoomKeysBeta = 25;
+  V26DirectionalVoiceChat = 26;
+  V27JuniorEnabledObjectFlag = 27;
+  V28SfxPlayForAll = 28;
+  V29UVManipulationAdded = 29;
+  V30HomeValuesAdded = 30;
+  V31SeatCollisionToggleAdded = 31;
+  V32StoringRotationAsVector4 = 32;
+  V33LightValuesFloat = 33;
+  V34OptimizeCollidersToggle = 34;
+  V35AudioPlayerProperties = 35;
+  V36BackpackToolsForbiddenInSpawner = 36;
+  V37ToolHandednessAdded = 37;
+  V38ProjectileSpreadFloat = 38;
+  LatestRoomPersistenceVersion = 38;
+}
+
+enum PersistedRoomVersion {
+  option allow_alias = true;
+  V0New = 0;
+  V1SerializeDefaultTags = 1;
+  V2ProgressionEventPopupShop = 2;
+  V3SandboxGunHandleCanReload = 3;
+  V4StudioAssetBundleChanges = 4;
+  V5ParticleEmitterSettings = 5;
+  V6HolotarProjectorCV2 = 6;
+  V7LaserPointer = 7;
+  V8TextScreenRelease = 8;
+  V9AudioPlayerRolloff = 9;
+  V7SunDirection = 10;
+  V11StudioSingleAudioMixer = 11;
+  V12StudioExposedProperties = 12;
+  V13AuthorizeRestrictedTools = 13;
+  V14LaserDirection = 14;
+  V15StudioAudioClipRegistry = 15;
+  V16NewUGCShapes = 16;
+  V17TriggerHandleControlLabel = 17;
+  V18StudioObjectCanvasInteraction = 18;
+  V19February23BetaRelease = 19;
+  LatestVersion = 19;
+}
 
 message PersistedRoomData {
-  int32 DEPRECATED_version = 1;
-  // field 2 (persistence_views) — repeated, default empty list.
-  // fields 3..22 — left at defaults.
+  DEPRECATED_RoomPersistenceVersion DEPRECATED_version = 1;
+  ToolTagSettingsData tool_tag_settings_data = 20;
+  GameRoleCollectionData game_role_data = 22;
   RoomRoleCollectionData room_role_data = 23;
-  // field 24+ — left at defaults.
+  PersistedRoomVersion version = 30;
+  bool creative_roles_enabled = 31;
 }

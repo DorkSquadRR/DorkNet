@@ -19,7 +19,7 @@ public sealed class JoinTimeoutService(
     {
         if (room is null) return;
 
-        if (IsDorm(room))
+        if (IsDorm(room) && !deferPresenceCommit)
         {
             ClearForPlayer(playerId, "dorm");
             return;
@@ -40,6 +40,12 @@ public sealed class JoinTimeoutService(
         _ = WatchAsync(playerId, pending);
     }
 
+    public (RoomInstanceDto TargetRoom, bool DeferPresenceCommit)? GetPending(long playerId)
+    {
+        if (!_pending.TryGetValue(playerId, out var pending)) return null;
+        return (pending.TargetRoom, pending.DeferPresenceCommit);
+    }
+
     public (RoomInstanceDto TargetRoom, bool DeferPresenceCommit)? MarkCompleted(long playerId, long instanceId, string outcome)
     {
         if (!_pending.TryGetValue(playerId, out var pending) || pending.InstanceId != instanceId)
@@ -55,7 +61,7 @@ public sealed class JoinTimeoutService(
         return (pending.TargetRoom, pending.DeferPresenceCommit);
     }
 
-    public async Task MarkFailedAsync(long playerId, long instanceId, string outcome)
+    public Task MarkFailedAsync(long playerId, long instanceId, string outcome)
     {
         var completed = MarkCompleted(playerId, instanceId, outcome);
 
@@ -66,14 +72,14 @@ public sealed class JoinTimeoutService(
             logger.LogInformation(
                 "[join-watchdog] failure ignored player={PlayerId} instance={InstanceId} current={CurrentInstance}",
                 playerId, instanceId, current?.RoomInstanceId);
-            return;
+            return Task.CompletedTask;
         }
 
         presence.Clear(playerId);
-        await notifications.KickPlayerAsync(playerId, "Room join failed. Returning to dorm.");
         logger.LogWarning(
-            "[join-watchdog] kicked failed join player={PlayerId} room={RoomId}/{RoomName} instance={InstanceId} outcome={Outcome}",
+            "[join-watchdog] cleared failed join player={PlayerId} room={RoomId}/{RoomName} instance={InstanceId} outcome={Outcome}",
             playerId, failedRoom.RoomId, failedRoom.Name, instanceId, outcome);
+        return Task.CompletedTask;
     }
 
     private async Task WatchAsync(long playerId, PendingJoin pending)

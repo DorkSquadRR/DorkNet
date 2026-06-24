@@ -1289,7 +1289,7 @@ public class GoToController(
 
         if (!string.IsNullOrWhiteSpace(room.CurrentDataBlobName)) return room.CurrentDataBlobName;
 
-        return $"room_{room.Id}_v1.dat";
+        return RoomService.SyntheticDefaultRoomDataBlobName(room.Id);
     }
 
     /// <summary>
