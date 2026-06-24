@@ -247,7 +247,7 @@ public class GoToController(
     /// location/blob when we actually resolved one.</summary>
     private static void ApplySubRoomMutation(
         MatchmakingResponseDto resp, long subId, string subRoomName,
-        string? subLocation, string? subDataBlob)
+        string? subLocation, string? subDataBlob, string? subRoomUnityAssetId = null)
     {
         resp.RoomInstance.RoomInstanceId = resp.RoomInstance.RoomId * 100_000L + subId;
         resp.RoomInstance.PhotonRoomId = $"{resp.RoomInstance.PhotonRoomId}_sub{subId}";
@@ -255,6 +255,7 @@ public class GoToController(
         resp.RoomInstance.SubRoomId = subId;
         if (subLocation is not null) resp.RoomInstance.Location = subLocation;
         if (!string.IsNullOrEmpty(subDataBlob)) resp.RoomInstance.DataBlob = subDataBlob;
+        resp.RoomInstance.SubRoomUnityAssetId = subRoomUnityAssetId ?? string.Empty;
     }
 
     /// <summary>POST <c>match.*/matchmake/room/{roomId}</c> — the 2023
@@ -329,14 +330,20 @@ public class GoToController(
         {
             var scene = await db.RoomScenes.AsNoTracking()
                 .Where(s => s.RoomId == resp.RoomInstance.RoomId && s.OrderIndex == subRoomId)
-                .Select(s => new { s.Name, s.RoomSceneLocationId, s.DataBlobName })
+                .Select(s => new { s.Name, s.RoomSceneLocationId, s.DataBlobName, s.StudioUnityAssetId })
                 .FirstOrDefaultAsync();
             if (scene is not null)
             {
                 logger.LogInformation(
-                    "[matchmake-subroom] {Room}/{Sub} → scene '{Name}' loc={Loc} blob={Blob}",
-                    roomId, subRoomId, scene.Name, scene.RoomSceneLocationId, scene.DataBlobName);
-                ApplySubRoomMutation(resp, subRoomId, scene.Name, scene.RoomSceneLocationId, scene.DataBlobName);
+                    "[matchmake-subroom] {Room}/{Sub} → scene '{Name}' loc={Loc} blob={Blob} unityAsset={UnityAsset}",
+                    roomId, subRoomId, scene.Name, scene.RoomSceneLocationId, scene.DataBlobName, scene.StudioUnityAssetId);
+                ApplySubRoomMutation(
+                    resp,
+                    subRoomId,
+                    scene.Name,
+                    scene.RoomSceneLocationId,
+                    scene.DataBlobName,
+                    scene.StudioUnityAssetId);
             }
             else
             {
@@ -684,6 +691,7 @@ public class GoToController(
                 IsPrivate = true,
                 IsInProgress = true,
                 DataBlob = inst.DataBlob,
+                SubRoomUnityAssetId = await ResolveSubRoomUnityAssetIdAsync(inst.RoomId, inst.SubRoomId),
             },
         };
     }
@@ -818,6 +826,7 @@ public class GoToController(
         IsPrivate = room.IsPrivate,
         IsInProgress = room.IsInProgress,
         DataBlob = room.DataBlob,
+        SubRoomUnityAssetId = room.SubRoomUnityAssetId,
         EventId = room.EventId,
         Name = room.Name,
         RoomInstanceType = room.RoomInstanceType,
@@ -1200,6 +1209,7 @@ public class GoToController(
             ? $"^dormroom_p{ownerForName}"
             : $"^{roomName.ToLowerInvariant()}_{roomId}";
         var dataBlob = await ResolveInitialDataBlobAsync(roomId, isDorm, dormOwnerId);
+        var subRoomUnityAssetId = await ResolveSubRoomUnityAssetIdAsync(roomId, 0);
 
         var resp = new MatchmakingResponseDto
         {
@@ -1228,6 +1238,7 @@ public class GoToController(
                 IsPrivate = false,
                 IsInProgress = true,
                 DataBlob = dataBlob,
+                SubRoomUnityAssetId = subRoomUnityAssetId,
             },
         };
         logger.LogInformation(
@@ -1290,6 +1301,14 @@ public class GoToController(
         if (!string.IsNullOrWhiteSpace(room.CurrentDataBlobName)) return room.CurrentDataBlobName;
 
         return RoomService.SyntheticDefaultRoomDataBlobName(room.Id);
+    }
+
+    private async Task<string> ResolveSubRoomUnityAssetIdAsync(long roomId, long subRoomId)
+    {
+        return await db.RoomScenes.AsNoTracking()
+            .Where(s => s.RoomId == roomId && s.OrderIndex == subRoomId)
+            .Select(s => s.StudioUnityAssetId)
+            .FirstOrDefaultAsync() ?? string.Empty;
     }
 
     /// <summary>
@@ -1399,6 +1418,13 @@ public class RoomInstanceDto
     [JsonPropertyName("dataBlob")]
     public string DataBlob { get; set; } = string.Empty;
 
+    // 2023 RoomLoading.LoadRoomCommand carries this separately from
+    // dataBlob. If it is empty, the loader can deserialize room view data
+    // before the Studio asset bundle has registered its prefabs, producing
+    // "Bad View Data detected. Expected a prefab, but found none".
+    [JsonPropertyName("subRoomUnityAssetId")]
+    public string SubRoomUnityAssetId { get; set; } = string.Empty;
+
     [JsonPropertyName("eventId")]
     public long EventId { get; set; } = 0;
 
@@ -1472,6 +1498,7 @@ public class RoomInstanceDto
             IsPrivate      = room.IsPrivate,
             IsInProgress   = room.IsInProgress,
             DataBlob       = string.Empty,
+            SubRoomUnityAssetId = room.SubRoomUnityAssetId,
             EventId        = room.EventId,
             Name           = room.Name,
         };

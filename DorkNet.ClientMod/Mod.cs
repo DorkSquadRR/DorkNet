@@ -22,6 +22,7 @@
 using HarmonyLib;
 using Il2CppInterop.Runtime;
 using Il2CppInterop.Runtime.InteropTypes;
+using Il2CppInterop.Runtime.InteropTypes.Arrays;
 using MelonLoader;
 using System;
 using System.Collections;
@@ -185,6 +186,24 @@ public class Mod : MelonMod
                            "NotifyServerCertificate",
                            prefix: nameof(TlsPatches.NotifyServerCertificate_Prefix));
         }
+        if (Cfg.EnableDebugConsole || Cfg.EnableDevWatchButton)
+            Log.Msg($"[debugconsole] armed: toggleKey={Cfg.DebugConsoleToggleKey}, commands={DebugConsolePatches.FormatConfiguredCommandsForLog()}");
+        // Image CDN signature verification. Server responses still include
+        // Content-Signature, but the official RSA public key is baked into
+        // GameAssembly and the matching private key is not available. This
+        // method is the verifier in the 2023 build (JFDPIJFDHAD.HOCPMNEKIHP);
+        // skipping it lets signed local CDN/image bytes load.
+        TryPatchByName("JFDPIJFDHAD",
+                       "HOCPMNEKIHP",
+                       args: new[]
+                       {
+                           typeof(string),
+                           typeof(Il2CppStructArray<byte>),
+                           typeof(Il2CppStructArray<byte>),
+                           typeof(Il2CppStructArray<byte>),
+                           typeof(Il2CppStructArray<byte>)
+                       },
+                       prefix: nameof(ImageSignaturePatches.VerifyImageSignature_Prefix));
         RegisterQuitTracePatches(logMisses: true);
         RegisterAntiTamperCallbackPatches(logMisses: true);
         RegisterToxModPatches(logMisses: true);
@@ -316,6 +335,9 @@ public class Mod : MelonMod
                            postfix: nameof(QuestTeamSize.RelaxEmptySpawnFilter_Postfix));
             Log.Msg($"[questsize] armed: target {Cfg.QuestMaxTeamSize} for [{string.Join(", ", Cfg.QuestMaxTeamSizeRooms)}]");
         }
+
+        RegisterStudioTracePatches();
+
         Log.Msg("=== Client patches registered ===");
     }
 
@@ -731,6 +753,11 @@ public class Mod : MelonMod
             RegisterToxModPatches(logMisses: false);
         }
 
+        if (Cfg.EnableDebugConsole || Cfg.EnableDevWatchButton)
+            DebugConsolePatches.PollToggleKey();
+
+        if (Cfg.DiagnoseDevMenu || Cfg.EnableDevWatchButton)
+            DevMenuProbe.Tick();
     }
 
     public override void OnApplicationQuit()
@@ -1036,7 +1063,7 @@ public class Mod : MelonMod
     {
         // Look in all three patch holder classes — small enough that a
         // linear scan is cheaper than per-class lookups.
-        foreach (var holder in new[] { typeof(UriPatches), typeof(HttpTracePatches), typeof(AuthPatches), typeof(AntiCheatPatches), typeof(AntiTamperPatches), typeof(FileHashCheckerPatches), typeof(ToxModPatches), typeof(TlsPatches), typeof(QuitTracePatches), typeof(DiagnosticPatches), typeof(RoomLoadDiagnostics), typeof(SavePatches), typeof(ChatPatches), typeof(JoinPatches), typeof(RegistrationPatches), typeof(DebugConsolePatches), typeof(ScreenSharePatches), typeof(MakerPenGiftPreviewPatches), typeof(QuestTeamSize) })
+        foreach (var holder in new[] { typeof(UriPatches), typeof(HttpTracePatches), typeof(AuthPatches), typeof(AntiCheatPatches), typeof(AntiTamperPatches), typeof(FileHashCheckerPatches), typeof(ToxModPatches), typeof(TlsPatches), typeof(ImageSignaturePatches), typeof(QuitTracePatches), typeof(DiagnosticPatches), typeof(RoomLoadDiagnostics), typeof(SavePatches), typeof(ChatPatches), typeof(JoinPatches), typeof(RegistrationPatches), typeof(DebugConsolePatches), typeof(ScreenSharePatches), typeof(MakerPenGiftPreviewPatches), typeof(QuestTeamSize) })
         {
             var m = holder.GetMethod(name, BindingFlags.Public | BindingFlags.Static);
             if (m is not null) return m;
@@ -1249,6 +1276,27 @@ public class Mod : MelonMod
         return true;
     }
 
+    /// <summary>Studio baked-asset load trace. Registered directly from the
+    /// live client-patch flow (the deep diagnostics path
+    /// <see cref="RegisterDiagnostics"/> is not wired into init, so probes
+    /// placed there never run). Pinpoints where the baked-Studio-scene chain
+    /// breaks: the unity-asset getter (does the client ever request a
+    /// bundle), prefab registration (does a bundle ever load), and the prefab
+    /// lookups that fail with "Expected a prefab, but found none".
+    /// RecRoomObjectPrefabManager is name-preserved; the getter is the
+    /// obfuscated NLDBPDCNNCF.FKLDMPMFLBD. Each is a single overload.</summary>
+    private void RegisterStudioTracePatches()
+    {
+        TryPatchByName("RecRoom.Core.Studio.RecRoomObjectPrefabManager", "RegisterPrefabs",
+                       postfix: nameof(RoomLoadDiagnostics.StudioRegisterPrefabs_Postfix));
+        TryPatchByName("RecRoom.Core.Studio.RecRoomObjectPrefabManager", "TryGetPrefab",
+                       postfix: nameof(RoomLoadDiagnostics.StudioTryGetPrefab_Postfix));
+        TryPatchByName("RecRoom.Core.Studio.RecRoomObjectPrefabManager", "IsKnownPrefab",
+                       postfix: nameof(RoomLoadDiagnostics.StudioIsKnownPrefab_Postfix));
+        TryPatchByName("NLDBPDCNNCF", "FKLDMPMFLBD",
+                       prefix: nameof(RoomLoadDiagnostics.StudioUnityAssetFetch_Prefix));
+    }
+
     private bool PatchKnownRoomLoadMoveNext(bool logMiss)
     {
         const string label = "room-load-state-machines.MoveNext";
@@ -1407,6 +1455,66 @@ internal static class RoomLoadDiagnostics
             WriteStack("room-load-exception");
         }
         return __exception;
+    }
+
+    // ── Studio baked-asset load trace ──────────────────────────────────
+    // Pinpoints where the baked-Studio-scene load chain breaks. The room
+    // joins but renders no custom geometry and logs "Expected a prefab,
+    // but found none"; the server serves everything but the client never
+    // requests a bundle. These probes answer: (1) does the client ever
+    // call the RecNet "get unity asset" API (FKLDMPMFLBD); (2) does it
+    // ever register baked prefabs; (3) which prefab GUIDs does it look up
+    // and miss.
+
+    /// <summary>RecNet unity-asset getter
+    /// <c>NLDBPDCNNCF.FKLDMPMFLBD(string unityAssetId, byte target, int version, CancellationToken)</c>
+    /// — the call that builds <c>unity_assets/{id}/{target}/{version}</c>. If
+    /// this never fires, the client decided not to fetch the bundle at all
+    /// (trigger missing upstream); if it fires, the URL/host/response is the
+    /// problem.</summary>
+    public static void StudioUnityAssetFetch_Prefix(object? __0, object? __1, object? __2)
+    {
+        DiagnosticPatches.Write(
+            $"[studio] UNITY-ASSET FETCH id={__0?.ToString() ?? "<null>"} " +
+            $"target={__1?.ToString() ?? "?"} version={__2?.ToString() ?? "?"}");
+        WriteStack("studio-assetfetch");
+    }
+
+    /// <summary><c>RecRoomObjectPrefabManager.RegisterPrefabs</c> — baked
+    /// prefabs being registered after a bundle loads. If this never fires,
+    /// no bundle was loaded.</summary>
+    public static void StudioRegisterPrefabs_Postfix(object? __0)
+    {
+        int count = -1;
+        try
+        {
+            if (__0 is not null)
+            {
+                var p = __0.GetType().GetProperty("Count");
+                if (p?.GetValue(__0) is int c) count = c;
+            }
+        }
+        catch { /* best-effort count */ }
+        DiagnosticPatches.Write($"[studio] RegisterPrefabs count={count}");
+        WriteStack("studio-registerprefabs");
+    }
+
+    /// <summary><c>RecRoomObjectPrefabManager.TryGetPrefab(Guid, out GameObject)</c>
+    /// — the lookup that fails with "Expected a prefab, but found none".
+    /// Logs the GUID + whether it resolved.</summary>
+    public static void StudioTryGetPrefab_Postfix(object? __0, bool __result)
+    {
+        if (!ShouldLog("studio-trygetprefab", 200)) return;
+        DiagnosticPatches.Write(
+            $"[studio] TryGetPrefab guid={__0?.ToString() ?? "<null>"} found={__result}");
+    }
+
+    /// <summary><c>RecRoomObjectPrefabManager.IsKnownPrefab(Guid)</c>.</summary>
+    public static void StudioIsKnownPrefab_Postfix(object? __0, bool __result)
+    {
+        if (!ShouldLog("studio-isknownprefab", 200)) return;
+        DiagnosticPatches.Write(
+            $"[studio] IsKnownPrefab guid={__0?.ToString() ?? "<null>"} known={__result}");
     }
 
     public static string FormatException(Exception? ex, object? fallback)
@@ -1634,12 +1742,13 @@ internal static class RoomLoadDiagnostics
 //
 // Everything is resolved by reflection at runtime so the SAME code works on
 // both client builds despite their differing obfuscation:
-//   * The show/hide toggle is the one non-compiler-generated private
-//     instance void(bool) on DebugConsole — ShowInputField on 2020.03,
-//     MCNBJFECHLJ on 2020.12. We try the readable name, then the obfuscated
-//     one, then fall back to that structural match.
-//   * The live component is found via UnityEngine.Object.FindObjectOfType
-//     (name-stable) rather than the SingletonMonoBehaviour<T> accessor.
+//   * The show/hide toggle is the one private instance void(bool) on
+//     DebugConsole — ShowInputField on 2020.03, MCNBJFECHLJ on 2020.12,
+//     KIAMDEDKFBC on 2023.03. We try the known names, then fall back to
+//     a structural match.
+//   * The live component is found via Resources.FindObjectsOfTypeAll
+//     using an Il2CppSystem.Type argument; this interop build does not
+//     expose UnityEngine.Object.FindObjectOfType(System.Type).
 //   * Execute(string) keeps its readable name on both builds (kept here as
 //     a scripted-command entry point even though the hotkey drives the UI).
 internal static class DebugConsolePatches
@@ -1656,11 +1765,22 @@ internal static class DebugConsolePatches
     private static bool _consoleResolved;
     private static Type? _consoleType;
     private static MethodInfo? _toggleMethod;     // ShowInputField(bool) / MCNBJFECHLJ(bool)
-    private static MethodInfo? _findObjectOfType; // UnityEngine.Object.FindObjectOfType(Type)
+    private static MethodInfo? _setConsoleText;   // DebugConsole.SetConsoleText(string)
 
     // Harmony prefix returning false → skips the original CheatManager
     // detector, so a tripped heuristic never runs its punish/drop path.
     public static bool SuppressCheatDetected_Prefix() => false;
+
+    public static string FormatConfiguredCommandsForLog()
+    {
+        var commands = GetConfiguredCommands();
+        if (commands.Count == 0) return "<none>";
+
+        var parts = new List<string>();
+        foreach (var command in commands)
+            parts.Add($"{command.Label}={command.Command}");
+        return string.Join(", ", parts);
+    }
 
     // Polled every frame from Mod.OnUpdate while EnableDebugConsole is set.
     public static void PollToggleKey()
@@ -1697,7 +1817,7 @@ internal static class DebugConsolePatches
         if (_consoleType is null) { Mod.Log.Warning("[debugconsole] probe: DebugConsole type NOT resolved"); return; }
         try
         {
-            var active = _findObjectOfType?.Invoke(null, new object[] { _consoleType });
+            var active = FindConsoleInstance();
             Mod.Log.Msg($"[debugconsole] probe: type={_consoleType.FullName}, toggleMethod={(_toggleMethod?.Name ?? "<none>")}, activeInstance={(active is null ? "null" : "found")}");
         }
         catch (Exception ex) { Mod.Log.Warning($"[debugconsole] probe failed: {ex.Message}"); }
@@ -1750,13 +1870,9 @@ internal static class DebugConsolePatches
         // name, then a structural fallback that fits both builds.
         _toggleMethod = AccessTools.Method(_consoleType, "ShowInputField", new[] { typeof(bool) })
                         ?? AccessTools.Method(_consoleType, "MCNBJFECHLJ", new[] { typeof(bool) })
+                        ?? AccessTools.Method(_consoleType, "KIAMDEDKFBC", new[] { typeof(bool) })
                         ?? FindToggleByShape(_consoleType);
         if (_toggleMethod is null) Mod.Log.Warning("[debugconsole] show/hide method not found");
-
-        var objType = Mod.ResolveType("UnityEngine.Object");
-        _findObjectOfType = objType is null ? null
-            : AccessTools.Method(objType, "FindObjectOfType", new[] { typeof(Type) });
-        if (_findObjectOfType is null) Mod.Log.Warning("[debugconsole] Object.FindObjectOfType(Type) not found");
     }
 
     // The console's show/hide is the single private, instance, void method
@@ -1782,10 +1898,10 @@ internal static class DebugConsolePatches
     public static void Toggle()
     {
         if (!_consoleResolved) ResolveConsole();
-        if (_consoleType is null || _toggleMethod is null || _findObjectOfType is null) return;
+        if (_consoleType is null || _toggleMethod is null) return;
         try
         {
-            var instance = _findObjectOfType.Invoke(null, new object[] { _consoleType });
+            var instance = FindConsoleInstance();
             if (instance is null)
             {
                 Mod.Log.Warning("[debugconsole] no live DebugConsole in scene — it may not be instantiated on this build");
@@ -1798,8 +1914,107 @@ internal static class DebugConsolePatches
             _consoleVisible = !_consoleVisible;
             _toggleMethod.Invoke(instance, new object[] { _consoleVisible });
             Mod.Log.Msg($"[debugconsole] {(_consoleVisible ? "opened" : "closed")}");
+            if (_consoleVisible)
+                ShowConfiguredCommands(instance);
         }
         catch (Exception ex) { Mod.Log.Warning($"[debugconsole] toggle failed: {ex.Message}"); }
+    }
+
+    private static object? FindConsoleInstance()
+    {
+        if (_consoleType is null) return null;
+        try
+        {
+            var il2cppType = ToIl2CppType(_consoleType);
+            if (il2cppType is null) return null;
+
+            var resources = Mod.ResolveType("UnityEngine.Resources");
+            var all = OneArgMethod(resources, "FindObjectsOfTypeAll", il2cppType)?.Invoke(null, new[] { il2cppType });
+            var count = ArrLen(all);
+            for (var i = 0; i < count; i++)
+            {
+                var item = ArrItem(all, i);
+                if (item is not null) return item;
+            }
+
+            var objType = Mod.ResolveType("UnityEngine.Object");
+            var findOne = OneArgMethod(objType, "FindObjectOfType", il2cppType);
+            return findOne?.Invoke(null, new[] { il2cppType });
+        }
+        catch (Exception ex)
+        {
+            Mod.Log.Warning($"[debugconsole] FindConsoleInstance failed: {ex.Message}");
+            return null;
+        }
+    }
+
+    private static void ShowConfiguredCommands(object instance)
+    {
+        try
+        {
+            if (_consoleType is null) return;
+            _setConsoleText ??= AccessTools.Method(_consoleType, "SetConsoleText", new[] { typeof(string) });
+            if (_setConsoleText is null)
+            {
+                Mod.Log.Warning($"[debugconsole] SetConsoleText(string) not found; configured commands: {FormatConfiguredCommandsForLog()}");
+                return;
+            }
+
+            _setConsoleText.Invoke(instance, new object[] { BuildConfiguredCommandText() });
+            Mod.Log.Msg($"[debugconsole] displayed configured commands: {FormatConfiguredCommandsForLog()}");
+        }
+        catch (Exception ex)
+        {
+            Mod.Log.Warning($"[debugconsole] failed to display configured commands: {ex.Message}");
+        }
+    }
+
+    private static string BuildConfiguredCommandText()
+    {
+        var commands = GetConfiguredCommands();
+        var sb = new StringBuilder();
+        sb.AppendLine("DorkNet debug commands");
+        sb.AppendLine();
+        if (commands.Count == 0)
+        {
+            sb.AppendLine("No commands configured in DevCommands.");
+        }
+        else
+        {
+            for (var i = 0; i < commands.Count; i++)
+                sb.AppendLine($"{i + 1}. {commands[i].Label}: {commands[i].Command}");
+        }
+        sb.AppendLine();
+        sb.AppendLine("Type a command and press Enter.");
+        return sb.ToString().TrimEnd();
+    }
+
+    private static List<ConfiguredCommand> GetConfiguredCommands()
+    {
+        var commands = new List<ConfiguredCommand>();
+        foreach (var entry in Mod.Cfg.DevCommands)
+        {
+            if (string.IsNullOrWhiteSpace(entry)) continue;
+            var split = entry.IndexOf('=');
+            var label = split >= 0 ? entry[..split].Trim() : entry.Trim();
+            var command = split >= 0 ? entry[(split + 1)..].Trim() : entry.Trim();
+            if (string.IsNullOrWhiteSpace(command)) continue;
+            if (string.IsNullOrWhiteSpace(label)) label = command;
+            commands.Add(new ConfiguredCommand(label, command));
+        }
+        return commands;
+    }
+
+    private readonly struct ConfiguredCommand
+    {
+        public ConfiguredCommand(string label, string command)
+        {
+            Label = label;
+            Command = command;
+        }
+
+        public string Label { get; }
+        public string Command { get; }
     }
 
     private static void EnableShowButton()
@@ -1816,6 +2031,52 @@ internal static class DebugConsolePatches
             }
         }
         catch { /* best-effort — the toggle still works without it */ }
+    }
+
+    private static object? ToIl2CppType(Type managed)
+    {
+        try
+        {
+            var il2cppTypeType = Mod.ResolveType("Il2CppInterop.Runtime.Il2CppType");
+            var from = il2cppTypeType?.GetMethod("From", new[] { typeof(Type), typeof(bool) })
+                       ?? il2cppTypeType?.GetMethod("From", new[] { typeof(Type) });
+            if (from is null) return null;
+            var args = from.GetParameters().Length == 2
+                ? new object[] { managed, true }
+                : new object[] { managed };
+            return from.Invoke(null, args);
+        }
+        catch { return null; }
+    }
+
+    private static MethodInfo? OneArgMethod(Type? type, string name, object arg)
+    {
+        if (type is null) return null;
+        foreach (var method in type.GetMethods(BindingFlags.Public | BindingFlags.Static))
+        {
+            if (method.Name != name) continue;
+            var parameters = method.GetParameters();
+            if (parameters.Length == 1 && parameters[0].ParameterType.IsInstanceOfType(arg))
+                return method;
+        }
+        return null;
+    }
+
+    private static int ArrLen(object? array)
+    {
+        if (array is null) return 0;
+        if (array is Array managedArray) return managedArray.Length;
+        var type = array.GetType();
+        var length = type.GetProperty("Length") ?? type.GetProperty("Count");
+        return (length?.GetValue(array) as int?) ?? 0;
+    }
+
+    private static object? ArrItem(object? array, int index)
+    {
+        if (array is null) return null;
+        if (array is Array managedArray) return managedArray.GetValue(index);
+        var getItem = array.GetType().GetMethod("get_Item", new[] { typeof(int) });
+        return getItem?.Invoke(array, new object[] { index });
     }
 }
 
@@ -3542,6 +3803,14 @@ internal static class TlsPatches
     public static bool NotifyServerCertificate_Prefix()
     {
         return !Mod.Cfg.EnableTlsTrustBypass; // false skips original; true (bypass off) lets it run
+    }
+}
+
+internal static class ImageSignaturePatches
+{
+    public static bool VerifyImageSignature_Prefix()
+    {
+        return false;
     }
 }
 

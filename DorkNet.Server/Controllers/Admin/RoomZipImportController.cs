@@ -59,6 +59,7 @@ public class RoomZipImportController(
     ILogger<RoomZipImportController> logger) : ControllerBase
 {
     private long CurrentAdminId => this.RequireCurrentPlayerId();
+    private const long MaxArchiveBytes = 12_000_000_000L;
 
     // ── Room-blob normaliser toggle ─────────────────────────────────────
     // The normaliser does two things now (see RoomBlobNormalizerService):
@@ -128,6 +129,7 @@ public class RoomZipImportController(
         ".mp4" => "video/mp4",
         ".htr" => "application/octet-stream",
         ".room" => "application/octet-stream",
+        ".assetbundle" => "application/octet-stream",
         ".meta" => "application/octet-stream",
         ".inv" => "application/octet-stream",
         ".dat" => "application/octet-stream",
@@ -220,6 +222,7 @@ public class RoomZipImportController(
         /// missing, the importer derives it from the SubRooms/&lt;scene&gt;
         /// folder name suffix (<c>SubRoomName__&lt;subRoomId&gt;</c>).</summary>
         public long? SubRoomId { get; set; }
+        public string? UnityAssetId { get; set; }
         public string? DataBlob { get; set; }
         public DateTime? CreatedAt { get; set; }
         public string? Description { get; set; }
@@ -268,7 +271,7 @@ public class RoomZipImportController(
 
     [HttpPost("zip-bulk-import")]
     [DisableRequestSizeLimit]
-    [RequestFormLimits(MultipartBodyLengthLimit = 5_000_000_000)] // 5 GB
+    [RequestFormLimits(MultipartBodyLengthLimit = MaxArchiveBytes)]
     public async Task<IActionResult> ZipImport(
         [FromForm(Name = "archive")] IFormFile? archive,
         [FromForm(Name = "creatorPlayerId")] long? creatorPlayerId,
@@ -320,8 +323,8 @@ public class RoomZipImportController(
     [HttpPost("zip-upload-init")]
     public ActionResult ChunkInit([FromBody] ChunkInitRequest body)
     {
-        if (body.TotalBytes <= 0 || body.TotalBytes > 5_000_000_000)
-            return BadRequest(new { error = "invalid_size", maxBytes = 5_000_000_000L, gotBytes = body.TotalBytes });
+        if (body.TotalBytes <= 0 || body.TotalBytes > MaxArchiveBytes)
+            return BadRequest(new { error = "invalid_size", maxBytes = MaxArchiveBytes, gotBytes = body.TotalBytes });
 
         // Prune stale sessions before allocating a new one. Anything
         // older than 2 hours with no activity is abandoned.
@@ -914,9 +917,11 @@ public class RoomZipImportController(
                 // it reflects whether the diagnostic parse succeeded, not
                 // whether we actually applied the normalised output.
                 NormalizedOk: norm.Normalized,
+                StudioUnityAssetId: null,
                 HtrAssets: htrAssets,
                 PvImages: pvImages,
                 Polaroids: polaroids,
+                AssetBundles: new List<(string Name, ZipArchiveEntry Entry)>(),
                 History: history));
             logger.LogInformation(
                 "[zip-import] room='{Room}' scene='{Scene}' blob={Blob} raw={Raw:N0} normOutput={Norm:N0} persistedFrom={Source} htr={Htr} pv={Pv} polaroids={Pol}",
@@ -1044,9 +1049,11 @@ public class RoomZipImportController(
         var htrAssetCount = 0;
         var pvImageCount = 0;
         var polaroidCount = 0;
+        var assetBundleCount = 0;
         var allHtrAssets = ordered.SelectMany(s => s.HtrAssets).ToList();
         var allPvImages = ordered.SelectMany(s => s.PvImages).ToList();
         var allPolaroids = ordered.SelectMany(s => s.Polaroids).ToList();
+        var allAssetBundles = ordered.SelectMany(s => s.AssetBundles).ToList();
 
         // De-dupe within the archive first (same .htr can appear under
         // multiple scenes), then de-dupe against the DB. Both layers
@@ -1054,6 +1061,7 @@ public class RoomZipImportController(
         var uniqueHtrNames = allHtrAssets.Select(a => a.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var uniquePvNames  = allPvImages.Select(a => a.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         var uniquePolaroidNames = allPolaroids.Select(a => a.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var uniqueAssetBundleNames = allAssetBundles.Select(a => a.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
         var existingHtrNames = new HashSet<string>(
             await db.RoomDataBlobs
@@ -1070,9 +1078,15 @@ public class RoomZipImportController(
                 .Where(b => uniquePolaroidNames.Contains(b.BlobName))
                 .Select(b => b.BlobName).ToListAsync(),
             StringComparer.OrdinalIgnoreCase);
+        var existingAssetBundleNames = new HashSet<string>(
+            await db.RoomDataBlobs
+                .Where(b => uniqueAssetBundleNames.Contains(b.BlobName))
+                .Select(b => b.BlobName).ToListAsync(),
+            StringComparer.OrdinalIgnoreCase);
         var htrAlreadyInDbAtStart = existingHtrNames.Count;
         var pvAlreadyInDbAtStart  = existingPvNames.Count;
         var polaroidAlreadyInDbAtStart = existingPolaroidNames.Count;
+        var assetBundleAlreadyInDbAtStart = existingAssetBundleNames.Count;
 
         // History (SubRooms/<scene>/History/<DataBlob>.room) — pre-load
         // existing names so the de-dup HashSet covers prior imports + same
@@ -1173,6 +1187,17 @@ public class RoomZipImportController(
                 await WriteBlobAsync(0, polName, bytes, creator);
                 polaroidCount++;
             }
+            // Studio baked Unity asset bundles. Keep original filenames;
+            // Studio save metadata points the 2023 client at
+            // cdn.../room/<filename>.assetbundle.
+            foreach (var (bundleName, bundleEntry) in allAssetBundles)
+            {
+                if (existingAssetBundleNames.Contains(bundleName)) continue;
+                existingAssetBundleNames.Add(bundleName);
+                var bytes = await ReadAllAsync(bundleEntry);
+                await WriteBlobAsync(0, bundleName, bytes, creator);
+                assetBundleCount++;
+            }
             // Room-root opaque marker files (e.g. <hash>.meta — 6-byte
             // sentinel the exporter drops, purpose unclear but watching
             // for fetches just in case). Rename to room_<id>_<hash>.meta
@@ -1234,6 +1259,9 @@ public class RoomZipImportController(
                 Accessibility = details.Accessibility ?? 1,
                 IsAGRoom = false,
                 IsDormRoom = details.IsDorm ?? false,
+                IsStudioRoom = entries.ContainsKey(studioDetailsKey),
+                IsRoomLinkedToRecRoomStudio = entries.ContainsKey(studioDetailsKey),
+                StudioSessionId = details.RoomId?.ToString() ?? TryParseStudioId(ZipFileName(roomFolder))?.ToString() ?? string.Empty,
                 CloningAllowed = details.CloningAllowed ?? true,
                 SupportsLevelVoting = details.SupportsLevelVoting ?? false,
                 SupportsVRLow = details.SupportsVRLow ?? true,
@@ -1246,7 +1274,7 @@ public class RoomZipImportController(
                 CustomRoomWarning = details.CustomWarning ?? string.Empty,
                 DisableMicAutoMute = details.DisableMicAutoMute ?? false,
                 LocationReplicationId = entryLocation,
-                TagsCsv = JoinTags(details.Tags),
+                TagsCsv = EnsureStudioTags(JoinTags(details.Tags), entries.ContainsKey(studioDetailsKey)),
                 CheerCount = details.Stats?.CheerCount ?? 0,
                 FavoriteCount = details.Stats?.FavoriteCount ?? 0,
                 VisitCount = details.Stats?.VisitCount ?? 0,
@@ -1266,6 +1294,11 @@ public class RoomZipImportController(
                     Name = s.SceneName,
                     RoomSceneLocationId = s.Manifest.UnitySceneId ?? entryLocation,
                     DataBlobName = MakeBlobName(s.SceneName),
+                    StudioSubRoomDataSaveId = s.Manifest.CurrentSave?.SubRoomDataSaveId,
+                    StudioUnityAssetId = s.StudioUnityAssetId ?? string.Empty,
+                    StudioAssetBundleNamesCsv = string.Join(',', s.AssetBundles
+                        .Select(a => a.Name)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)),
                     MaxPlayers = s.Manifest.MaxPlayers ?? 8,
                     IsSandbox = s.Manifest.IsSandbox ?? false,
                     CanMatchmakeInto = true,
@@ -1282,7 +1315,8 @@ public class RoomZipImportController(
                 Reason = $"name={name} scenes={ordered.Count} entry={entry.SceneName} src={entrySource} " +
                          $"htr={htrAssetCount}new+{htrAlreadyInDbAtStart}existed " +
                          $"pv={pvImageCount}new+{pvAlreadyInDbAtStart}existed " +
-                         $"polaroids={polaroidCount}new+{polaroidAlreadyInDbAtStart}existed",
+                         $"polaroids={polaroidCount}new+{polaroidAlreadyInDbAtStart}existed " +
+                         $"bundles={assetBundleCount}new+{assetBundleAlreadyInDbAtStart}existed",
             });
             await db.SaveChangesAsync();
             await tx.CommitAsync();
@@ -1318,6 +1352,12 @@ public class RoomZipImportController(
                 newlyImported = polaroidCount,
                 alreadyInDb = polaroidAlreadyInDbAtStart,
             },
+            assetBundles = new
+            {
+                referenced = uniqueAssetBundleNames.Count,
+                newlyImported = assetBundleCount,
+                alreadyInDb = assetBundleAlreadyInDbAtStart,
+            },
             history = new
             {
                 referenced = allHistoryNames.Count,
@@ -1350,6 +1390,7 @@ public class RoomZipImportController(
                 maxPlayers = s.Manifest.MaxPlayers,
                 htrAssets = s.HtrAssets.Count,
                 pvImages = s.PvImages.Count,
+                assetBundles = s.AssetBundles.Count,
             }),
         };
     }
@@ -1430,9 +1471,19 @@ public class RoomZipImportController(
             var htrAssets = new List<(string Name, ZipArchiveEntry Entry)>();
             var pvImages = new List<(string Name, ZipArchiveEntry Entry)>();
             var polaroids = new List<(string Name, ZipArchiveEntry Entry)>();
+            var assetBundles = new List<(string Name, ZipArchiveEntry Entry)>();
 
             foreach (var save in saves)
             {
+                var bundlePrefix = $"{savesPrefix}{save.SaveId}__bundle_";
+                foreach (var (path, assetEntry) in entries.Where(kv =>
+                    kv.Key.StartsWith(bundlePrefix, StringComparison.OrdinalIgnoreCase)
+                    && kv.Key.EndsWith(".assetbundle", StringComparison.OrdinalIgnoreCase)
+                    && !kv.Key[bundlePrefix.Length..].Contains('/')))
+                {
+                    assetBundles.Add((Path.GetFileName(path), assetEntry));
+                }
+
                 var refPrefix = $"{savesPrefix}{save.SaveId}__ref_";
                 foreach (var (path, assetEntry) in entries.Where(kv =>
                     kv.Key.StartsWith(refPrefix, StringComparison.OrdinalIgnoreCase)
@@ -1481,16 +1532,18 @@ public class RoomZipImportController(
                 Bytes: persistedBytes,
                 RawBytes: blobBytes.Length,
                 NormalizedOk: norm.Normalized,
+                StudioUnityAssetId: current.Sidecar.UnityAssetId,
                 HtrAssets: htrAssets,
                 PvImages: pvImages,
                 Polaroids: polaroids,
+                AssetBundles: assetBundles,
                 History: history));
 
             logger.LogInformation(
-                "[zip-import] studio-dump room='{Room}' scene='{Scene}' save={SaveId} raw={Raw:N0} normOutput={Norm:N0} persistedFrom={Source} htr={Htr} pv={Pv} polaroids={Pol} history={History}",
+                "[zip-import] studio-dump room='{Room}' scene='{Scene}' save={SaveId} raw={Raw:N0} normOutput={Norm:N0} persistedFrom={Source} htr={Htr} pv={Pv} polaroids={Pol} bundles={Bundles} history={History}",
                 roomName, sceneName, current.SaveId, blobBytes.Length, norm.Bytes.Length,
                 normalizeBlobs ? "normaliser" : "raw",
-                htrAssets.Count, pvImages.Count, polaroids.Count, history.Count);
+                htrAssets.Count, pvImages.Count, polaroids.Count, assetBundles.Count, history.Count);
         }
 
         return (resolvedScenes, missingScenes);
@@ -1791,15 +1844,32 @@ public class RoomZipImportController(
         return values.Count > 0 ? string.Join(',', values!) : "community";
     }
 
+    private static string EnsureStudioTags(string tagsCsv, bool isStudioDump)
+    {
+        if (!isStudioDump) return tagsCsv;
+        var values = (tagsCsv ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToList();
+        if (!values.Contains("community", StringComparer.OrdinalIgnoreCase))
+            values.Add("community");
+        if (!values.Contains("studio", StringComparer.OrdinalIgnoreCase))
+            values.Add("studio");
+        if (!values.Contains("developer", StringComparer.OrdinalIgnoreCase))
+            values.Add("developer");
+        return string.Join(',', values);
+    }
+
     private sealed record ResolvedSubroom(
         SubRoomDto Manifest,
         string SceneName,
         byte[] Bytes,
         int RawBytes,
         bool NormalizedOk,
+        string? StudioUnityAssetId,
         List<(string Name, ZipArchiveEntry Entry)> HtrAssets,
         List<(string Name, ZipArchiveEntry Entry)> PvImages,
         List<(string Name, ZipArchiveEntry Entry)> Polaroids,
+        List<(string Name, ZipArchiveEntry Entry)> AssetBundles,
         List<HistorySave> History);
 
     /// <summary>One historical save under SubRooms/&lt;scene&gt;/History/.

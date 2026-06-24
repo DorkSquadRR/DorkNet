@@ -135,9 +135,31 @@ public class InventionsController(
     [HttpPost("api/inventions/v1/dormskinsfromids")]
     public async Task<ActionResult> Batch([FromBody] InventionBatchRequest req)
     {
-        if (req?.InventionIds is null || req.InventionIds.Count == 0)
+        return await BatchIdsAsync(req?.InventionIds ?? []);
+    }
+
+    [HttpGet("api/inventions/v1/batch")]
+    [HttpGet("api/inventions/v2/batch")]
+    [HttpGet("api/inventions/v1/dormskinsfromids")]
+    public async Task<ActionResult> BatchFromQuery()
+    {
+        var ids = Request.Query
+            .SelectMany(q => q.Value)
+            .SelectMany(v => (v ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Select(v => long.TryParse(v, out var id) ? id : 0L)
+            .Where(id => id > 0)
+            .Distinct()
+            .Take(200)
+            .ToList();
+
+        return await BatchIdsAsync(ids);
+    }
+
+    private async Task<ActionResult> BatchIdsAsync(IReadOnlyCollection<long> requestedIds)
+    {
+        if (requestedIds.Count == 0)
             return Ok(Array.Empty<object>());
-        var ids = req.InventionIds.Take(200).ToList();
+        var ids = requestedIds.Take(200).ToList();
         var rows = await db.Inventions
             .Where(i => !i.IsDeleted && ids.Contains(i.Id))
             .ToListAsync();

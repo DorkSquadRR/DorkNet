@@ -106,6 +106,7 @@ public static class DatabaseBootstrap
         await EnsureInventorySchemaAsync(db);
         await EnsureLeaderboardSchemaAsync(db);
         await EnsureRoomColumnsAsync(db);
+        await EnsureRoomSceneColumnsAsync(db);
         await EnsureInventionColumnsAsync(db);
         await EnsureMarch2023TablesAsync(db);
 
@@ -330,6 +331,42 @@ public static class DatabaseBootstrap
         {
             await db.Database.ExecuteSqlRawAsync(
                 @"ALTER TABLE ""Inventions"" ADD COLUMN ""Price"" INTEGER NOT NULL DEFAULT 0;");
+        }
+        catch { }
+    }
+
+    private static async Task EnsureRoomSceneColumnsAsync(DorkNetDbContext db)
+    {
+        var provider = db.Database.ProviderName ?? string.Empty;
+        if (provider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""RoomScenes"" ADD COLUMN IF NOT EXISTS ""StudioSubRoomDataSaveId"" bigint NULL;");
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""RoomScenes"" ADD COLUMN IF NOT EXISTS ""StudioUnityAssetId"" character varying(64) NOT NULL DEFAULT '';");
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""RoomScenes"" ADD COLUMN IF NOT EXISTS ""StudioAssetBundleNamesCsv"" character varying(4096) NOT NULL DEFAULT '';");
+            return;
+        }
+
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""RoomScenes"" ADD COLUMN ""StudioSubRoomDataSaveId"" INTEGER NULL;");
+        }
+        catch { }
+
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""RoomScenes"" ADD COLUMN ""StudioUnityAssetId"" TEXT NOT NULL DEFAULT '';");
+        }
+        catch { }
+
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""RoomScenes"" ADD COLUMN ""StudioAssetBundleNamesCsv"" TEXT NOT NULL DEFAULT '';");
         }
         catch { }
     }
