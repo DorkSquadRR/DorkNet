@@ -527,6 +527,204 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
 
         return null;
     }
+
+    private async Task<long?> ReadBareLongAsync(params string[] keys)
+    {
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync();
+            foreach (var key in keys)
+                if (long.TryParse(form[key].FirstOrDefault(), out var value)) return value;
+            return null;
+        }
+
+        foreach (var key in keys)
+            if (long.TryParse(Request.Query[key].FirstOrDefault(), out var value)) return value;
+
+        if ((Request.ContentLength ?? 0) <= 0) return null;
+        try
+        {
+            using var doc = await JsonDocument.ParseAsync(Request.Body);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return null;
+            foreach (var key in keys)
+            {
+                if (!doc.RootElement.TryGetProperty(key, out var prop)) continue;
+                if (prop.ValueKind == JsonValueKind.Number && prop.TryGetInt64(out var n)) return n;
+                if (prop.ValueKind == JsonValueKind.String && long.TryParse(prop.GetString(), out n)) return n;
+            }
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        return null;
+    }
+
+    private async Task<bool?> ReadBareBoolAsync(params string[] keys)
+    {
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync();
+            foreach (var key in keys)
+                if (TryParseBool(form[key].FirstOrDefault(), out var value)) return value;
+            return null;
+        }
+
+        foreach (var key in keys)
+            if (TryParseBool(Request.Query[key].FirstOrDefault(), out var value)) return value;
+
+        if ((Request.ContentLength ?? 0) <= 0) return null;
+        try
+        {
+            using var doc = await JsonDocument.ParseAsync(Request.Body);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object)
+                return doc.RootElement.ValueKind == JsonValueKind.True
+                    ? true
+                    : doc.RootElement.ValueKind == JsonValueKind.False
+                        ? false
+                        : null;
+            foreach (var key in keys)
+            {
+                if (!doc.RootElement.TryGetProperty(key, out var prop)) continue;
+                if (prop.ValueKind == JsonValueKind.True) return true;
+                if (prop.ValueKind == JsonValueKind.False) return false;
+                if (prop.ValueKind == JsonValueKind.Number && prop.TryGetInt32(out var n)) return n != 0;
+                if (prop.ValueKind == JsonValueKind.String && TryParseBool(prop.GetString(), out var parsed)) return parsed;
+            }
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        return null;
+    }
+
+    private async Task<string?> ReadStringValueAsync(params string[] keys)
+    {
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync();
+            foreach (var key in keys)
+            {
+                var value = form[key].FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(value)) return value;
+            }
+            return null;
+        }
+
+        foreach (var key in keys)
+        {
+            var value = Request.Query[key].FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(value)) return value;
+        }
+
+        if ((Request.ContentLength ?? 0) <= 0) return null;
+        try
+        {
+            using var doc = await JsonDocument.ParseAsync(Request.Body);
+            if (doc.RootElement.ValueKind == JsonValueKind.String)
+                return doc.RootElement.GetString();
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return null;
+            foreach (var key in keys)
+            {
+                if (!doc.RootElement.TryGetProperty(key, out var prop)) continue;
+                if (prop.ValueKind == JsonValueKind.String) return prop.GetString();
+                if (prop.ValueKind == JsonValueKind.Number || prop.ValueKind == JsonValueKind.True || prop.ValueKind == JsonValueKind.False)
+                    return prop.ToString();
+            }
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        return null;
+    }
+
+    private async Task<JsonElement?> ReadJsonElementAsync(params string[] stringKeys)
+    {
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync();
+            var dict = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var key in form.Keys)
+            {
+                var value = form[key].FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(value)) dict[key] = value;
+            }
+            if (dict.Count == 0) return null;
+            return JsonSerializer.SerializeToElement(dict);
+        }
+
+        if ((Request.ContentLength ?? 0) > 0)
+        {
+            try
+            {
+                using var doc = await JsonDocument.ParseAsync(Request.Body);
+                return doc.RootElement.Clone();
+            }
+            catch (JsonException)
+            {
+                return null;
+            }
+        }
+
+        foreach (var key in stringKeys)
+        {
+            var value = Request.Query[key].FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(value)) return JsonSerializer.SerializeToElement(value);
+        }
+
+        return null;
+    }
+
+    private static bool TryParseBool(string? raw, out bool value)
+    {
+        if (bool.TryParse(raw, out value)) return true;
+        if (int.TryParse(raw, out var n))
+        {
+            value = n != 0;
+            return true;
+        }
+        value = false;
+        return false;
+    }
+
+    private static List<JsonElement> ReadJsonElementList(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return new List<JsonElement>();
+        try
+        {
+            return JsonSerializer.Deserialize<JsonElement[]>(json)?.ToList() ?? new List<JsonElement>();
+        }
+        catch (JsonException)
+        {
+            return new List<JsonElement>();
+        }
+    }
+
+    private static List<string> ReadStringList(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return new List<string>();
+        try
+        {
+            return JsonSerializer.Deserialize<string[]>(json)?.Where(v => !string.IsNullOrWhiteSpace(v)).ToList()
+                   ?? new List<string>();
+        }
+        catch (JsonException)
+        {
+            return new List<string>();
+        }
+    }
+
+    private static string SerializeLimited<T>(IEnumerable<T> values, int maxChars = 4096)
+    {
+        var json = JsonSerializer.Serialize(values);
+        return json.Length <= maxChars ? json : "[]";
+    }
+
     [HttpPost("rooms/{roomId:long}/cloning")]
     [HttpPut("rooms/{roomId:long}/cloning")]
     public async Task<IActionResult> BareCloning(long roomId, [FromBody] BareBoolRequest? body,
@@ -568,6 +766,171 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
             if (body?.RoomWarningMask is int m) r.RoomWarningMask = m;
             if (body?.CustomRoomWarning is not null) r.CustomRoomWarning = body.CustomRoomWarning;
         });
+
+    [HttpPost("rooms/{roomId:long}/creator")]
+    [HttpPut("rooms/{roomId:long}/creator")]
+    [HttpPost("roomserver/rooms/{roomId:long}/creator")]
+    [HttpPut("roomserver/rooms/{roomId:long}/creator")]
+    [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    public async Task<IActionResult> BareCreator(long roomId)
+    {
+        var creatorId = await ReadBareLongAsync(
+            "creatorAccountId", "CreatorAccountId",
+            "creatorPlayerId", "CreatorPlayerId",
+            "accountId", "AccountId",
+            "value", "Value");
+        if (creatorId is null or <= 0) return BadRequest(new { error = "missing_creator" });
+        var exists = await db.Players.AnyAsync(p => p.Id == creatorId.Value);
+        if (!exists) return NotFound(new { error = "creator_not_found", creatorId });
+        return await ApplyAndReturn(roomId, r => r.CreatorPlayerId = creatorId.Value);
+    }
+
+    [HttpPost("rooms/{roomId:long}/allow_new_users")]
+    [HttpPut("rooms/{roomId:long}/allow_new_users")]
+    [HttpPost("roomserver/rooms/{roomId:long}/allow_new_users")]
+    [HttpPut("roomserver/rooms/{roomId:long}/allow_new_users")]
+    [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    public async Task<IActionResult> BareAllowNewUsers(long roomId)
+    {
+        var value = await ReadBareBoolAsync("allowNewUsers", "AllowNewUsers", "value", "Value");
+        return await ApplyAndReturn(roomId, r =>
+        {
+            if (value is bool v) r.AllowNewUsers = v;
+        });
+    }
+
+    [HttpPost("rooms/{roomId:long}/min_level")]
+    [HttpPut("rooms/{roomId:long}/min_level")]
+    [HttpPost("roomserver/rooms/{roomId:long}/min_level")]
+    [HttpPut("roomserver/rooms/{roomId:long}/min_level")]
+    [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    public async Task<IActionResult> BareMinLevel(long roomId)
+    {
+        var value = await ReadBareIntAsync("minLevel", "MinLevel", "level", "Level", "value", "Value");
+        return await ApplyAndReturn(roomId, r =>
+        {
+            if (value is int v) r.MinLevel = Math.Max(0, v);
+        });
+    }
+
+    [HttpPost("rooms/{roomId:long}/max_player_calculation_mode")]
+    [HttpPut("rooms/{roomId:long}/max_player_calculation_mode")]
+    [HttpPost("roomserver/rooms/{roomId:long}/max_player_calculation_mode")]
+    [HttpPut("roomserver/rooms/{roomId:long}/max_player_calculation_mode")]
+    [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    public async Task<IActionResult> BareMaxPlayerCalculationMode(long roomId)
+    {
+        var value = await ReadBareIntAsync(
+            "maxPlayerCalculationMode", "MaxPlayerCalculationMode",
+            "mode", "Mode",
+            "value", "Value");
+        return await ApplyAndReturn(roomId, r =>
+        {
+            if (value is int v) r.MaxPlayerCalculationMode = Math.Max(0, v);
+        });
+    }
+
+    [HttpPost("rooms/{roomId:long}/loadscreen")]
+    [HttpPut("rooms/{roomId:long}/loadscreen")]
+    [HttpPost("roomserver/rooms/{roomId:long}/loadscreen")]
+    [HttpPut("roomserver/rooms/{roomId:long}/loadscreen")]
+    [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    public async Task<IActionResult> BareLoadScreen(long roomId)
+    {
+        var payload = await ReadJsonElementAsync("loadScreen", "LoadScreen", "value", "Value");
+        return await ApplyAndReturn(roomId, r =>
+        {
+            if (payload is JsonElement p)
+                r.LoadScreensJson = p.ValueKind == JsonValueKind.Array
+                    ? p.GetRawText()
+                    : SerializeLimited(new[] { p });
+        });
+    }
+
+    [HttpPost("rooms/{roomId:long}/promo_images")]
+    [HttpPut("rooms/{roomId:long}/promo_images")]
+    [HttpPost("roomserver/rooms/{roomId:long}/promo_images")]
+    [HttpPut("roomserver/rooms/{roomId:long}/promo_images")]
+    [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    public async Task<IActionResult> BarePromoImagesAdd(long roomId)
+    {
+        var image = await ReadStringValueAsync("imageName", "ImageName", "name", "Name", "value", "Value");
+        if (string.IsNullOrWhiteSpace(image)) return BadRequest(new { error = "missing_image" });
+        return await ApplyAndReturn(roomId, r =>
+        {
+            var images = ReadStringList(r.PromoImagesJson);
+            if (!images.Contains(image, StringComparer.OrdinalIgnoreCase))
+                images.Add(image);
+            r.PromoImagesJson = SerializeLimited(images);
+        });
+    }
+
+    [HttpDelete("rooms/{roomId:long}/promo_images")]
+    [HttpDelete("roomserver/rooms/{roomId:long}/promo_images")]
+    [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    public async Task<IActionResult> BarePromoImagesRemove(long roomId)
+    {
+        var image = await ReadStringValueAsync("imageName", "ImageName", "name", "Name", "value", "Value");
+        if (string.IsNullOrWhiteSpace(image)) return BadRequest(new { error = "missing_image" });
+        return await ApplyAndReturn(roomId, r =>
+        {
+            var images = ReadStringList(r.PromoImagesJson)
+                .Where(v => !string.Equals(v, image, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            r.PromoImagesJson = SerializeLimited(images);
+        });
+    }
+
+    [HttpPost("rooms/{roomId:long}/promo_external")]
+    [HttpPut("rooms/{roomId:long}/promo_external")]
+    [HttpPost("roomserver/rooms/{roomId:long}/promo_external")]
+    [HttpPut("roomserver/rooms/{roomId:long}/promo_external")]
+    [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    public async Task<IActionResult> BarePromoExternalAdd(long roomId)
+    {
+        var payload = await ReadJsonElementAsync("url", "Url", "value", "Value");
+        if (payload is null) return BadRequest(new { error = "missing_promo_external" });
+        return await ApplyAndReturn(roomId, r =>
+        {
+            var items = ReadJsonElementList(r.PromoExternalContentJson);
+            var raw = payload.Value.GetRawText();
+            if (!items.Any(i => string.Equals(i.GetRawText(), raw, StringComparison.Ordinal)))
+                items.Add(payload.Value);
+            r.PromoExternalContentJson = SerializeLimited(items);
+        });
+    }
+
+    [HttpDelete("rooms/{roomId:long}/promo_external")]
+    [HttpDelete("roomserver/rooms/{roomId:long}/promo_external")]
+    [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    public async Task<IActionResult> BarePromoExternalRemove(long roomId)
+    {
+        var match = await ReadStringValueAsync("id", "Id", "url", "Url", "value", "Value");
+        if (string.IsNullOrWhiteSpace(match)) return BadRequest(new { error = "missing_promo_external" });
+        return await ApplyAndReturn(roomId, r =>
+        {
+            var items = ReadJsonElementList(r.PromoExternalContentJson)
+                .Where(i => !PromoExternalMatches(i, match))
+                .ToList();
+            r.PromoExternalContentJson = SerializeLimited(items);
+        });
+    }
+
+    private static bool PromoExternalMatches(JsonElement item, string match)
+    {
+        if (string.Equals(item.GetRawText(), match, StringComparison.OrdinalIgnoreCase)) return true;
+        if (item.ValueKind == JsonValueKind.String)
+            return string.Equals(item.GetString(), match, StringComparison.OrdinalIgnoreCase);
+        if (item.ValueKind != JsonValueKind.Object) return false;
+        foreach (var key in new[] { "Id", "id", "Url", "url", "Value", "value" })
+        {
+            if (item.TryGetProperty(key, out var prop) &&
+                prop.ValueKind == JsonValueKind.String &&
+                string.Equals(prop.GetString(), match, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
 
     /// <summary><c>rooms/{id}/comments</c> + <c>voice_chat_encryption</c>
     /// — fields not persisted in the 2020 RoomEntity. Owner-gated
@@ -639,10 +1002,19 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
             SupportsWalkVR = source.SupportsWalkVR,
             SupportsTeleportVR = source.SupportsTeleportVR,
             AllowsJuniors = source.AllowsJuniors,
+            AllowNewUsers = source.AllowNewUsers,
+            MinLevel = source.MinLevel,
+            MaxPlayerCalculationMode = source.MaxPlayerCalculationMode,
+            LoadScreensJson = source.LoadScreensJson,
+            PromoImagesJson = source.PromoImagesJson,
+            PromoExternalContentJson = source.PromoExternalContentJson,
             RoomWarningMask = source.RoomWarningMask,
             CustomRoomWarning = source.CustomRoomWarning,
             DisableMicAutoMute = source.DisableMicAutoMute,
             LocationReplicationId = source.LocationReplicationId,
+            IsStudioRoom = source.IsStudioRoom,
+            IsRoomLinkedToRecRoomStudio = source.IsRoomLinkedToRecRoomStudio,
+            StudioSessionId = source.StudioSessionId,
             TagsCsv = source.TagsCsv,
             CurrentDataBlobName = source.CurrentDataBlobName,
         };

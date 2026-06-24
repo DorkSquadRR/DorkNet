@@ -106,6 +106,7 @@ public class RoomService(DorkNetDbContext db)
             ("IsleOfLostSkulls", "The Isle of Lost Skulls", "Can your pirate crew get to the Isle, defeat its fearsome guardian, and escape with the gold?", "7e01cfe0-820a-406f-b1b3-0a5bf575235c", "recroomoriginal,quest,co-op,adventure", "image_IsleOfLostSkulls.png"),
             ("Crescendo",        "Crescendo of the Blood Moon", "Brave the haunted halls of Castle Dracula and survive the night.", "49cb8993-a956-43e2-86f4-1318f279b22a", "recroomoriginal,quest,co-op,adventure", "by3mjs9jbozpdvu6g9aje7jgz.png"),
             ("StuntRunner",      "Stunt Runner",       "A solo platforming gauntlet — sprint, climb and dodge to reach the trophy at the top.", "b7281665-a715-4051-826b-8e08e69c6172", "recroomoriginal,sport,quest,stuntrunner,parkour", "image_StuntRunner.png"),
+            ("RecRally",         "Rec Rally",          "Race across Chaparral with friends in off-road vehicles built for jumps, boosts, and tight turns.", "56193568-9ae0-498c-8a77-4df79dec91f5", "recroomoriginal,featured,sport,recrally,racing,pvp", "image_RecRally.png"),
             ("Drive-In",         "Rec Drive-In",       "Watch movies, hang out with friends, or chill at the bar.", "65ddbb48-5a01-4e3e-972d-e5c7419e2bc3", "recroomoriginal,featured,hangout,chill", "image_DriveIn.png"),
             // Hub / hang rooms — no specific gameplay, just shared spaces.
             ("Park",             "The Park",           "An outdoor park with picnic tables and lawn games — a chill place to hang out.", "0a864c86-5a71-4e18-8041-8124e4dc9d98", "recroomoriginal,featured,hangout,chill", "image_Park.png"),
@@ -190,6 +191,7 @@ public class RoomService(DorkNetDbContext db)
             ["Quarry"]          = "image_Quarry.png",
             ["Clearcut"]        = "image_Clearcut.png",
             ["Spillway"]        = "image_Spillway.png",
+            ["RecRally"]        = "image_RecRally.png",
         };
         var candidates = new[]
         {
@@ -368,6 +370,7 @@ public class RoomService(DorkNetDbContext db)
             ("BowlingAlley",    "Bowling Alley",         "Classic ten-pin bowling. Roll strikes, beat your friends.", "ae929543-9a07-41d5-8ee9-dbbee8c36800", "recroomoriginal,sport", "image_BowlingAlley.png"),
             ("Crescendo",       "Crescendo of the Blood Moon", "Brave the haunted halls of Castle Dracula and survive the night.", "49cb8993-a956-43e2-86f4-1318f279b22a", "recroomoriginal,quest", "by3mjs9jbozpdvu6g9aje7jgz.png"),
             ("LaserTagHangar",  "Laser Tag Hangar",      "Teams battle in an industrial warehouse map.", "239e676c-f12f-489f-bf3a-d4c383d692c3", "recroomoriginal,sport", "image_LaserTag.png"),
+            ("RecRally",        "Rec Rally",             "Race across Chaparral with friends in off-road vehicles built for jumps, boosts, and tight turns.", "56193568-9ae0-498c-8a77-4df79dec91f5", "recroomoriginal,featured,sport,recrally,racing,pvp", "image_RecRally.png"),
             ("MakerRoom",       "Maker Room",            "A blank-walled canvas. The classic starting point for a Maker Pen build.", "a75f7547-79eb-47c6-8986-6767abcb4f92", "recroomoriginal,template,featured", "image_RecCenter.png"),
         };
 
@@ -640,6 +643,17 @@ public class RoomService(DorkNetDbContext db)
         !string.IsNullOrWhiteSpace(blobName) && !IsLegacySyntheticDefaultRoomDataBlobName(roomId, blobName)
             ? blobName
             : SyntheticDefaultRoomDataBlobName(roomId);
+
+    public static bool IsBakedOriginalRoom(RoomEntity room)
+    {
+        return !room.IsDormRoom
+            && !room.IsStudioRoom
+            && room.CreatorPlayerId == 1
+            && !string.IsNullOrWhiteSpace(room.TagsCsv)
+            && room.TagsCsv
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Any(tag => string.Equals(tag, "recroomoriginal", StringComparison.OrdinalIgnoreCase));
+    }
 
     private async Task<bool> IsUsableDormBlobNameAsync(string? blobName, long dormRoomId)
     {

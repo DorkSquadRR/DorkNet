@@ -1609,16 +1609,18 @@ public class AdminController(
 
     public sealed record PlayMenuTagsRequest(
         List<string>? PinnedTags,
-        List<string>? PopularTags);
+        List<string>? PopularTags,
+        List<string>? TrendingTags);
 
     [HttpPost("settings/play-menu-tags")]
     public async Task<ActionResult> SetPlayMenuTags([FromBody] PlayMenuTagsRequest body)
     {
         var tags = await serverSettings.SetPlayMenuTagsAsync(
             body.PinnedTags ?? [],
-            body.PopularTags ?? []);
+            body.PopularTags ?? [],
+            body.TrendingTags ?? []);
         await LogAsync("play_menu_tags_updated", "system", 0,
-            $"pinned={string.Join(",", tags.PinnedTags)} popular={string.Join(",", tags.PopularTags)}");
+            $"pinned={string.Join(",", tags.PinnedTags)} popular={string.Join(",", tags.PopularTags)} trending={string.Join(",", tags.TrendingTags)}");
         await db.SaveChangesAsync();
         return Ok(tags);
     }

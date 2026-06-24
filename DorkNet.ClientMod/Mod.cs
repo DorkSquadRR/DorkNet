@@ -49,6 +49,7 @@ public class Mod : MelonMod
     private static readonly Dictionary<string, Type> ResolvedTypeCache = new();
     private readonly HashSet<string> _diagnosticPatchLabels = new();
     private bool _networkPatchesRegistered;
+    private bool _httpDiagnosticsRegistered;
     private bool _joinTracePatchesRegistered;
     private bool _quitTraceCoreRegistered;
     private bool _quitTraceGameComplete;
@@ -86,6 +87,9 @@ public class Mod : MelonMod
         // is a UnityEngine.KeyCode name; BackQuote is the `~` key.
         public static bool   EnableDebugConsole = false;
         public static string DebugConsoleToggleKey = "BackQuote";
+        public static string[] DevCommands = Array.Empty<string>();
+        public static bool   DiagnoseDevMenu = false;
+        public static bool   EnableBuiltInDevDebugTools = false;
 
         // ── Desktop Screen Sharing gadget FPS ──
         // RecRoom.Tools.Productivity.DesktopScreenSharingDisplay broadcasts
@@ -109,29 +113,6 @@ public class Mod : MelonMod
         // lower these if 30 fps saturates bandwidth (chunked frames stall).
         public static int    DesktopScreenShareResolution = 0; // horizontal px
         public static int    DesktopScreenShareQuality = 0;    // JPEG quality
-
-        // One-shot dev-UI diagnostic (no behaviour change). When true,
-        // ~5s after load the mod logs whether the watch's native developer
-        // menu content actually exists in this build (HomeScreenFlow.
-        // devMenuPanel / devButtonPrefab present vs NULL), the dev-flow list
-        // counts, and whether RecRoom.Debugging.DebugConsole is in the scene
-        // + whether its static Execute() command path works. This tells us
-        // stripped-vs-gated so we know whether to un-gate the game's own dev
-        // menu or build a custom watch entry. Output goes to the MelonLoader
-        // console + dorknet-diagnostics.log.
-        public static bool   DiagnoseDevMenu = false;
-
-        // Inject a "Dev Console" button into the watch's native dev-menu
-        // panel (HomeScreenFlow.devMenuPanel) by cloning the game's own
-        // devButtonPrefab. The panel/prefab exist in this build (just gated
-        // off), so we instantiate + activate + label, then wire its click to
-        // run console commands. Native Button3D → works in VR and Screen Mode.
-        public static bool   EnableDevWatchButton = false;
-        // Preset dev commands shown as watch buttons (when EnableDevWatchButton
-        // is on). Each entry is "Label=command"; clicking runs
-        // DebugConsole.Execute(command). Edit to match this build's actual
-        // DebugConsoleCommandConfig command names/args.
-        public static string[] DevCommands = { "Help=help", "Fly=fly", "NoClip=noclip" };
 
         // Raise RRO quest party size past the baked 4. The cap lives in each
         // quest GameConfigurationAsset.TeamConfigurations[].MaxTeamSize
@@ -186,116 +167,10 @@ public class Mod : MelonMod
                            "NotifyServerCertificate",
                            prefix: nameof(TlsPatches.NotifyServerCertificate_Prefix));
         }
-        if (Cfg.EnableDebugConsole || Cfg.EnableDevWatchButton)
-            Log.Msg($"[debugconsole] armed: toggleKey={Cfg.DebugConsoleToggleKey}, commands={DebugConsolePatches.FormatConfiguredCommandsForLog()}");
-        // Image CDN signature verification. Server responses still include
-        // Content-Signature, but the official RSA public key is baked into
-        // GameAssembly and the matching private key is not available. This
-        // method is the verifier in the 2023 build (JFDPIJFDHAD.HOCPMNEKIHP);
-        // skipping it lets signed local CDN/image bytes load.
-        TryPatchByName("JFDPIJFDHAD",
-                       "HOCPMNEKIHP",
-                       args: new[]
-                       {
-                           typeof(string),
-                           typeof(Il2CppStructArray<byte>),
-                           typeof(Il2CppStructArray<byte>),
-                           typeof(Il2CppStructArray<byte>),
-                           typeof(Il2CppStructArray<byte>)
-                       },
-                       prefix: nameof(ImageSignaturePatches.VerifyImageSignature_Prefix));
         RegisterQuitTracePatches(logMisses: true);
         RegisterAntiTamperCallbackPatches(logMisses: true);
         RegisterToxModPatches(logMisses: true);
         PatchFileHashCheckerCallback();
-        // Post-save blob-name refresh. The 2020 watch's
-        // RoomPersistenceManager.RoomDataBlobName is only ever set by
-        // /goto-driven flows — neither the SubscriptionUpdateRoom push
-        // nor SubscriptionUpdatePresence pushes the server fires after
-        // save propagate into this field. So the PostSaveReloading
-        // sub-state's MasterReloadRoomAsync deserializes the cached
-        // bytes from the OLD blob name (the one /goto returned at boot),
-        // wiping any MakerPen object the user just placed even though
-        // the new blob is already on S3.
-        //
-        // Verified live: after a dorm save with object placement, server
-        // pushes SubscriptionUpdateRoom + PresenceUpdate both carrying
-        // dataBlob="dorm_p<id>_v(N+1).dat", but the watch's
-        // set_RoomDataBlobName trace immediately after the save shows
-        // old="v(N)" new="v(N)" — no propagation, no fresh download,
-        // no respawn. Leave+return triggers /goto which DOES update
-        // RoomDataBlobName, so the fix is to do the same write
-        // ourselves: when entering the SavingRoomSuccess state on the
-        // RoomPersistenceManager, read the just-pushed
-        // Rooms.LocalRoomScene.DataBlobName and force-set
-        // __instance.RoomDataBlobName to it. That fires the real
-        // setter → OnRoomDataBlobNameChanged → DownloadRoomDataBlobAsync
-        // for the new blob → PostSaveReloading picks up the fresh
-        // bytes and respawns the MakerPen objects.
-        TryPatchByName("RecRoom.Persistence.RoomPersistenceManager",
-                       "set_RoomDataBlobName",
-                       args: new[] { typeof(string) },
-                       prefix: nameof(SavePatches.SetRoomDataBlobName_Prefix));
-        // Intercept the SubscriptionUpdateRoom push BEFORE the watch's
-        // (cachedRoomId, cachedSubRoomId) early-out gate drops it. We
-        // stash the just-arrived Scenes[0].DataBlobName into a static
-        // so the set_RoomDataBlobName hijack can use it — otherwise
-        // LocalRoomDetails / LocalRoomScene never get the new blob
-        // name on the second-or-later push for the same (room, sub)
-        // tuple (= every post-save push in a dorm).
-        TryPatchByName("RecNet.Rooms",
-                       "OnSubscriptionUpdateRoom",
-                       prefix: nameof(SavePatches.OnSubscriptionUpdateRoom_Prefix));
-        // Force AccountExtensions.CanLocalPlayerChat to return true. The
-        // 2020 watch's room-chat send path (PlayerEmotes.SendChatEmote
-        // Coroutine d__53 offset 040) gates on this — if false, the
-        // coroutine bails before raising the Photon RPC, so the sender
-        // doesn't even see their own message. The check ANDs three
-        // signals: LocalAccount.TreatAsJunior (ObscuredBool at offset
-        // 0x40), a PlatformManager flag, and a ModerationManager
-        // singleton field. At least one returns the wrong value against
-        // our server. Force-allow — single-tenant private server, text
-        // moderation isn't a concern.
-        TryPatchByName("RecNet.AccountExtensions",
-                       "CanLocalPlayerChat",
-                       args: Type.EmptyTypes,
-                       postfix: nameof(ChatPatches.CanLocalPlayerChat_Postfix));
-        // PlayerEmotes.RemoveInvalidCharactersFromMessage walks the chat
-        // font asset's character table via TMP_FontAsset.HasCharacters
-        // to strip glyphs the font can't render. On 2020 Rec Room the
-        // chat font field can be null at the moment this fires (font
-        // asset bundle hasn't loaded yet?) and HasCharacters NREs deep
-        // inside Unity's TMP — which propagates out through the chat
-        // send callback and aborts the RPC. The watch's own ISIL has
-        // "skipping invalid character check" log paths for missing
-        // assets but doesn't actually short-circuit on the null field
-        // we hit. Skip the method entirely; chat lines will just keep
-        // any glyphs the font can't render (most common: emoji).
-        TryPatchByName("RecRoom.Players.PlayerEmotes",
-                       "RemoveInvalidCharactersFromMessage",
-                       prefix: nameof(ChatPatches.RemoveInvalidCharactersFromMessage_Prefix));
-        // Trace hooks so we can see exactly where chat dies. Send path:
-        //  KeyboardInputField.submit → RoomChatMenu.SendEmoteMessage(string)
-        //  → PlayerEmotes.SendChatEmote(msg, true)
-        //  → SendChatEmoteCoroutine d__53 → PurifyString HTTP call
-        //  → b__0 callback (error, cleanVersion) — fires Photon RPC
-        //    AND local-echoes via ProcessNewChatMessageReceived
-        //  → on each receiver (including self): RpcChatEmote(msg) →
-        //    ProcessNewChatMessageReceived → ReceiveRoomChat appends to
-        //    the chat log buffer.
-        TryPatchByName("RecRoom.Players.PlayerEmotes",
-                       "SendChatEmote",
-                       args: new[] { typeof(string), typeof(bool) },
-                       prefix: nameof(ChatPatches.SendChatEmote_Prefix));
-        TryPatchByName("RecRoom.Players.PlayerEmotes",
-                       "ProcessNewChatMessageReceived",
-                       args: new[] { typeof(string), typeof(bool) },
-                       prefix: nameof(ChatPatches.ProcessNewChatMessageReceived_Prefix));
-        TryPatchByName("RecRoom.Players.PlayerEmotes",
-                       "RpcChatEmote",
-                       args: new[] { typeof(string) },
-                       prefix: nameof(ChatPatches.RpcChatEmote_Prefix));
-
         // Desktop Screen Sharing FPS override. Only register when a target
         // is set; the postfix on the gadget's Awake rewrites the baked
         // refresh-frequency field (and, if enabled, raises the Photon
@@ -308,11 +183,6 @@ public class Mod : MelonMod
             Log.Msg($"[screenshare] override armed: target {Cfg.DesktopScreenShareFps} fps " +
                     $"(raisePhotonRate={Cfg.DesktopScreenShareRaisePhotonRate})");
         }
-
-        TryPatchByName("RecRoom.Tools.MakerPenVisuals",
-                       "set_LaserPointerEnabled",
-                       args: new[] { typeof(bool) },
-                       prefix: nameof(MakerPenGiftPreviewPatches.LaserPointerEnabled_Prefix));
 
         // RRO quest party-size bump. Prefix the runtime config-apply path so
         // we can read the config's Name (scope to the allowlisted quests) and
@@ -338,7 +208,28 @@ public class Mod : MelonMod
 
         RegisterStudioTracePatches();
 
+        if (Cfg.EnableBuiltInDevDebugTools)
+            RegisterBuiltInDevDebugTools();
+
         Log.Msg("=== Client patches registered ===");
+    }
+
+    private void RegisterBuiltInDevDebugTools()
+    {
+        Log.Msg("=== Registering built-in Dev Debug Tools hooks ===");
+        TryPatchByName("RRUI.Data.GlobalModelController+HideIfNotDeveloperImpl",
+                       "DGFIJKPCBLK", args: Type.EmptyTypes,
+                       prefix: nameof(BuiltInDevDebugToolsPatches.KeepVisible_Prefix));
+        TryPatchByName("RRUI.Data.GlobalModelController+HideIfNotDeveloperAndNotDebugBuildImpl",
+                       "DGFIJKPCBLK", args: Type.EmptyTypes,
+                       prefix: nameof(BuiltInDevDebugToolsPatches.KeepVisible_Prefix));
+        TryPatchByName("RRUI.Data.GlobalModelController+HideIfNotDebugBuildImpl",
+                       "DGFIJKPCBLK", args: Type.EmptyTypes,
+                       prefix: nameof(BuiltInDevDebugToolsPatches.KeepVisible_Prefix));
+        TryPatchByName("RRUI.Data.DevDebugBuildInformationModel",
+                       "get_BuildInfoFormatted", args: Type.EmptyTypes,
+                       postfix: nameof(BuiltInDevDebugToolsPatches.BuildInfoFormatted_Postfix));
+        Log.Msg("=== Built-in Dev Debug Tools hooks registered ===");
     }
 
     // ── Room-join + watch-button trace ────────────────────────────────
@@ -631,12 +522,6 @@ public class Mod : MelonMod
                  new[] { typeof(string), typeof(UriKind) },
                  prefix: nameof(UriPatches.UriStringCtor_Prefix));
         complete &= TryPatchHttpRequestUriConstructors();
-        TryPatchByName("BestHTTP.HTTPRequest", "set_Uri",
-                 args: new[] { typeof(Uri) },
-                 prefix: nameof(UriPatches.HttpRequestSetUri_Prefix));
-        TryPatchByName("BestHTTP.HTTPRequest", "PrepareUri",
-                 args: new[] { typeof(Uri) },
-                 prefix: nameof(UriPatches.HttpRequestPrepareUri_Prefix));
         complete &= TryPatchByName("BestHTTP.HTTPRequest", "Send",
                  prefix: nameof(UriPatches.HttpRequestSend_Prefix));
         complete &= TryPatchHttpManagerStringSendRequestOverloads();
@@ -644,7 +529,88 @@ public class Mod : MelonMod
                  args: new[] { ResolveType("BestHTTP.HTTPRequest") ?? typeof(object) },
                  prefix: nameof(UriPatches.HttpManagerSendRequestObject_Prefix));
 
+        RegisterHttpDiagnostics();
         _networkPatchesRegistered = complete;
+    }
+
+    private void RegisterHttpDiagnostics()
+    {
+        if (_httpDiagnosticsRegistered) return;
+
+        var complete = true;
+        complete &= TryPatchBndRequestBuilderDiagnostics();
+        complete &= TryPatchDiagnosticAllOverloads("BestHTTP.HTTPRequest", "CallCallback",
+            postfix: nameof(HttpTracePatches.CallCallback_Postfix),
+            finalizer: nameof(HttpTracePatches.CallCallback_Finalizer));
+        complete &= TryPatchByName("BestHTTP.HTTPRequest", "AddHeader",
+            args: new[] { typeof(string), typeof(string) },
+            prefix: nameof(HttpTracePatches.HeaderSet_Prefix));
+        complete &= TryPatchByName("BestHTTP.HTTPRequest", "SetHeader",
+            args: new[] { typeof(string), typeof(string) },
+            prefix: nameof(HttpTracePatches.HeaderSet_Prefix));
+
+        _httpDiagnosticsRegistered = complete;
+    }
+
+    private bool TryPatchBndRequestBuilderDiagnostics()
+    {
+        const string label = "BNDIAONDFFF.request-builder";
+        if (_diagnosticPatchLabels.Contains(label))
+            return true;
+
+        var type = ResolveType("BNDIAONDFFF");
+        if (type is null)
+        {
+            Log.Warning("[patch-miss] BNDIAONDFFF request-builder: type not found");
+            return false;
+        }
+
+        var prefix = new HarmonyMethod(GetPatchMethod(nameof(HttpTracePatches.RecNetRequestBuilderCtor_Prefix)));
+        var postfix = new HarmonyMethod(GetPatchMethod(nameof(HttpTracePatches.RecNetRequestBuilderCtor_Postfix)));
+        var patched = 0;
+
+        foreach (var ctor in type.GetConstructors(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+        {
+            var parameters = ctor.GetParameters();
+            if (parameters.Length != 3 || parameters[2].ParameterType != typeof(string)) continue;
+
+            try
+            {
+                HarmonyInstance.Patch(ctor, prefix: prefix, postfix: postfix);
+                patched++;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[patch-fail] BNDIAONDFFF..ctor({FormatParameterTypes(parameters)}): {ex.Message}");
+            }
+        }
+
+        foreach (var method in AccessTools.GetDeclaredMethods(type))
+        {
+            if (method.Name != "FILJELOLBKK") continue;
+            var parameters = method.GetParameters();
+            if (parameters.Length != 3 || parameters[2].ParameterType != typeof(string)) continue;
+
+            try
+            {
+                HarmonyInstance.Patch(method, prefix: prefix, postfix: postfix);
+                patched++;
+            }
+            catch (Exception ex)
+            {
+                Log.Warning($"[patch-fail] BNDIAONDFFF.FILJELOLBKK({FormatParameterTypes(parameters)}): {ex.Message}");
+            }
+        }
+
+        if (patched == 0)
+        {
+            Log.Warning("[patch-miss] BNDIAONDFFF request-builder overloads");
+            return false;
+        }
+
+        _diagnosticPatchLabels.Add(label);
+        Log.Msg($"[patch-ok] BNDIAONDFFF request-builder x{patched}");
+        return true;
     }
 
     private bool TryPatchHttpRequestUriConstructors()
@@ -753,10 +719,10 @@ public class Mod : MelonMod
             RegisterToxModPatches(logMisses: false);
         }
 
-        if (Cfg.EnableDebugConsole || Cfg.EnableDevWatchButton)
+        if (Cfg.EnableDebugConsole)
             DebugConsolePatches.PollToggleKey();
 
-        if (Cfg.DiagnoseDevMenu || Cfg.EnableDevWatchButton)
+        if (Cfg.DiagnoseDevMenu)
             DevMenuProbe.Tick();
     }
 
@@ -783,13 +749,22 @@ public class Mod : MelonMod
             if (TryGetConfigValue(r, "ServerHost", out var v))           Cfg.ServerHost = v.GetString() ?? Cfg.ServerHost;
             if (TryGetConfigValue(r, "EnableTlsTrustBypass", out v))     Cfg.EnableTlsTrustBypass = v.GetBoolean();
             if (TryGetConfigValue(r, "TraceRegistrationDialog", out v))  Cfg.TraceRegistrationDialog = v.GetBoolean();
-            if (TryGetConfigValue(r, "EnableDebugConsole", out v))       Cfg.EnableDebugConsole = v.GetBoolean();
-            if (TryGetConfigValue(r, "DebugConsoleToggleKey", out v))    Cfg.DebugConsoleToggleKey = v.GetString() ?? Cfg.DebugConsoleToggleKey;
+            if (TryGetConfigValue(r, "EnableDebugConsole", out v))        Cfg.EnableDebugConsole = v.GetBoolean();
+            if (TryGetConfigValue(r, "DebugConsoleToggleKey", out v))     Cfg.DebugConsoleToggleKey = v.GetString() ?? Cfg.DebugConsoleToggleKey;
+            if (TryGetConfigValue(r, "DiagnoseDevMenu", out v))           Cfg.DiagnoseDevMenu = v.GetBoolean();
+            if (TryGetConfigValue(r, "EnableBuiltInDevDebugTools", out v)) Cfg.EnableBuiltInDevDebugTools = v.GetBoolean();
+            if (TryGetConfigValue(r, "DevCommands", out v) && v.ValueKind == JsonValueKind.Array)
+            {
+                var commands = new List<string>();
+                foreach (var e in v.EnumerateArray())
+                    if (e.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(e.GetString()))
+                        commands.Add(e.GetString()!);
+                Cfg.DevCommands = commands.ToArray();
+            }
             if (TryGetConfigValue(r, "DesktopScreenShareFps", out v))             Cfg.DesktopScreenShareFps = (float)v.GetDouble();
             if (TryGetConfigValue(r, "DesktopScreenShareRaisePhotonRate", out v)) Cfg.DesktopScreenShareRaisePhotonRate = v.GetBoolean();
             if (TryGetConfigValue(r, "DesktopScreenShareResolution", out v))      Cfg.DesktopScreenShareResolution = v.GetInt32();
             if (TryGetConfigValue(r, "DesktopScreenShareQuality", out v))         Cfg.DesktopScreenShareQuality = v.GetInt32();
-            if (TryGetConfigValue(r, "DiagnoseDevMenu", out v))                   Cfg.DiagnoseDevMenu = v.GetBoolean();
             if (TryGetConfigValue(r, "QuestMaxTeamSize", out v))                  Cfg.QuestMaxTeamSize = v.GetInt32();
             if (TryGetConfigValue(r, "QuestMaxTeamSizeRooms", out v) && v.ValueKind == JsonValueKind.Array)
             {
@@ -798,17 +773,6 @@ public class Mod : MelonMod
                     if (e.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(e.GetString()))
                         rooms.Add(e.GetString()!);
                 Cfg.QuestMaxTeamSizeRooms = rooms.ToArray(); // explicit (incl. empty = none)
-            }
-            if (TryGetConfigValue(r, "EnableDevWatchButton", out v))          Cfg.EnableDevWatchButton = v.GetBoolean();
-            if (TryGetConfigValue(r, "DevCommands", out v) && v.ValueKind == JsonValueKind.Array)
-            {
-                var list = new List<string>();
-                foreach (var e in v.EnumerateArray())
-                {
-                    var s = e.GetString();
-                    if (!string.IsNullOrWhiteSpace(s)) list.Add(s!);
-                }
-                if (list.Count > 0) Cfg.DevCommands = list.ToArray();
             }
             Log.Msg($"[config] loaded from {path}: ServerHost={Cfg.ServerHost}, " +
                     $"EnableTlsTrustBypass={Cfg.EnableTlsTrustBypass}");
@@ -1063,7 +1027,7 @@ public class Mod : MelonMod
     {
         // Look in all three patch holder classes — small enough that a
         // linear scan is cheaper than per-class lookups.
-        foreach (var holder in new[] { typeof(UriPatches), typeof(HttpTracePatches), typeof(AuthPatches), typeof(AntiCheatPatches), typeof(AntiTamperPatches), typeof(FileHashCheckerPatches), typeof(ToxModPatches), typeof(TlsPatches), typeof(ImageSignaturePatches), typeof(QuitTracePatches), typeof(DiagnosticPatches), typeof(RoomLoadDiagnostics), typeof(SavePatches), typeof(ChatPatches), typeof(JoinPatches), typeof(RegistrationPatches), typeof(DebugConsolePatches), typeof(ScreenSharePatches), typeof(MakerPenGiftPreviewPatches), typeof(QuestTeamSize) })
+        foreach (var holder in new[] { typeof(UriPatches), typeof(HttpTracePatches), typeof(AuthPatches), typeof(AntiCheatPatches), typeof(AntiTamperPatches), typeof(FileHashCheckerPatches), typeof(ToxModPatches), typeof(TlsPatches), typeof(QuitTracePatches), typeof(DiagnosticPatches), typeof(RoomLoadDiagnostics), typeof(SavePatches), typeof(ChatPatches), typeof(JoinPatches), typeof(RegistrationPatches), typeof(BuiltInDevDebugToolsPatches), typeof(DebugConsolePatches), typeof(ScreenSharePatches), typeof(MakerPenGiftPreviewPatches), typeof(QuestTeamSize) })
         {
             var m = holder.GetMethod(name, BindingFlags.Public | BindingFlags.Static);
             if (m is not null) return m;
@@ -1085,17 +1049,6 @@ public class Mod : MelonMod
         }
 
         var complete = true;
-        complete &= TryPatchDiagnosticByName("SessionManager", "TryApplicationQuit",
-                                             prefix: nameof(QuitTracePatches.SessionManagerTryApplicationQuit_Prefix),
-                                             logMiss: logMisses);
-        complete &= TryPatchDiagnosticByName("SessionManager", "TryApplicationQuit",
-                                             args: new[] { typeof(int) },
-                                             prefix: nameof(QuitTracePatches.SessionManagerTryApplicationQuitInt_Prefix),
-                                             logMiss: logMisses);
-        complete &= TryPatchDiagnosticByName("SessionManager", "FatalApplicationQuit",
-                                             args: new[] { typeof(int), typeof(string) },
-                                             prefix: nameof(QuitTracePatches.SessionManagerFatalApplicationQuit_Prefix),
-                                             logMiss: logMisses);
         complete &= TryPatchDiagnosticByName("OPEOLPDLEBO", "GDNAOLMIDLM",
                                              prefix: nameof(QuitTracePatches.ApplicationWantsToQuit_Prefix),
                                              logMiss: logMisses);
@@ -1145,17 +1098,6 @@ public class Mod : MelonMod
                                       logMiss: logMisses);
         }
 
-        TryPatchDiagnosticByName("SessionManager", "TryApplicationQuit",
-                                 prefix: nameof(DiagnosticPatches.SessionManagerTryApplicationQuit_Prefix),
-                                 logMiss: logMisses);
-        TryPatchDiagnosticByName("SessionManager", "TryApplicationQuit",
-                                 args: new[] { typeof(int) },
-                                 prefix: nameof(DiagnosticPatches.SessionManagerTryApplicationQuitInt_Prefix),
-                                 logMiss: logMisses);
-        TryPatchDiagnosticByName("SessionManager", "FatalApplicationQuit",
-                                 args: new[] { typeof(int), typeof(string) },
-                                 prefix: nameof(DiagnosticPatches.SessionManagerFatalApplicationQuit_Prefix),
-                                 logMiss: logMisses);
         RegisterDeepRoomDiagnostics(logMisses);
         // SteamManager.Awake + SteamPlatformManager.*LoginInitialize were
         // pure-logging diagnostics that fired during Unity's very first
@@ -1732,6 +1674,31 @@ internal static class RoomLoadDiagnostics
 }
 
 // ── Debug console access ───────────────────────────────────────────────
+// Built-in watch Dev Debug Tools hooks. The 2023 RRUI page already exists,
+// but retail rows are hidden by GlobalModelController hide gates. We keep
+// those rows visible and append the debug-console command table to the
+// built-in Build Information text so the watch page reflects the real client
+// command config.
+internal static class BuiltInDevDebugToolsPatches
+{
+    public static bool KeepVisible_Prefix() => false;
+
+    public static void BuildInfoFormatted_Postfix(ref string __result)
+    {
+        try
+        {
+            var commands = DebugConsolePatches.BuildCommandReferenceText("Debug Console Commands", maxCommands: 60);
+            __result = string.IsNullOrWhiteSpace(__result)
+                ? commands
+                : __result.TrimEnd() + "\n\n" + commands;
+        }
+        catch (Exception ex)
+        {
+            Mod.Log.Warning($"[devtools] failed to append command list: {ex.Message}");
+        }
+    }
+}
+
 // The 2020 client ships RecRoom.Debugging.DebugConsole — a real in-game
 // dev console (text input + a DebugConsoleCommandConfig command table:
 // SetTimeScale, Fly, Teleport, GoToRoom, KillAllEnemies, DebugCompleteDaily,
@@ -1766,6 +1733,7 @@ internal static class DebugConsolePatches
     private static Type? _consoleType;
     private static MethodInfo? _toggleMethod;     // ShowInputField(bool) / MCNBJFECHLJ(bool)
     private static MethodInfo? _setConsoleText;   // DebugConsole.SetConsoleText(string)
+    private static List<ConfiguredCommand>? _commandCache;
 
     // Harmony prefix returning false → skips the original CheatManager
     // detector, so a tripped heuristic never runs its punish/drop path.
@@ -1773,7 +1741,7 @@ internal static class DebugConsolePatches
 
     public static string FormatConfiguredCommandsForLog()
     {
-        var commands = GetConfiguredCommands();
+        var commands = GetAvailableCommands();
         if (commands.Count == 0) return "<none>";
 
         var parts = new List<string>();
@@ -1971,27 +1939,49 @@ internal static class DebugConsolePatches
 
     private static string BuildConfiguredCommandText()
     {
-        var commands = GetConfiguredCommands();
+        return BuildCommandReferenceText("DorkNet debug commands", maxCommands: 80) + "\n\nType a command and press Enter.";
+    }
+
+    public static string BuildCommandReferenceText(string header, int maxCommands = int.MaxValue)
+    {
+        var commands = GetAvailableCommands();
         var sb = new StringBuilder();
-        sb.AppendLine("DorkNet debug commands");
+        sb.AppendLine(header);
         sb.AppendLine();
         if (commands.Count == 0)
         {
-            sb.AppendLine("No commands configured in DevCommands.");
+            sb.AppendLine("No DebugConsoleCommandConfig commands found.");
         }
         else
         {
-            for (var i = 0; i < commands.Count; i++)
+            var visible = Math.Min(commands.Count, maxCommands);
+            for (var i = 0; i < visible; i++)
                 sb.AppendLine($"{i + 1}. {commands[i].Label}: {commands[i].Command}");
+            if (visible < commands.Count)
+            {
+                sb.AppendLine();
+                sb.AppendLine($"+ {commands.Count - visible} more commands available through the debug console.");
+            }
         }
-        sb.AppendLine();
-        sb.AppendLine("Type a command and press Enter.");
         return sb.ToString().TrimEnd();
     }
 
-    private static List<ConfiguredCommand> GetConfiguredCommands()
+    internal static List<ConfiguredCommand> GetAvailableCommands()
     {
+        if (_commandCache is not null) return _commandCache;
+
         var commands = new List<ConfiguredCommand>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        AddConfiguredCommands(commands, seen);
+        AddRuntimeCommands(commands, seen);
+        commands.Sort((a, b) => string.Compare(a.Label, b.Label, StringComparison.OrdinalIgnoreCase));
+        _commandCache = commands;
+        Mod.Log.Msg($"[debugconsole] command table loaded: {commands.Count} command(s)");
+        return commands;
+    }
+
+    private static void AddConfiguredCommands(List<ConfiguredCommand> commands, HashSet<string> seen)
+    {
         foreach (var entry in Mod.Cfg.DevCommands)
         {
             if (string.IsNullOrWhiteSpace(entry)) continue;
@@ -2000,12 +1990,117 @@ internal static class DebugConsolePatches
             var command = split >= 0 ? entry[(split + 1)..].Trim() : entry.Trim();
             if (string.IsNullOrWhiteSpace(command)) continue;
             if (string.IsNullOrWhiteSpace(label)) label = command;
-            commands.Add(new ConfiguredCommand(label, command));
+            AddCommand(commands, seen, label, command);
         }
-        return commands;
     }
 
-    private readonly struct ConfiguredCommand
+    private static void AddRuntimeCommands(List<ConfiguredCommand> commands, HashSet<string> seen)
+    {
+        try
+        {
+            var cfgType = Mod.ResolveType("RecRoom.Debugging.DebugConsoleCommandConfig");
+            if (cfgType is null)
+            {
+                Mod.Log.Warning("[debugconsole] DebugConsoleCommandConfig type not found");
+                return;
+            }
+
+            foreach (var method in cfgType.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
+            {
+                if (method.GetParameters().Length != 0) continue;
+                if (!cfgType.IsAssignableFrom(method.ReturnType)) continue;
+                try { AddCommandConfig(method.Invoke(null, Array.Empty<object>()), commands, seen); }
+                catch { }
+            }
+
+            var il2cppType = ToIl2CppType(cfgType);
+            var resources = Mod.ResolveType("UnityEngine.Resources");
+            if (il2cppType is not null && resources is not null)
+            {
+                var all = OneArgMethod(resources, "FindObjectsOfTypeAll", il2cppType)?.Invoke(null, new[] { il2cppType });
+                var count = ArrLen(all);
+                for (var i = 0; i < count; i++)
+                    AddCommandConfig(ArrItem(all, i), commands, seen);
+            }
+        }
+        catch (Exception ex)
+        {
+            Mod.Log.Warning($"[debugconsole] runtime command scan failed: {ex.Message}");
+        }
+    }
+
+    private static void AddCommandConfig(object? config, List<ConfiguredCommand> commands, HashSet<string> seen)
+    {
+        if (config is null) return;
+        var metas = GetMemberValue(config, "Metas");
+        var count = ArrLen(metas);
+        for (var i = 0; i < count; i++)
+        {
+            var meta = ArrItem(metas, i);
+            if (meta is null) continue;
+            var methodName = ReadStringMember(meta, "MethodName");
+            if (string.IsNullOrWhiteSpace(methodName)) continue;
+            var declaringType = ReadStringMember(meta, "DeclaringType");
+            var label = string.IsNullOrWhiteSpace(declaringType)
+                ? methodName
+                : $"{ShortTypeName(declaringType)}.{methodName}";
+            AddCommand(commands, seen, label, methodName);
+        }
+    }
+
+    private static void AddCommand(List<ConfiguredCommand> commands, HashSet<string> seen, string label, string command)
+    {
+        label = CleanLabel(label);
+        command = (command ?? string.Empty).Trim();
+        if (command.Length == 0 || !seen.Add(command)) return;
+        commands.Add(new ConfiguredCommand(label, command));
+    }
+
+    private static object? GetMemberValue(object instance, string name)
+    {
+        var type = instance.GetType();
+        var prop = type.GetProperty(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+        if (prop is not null && prop.CanRead && prop.GetIndexParameters().Length == 0)
+        {
+            try { return prop.GetValue(instance); } catch { }
+        }
+
+        var field = type.GetField(name, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+        if (field is not null)
+        {
+            try { return field.GetValue(instance); } catch { }
+        }
+
+        return null;
+    }
+
+    private static string ReadStringMember(object instance, string name)
+    {
+        return GetMemberValue(instance, name)?.ToString() ?? string.Empty;
+    }
+
+    private static string CleanLabel(string label)
+    {
+        label = (label ?? string.Empty).Trim();
+        if (label.Length == 0) return "Command";
+
+        var cleaned = new char[label.Length];
+        for (var i = 0; i < label.Length; i++)
+        {
+            var ch = label[i];
+            cleaned[i] = char.IsLetterOrDigit(ch) || ch is '.' or '_' or '-' or ' ' ? ch : '_';
+        }
+
+        return new string(cleaned);
+    }
+
+    private static string ShortTypeName(string typeName)
+    {
+        var idx = typeName.LastIndexOf('.');
+        return idx >= 0 && idx < typeName.Length - 1 ? typeName[(idx + 1)..] : typeName;
+    }
+
+    internal readonly struct ConfiguredCommand
     {
         public ConfiguredCommand(string label, string command)
         {
@@ -2677,6 +2772,8 @@ internal static class HttpTracePatches
     private static int _failureLogCount;
     private static int _responseTupleLogCount;
     private static int _builderSendLogCount;
+    private static int _callbackLogCount;
+    private static int _uriUnreadDumpCount;
 
     public static void RecNetRequestSend_Prefix(object __instance, MethodBase __originalMethod)
     {
@@ -2827,6 +2924,7 @@ internal static class HttpTracePatches
     {
         try
         {
+            if (!ShouldLogCallback(__instance)) return;
             DiagnosticPatches.Write(
                 $"[http-callback] EXIT {__originalMethod.DeclaringType?.FullName}.{__originalMethod.Name} " +
                 $"{DescribeRequestAndResponse(__instance)}");
@@ -2835,6 +2933,27 @@ internal static class HttpTracePatches
         {
             LogFailure("callback-exit", ex);
         }
+    }
+
+    public static Exception? CallCallback_Finalizer(Exception? __exception, object __instance, MethodBase __originalMethod)
+    {
+        if (__exception is not null)
+        {
+            try
+            {
+                DiagnosticPatches.Write(
+                    $"[http-callback] EXCEPTION {__originalMethod.DeclaringType?.FullName}.{__originalMethod.Name} " +
+                    $"{DescribeRequestAndResponse(__instance)} " +
+                    $"{RoomLoadDiagnostics.FormatException(__exception, __exception)} " +
+                    $"state={DumpObjectFields(__instance, 32, 900)}");
+            }
+            catch (Exception ex)
+            {
+                LogFailure("callback-finalizer", ex);
+            }
+        }
+
+        return __exception;
     }
 
     public static void TraceUrl(string? url, string source)
@@ -2855,14 +2974,18 @@ internal static class HttpTracePatches
         try
         {
             var id = NextRequestId();
-            var uri = TryReadRequestUri(request)?.ToString() ?? "<uri unread>";
+            var uriValue = TryReadRequestUri(request);
+            var uri = uriValue?.ToString() ?? "<uri unread>";
             var method = TryReadHttpMethod(request);
             var headers = TryReadHeaders(request);
             var body = TryReadBodyPreview(request);
+            var fallback = uriValue is null && System.Threading.Interlocked.Increment(ref _uriUnreadDumpCount) <= 40
+                ? $" requestFields={DumpObjectFields(request, 24, 260)}"
+                : "";
 
             DiagnosticPatches.Write(
                 $"[http-trace] #{id} {source} method={method} uri={SanitizeInline(uri)} " +
-                $"headers={headers} body={body}");
+                $"headers={headers} body={body}{fallback}");
         }
         catch (Exception ex)
         {
@@ -3019,6 +3142,14 @@ internal static class HttpTracePatches
         return "<body unread>";
     }
 
+    private static bool ShouldLogCallback(object request)
+    {
+        var response = TryReadResponseObject(request);
+        var status = response is null ? null : TryReadStatusCode(response);
+        if (status >= 400) return true;
+        return System.Threading.Interlocked.Increment(ref _callbackLogCount) <= 80;
+    }
+
     private static string DescribeRequestAndResponse(object request)
     {
         var uri = TryReadRequestUri(request)?.ToString() ?? "<uri unread>";
@@ -3058,6 +3189,17 @@ internal static class HttpTracePatches
                 var value = field.GetValue(request);
                 if (value is not null) return value;
             }
+            catch { }
+        }
+
+        return null;
+    }
+
+    private static int? TryReadStatusCode(object response)
+    {
+        if (TryReadMemberValue(response, "StatusCode", out var value))
+        {
+            try { return Convert.ToInt32(value); }
             catch { }
         }
 
@@ -3803,14 +3945,6 @@ internal static class TlsPatches
     public static bool NotifyServerCertificate_Prefix()
     {
         return !Mod.Cfg.EnableTlsTrustBypass; // false skips original; true (bypass off) lets it run
-    }
-}
-
-internal static class ImageSignaturePatches
-{
-    public static bool VerifyImageSignature_Prefix()
-    {
-        return false;
     }
 }
 

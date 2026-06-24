@@ -329,7 +329,12 @@ public class MatchPlayerController(
             return null;
         }
 
-        var resolvedDataBlob = await ResolveDataBlobForPresenceAsync(room.RoomId, playerId, room.RoomInstanceId);
+        var resolvedDataBlob = await ResolveDataBlobForPresenceAsync(
+            room.RoomId,
+            playerId,
+            room.RoomInstanceId,
+            room.SubRoomId,
+            room.IsPrivate);
         if (!string.IsNullOrWhiteSpace(resolvedDataBlob)
             && !string.Equals(room.DataBlob, resolvedDataBlob, StringComparison.Ordinal))
         {
@@ -434,7 +439,9 @@ public class MatchPlayerController(
     private async Task<string> ResolveDataBlobForPresenceAsync(
         long roomId,
         int playerId,
-        long? roomInstanceId = null)
+        long? roomInstanceId = null,
+        long? subRoomId = null,
+        bool isPrivateInstance = false)
     {
         var room = await db.Rooms.AsNoTracking().FirstOrDefaultAsync(r => r.Id == roomId);
         if (room is null) return string.Empty;
@@ -445,7 +452,7 @@ public class MatchPlayerController(
             if (!string.IsNullOrWhiteSpace(dormBlob)) return dormBlob;
         }
 
-        if (roomInstanceId is > 0)
+        if (isPrivateInstance && roomInstanceId is > 0)
         {
             var instanceBlob = await db.PrivateInstances.AsNoTracking()
                 .Where(instance => instance.Id == roomInstanceId && instance.RoomId == roomId)
@@ -454,7 +461,18 @@ public class MatchPlayerController(
             if (!string.IsNullOrWhiteSpace(instanceBlob)) return instanceBlob;
         }
 
+        if (subRoomId is >= 0)
+        {
+            var sceneBlob = await db.RoomScenes.AsNoTracking()
+                .Where(scene => scene.RoomId == roomId && scene.OrderIndex == subRoomId)
+                .Select(scene => scene.DataBlobName)
+                .FirstOrDefaultAsync();
+            if (!string.IsNullOrWhiteSpace(sceneBlob)) return sceneBlob;
+        }
+
         if (!string.IsNullOrWhiteSpace(room.CurrentDataBlobName)) return room.CurrentDataBlobName;
+
+        if (RoomService.IsBakedOriginalRoom(room)) return string.Empty;
 
         return RoomService.SyntheticDefaultRoomDataBlobName(room.Id);
     }

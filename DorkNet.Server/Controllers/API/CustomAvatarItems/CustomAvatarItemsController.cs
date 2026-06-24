@@ -13,6 +13,7 @@ namespace DorkNet.Server.Controllers.API.CustomAvatarItems;
 [ApiController]
 [Route("api/customAvatarItems")]
 [Route("api/customAvatarItems/v1")]
+[Route("api/customAvatarItems/v2")]
 public class CustomAvatarItemsController(
     DorkNetDbContext db,
     LevelService level,
@@ -105,6 +106,26 @@ public class CustomAvatarItemsController(
         var rows = await db.CustomAvatarItems
             .Where(i => i.IsPublic)
             .OrderByDescending(i => i.CreatedAt)
+            .Take(take)
+            .ToListAsync();
+        return Ok(rows.Select(ToWire));
+    }
+
+    [HttpGet("fromCreator/{creatorId:long}")]
+    [AllowAnonymous]
+    public async Task<IActionResult> FromCreator(
+        long creatorId,
+        [FromQuery] int skip = 0,
+        [FromQuery] int take = 100)
+    {
+        skip = Math.Max(0, skip);
+        take = Math.Clamp(take, 1, 100);
+        var currentPlayerId = this.CurrentPlayerId();
+        var rows = await db.CustomAvatarItems
+            .Where(i => i.CreatorPlayerId == creatorId
+                        && (i.IsPublic || i.CreatorPlayerId == currentPlayerId))
+            .OrderByDescending(i => i.UpdatedAt)
+            .Skip(skip)
             .Take(take)
             .ToListAsync();
         return Ok(rows.Select(ToWire));

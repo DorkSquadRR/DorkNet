@@ -102,9 +102,10 @@ public class ServerSettingsService(DorkNetDbContext db)
 
     public async Task<PlayMenuTagSettings> SetPlayMenuTagsAsync(
         IReadOnlyList<string> pinned,
-        IReadOnlyList<string> popular)
+        IReadOnlyList<string> popular,
+        IReadOnlyList<string>? trending = null)
     {
-        var normalized = NormalizePlayMenuTags(pinned, popular);
+        var normalized = NormalizePlayMenuTags(pinned, popular, trending);
         var existing = await GetTrackedRowAsync();
         existing.PlayMenuTagsJson = JsonSerializer.Serialize(normalized, JsonOptions);
         existing.UpdatedAt = DateTime.UtcNow;
@@ -212,7 +213,7 @@ public class ServerSettingsService(DorkNetDbContext db)
                     row.PlayMenuTagsJson,
                     JsonOptions);
                 if (parsed is not null)
-                    return NormalizePlayMenuTags(parsed.PinnedTags, parsed.PopularTags)
+                    return NormalizePlayMenuTags(parsed.PinnedTags, parsed.PopularTags, parsed.TrendingTags)
                         with { UpdatedAt = row.UpdatedAt };
             }
             catch
@@ -473,6 +474,19 @@ public class ServerSettingsService(DorkNetDbContext db)
                 "music",
                 "parkour",
             ],
+            TrendingTags:
+            [
+                "featured",
+                "community",
+                "makerpen",
+                "pvp",
+                "quest",
+                "music",
+                "parkour",
+                "hangout",
+                "creative",
+                "recroomoriginal",
+            ],
             UpdatedAt: DateTime.UtcNow);
 
     public static RecCenterDoorSettings DefaultRecCenterDoors() =>
@@ -537,13 +551,14 @@ public class ServerSettingsService(DorkNetDbContext db)
     }
 
     private static PlayMenuTagSettings NormalizePlayMenuTags(
-        IReadOnlyList<string> pinned,
-        IReadOnlyList<string> popular)
+        IReadOnlyList<string>? pinned,
+        IReadOnlyList<string>? popular,
+        IReadOnlyList<string>? trending)
     {
-        static List<string> Normalize(IReadOnlyList<string> tags, int max)
+        static List<string> Normalize(IReadOnlyList<string>? tags, int max)
         {
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            return tags
+            return (tags ?? [])
                 .Select(t => (t ?? string.Empty).Trim().TrimStart('#').ToLowerInvariant())
                 .Where(t => t.Length > 0)
                 .Where(t => t.All(c => char.IsLetterOrDigit(c) || c is '-' or '_'))
@@ -555,9 +570,11 @@ public class ServerSettingsService(DorkNetDbContext db)
         var defaults = DefaultPlayMenuTags();
         var pinnedTags = Normalize(pinned, 16);
         var popularTags = Normalize(popular, 32);
+        var trendingTags = Normalize(trending, 32);
         return new PlayMenuTagSettings(
             pinnedTags.Count > 0 ? pinnedTags : defaults.PinnedTags,
             popularTags.Count > 0 ? popularTags : defaults.PopularTags,
+            trendingTags.Count > 0 ? trendingTags : defaults.TrendingTags,
             DateTime.UtcNow);
     }
 
@@ -669,6 +686,7 @@ public sealed record WeeklyChallengeReward(
 public sealed record PlayMenuTagSettings(
     List<string> PinnedTags,
     List<string> PopularTags,
+    List<string> TrendingTags,
     DateTime UpdatedAt);
 
 public sealed record RecCenterDoorSettings(

@@ -396,17 +396,61 @@ public class ImagesController(
     [HttpGet("api/images/v3/byaccount/{accountId:long}")]
     [HttpGet("api/images/v4/byaccount/{accountId:long}")]
     [HttpGet("api/images/v5/byaccount/{accountId:long}")]
+    [HttpGet("api/images/v2/player/{accountId:long}")]
+    [HttpGet("api/images/v3/player/{accountId:long}")]
+    [HttpGet("api/images/v4/player/{accountId:long}")]
+    [HttpGet("api/images/v5/player/{accountId:long}")]
     public async Task<IActionResult> GetByAccount(long accountId,
-        [FromQuery] int take = 50, [FromQuery] int skip = 0)
+        [FromQuery] int take = 50, [FromQuery] int skip = 0, [FromQuery] int sort = 0)
     {
         take = Math.Clamp(take, 1, 200);
         skip = Math.Max(0, skip);
-        var rows = await db.Photos
+        var query = db.Photos
             .Where(p => p.UploaderPlayerId == accountId && p.IsPublic && p.DeletedAt == null)
-            .OrderByDescending(p => p.CreatedAt)
-            .Skip(skip).Take(take)
+            .AsQueryable();
+        query = sort switch
+        {
+            1 => query.OrderByDescending(p => p.CheerCount).ThenByDescending(p => p.CreatedAt),
+            2 => query.OrderByDescending(p => p.ViewCount).ThenByDescending(p => p.CreatedAt),
+            _ => query.OrderByDescending(p => p.CreatedAt),
+        };
+
+        var rows = await query
+            .Skip(skip)
+            .Take(take)
             .ToListAsync();
         return Ok(rows.Select(p => BuildImageInfo(p, accountId)));
+    }
+
+    [HttpGet("api/images/v2/room/{roomId:long}")]
+    [HttpGet("api/images/v3/room/{roomId:long}")]
+    [HttpGet("api/images/v4/room/{roomId:long}")]
+    [HttpGet("api/images/v5/room/{roomId:long}")]
+    public async Task<IActionResult> GetByRoom(
+        long roomId,
+        [FromQuery] int take = 50,
+        [FromQuery] int skip = 0,
+        [FromQuery] int sort = 0,
+        [FromQuery] int filter = 0)
+    {
+        take = Math.Clamp(take, 1, 200);
+        skip = Math.Max(0, skip);
+
+        var query = db.Photos
+            .Where(p => p.RoomId == roomId && p.IsPublic && p.DeletedAt == null)
+            .AsQueryable();
+        query = sort switch
+        {
+            1 => query.OrderByDescending(p => p.CheerCount).ThenByDescending(p => p.CreatedAt),
+            2 => query.OrderByDescending(p => p.ViewCount).ThenByDescending(p => p.CreatedAt),
+            _ => query.OrderByDescending(p => p.CreatedAt),
+        };
+
+        var rows = await query
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync();
+        return Ok(rows.Select(p => BuildImageInfo(p, p.UploaderPlayerId)));
     }
 
     /// <summary>POST api/images/v{2-5}/share/{id} — flip a saved photo

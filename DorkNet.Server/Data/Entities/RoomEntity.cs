@@ -60,6 +60,9 @@ public class RoomEntity
     public bool SupportsWalkVR { get; set; } = true;
     public bool SupportsTeleportVR { get; set; } = true;
     public bool AllowsJuniors { get; set; } = true;
+    public bool AllowNewUsers { get; set; } = true;
+    public int MinLevel { get; set; } = 0;
+    public int MaxPlayerCalculationMode { get; set; } = 0;
 
     /// <summary>Max players the room advertises per instance — flows into the
     /// matchmaking RoomInstance.MaxCapacity and the v4/details synthesized
@@ -88,6 +91,15 @@ public class RoomEntity
     /// flat string avoids a join table for the v0 watch implementation.</summary>
     [MaxLength(1024)]
     public string TagsCsv { get; set; } = string.Empty;
+
+    [MaxLength(4096)]
+    public string LoadScreensJson { get; set; } = string.Empty;
+
+    [MaxLength(4096)]
+    public string PromoImagesJson { get; set; } = string.Empty;
+
+    [MaxLength(4096)]
+    public string PromoExternalContentJson { get; set; } = string.Empty;
 
     public int CheerCount { get; set; } = 0;
     public int FavoriteCount { get; set; } = 0;

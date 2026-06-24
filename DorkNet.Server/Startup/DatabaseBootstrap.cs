@@ -283,6 +283,18 @@ public static class DatabaseBootstrap
                 @"ALTER TABLE ""Rooms"" ADD COLUMN IF NOT EXISTS ""IsRoomLinkedToRecRoomStudio"" boolean NOT NULL DEFAULT false;");
             await db.Database.ExecuteSqlRawAsync(
                 @"ALTER TABLE ""Rooms"" ADD COLUMN IF NOT EXISTS ""StudioSessionId"" character varying(128) NOT NULL DEFAULT '';");
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""Rooms"" ADD COLUMN IF NOT EXISTS ""AllowNewUsers"" boolean NOT NULL DEFAULT true;");
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""Rooms"" ADD COLUMN IF NOT EXISTS ""MinLevel"" integer NOT NULL DEFAULT 0;");
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""Rooms"" ADD COLUMN IF NOT EXISTS ""MaxPlayerCalculationMode"" integer NOT NULL DEFAULT 0;");
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""Rooms"" ADD COLUMN IF NOT EXISTS ""LoadScreensJson"" character varying(4096) NOT NULL DEFAULT '';");
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""Rooms"" ADD COLUMN IF NOT EXISTS ""PromoImagesJson"" character varying(4096) NOT NULL DEFAULT '';");
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""Rooms"" ADD COLUMN IF NOT EXISTS ""PromoExternalContentJson"" character varying(4096) NOT NULL DEFAULT '';");
             return;
         }
 
@@ -313,6 +325,48 @@ public static class DatabaseBootstrap
         {
             await db.Database.ExecuteSqlRawAsync(
                 @"ALTER TABLE ""Rooms"" ADD COLUMN ""StudioSessionId"" TEXT NOT NULL DEFAULT '';");
+        }
+        catch { }
+
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""Rooms"" ADD COLUMN ""AllowNewUsers"" INTEGER NOT NULL DEFAULT 1;");
+        }
+        catch { }
+
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""Rooms"" ADD COLUMN ""MinLevel"" INTEGER NOT NULL DEFAULT 0;");
+        }
+        catch { }
+
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""Rooms"" ADD COLUMN ""MaxPlayerCalculationMode"" INTEGER NOT NULL DEFAULT 0;");
+        }
+        catch { }
+
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""Rooms"" ADD COLUMN ""LoadScreensJson"" TEXT NOT NULL DEFAULT '';");
+        }
+        catch { }
+
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""Rooms"" ADD COLUMN ""PromoImagesJson"" TEXT NOT NULL DEFAULT '';");
+        }
+        catch { }
+
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""Rooms"" ADD COLUMN ""PromoExternalContentJson"" TEXT NOT NULL DEFAULT '';");
         }
         catch { }
     }
