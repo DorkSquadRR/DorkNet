@@ -23,6 +23,7 @@ public class MatchPlayerController(
     NotificationService notifications,
     RoomService rooms,
     PrivateInstanceService privateInstances,
+    JoinTimeoutService joinTimeouts,
     IConfiguration config,
     DorkNetDbContext db,
     ILogger<MatchPlayerController> log) : ControllerBase
@@ -61,6 +62,8 @@ public class MatchPlayerController(
         var playerId = TryGetCurrentPlayerId();
         if (playerId != 0 && !string.IsNullOrWhiteSpace(loginLock))
         {
+            presence.Clear(playerId);
+            presence.BeginBootDormGrace(playerId);
             var replaced = presence.SetLock(playerId, loginLock);
             if (replaced)
             {
@@ -276,8 +279,27 @@ public class MatchPlayerController(
         if (playerId == 0) return null;
 
         var room = presence.GetRoom(playerId);
+        var pending = joinTimeouts.GetPending(playerId);
+        if (pending is { DeferPresenceCommit: true })
+        {
+            log.LogInformation(
+                "[player-heartbeat] player={PlayerId} pending deferred room={RoomId} instance={InstanceId}; returning null until join result",
+                playerId,
+                pending.Value.TargetRoom.RoomId,
+                pending.Value.TargetRoom.RoomInstanceId);
+            return null;
+        }
+
         if (room is null)
         {
+            if (presence.IsBootDormGraceActive(playerId))
+            {
+                log.LogInformation(
+                    "[player-heartbeat] player={PlayerId} in boot dorm grace; returning null roomInstance",
+                    playerId);
+                return null;
+            }
+
             // Boot-time race: the watch hits /player/heartbeat before
             // /goto/room/DormRoom has finished recording presence. The
             // watch's OnPresenceHeartbeatResponse compares
@@ -434,7 +456,7 @@ public class MatchPlayerController(
 
         if (!string.IsNullOrWhiteSpace(room.CurrentDataBlobName)) return room.CurrentDataBlobName;
 
-        return $"room_{room.Id}_v1.dat";
+        return RoomService.SyntheticDefaultRoomDataBlobName(room.Id);
     }
 }
 

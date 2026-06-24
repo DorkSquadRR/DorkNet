@@ -37,8 +37,8 @@ public class MatchController(
     /// we mostly use this for visibility into Photon-side issues —
     /// without it, all we see in the catch-all is an opaque "200, empty
     /// reply" and no clue why a player crashed back to dorm. Failure
-    /// reports also clear the pending /goto room and push a ModerationKick
-    /// so the watch leaves the "Joining room" overlay instead of softlocking.</summary>
+    /// reports also clear the pending /goto room so the next matchmaking
+    /// attempt starts from a clean presence state.</summary>
     [HttpPost("/roominstance/{instanceId:long}/reportjoinresult")]
     public async Task<IActionResult> ReportJoinResult(long instanceId, [FromForm(Name = "result")] int? result)
     {
@@ -59,6 +59,7 @@ public class MatchController(
             {
                 presence.SetRoom(pid, completed.Value.TargetRoom);
                 presence.MarkActive(pid);
+                presence.EndBootDormGrace(pid);
                 logger.LogInformation(
                     "[joinresult] committed presence player={Player} room={RoomId}/{RoomName} instance={Instance} deferred={Deferred}",
                     pid,
@@ -71,6 +72,7 @@ public class MatchController(
             {
                 presence.MarkActive(pid);
                 presence.TouchRoom(pid);
+                presence.EndBootDormGrace(pid);
             }
             logger.LogInformation(
                 "[joinresult] player={Player} instance={Instance} OK ({Label})",
@@ -80,7 +82,7 @@ public class MatchController(
         {
             await joinTimeouts.MarkFailedAsync(pid, instanceId, label);
             logger.LogWarning(
-                "[joinresult] player={Player} instance={Instance} FAILED code={Code} ({Label}) — Photon-side error, check Photon AppId/region/auth",
+                "[joinresult] player={Player} instance={Instance} FAILED code={Code} ({Label})",
                 pid, instanceId, code, label);
         }
         return Ok();
@@ -91,6 +93,22 @@ public class MatchController(
     {
         var pid = this.CurrentPlayerId() ?? 0;
         if (pid == 0) return Unauthorized();
+
+        var pending = joinTimeouts.GetPending(pid);
+        if (pending is { DeferPresenceCommit: true })
+        {
+            presence.MarkActive(pid);
+            logger.LogInformation(
+                "[matchmake-none] player={Player} has deferred pending room={Room} instance={Instance}; not committing presence",
+                pid,
+                pending.Value.TargetRoom.RoomId,
+                pending.Value.TargetRoom.RoomInstanceId);
+            return Ok(new MatchmakingResponseDto
+            {
+                ErrorCode = 0,
+                RoomInstance = pending.Value.TargetRoom,
+            });
+        }
 
         var current = presence.GetRoom(pid) ?? await BuildDormRoomInstanceAsync(pid);
         presence.SetRoom(pid, current);
@@ -110,8 +128,22 @@ public class MatchController(
         var appId = config["Photon:AppId"] ?? string.Empty;
         var voiceAppId = config["Photon:VoiceAppId"] ?? string.Empty;
         var region = (config["Photon:CloudRegion"] ?? "us").ToLowerInvariant();
+        var currentRoom = presence.GetRoom(pid);
+        var permissions = BuildPhotonPermissionSeed();
+        logger.LogInformation(
+            "[photon-token] player={PlayerId} roomInstance={RoomInstanceId} permissions={PermissionCount}",
+            pid, currentRoom?.RoomInstanceId ?? 0L, permissions.Length);
         return Ok(new Dictionary<string, object>
         {
+            // 2023 deserializes this endpoint as ALIIIAGAPND before room
+            // permissions initialization. If Permissions is missing/empty,
+            // OMJKHJLFOCO falls into the persisted-role migration path that
+            // currently NREs during first spawn.
+            ["RoomInstanceId"] = currentRoom?.RoomInstanceId ?? 0L,
+            ["PhotonAccessToken"] = string.Empty,
+            ["Permissions"] = permissions,
+
+            // Existing custom-auth/app-id shape kept for Photon auth callers.
             ["ResultCode"] = 1,
             ["Message"] = string.Empty,
             ["UserId"] = pid.ToString(System.Globalization.CultureInfo.InvariantCulture),
@@ -125,6 +157,30 @@ public class MatchController(
         });
     }
 
+    private static object[] BuildPhotonPermissionSeed()
+        =>
+        [
+            BuildPhotonPermission(13, 30),  // Can Use Maker Pen
+            BuildPhotonPermission(20, 30),  // Can Spawn Inventions
+            BuildPhotonPermission(21, 30),  // Can Spawn Consumables
+            BuildPhotonPermission(22, 30),  // Can Use Room Reset Button
+            BuildPhotonPermission(23, 30),  // Can Use Play Gizmos Toggle
+            BuildPhotonPermission(13, 255), // Creator alias
+            BuildPhotonPermission(20, 255),
+            BuildPhotonPermission(21, 255),
+            BuildPhotonPermission(22, 255),
+            BuildPhotonPermission(23, 255),
+        ];
+
+    private static object BuildPhotonPermission(int permission, int role) => new
+    {
+        Permission = permission.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        Role = role,
+        Override = true,
+        Type = 0,
+        Value = "true",
+    };
+
     [HttpPost("/matchmake/dorm")]
     public async Task<IActionResult> MatchmakeDorm()
     {
@@ -132,11 +188,11 @@ public class MatchController(
         if (pid == 0) return Unauthorized();
 
         var room = await BuildDormRoomInstanceAsync(pid);
-        presence.SetRoom(pid, room);
+        joinTimeouts.MarkPending(pid, room, deferPresenceCommit: true);
         presence.MarkActive(pid);
         await RecordVisitAsync(pid, room.RoomId);
         logger.LogInformation(
-            "[matchmake-dorm] player={Player} room={Room} instance={Instance} photon={Photon}",
+            "[matchmake-dorm] player={Player} room={Room} instance={Instance} photon={Photon} deferredPresence=True",
             pid, room.RoomId, room.RoomInstanceId, room.PhotonRoomId);
         return Ok(new MatchmakingResponseDto
         {

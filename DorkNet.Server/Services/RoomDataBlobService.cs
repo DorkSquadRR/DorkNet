@@ -12,7 +12,11 @@ namespace DorkNet.Server.Services;
 /// </summary>
 public class RoomDataBlobService
 {
-    private const int December2020PersistenceVersion = 26;
+    private const DEPRECATED_RoomPersistenceVersion LatestDeprecatedPersistenceVersion =
+        DEPRECATED_RoomPersistenceVersion.LatestRoomPersistenceVersion;
+
+    private const PersistedRoomVersion LatestPersistenceVersion =
+        PersistedRoomVersion.LatestVersion;
 
     private readonly RoomRoleCollectionData _allPermsRoleData = BuildAllPermsRoleData();
     private readonly byte[] _rroEditableBlob = BuildRroEditableBlob();
@@ -46,8 +50,10 @@ public class RoomDataBlobService
                 if (bytes.Length > 0)
                 {
                     var msg = PersistedRoomData.Parser.ParseFrom(StripTopLevelField(bytes, 2));
-                    EnsureEditablePersistenceVersion(msg);
+                    Ensure2023PersistenceHeader(msg);
                     msg.RoomRoleData = BuildDefaultRoomRoleData();
+                    msg.GameRoleData ??= BuildDefaultGameRoleData();
+                    msg.ToolTagSettingsData ??= BuildDefaultToolTagSettingsData();
                     return msg.ToByteArray();
                 }
             }
@@ -118,16 +124,20 @@ public class RoomDataBlobService
     public byte[] OverlayAllPermsRoleData(byte[] existingBlob)
     {
         var msg = PersistedRoomData.Parser.ParseFrom(existingBlob);
-        EnsureEditablePersistenceVersion(msg);
+        Ensure2023PersistenceHeader(msg);
         msg.RoomRoleData = _allPermsRoleData.Clone();
+        msg.GameRoleData ??= BuildDefaultGameRoleData();
+        msg.ToolTagSettingsData ??= BuildDefaultToolTagSettingsData();
         return msg.ToByteArray();
     }
 
     public byte[] OverlayRroEditableRoleData(byte[] existingBlob)
     {
         var msg = PersistedRoomData.Parser.ParseFrom(existingBlob);
-        EnsureEditablePersistenceVersion(msg);
+        Ensure2023PersistenceHeader(msg);
         msg.RoomRoleData = _rroEditableRoleData.Clone();
+        msg.GameRoleData ??= BuildDefaultGameRoleData();
+        msg.ToolTagSettingsData ??= BuildDefaultToolTagSettingsData();
         return msg.ToByteArray();
     }
 
@@ -135,7 +145,11 @@ public class RoomDataBlobService
     {
         var msg = new PersistedRoomData
         {
-            DEPRECATEDVersion = December2020PersistenceVersion,
+            DEPRECATEDVersion = LatestDeprecatedPersistenceVersion,
+            Version = LatestPersistenceVersion,
+            CreativeRolesEnabled = true,
+            ToolTagSettingsData = BuildDefaultToolTagSettingsData(),
+            GameRoleData = BuildDefaultGameRoleData(),
             RoomRoleData = BuildAllPermsRoleData(),
         };
 
@@ -146,7 +160,11 @@ public class RoomDataBlobService
     {
         var msg = new PersistedRoomData
         {
-            DEPRECATEDVersion = December2020PersistenceVersion,
+            DEPRECATEDVersion = LatestDeprecatedPersistenceVersion,
+            Version = LatestPersistenceVersion,
+            CreativeRolesEnabled = true,
+            ToolTagSettingsData = BuildDefaultToolTagSettingsData(),
+            GameRoleData = BuildDefaultGameRoleData(),
             RoomRoleData = BuildDefaultRoomRoleData(),
         };
 
@@ -157,7 +175,7 @@ public class RoomDataBlobService
     {
         var collection = new RoomRoleCollectionData
         {
-            RecNetMigrationVersion = 1,
+            RecNetMigrationVersion = MigratedToRecNetVersion.MigratedToRecNet,
         };
         collection.RoomRoles.Add(BuildPermissiveRole(0, 100, "Creator"));
 
@@ -166,20 +184,18 @@ public class RoomDataBlobService
 
     private static RoomRoleCollectionData BuildDefaultRoomRoleData()
     {
-        var collection = new RoomRoleCollectionData
-        {
-            RecNetMigrationVersion = 1,
-        };
-        collection.RoomRoles.Add(BuildPermissiveRole(2_097_152, 100, "Creator")); // AG_CREATOR
-
-        return collection;
+        return BuildRroEditableRoleData();
     }
 
     private static byte[] BuildRroEditableBlob()
     {
         var msg = new PersistedRoomData
         {
-            DEPRECATEDVersion = December2020PersistenceVersion,
+            DEPRECATEDVersion = LatestDeprecatedPersistenceVersion,
+            Version = LatestPersistenceVersion,
+            CreativeRolesEnabled = true,
+            ToolTagSettingsData = BuildDefaultToolTagSettingsData(),
+            GameRoleData = BuildDefaultGameRoleData(),
             RoomRoleData = BuildRroEditableRoleData(),
         };
 
@@ -190,8 +206,18 @@ public class RoomDataBlobService
     {
         var collection = new RoomRoleCollectionData
         {
-            RecNetMigrationVersion = 1,
+            RecNetMigrationVersion = MigratedToRecNetVersion.MigratedToRecNet,
         };
+
+        // The 2023 room-permissions runtime looks up roles by RecNet account-role
+        // values during load. Keep the AG role bitmasks below, but also provide
+        // compatibility aliases for the keys OMJKHJLFOCO.ONECLLALJEO can return.
+        collection.RoomRoles.Add(BuildPermissiveRole(0, 10, "Default"));
+        collection.RoomRoles.Add(BuildPermissiveRole(10, 60, "Player"));
+        collection.RoomRoles.Add(BuildPermissiveRole(20, 80, "Host"));
+        collection.RoomRoles.Add(BuildPermissiveRole(30, 90, "Co-owner"));
+        collection.RoomRoles.Add(BuildPermissiveRole(255, 100, "Creator"));
+
         collection.RoomRoles.Add(BuildPermissiveRole(2_097_152, 100, "Creator"));   // AG_CREATOR
         collection.RoomRoles.Add(BuildPermissiveRole(4_194_304, 90, "Co-owner"));   // AG_COOWNER
         collection.RoomRoles.Add(BuildPermissiveRole(8_388_608, 80, "Host"));       // AG_HOST
@@ -250,10 +276,10 @@ public class RoomDataBlobService
             CanSaveInventions = OverrideTrue(),
             DisableMicAutoMute = OverrideTrue(),
             CanUseShareCam = OverrideTrue(),
-            UnknownPermission20 = OverrideTrue(),
-            UnknownPermission21 = OverrideTrue(),
-            UnknownPermission22 = OverrideTrue(),
-            UnknownPermission23 = OverrideTrue(),
+            CanSpawnInventions = OverrideTrue(),
+            CanSpawnConsumables = OverrideTrue(),
+            CanUseRoomResetButton = OverrideTrue(),
+            CanUsePlayGizmosToggle = OverrideTrue(),
 
             // Vote-kick permission — int field, set to a permissive value.
             // 0 = AnyoneCanVoteKickAnyone in the 2020 enum (verified via
@@ -268,12 +294,29 @@ public class RoomDataBlobService
         };
     }
 
-    private static void EnsureEditablePersistenceVersion(PersistedRoomData msg)
+    private static GameRoleCollectionData BuildDefaultGameRoleData()
     {
-        if (msg.DEPRECATEDVersion < 20)
+        return new GameRoleCollectionData();
+    }
+
+    private static ToolTagSettingsData BuildDefaultToolTagSettingsData()
+    {
+        return new ToolTagSettingsData
         {
-            msg.DEPRECATEDVersion = December2020PersistenceVersion;
+            RuntimeTagData = new TagData(),
+        };
+    }
+
+    private static void Ensure2023PersistenceHeader(PersistedRoomData msg)
+    {
+        if ((int)msg.DEPRECATEDVersion < 20)
+        {
+            msg.DEPRECATEDVersion = LatestDeprecatedPersistenceVersion;
         }
+
+        msg.Version = LatestPersistenceVersion;
+        msg.CreativeRolesEnabled = true;
+        msg.ToolTagSettingsData ??= BuildDefaultToolTagSettingsData();
     }
 
     private static string StableRoleGuid(int roleId) =>
@@ -284,6 +327,10 @@ public class RoomDataBlobService
             8_388_608 => "BD0F2F3A-F931-419E-B50C-ECDFF3F56B52",
             16_777_216 => "32300035-3BEA-457E-95C0-1630AFDFA6BD",
             0 => Guid.Empty.ToString(),
+            10 => "3C66F53A-6B76-4DB1-A93F-76F1F59E03B8",
+            20 => "1E8890ED-D729-446B-835B-3C96D8C7D939",
+            30 => "FA1825F9-8F41-54E8-8DB4-530C6B24B3E5",
+            255 => "6F31F2B8-AC6E-549F-8F8C-F8344C9BAE1E",
             _ => GuidUtility.Create(GuidUtility.UrlNamespace, $"dorknet-room-role:{roleId}").ToString(),
         };
 }

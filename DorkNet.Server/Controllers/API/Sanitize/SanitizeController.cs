@@ -84,6 +84,11 @@ public class SanitizeController(ILogger<SanitizeController> logger) : Controller
         public string? Text { get; set; }
         public string? Input { get; set; }
         public string? Value { get; set; }
+        public string? Context { get; set; }
+        public int? Intent { get; set; }
+
+        [System.Text.Json.Serialization.JsonPropertyName("ruleset")]
+        public int? Ruleset { get; set; }
     }
 
     /// <summary>POST <c>api/sanitize/v1/purifyString</c> — returns
@@ -114,6 +119,32 @@ public class SanitizeController(ILogger<SanitizeController> logger) : Controller
         var input = body?.Text ?? body?.Input ?? body?.Value
             ?? textForm ?? textQuery ?? string.Empty;
         return Ok(ProfanityFilter.IsClean(input));
+    }
+
+    /// <summary>POST <c>api/sanitize/v1/isPure</c> — 2023 route used
+    /// by CV2 maker pen text such as port names. It imports an object
+    /// field named <c>IsPure</c>.</summary>
+    [HttpPost("api/sanitize/v1/isPure")]
+    public IActionResult IsPureV1(
+        [FromBody] SanitizeBody? body,
+        [FromForm(Name = "Text")] string? textForm,
+        [FromForm(Name = "Input")] string? inputForm,
+        [FromForm(Name = "Value")] string? valueForm,
+        [FromQuery(Name = "text")] string? textQuery)
+    {
+        var input = body?.Text ?? body?.Input ?? body?.Value
+            ?? textForm ?? inputForm ?? valueForm ?? textQuery ?? string.Empty;
+        var isPure = ProfanityFilter.IsClean(input);
+        logger.LogInformation(
+            "[sanitize] isPure context={Context} intent={Intent} ruleset={Ruleset} valueLength={ValueLength} isPure={IsPure}",
+            body?.Context ?? string.Empty,
+            body?.Intent,
+            body?.Ruleset,
+            input.Length,
+            isPure);
+
+        var json = System.Text.Json.JsonSerializer.Serialize(new { IsPure = isPure });
+        return Content(json, "application/json");
     }
 
     /// <summary>POST <c>api/sanitize/isPure</c> — December 2020 route

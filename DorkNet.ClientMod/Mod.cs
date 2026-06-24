@@ -49,6 +49,13 @@ public class Mod : MelonMod
     private readonly HashSet<string> _diagnosticPatchLabels = new();
     private bool _networkPatchesRegistered;
     private bool _joinTracePatchesRegistered;
+    private bool _quitTraceCoreRegistered;
+    private bool _quitTraceGameComplete;
+    private int _quitTraceRetryFrame;
+    private bool _antiTamperCallbackPatchesComplete;
+    private int _antiTamperCallbackRetryFrame;
+    private bool _toxModPatchesComplete;
+    private int _toxModRetryFrame;
     private bool _diagnosticCoreRegistered;
     private bool _diagnosticGameComplete;
     private bool _firstUpdateLogged;
@@ -178,6 +185,9 @@ public class Mod : MelonMod
                            "NotifyServerCertificate",
                            prefix: nameof(TlsPatches.NotifyServerCertificate_Prefix));
         }
+        RegisterQuitTracePatches(logMisses: true);
+        RegisterAntiTamperCallbackPatches(logMisses: true);
+        RegisterToxModPatches(logMisses: true);
         PatchFileHashCheckerCallback();
         // Post-save blob-name refresh. The 2020 watch's
         // RoomPersistenceManager.RoomDataBlobName is only ever set by
@@ -480,6 +490,93 @@ public class Mod : MelonMod
         return true;
     }
 
+    private void RegisterAntiTamperCallbackPatches(bool logMisses)
+    {
+        var complete = true;
+        complete &= PatchCallbackMethod(
+            "hile warning callback",
+            type => TypeNameContains(type, "FPIBGPIAOBI") && TypeNameContains(type, "KHIIHOIFDMP"),
+            method => MethodNameContains(method, "CreateHileWarning") && MethodNameContains(method, "b__0"),
+            nameof(AntiTamperPatches.CreateHileWarningCallback_Prefix),
+            logMisses);
+        complete &= PatchCallbackMethod(
+            "unknown DLL callback",
+            type => TypeNameContains(type, "CheatManager") && TypeNameContains(type, "PNHDGEKCJCH"),
+            method => MethodNameContains(method, "OnUnknownDLLDetected") && MethodNameContains(method, "b__0"),
+            nameof(AntiTamperPatches.UnknownDllDetectedCallback_Prefix),
+            logMisses);
+        _antiTamperCallbackPatchesComplete = complete;
+    }
+
+    private void RegisterToxModPatches(bool logMisses)
+    {
+        var complete = true;
+        complete &= TryPatchDiagnosticByName("ToxMod.ToxModVoiceComponent",
+                                             "CanInitializeToxMod",
+                                             args: Type.EmptyTypes,
+                                             prefix: nameof(ToxModPatches.CanInitializeToxMod_Prefix),
+                                             logMiss: logMisses);
+        complete &= TryPatchDiagnosticByName("ToxMod.ToxModVoiceComponent",
+                                             "PhotonVoiceCreated",
+                                             prefix: nameof(ToxModPatches.PhotonVoiceCreated_Prefix),
+                                             logMiss: logMisses);
+        _toxModPatchesComplete = complete;
+    }
+
+    private bool PatchCallbackMethod(string label,
+                                     Func<Type, bool> typePredicate,
+                                     Func<MethodInfo, bool> methodPredicate,
+                                     string prefix,
+                                     bool logMiss)
+    {
+        if (_diagnosticPatchLabels.Contains(label))
+            return true;
+
+        var prefixMethod = GetPatchMethod(prefix);
+        var patched = 0;
+
+        foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+        {
+            foreach (var type in GetLoadableTypes(asm))
+            {
+                if (!typePredicate(type)) continue;
+                foreach (var method in AccessTools.GetDeclaredMethods(type))
+                {
+                    if (method.IsAbstract || method.ContainsGenericParameters) continue;
+                    if (!methodPredicate(method)) continue;
+                    try
+                    {
+                        HarmonyInstance.Patch(method, prefix: new HarmonyMethod(prefixMethod));
+                        patched++;
+                        Log.Msg($"[patch-ok] {label} {type.FullName}.{method.Name}");
+                    }
+                    catch (Exception ex)
+                    {
+                        Log.Warning($"[patch-fail] {label} {type.FullName}.{method.Name}: {ex.Message}");
+                    }
+                }
+            }
+        }
+
+        if (patched == 0)
+        {
+            if (logMiss) Log.Warning($"[patch-miss] {label}");
+            return false;
+        }
+
+        _diagnosticPatchLabels.Add(label);
+        return true;
+    }
+
+    private static bool TypeNameContains(Type type, string value)
+    {
+        var fullName = type.FullName ?? type.Name;
+        return fullName.Contains(value, StringComparison.Ordinal);
+    }
+
+    private static bool MethodNameContains(MethodInfo method, string value)
+        => method.Name.Contains(value, StringComparison.Ordinal);
+
     private static bool MatchesFileHashCheckerCallbackType(Type type)
     {
         var fullName = type.FullName ?? type.Name;
@@ -614,6 +711,24 @@ public class Mod : MelonMod
         {
             _firstUpdateLogged = true;
             Log.Msg("[lifecycle] first OnUpdate tick (Unity frame loop is live)");
+        }
+
+        if (!_quitTraceGameComplete && ++_quitTraceRetryFrame >= 300)
+        {
+            _quitTraceRetryFrame = 0;
+            RegisterQuitTracePatches(logMisses: false);
+        }
+
+        if (!_antiTamperCallbackPatchesComplete && ++_antiTamperCallbackRetryFrame >= 300)
+        {
+            _antiTamperCallbackRetryFrame = 0;
+            RegisterAntiTamperCallbackPatches(logMisses: false);
+        }
+
+        if (!_toxModPatchesComplete && ++_toxModRetryFrame >= 300)
+        {
+            _toxModRetryFrame = 0;
+            RegisterToxModPatches(logMisses: false);
         }
 
     }
@@ -921,12 +1036,47 @@ public class Mod : MelonMod
     {
         // Look in all three patch holder classes — small enough that a
         // linear scan is cheaper than per-class lookups.
-        foreach (var holder in new[] { typeof(UriPatches), typeof(HttpTracePatches), typeof(AuthPatches), typeof(AntiCheatPatches), typeof(FileHashCheckerPatches), typeof(TlsPatches), typeof(DiagnosticPatches), typeof(RoomLoadDiagnostics), typeof(SavePatches), typeof(ChatPatches), typeof(JoinPatches), typeof(RegistrationPatches), typeof(DebugConsolePatches), typeof(ScreenSharePatches), typeof(MakerPenGiftPreviewPatches), typeof(QuestTeamSize) })
+        foreach (var holder in new[] { typeof(UriPatches), typeof(HttpTracePatches), typeof(AuthPatches), typeof(AntiCheatPatches), typeof(AntiTamperPatches), typeof(FileHashCheckerPatches), typeof(ToxModPatches), typeof(TlsPatches), typeof(QuitTracePatches), typeof(DiagnosticPatches), typeof(RoomLoadDiagnostics), typeof(SavePatches), typeof(ChatPatches), typeof(JoinPatches), typeof(RegistrationPatches), typeof(DebugConsolePatches), typeof(ScreenSharePatches), typeof(MakerPenGiftPreviewPatches), typeof(QuestTeamSize) })
         {
             var m = holder.GetMethod(name, BindingFlags.Public | BindingFlags.Static);
             if (m is not null) return m;
         }
         throw new MissingMethodException($"patch method '{name}' not found on any holder");
+    }
+
+    private void RegisterQuitTracePatches(bool logMisses)
+    {
+        if (!_quitTraceCoreRegistered)
+        {
+            TryPatchByName("UnityEngine.Application", "Quit", Type.EmptyTypes,
+                           prefix: nameof(QuitTracePatches.ApplicationQuit_Prefix),
+                           logMiss: logMisses);
+            TryPatchByName("UnityEngine.Application", "Quit", new[] { typeof(int) },
+                           prefix: nameof(QuitTracePatches.ApplicationQuitInt_Prefix),
+                           logMiss: logMisses);
+            _quitTraceCoreRegistered = true;
+        }
+
+        var complete = true;
+        complete &= TryPatchDiagnosticByName("SessionManager", "TryApplicationQuit",
+                                             prefix: nameof(QuitTracePatches.SessionManagerTryApplicationQuit_Prefix),
+                                             logMiss: logMisses);
+        complete &= TryPatchDiagnosticByName("SessionManager", "TryApplicationQuit",
+                                             args: new[] { typeof(int) },
+                                             prefix: nameof(QuitTracePatches.SessionManagerTryApplicationQuitInt_Prefix),
+                                             logMiss: logMisses);
+        complete &= TryPatchDiagnosticByName("SessionManager", "FatalApplicationQuit",
+                                             args: new[] { typeof(int), typeof(string) },
+                                             prefix: nameof(QuitTracePatches.SessionManagerFatalApplicationQuit_Prefix),
+                                             logMiss: logMisses);
+        complete &= TryPatchDiagnosticByName("OPEOLPDLEBO", "GDNAOLMIDLM",
+                                             prefix: nameof(QuitTracePatches.ApplicationWantsToQuit_Prefix),
+                                             logMiss: logMisses);
+        complete &= TryPatchDiagnosticByName("OPEOLPDLEBO", "DGHJGMBNHCL",
+                                             prefix: nameof(QuitTracePatches.CreateExitTask_Prefix),
+                                             logMiss: logMisses);
+
+        _quitTraceGameComplete = complete;
     }
 
     private void RegisterDiagnostics()
@@ -1326,7 +1476,10 @@ internal static class RoomLoadDiagnostics
                     continue;
                 }
 
-                parts.Add($"{field.Name}={DescribeValue(value, 400)}");
+                var described = DescribeValue(value, 400);
+                if (ShouldExpandField(field, value))
+                    described += " " + DumpNestedFields(value, 16);
+                parts.Add($"{field.Name}={described}");
             }
 
             return $"{type.FullName} {{{string.Join("; ", parts)}}}";
@@ -1334,6 +1487,58 @@ internal static class RoomLoadDiagnostics
         catch (Exception ex)
         {
             return $"<dump failed {ex.GetType().Name}: {Sanitize(ex.Message, 400)}>";
+        }
+    }
+
+    private static bool ShouldExpandField(FieldInfo field, object? value)
+    {
+        if (value is null) return false;
+        if (value is string) return false;
+
+        var valueType = value.GetType();
+        if (valueType.IsPrimitive || valueType.IsEnum || value is decimal)
+            return false;
+        if (value is IEnumerable)
+            return false;
+
+        var fieldName = field.Name ?? string.Empty;
+        var typeName = valueType.FullName ?? valueType.Name;
+        return fieldName.IndexOf("this", StringComparison.OrdinalIgnoreCase) >= 0 ||
+               typeName.IndexOf("OMJKHJLFOCO", StringComparison.Ordinal) >= 0 ||
+               typeName.IndexOf("RoomPermissions", StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
+    private static string DumpNestedFields(object value, int maxFields)
+    {
+        try
+        {
+            var type = value.GetType();
+            var parts = new List<string>();
+            const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+            foreach (var field in type.GetFields(flags))
+            {
+                if (parts.Count >= maxFields)
+                {
+                    parts.Add("...");
+                    break;
+                }
+
+                object? nested;
+                try { nested = field.GetValue(value); }
+                catch (Exception ex)
+                {
+                    parts.Add($"{field.Name}=<read failed {ex.GetType().Name}>");
+                    continue;
+                }
+
+                parts.Add($"{field.Name}={DescribeValue(nested, 220)}");
+            }
+
+            return "{nested " + string.Join("; ", parts) + "}";
+        }
+        catch (Exception ex)
+        {
+            return $"{{nested dump failed {ex.GetType().Name}: {Sanitize(ex.Message, 220)}}}";
         }
     }
 
@@ -3287,11 +3492,42 @@ internal static class AntiCheatPatches
     }
 }
 
+internal static class AntiTamperPatches
+{
+    public static bool CreateHileWarningCallback_Prefix(bool shouldQuit)
+    {
+        Mod.Log.Msg($"[hile] suppressed warning callback shouldQuit={shouldQuit}");
+        return false;
+    }
+
+    public static bool UnknownDllDetectedCallback_Prefix()
+    {
+        Mod.Log.Msg("[cheatmanager] suppressed unknown DLL fatal callback");
+        return false;
+    }
+}
+
 internal static class FileHashCheckerPatches
 {
     public static bool InitializeCallback_Prefix(object? result)
     {
         Mod.Log.Msg($"[filecheck] suppressed verifier callback result={result?.GetType().FullName ?? "null"}");
+        return false;
+    }
+}
+
+internal static class ToxModPatches
+{
+    public static bool CanInitializeToxMod_Prefix(ref bool __result)
+    {
+        __result = false;
+        Mod.Log.Msg("[toxmod] disabled local ToxMod init");
+        return false;
+    }
+
+    public static bool PhotonVoiceCreated_Prefix()
+    {
+        Mod.Log.Msg("[toxmod] skipped PhotonVoiceCreated");
         return false;
     }
 }
@@ -3306,6 +3542,83 @@ internal static class TlsPatches
     public static bool NotifyServerCertificate_Prefix()
     {
         return !Mod.Cfg.EnableTlsTrustBypass; // false skips original; true (bypass off) lets it run
+    }
+}
+
+internal static class QuitTracePatches
+{
+    public static bool ApplicationQuit_Prefix()
+    {
+        Write("[quit-trace] UnityEngine.Application.Quit()");
+        WriteStack();
+        return true;
+    }
+
+    public static bool ApplicationQuitInt_Prefix(int exitCode)
+    {
+        Write($"[quit-trace] UnityEngine.Application.Quit({exitCode})");
+        WriteStack();
+        if (exitCode == 1550502249 || exitCode == 533223478)
+        {
+            Write($"[quit-blocked] UnityEngine.Application.Quit fatal client exit {exitCode}");
+            return false;
+        }
+        return true;
+    }
+
+    public static bool SessionManagerTryApplicationQuit_Prefix(MethodBase __originalMethod)
+    {
+        Write($"[quit-trace] {FormatOriginal(__originalMethod)}");
+        WriteStack();
+        return true;
+    }
+
+    public static bool SessionManagerTryApplicationQuitInt_Prefix(int DKOGJICFAEP, MethodBase __originalMethod)
+    {
+        Write($"[quit-trace] {FormatOriginal(__originalMethod)}({DKOGJICFAEP})");
+        WriteStack();
+        return true;
+    }
+
+    public static bool SessionManagerFatalApplicationQuit_Prefix(int DKOGJICFAEP, string EPAIMCEIMPA, MethodBase __originalMethod)
+    {
+        Write($"[quit-trace] {FormatOriginal(__originalMethod)}({DKOGJICFAEP}, {EPAIMCEIMPA})");
+        WriteStack();
+        return true;
+    }
+
+    public static void ApplicationWantsToQuit_Prefix(MethodBase __originalMethod)
+    {
+        Write($"[quit-trace] {FormatOriginal(__originalMethod)} wants-to-quit handler entered");
+        WriteStack();
+    }
+
+    public static void CreateExitTask_Prefix(MethodBase __originalMethod)
+    {
+        Write($"[quit-trace] {FormatOriginal(__originalMethod)} creating exit task");
+        WriteStack();
+    }
+
+    private static string FormatOriginal(MethodBase method)
+    {
+        return $"{method.DeclaringType?.FullName}.{method.Name}";
+    }
+
+    private static void Write(string message)
+    {
+        try { Mod.Log.Msg(message); } catch { }
+    }
+
+    private static void WriteStack()
+    {
+        try
+        {
+            Write("[quit-trace-stack] " + new StackTrace(skipFrames: 2, fNeedFileInfo: false));
+        }
+        catch (Exception ex)
+        {
+            Write("[quit-trace-stack] failed: " + ex.Message);
+        }
     }
 }
 
@@ -3334,11 +3647,6 @@ internal static class DiagnosticPatches
     {
         Write($"[quit] UnityEngine.Application.Quit({exitCode})");
         WriteStack();
-        if (exitCode == 1550502249 || exitCode == 533223478)
-        {
-            Write($"[quit-blocked] UnityEngine.Application.Quit fatal client exit {exitCode}");
-            return false;
-        }
         return true;
     }
 
@@ -3356,23 +3664,23 @@ internal static class DiagnosticPatches
 
     public static bool SessionManagerTryApplicationQuit_Prefix(MethodBase __originalMethod)
     {
-        Write($"[quit-blocked] {__originalMethod.DeclaringType?.FullName}.{__originalMethod.Name}");
+        Write($"[quit-trace] {__originalMethod.DeclaringType?.FullName}.{__originalMethod.Name}");
         WriteStack();
-        return false;
+        return true;
     }
 
     public static bool SessionManagerTryApplicationQuitInt_Prefix(int DKOGJICFAEP, MethodBase __originalMethod)
     {
-        Write($"[quit-blocked] {__originalMethod.DeclaringType?.FullName}.{__originalMethod.Name}({DKOGJICFAEP})");
+        Write($"[quit-trace] {__originalMethod.DeclaringType?.FullName}.{__originalMethod.Name}({DKOGJICFAEP})");
         WriteStack();
-        return false;
+        return true;
     }
 
     public static bool SessionManagerFatalApplicationQuit_Prefix(int DKOGJICFAEP, string EPAIMCEIMPA, MethodBase __originalMethod)
     {
-        Write($"[quit-blocked] {__originalMethod.DeclaringType?.FullName}.{__originalMethod.Name}({DKOGJICFAEP}, {EPAIMCEIMPA})");
+        Write($"[quit-trace] {__originalMethod.DeclaringType?.FullName}.{__originalMethod.Name}({DKOGJICFAEP}, {EPAIMCEIMPA})");
         WriteStack();
-        return false;
+        return true;
     }
 
     private static void WriteStack()

@@ -47,6 +47,7 @@ public class PlayerPresenceService
     private readonly ConcurrentDictionary<long, RoomInstanceDto> _local = new();
     private readonly ConcurrentDictionary<long, DateTimeOffset> _localRoomExpires = new();
     private readonly ConcurrentDictionary<long, DateTimeOffset> _localActiveExpires = new();
+    private readonly ConcurrentDictionary<long, DateTimeOffset> _localBootDormGraceExpires = new();
     private readonly IConnectionMultiplexer? _redis;
     private readonly ILogger<PlayerPresenceService>? _log;
 
@@ -67,6 +68,15 @@ public class PlayerPresenceService
     /// stale room presence make someone look online for the full room TTL.
     /// </summary>
     public static TimeSpan ActivityTtl { get; } = TimeSpan.FromSeconds(90);
+
+    /// <summary>
+    /// Right after login the 2023 watch may boot into its cached offline
+    /// DormRoom before the live Photon join finishes. During that window
+    /// a null roomInstance is safer than returning stale/live presence:
+    /// the client treats the offline placeholder as invalid and accepts
+    /// null, but a live private dorm forces a resync.
+    /// </summary>
+    public static TimeSpan BootDormGraceTtl { get; } = TimeSpan.FromSeconds(45);
 
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
@@ -148,6 +158,63 @@ public class PlayerPresenceService
         }
 
         _localActiveExpires[playerId] = DateTimeOffset.UtcNow.Add(ActivityTtl);
+    }
+
+    public void BeginBootDormGrace(long playerId)
+    {
+        if (_redis is { } mux)
+        {
+            try
+            {
+                mux.GetDatabase().StringSet(BootDormGraceKey(playerId), "1", BootDormGraceTtl);
+            }
+            catch (Exception ex)
+            {
+                _log?.LogWarning(ex, "[presence] redis boot grace SET failed for player={PlayerId}", playerId);
+            }
+            return;
+        }
+
+        _localBootDormGraceExpires[playerId] = DateTimeOffset.UtcNow.Add(BootDormGraceTtl);
+    }
+
+    public bool IsBootDormGraceActive(long playerId)
+    {
+        if (_redis is { } mux)
+        {
+            try
+            {
+                return mux.GetDatabase().KeyExists(BootDormGraceKey(playerId));
+            }
+            catch (Exception ex)
+            {
+                _log?.LogWarning(ex, "[presence] redis boot grace GET failed for player={PlayerId}", playerId);
+                return false;
+            }
+        }
+
+        if (!_localBootDormGraceExpires.TryGetValue(playerId, out var expires)) return false;
+        if (expires > DateTimeOffset.UtcNow) return true;
+        _localBootDormGraceExpires.TryRemove(playerId, out _);
+        return false;
+    }
+
+    public void EndBootDormGrace(long playerId)
+    {
+        if (_redis is { } mux)
+        {
+            try
+            {
+                mux.GetDatabase().KeyDelete(BootDormGraceKey(playerId));
+            }
+            catch (Exception ex)
+            {
+                _log?.LogWarning(ex, "[presence] redis boot grace DEL failed for player={PlayerId}", playerId);
+            }
+            return;
+        }
+
+        _localBootDormGraceExpires.TryRemove(playerId, out _);
     }
 
     public IReadOnlyCollection<long> RecentlyActivePlayerIds()
@@ -265,6 +332,7 @@ public class PlayerPresenceService
             var db = mux.GetDatabase();
             db.KeyDelete(Key(playerId));
             db.KeyDelete(ActiveKey(playerId));
+            db.KeyDelete(BootDormGraceKey(playerId));
             db.SetRemove(ActiveSetKey, playerId);
         }
         else
@@ -272,6 +340,7 @@ public class PlayerPresenceService
             _local.TryRemove(playerId, out _);
             _localRoomExpires.TryRemove(playerId, out _);
             _localActiveExpires.TryRemove(playerId, out _);
+            _localBootDormGraceExpires.TryRemove(playerId, out _);
         }
     }
 
@@ -316,6 +385,7 @@ public class PlayerPresenceService
 
     private static string Key(long playerId) => $"presence:{playerId}";
     private static string ActiveKey(long playerId) => $"presence-active:{playerId}";
+    private static string BootDormGraceKey(long playerId) => $"presence-boot-dorm-grace:{playerId}";
     private const string ActiveSetKey = "presence-active";
 
     // ── LoginLock single-session enforcement ─────────────────────────
