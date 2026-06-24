@@ -110,11 +110,12 @@ public class CdnController(
     // constraint they must be doubled — so `[^/]` becomes `[[^/]]`.
     //
     // Extension list: image formats + room/.htr/.inv blobs that the
-    // watch fetches directly, plus video formats (mp4/webm/mov/m4v) so
+    // watch fetches directly, Studio .assetbundle files, plus video
+    // formats (mp4/webm/mov/m4v) so
     // community-board video blobs uploaded via /admin/v1/communityboard/
     // video/upload (which writes `cb_video_<hash>.mp4` etc.) resolve
     // through the same bare-filename catch-all.
-    [Route("/{path:regex(^[[^/]]+\\.(png|jpg|jpeg|webp|gif|dat|bin|holotar|inv|room|htr|mp4|webm|mov|m4v)$)}")]
+    [Route("/{path:regex(^[[^/]]+\\.(png|jpg|jpeg|webp|gif|dat|bin|holotar|inv|room|htr|assetbundle|mp4|webm|mov|m4v)$)}")]
     [AcceptVerbs("GET", "HEAD")]
     public async Task<IActionResult> Serve(string? path)
     {
@@ -138,6 +139,113 @@ public class CdnController(
 
         if (isImg) return await ServeImage(fullPath);
         return await ServeCdn(fullPath);
+    }
+
+    // ── Studio baked Unity asset-bundle download ───────────────────────
+    /// <summary>GET <c>unity_assets/{assetId}/{target}/{version}</c> — the
+    /// 2023 client's asset-bundle download for baked Studio scenes. The
+    /// client builds this URL itself in RecNet.Runtime:
+    /// <c>String.Format("unity_assets/{0}/{1}/{2}",
+    /// WebUtility.UrlEncode(unityAssetId), (byte)target, (int)version)</c>
+    /// after reading <c>UnityAssetId</c> / <c>Target</c> / <c>Version</c>
+    /// from <c>rooms/{id}/subrooms/{sid}/saves/{saveId}</c>. It does NOT
+    /// fetch the bare <c>{filename}.assetbundle</c> the save metadata names
+    /// — so the bundle bytes only resolve through this id-addressed route.
+    ///
+    /// <para>Resolution: the importer stores each baked bundle in S3 under
+    /// its original filename (<c>{saveId}__bundle_t{target}_v{version}.assetbundle</c>)
+    /// and stamps the owning scene's <see cref="Data.Entities.RoomSceneEntity.StudioUnityAssetId"/>
+    /// + <see cref="Data.Entities.RoomSceneEntity.StudioAssetBundleNamesCsv"/>.
+    /// We look the scene up by <c>StudioUnityAssetId == assetId</c>, pick the
+    /// bundle whose embedded target+version match, and stream its bytes.</para>
+    ///
+    /// <para>A genuine miss 404s — handing back a default room blob here
+    /// (as the room-blob path does) would feed the Unity AssetBundle loader
+    /// garbage and fail the scene load far less legibly than an honest
+    /// 404.</para></summary>
+    [Route("/unity_assets/{assetId}/{target:int}/{version:int}")]
+    [AcceptVerbs("GET", "HEAD")]
+    public async Task<IActionResult> ServeUnityAsset(string assetId, int target, int version)
+    {
+        assetId = (assetId ?? string.Empty).Trim();
+        if (string.IsNullOrEmpty(assetId)) return NotFound();
+
+        // The Studio UnityAssetId is the per-save asset id from the dump
+        // sidecar, unique per baked save, so this maps to one scene in
+        // practice; tolerate >1 by scanning each candidate's bundle list.
+        var scenes = await db.RoomScenes
+            .Where(s => s.StudioUnityAssetId == assetId)
+            .ToListAsync();
+
+        var candidates = scenes
+            .SelectMany(s => (s.StudioAssetBundleNamesCsv ?? string.Empty)
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Select(ParseBundleName)
+            .Where(b => b is not null)
+            .Cast<(int Target, int Version, string Filename)>()
+            .Where(b => b.Target == target)
+            .ToList();
+
+        // Exact match first; otherwise serve the highest available version
+        // for the requested target (a Studio re-bake bumps the version, but
+        // a cached client manifest may still ask for a superseded one).
+        var pick = candidates.FirstOrDefault(b => b.Version == version);
+        if (pick.Filename is null && candidates.Count > 0)
+            pick = candidates.OrderByDescending(b => b.Version).First();
+
+        if (pick.Filename is null)
+        {
+            logger.LogWarning("[unity_assets] no bundle assetId={AssetId} target={Target} version={Version} scenes={Scenes}",
+                assetId, target, version, scenes.Count);
+            return NotFound();
+        }
+
+        var (bucket, key) = BlobRouter.Route(pick.Filename);
+        byte[]? bytes = null;
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+            bytes = await storage.GetAsync(bucket, key, cts.Token);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "[unity_assets] S3 GetAsync threw {Bucket}/{Key}", bucket, key);
+        }
+
+        if (bytes is not { Length: > 0 })
+        {
+            logger.LogWarning("[unity_assets] MISS assetId={AssetId} file={File} bucket={Bucket} key={Key}",
+                assetId, pick.Filename, bucket, key);
+            return NotFound();
+        }
+
+        logger.LogInformation("[unity_assets] hit assetId={AssetId} target={Target} version={Version} file={File} bytes={Bytes}",
+            assetId, target, version, pick.Filename, bytes.Length);
+        Response.Headers.CacheControl = "public, max-age=3600";
+        signatures.AddContentSignature(Response, bytes);
+        return new FileContentResult(bytes, "application/octet-stream");
+    }
+
+    /// <summary>Parse a Studio baked-bundle filename
+    /// (<c>{saveId}__bundle_t{target}_v{version}.assetbundle</c>, or older
+    /// <c>{saveId}__bundle_t{target}.assetbundle</c>) into its
+    /// target/version/filename. Mirrors the parser in RoomsController so the
+    /// id-addressed CDN route and the save-metadata endpoint agree on the
+    /// same naming contract.</summary>
+    private static (int Target, int Version, string Filename)? ParseBundleName(string fileName)
+    {
+        var name = Path.GetFileName(fileName);
+        var match = System.Text.RegularExpressions.Regex.Match(
+            name,
+            @"^(?<save>\d+)__bundle_t(?<target>\d+)(?:_v(?<version>\d+))?\.assetbundle$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        if (!match.Success) return null;
+        if (!int.TryParse(match.Groups["target"].Value, out var target)) return null;
+        var version = 0;
+        if (match.Groups["version"].Success &&
+            !int.TryParse(match.Groups["version"].Value, out version))
+            return null;
+        return (target, version, name);
     }
 
     // ── Image pipeline (img.{apex}) ────────────────────────────────────
@@ -512,6 +620,7 @@ public class CdnController(
             ".mp4" or ".m4v"  => "video/mp4",
             ".webm" => "video/webm",
             ".mov"  => "video/quicktime",
+            ".assetbundle" => "application/octet-stream",
             _ => "application/octet-stream",
         };
     }

@@ -52,6 +52,18 @@ public class RoomSceneEntity
     [MaxLength(128)]
     public string DataBlobName { get; set; } = string.Empty;
 
+    /// <summary>Original RecNet Studio save id for this sub-room, when
+    /// the scene was imported from a Studio dump. Used by
+    /// rooms/{roomId}/subrooms/{subRoomId}/saves/{saveId} to return the
+    /// baked Unity asset bundle filenames the 2023 client downloads.</summary>
+    public long? StudioSubRoomDataSaveId { get; set; }
+
+    [MaxLength(64)]
+    public string StudioUnityAssetId { get; set; } = string.Empty;
+
+    [MaxLength(4096)]
+    public string StudioAssetBundleNamesCsv { get; set; } = string.Empty;
+
     public int MaxPlayers { get; set; } = 8;
     public bool IsSandbox { get; set; } = false;
     public bool CanMatchmakeInto { get; set; } = true;

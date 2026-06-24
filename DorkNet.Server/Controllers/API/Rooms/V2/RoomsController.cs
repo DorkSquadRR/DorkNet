@@ -218,7 +218,10 @@ public class RoomsController(
     }
 
     [HttpGet("rooms/{roomId:long}")]
-    public async Task<IActionResult> RoomServerById(long roomId)
+    public async Task<IActionResult> RoomServerById(
+        long roomId,
+        [FromQuery] int? unityAssetTarget,
+        [FromQuery] int? unityAssetVersion)
     {
         var room = await rooms.GetByIdAsync(roomId) ?? Synthetic($"Room_{roomId}", roomId);
         var sceneRows = await db.RoomScenes
@@ -229,7 +232,12 @@ public class RoomsController(
             .Where(r => r.RoomId == room.Id)
             .ToListAsync();
 
-        return Ok(BuildRoomServerDetails(room, sceneRows, roles: roles));
+        return Ok(BuildRoomServerDetails(
+            room,
+            sceneRows,
+            roles: roles,
+            unityAssetTarget: unityAssetTarget,
+            unityAssetVersion: unityAssetVersion));
     }
 
     // ── RoomDetails (the boot-critical one) ─────────────────────────────
@@ -310,6 +318,270 @@ public class RoomsController(
             })
             .ToListAsync();
         return Ok(blobs);
+    }
+
+    /// <summary>GET <c>rooms/{roomId}/subrooms/{subRoomId}/saves/{saveId}</c>
+    /// — Studio room save metadata. The 2023 client can load baked Studio
+    /// scenes by first asking this endpoint which Unity asset bundle file
+    /// belongs to the save, then downloading it from
+    /// <c>cdn.../room/{Filename}.assetbundle</c>. The importer persists
+    /// the exact bundle filenames from the Studio dump on RoomScenes, so
+    /// this response is backed by the imported archive bytes rather than a
+    /// placeholder.</summary>
+    [HttpGet("rooms/{roomId:long}/subrooms/{subRoomId:long}/saves/{saveId:long}")]
+    [HttpGet("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/saves/{saveId:long}")]
+    [Authorize]
+    public async Task<IActionResult> StudioSubRoomSave(
+        long roomId,
+        long subRoomId,
+        long saveId,
+        [FromQuery] int? unityAssetTarget,
+        [FromQuery] int? unityAssetVersion)
+    {
+        var room = await rooms.GetByIdAsync(roomId);
+        if (room is null) return NotFound(new { error = "room_not_found", roomId });
+
+        var sceneRows = await db.RoomScenes
+            .Where(s => s.RoomId == roomId)
+            .OrderBy(s => s.OrderIndex)
+            .ToListAsync();
+        var scene = sceneRows.FirstOrDefault(s => s.OrderIndex == (int)subRoomId)
+            ?? sceneRows.FirstOrDefault(s => s.StudioSubRoomDataSaveId == saveId);
+        if (scene is null) return NotFound(new { error = "subroom_not_found", roomId, subRoomId });
+
+        return Ok(BuildStudioSaveWire(room, scene, subRoomId, saveId, unityAssetTarget, unityAssetVersion));
+    }
+
+    /// <summary>GET <c>rooms/{roomId}/subrooms</c> — the subroom list the
+    /// 2023 client / Studio editor fetches
+    /// (<c>String.Format("rooms/{0}/subrooms", roomId)</c>). Emits the same
+    /// per-subroom shape as the <c>SubRooms[]</c> entries inside
+    /// <c>/roomserver/rooms/{id}</c>, so a single-scene room synthesises one
+    /// "Home" entry and a multi-scene imported room enumerates its
+    /// RoomScenes.</summary>
+    [HttpGet("rooms/{roomId:long}/subrooms")]
+    [HttpGet("roomserver/rooms/{roomId:long}/subrooms")]
+    [Authorize]
+    public async Task<IActionResult> SubRooms(long roomId)
+    {
+        var room = await rooms.GetByIdAsync(roomId);
+        if (room is null) return NotFound(new { error = "room_not_found", roomId });
+
+        var sceneRows = await db.RoomScenes
+            .Where(s => s.RoomId == roomId)
+            .OrderBy(s => s.OrderIndex)
+            .ToListAsync();
+
+        var wire = sceneRows.Count > 0
+            ? sceneRows.Select(s => BuildSubRoomWire(room, s)).ToArray()
+            : new[] { BuildSubRoomWire(room, null) };
+        return Ok(wire);
+    }
+
+    /// <summary>GET <c>rooms/{roomId}/subrooms/{subRoomId}</c> — one subroom
+    /// (<c>String.Format("rooms/{0}/subrooms/{1}", roomId, subRoomId)</c>).
+    /// <paramref name="subRoomId"/> is the RoomScene OrderIndex.</summary>
+    [HttpGet("rooms/{roomId:long}/subrooms/{subRoomId:long}")]
+    [HttpGet("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}")]
+    [Authorize]
+    public async Task<IActionResult> SubRoom(long roomId, long subRoomId)
+    {
+        var room = await rooms.GetByIdAsync(roomId);
+        if (room is null) return NotFound(new { error = "room_not_found", roomId });
+
+        var scene = await db.RoomScenes
+            .Where(s => s.RoomId == roomId && s.OrderIndex == (int)subRoomId)
+            .FirstOrDefaultAsync();
+        // A single-scene room has no RoomScene row; subRoom 0 is the
+        // synthesised "Home" scene.
+        if (scene is null && subRoomId != 0)
+            return NotFound(new { error = "subroom_not_found", roomId, subRoomId });
+
+        return Ok(BuildSubRoomWire(room, scene));
+    }
+
+    /// <summary>GET <c>rooms/{roomId}/subrooms/{subRoomId}/data</c> — the
+    /// current persisted save for the subroom
+    /// (<c>String.Format("rooms/{0}/subrooms/{1}/data", roomId, subRoomId)</c>).
+    /// Returns the same <c>SubRoomDataSave</c> shape as
+    /// <c>/saves/{saveId}</c> resolved to the scene's current save id.</summary>
+    [HttpGet("rooms/{roomId:long}/subrooms/{subRoomId:long}/data")]
+    [HttpGet("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/data")]
+    [Authorize]
+    public async Task<IActionResult> SubRoomData(
+        long roomId,
+        long subRoomId,
+        [FromQuery] int? unityAssetTarget,
+        [FromQuery] int? unityAssetVersion)
+    {
+        var room = await rooms.GetByIdAsync(roomId);
+        if (room is null) return NotFound(new { error = "room_not_found", roomId });
+
+        var scene = await db.RoomScenes
+            .Where(s => s.RoomId == roomId && s.OrderIndex == (int)subRoomId)
+            .FirstOrDefaultAsync();
+        if (scene is null && subRoomId != 0)
+            return NotFound(new { error = "subroom_not_found", roomId, subRoomId });
+
+        var saveId = scene?.StudioSubRoomDataSaveId ?? 0L;
+        return Ok(BuildStudioSaveWire(room, scene, subRoomId, saveId, unityAssetTarget, unityAssetVersion));
+    }
+
+    /// <summary>GET <c>rooms/{roomId}/subrooms/{subRoomId}/saves</c> — the
+    /// list of saves for a subroom
+    /// (<c>String.Format("rooms/{0}/subrooms/{1}/saves", roomId, subRoomId)</c>).
+    /// Returns the current save plus any historical blobs recorded for the
+    /// subroom, newest first, each in the <c>SubRoomDataSave</c> shape.</summary>
+    [HttpGet("rooms/{roomId:long}/subrooms/{subRoomId:long}/saves")]
+    [HttpGet("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/saves")]
+    [Authorize]
+    public async Task<IActionResult> SubRoomSaves(long roomId, long subRoomId)
+    {
+        var room = await rooms.GetByIdAsync(roomId);
+        if (room is null) return NotFound(new { error = "room_not_found", roomId });
+
+        var scene = await db.RoomScenes
+            .Where(s => s.RoomId == roomId && s.OrderIndex == (int)subRoomId)
+            .FirstOrDefaultAsync();
+        if (scene is null && subRoomId != 0)
+            return NotFound(new { error = "subroom_not_found", roomId, subRoomId });
+
+        var currentSaveId = scene?.StudioSubRoomDataSaveId ?? 0L;
+        var saves = new List<object>
+        {
+            BuildStudioSaveWire(room, scene, subRoomId, currentSaveId, null, null),
+        };
+
+        // Historical blobs for this subroom (the same rows the datahistory
+        // endpoint surfaces), surfaced as prior saves so the Studio editor's
+        // version picker has the full set. Distinct by blob name, current
+        // save excluded (already first in the list).
+        var history = await db.RoomDataBlobs
+            .Where(b => b.RoomId == roomId && b.SubRoomId == subRoomId)
+            .OrderByDescending(b => b.UploadedAt)
+            .Take(50)
+            .ToListAsync();
+        foreach (var h in history)
+        {
+            if (!string.IsNullOrWhiteSpace(scene?.DataBlobName) &&
+                string.Equals(h.BlobName, scene!.DataBlobName, StringComparison.OrdinalIgnoreCase))
+                continue;
+            saves.Add(new
+            {
+                SubRoomDataSaveId = currentSaveId,
+                SubRoomId = subRoomId,
+                UnityAssetId = scene?.StudioUnityAssetId ?? string.Empty,
+                SubRoomUnityAssetId = scene?.StudioUnityAssetId ?? string.Empty,
+                ReferencedUnityAssetIds = Array.Empty<string>(),
+                DataBlob = h.BlobName,
+                DataBlobName = h.BlobName,
+                PersistenceVersion = 41,
+                OMVersion = 0,
+                SavedByAccountId = h.UploadedByPlayerId,
+                SavedOnPlatform = 7,
+                SavedOnDeviceClass = 2,
+                SavedAt = (h.UploadedAt == default ? DateTime.UtcNow : h.UploadedAt)
+                    .ToString("yyyy-MM-ddTHH:mm:ssZ"),
+            });
+        }
+
+        return Ok(saves);
+    }
+
+    /// <summary>Build one subroom entry in the wire shape the watch's
+    /// <c>SubRooms[]</c> array uses (see <c>BuildRoomServerDetails</c>). A
+    /// null <paramref name="scene"/> yields the synthesised "Home" scene for
+    /// single-scene rooms.</summary>
+    private object BuildSubRoomWire(RoomEntity room, RoomSceneEntity? scene)
+    {
+        var fallback = CurrentOrSyntheticDataBlobName(room);
+        var orderIndex = scene?.OrderIndex ?? 0;
+        var dataBlob = scene is null
+            ? fallback
+            : SceneOrSyntheticDataBlobName(room, scene.DataBlobName, fallback);
+        var modified = scene?.DataModifiedAt ?? room.UpdatedAt;
+        return new
+        {
+            SubRoomId = (long)orderIndex,
+            RoomId = room.Id,
+            Name = scene?.Name ?? "Home",
+            DataBlob = dataBlob,
+            DataSavedAt = (modified == default ? DateTime.UtcNow : modified)
+                .ToString("yyyy-MM-ddTHH:mm:ssZ"),
+            IsSandbox = scene?.IsSandbox ?? false,
+            MaxPlayers = scene?.MaxPlayers ?? 8,
+            Accessibility = room.Accessibility,
+            UnitySceneId = scene?.RoomSceneLocationId ?? room.LocationReplicationId,
+            UnityAssetId = scene?.StudioUnityAssetId ?? string.Empty,
+            SubRoomUnityAssetId = scene?.StudioUnityAssetId ?? string.Empty,
+            CurrentSave = new
+            {
+                SubRoomDataSaveId = scene?.StudioSubRoomDataSaveId ?? 0L,
+                SubRoomId = (long)orderIndex,
+                UnityAssetId = scene?.StudioUnityAssetId ?? string.Empty,
+                SubRoomUnityAssetId = scene?.StudioUnityAssetId ?? string.Empty,
+                ReferencedUnityAssetIds = Array.Empty<string>(),
+                DataBlob = dataBlob,
+            },
+        };
+    }
+
+    /// <summary>Build the <c>SubRoomDataSave</c> wire object for a Studio
+    /// save — shared by <c>/saves/{saveId}</c>, <c>/data</c>, and the first
+    /// entry of <c>/saves</c>. A null <paramref name="scene"/> (single-scene
+    /// room) returns a save with no baked bundles, pointing at the room's
+    /// current data blob.</summary>
+    private object BuildStudioSaveWire(
+        RoomEntity room,
+        RoomSceneEntity? scene,
+        long subRoomId,
+        long saveId,
+        int? unityAssetTarget,
+        int? unityAssetVersion)
+    {
+        var bundles = StudioBundlesForScene(scene, saveId);
+
+        if (bundles.Count == 0 && scene is not null)
+        {
+            logger.LogWarning(
+                "[rooms-studio-save] no asset bundles room={RoomId} subRoom={SubRoomId} save={SaveId} scene={Scene} csvLen={CsvLen}",
+                room.Id, subRoomId, saveId, scene.Name, scene.StudioAssetBundleNamesCsv?.Length ?? 0);
+        }
+
+        var unityAssetId = scene?.StudioUnityAssetId ?? string.Empty;
+        var bakedAssets = BuildStudioBakedAssets(room, scene, saveId, unityAssetTarget, unityAssetVersion);
+        var primary = bakedAssets.FirstOrDefault();
+        var unityAsset = BuildStudioUnityAsset(room, scene, bakedAssets);
+        var dataBlob = !string.IsNullOrWhiteSpace(scene?.DataBlobName)
+            ? scene!.DataBlobName
+            : CurrentOrSyntheticDataBlobName(room);
+
+        logger.LogInformation(
+            "[rooms-studio-save] room={RoomId} subRoom={SubRoomId} save={SaveId} scene={Scene} target={Target} version={Version} primary={Primary} bundles={BundleCount}",
+            room.Id, subRoomId, saveId, scene?.Name ?? "Home", unityAssetTarget, unityAssetVersion,
+            primary?.Filename ?? string.Empty, bundles.Count);
+
+        return new
+        {
+            SubRoomDataSaveId = saveId,
+            SubRoomId = subRoomId,
+            UnityAssetId = unityAssetId,
+            SubRoomUnityAssetId = unityAssetId,
+            ReferencedUnityAssetIds = Array.Empty<string>(),
+            DataBlob = dataBlob,
+            DataBlobName = dataBlob,
+            PersistenceVersion = 41,
+            OMVersion = 0,
+            SavedByAccountId = room.CreatorPlayerId,
+            SavedOnPlatform = 7,
+            SavedOnDeviceClass = 2,
+            CreatedByAccountId = room.CreatorPlayerId,
+            UnityAssetHash = string.Empty,
+            UnityAsset = unityAsset,
+            UnityAssetFilename = primary?.Filename ?? string.Empty,
+            BakedUnityAssets = bakedAssets,
+            UnitySubAssets = Array.Empty<object>(),
+        };
     }
 
     /// <summary>POST <c>roomserver/rooms/{roomId}/subrooms/{subRoomId}/restoredata</c>
@@ -1300,7 +1572,9 @@ public class RoomsController(
         RoomEntity room,
         IReadOnlyList<RoomSceneEntity>? sceneRows = null,
         string? overrideDataBlobName = null,
-        IReadOnlyList<RoomRoleEntity>? roles = null)
+        IReadOnlyList<RoomRoleEntity>? roles = null,
+        int? unityAssetTarget = null,
+        int? unityAssetVersion = null)
     {
         var roleList = roles ?? Array.Empty<RoomRoleEntity>();
         // 2023's room-permissions runtime needs a real PersistedRoomData
@@ -1311,34 +1585,118 @@ public class RoomsController(
             .ToString("yyyy-MM-ddTHH:mm:ssZ");
 
         object[] subRooms = sceneRows is { Count: > 0 }
-            ? sceneRows.Select(s => (object)new
+            ? sceneRows.Select(s =>
             {
-                SubRoomId = (long)s.OrderIndex,
-                RoomId = room.Id,
-                Name = s.Name,
-                DataBlob = !string.IsNullOrWhiteSpace(overrideDataBlobName) && sceneRows.Count == 1
+                var dataBlob = !string.IsNullOrWhiteSpace(overrideDataBlobName) && sceneRows.Count == 1
                     ? overrideDataBlobName
-                    : SceneOrSyntheticDataBlobName(room, s.DataBlobName, dataBlobName),
-                DataSavedAt = (s.DataModifiedAt == default ? DateTime.UtcNow : s.DataModifiedAt)
-                    .ToString("yyyy-MM-ddTHH:mm:ssZ"),
-                IsSandbox = s.IsSandbox,
-                MaxPlayers = s.MaxPlayers,
-                Accessibility = room.Accessibility,
-                UnitySceneId = s.RoomSceneLocationId,
+                    : SceneOrSyntheticDataBlobName(room, s.DataBlobName, dataBlobName);
+                // A scene with a baked Studio asset (non-empty UnityAssetId)
+                // must advertise a Studio-era PersistenceVersion on its
+                // CurrentSave. The 2023 client gates the baked-Addressables
+                // load path on this: a version of 0 (the old default) makes
+                // it treat the save as a pre-baked legacy blob and it never
+                // fetches unity_assets/{id}/{target}/{version}, so the
+                // persistence views reference prefabs that were never loaded
+                // ("Expected a prefab, but found none"). 41 matches the real
+                // RecRocks export (room.json PersistenceVersion=41).
+                var baked = !string.IsNullOrWhiteSpace(s.StudioUnityAssetId);
+                var saveVersion = baked ? StudioPersistenceVersion : 0;
+                var bakedAssets = BuildStudioBakedAssets(
+                    room,
+                    s,
+                    s.StudioSubRoomDataSaveId ?? 0L,
+                    unityAssetTarget,
+                    unityAssetVersion);
+                var unityAsset = bakedAssets.FirstOrDefault();
+                var unityAssetParent = BuildStudioUnityAsset(room, s, bakedAssets);
+                return (object)new
+                {
+                    ReplicationId = s.RoomSceneLocationId,
+                    PersistenceVersion = saveVersion,
+                    SupportsJoinInProgress = true,
+                    UseLevelBasedMatchmaking = false,
+                    UseAgeBasedMatchmaking = false,
+                    UseRecRoyaleMatchmaking = false,
+                    SubRoomId = (long)s.OrderIndex,
+                    RoomId = room.Id,
+                    Name = s.Name,
+                    UnityAssetId = s.StudioUnityAssetId,
+                    SubRoomUnityAssetId = s.StudioUnityAssetId,
+                    UnityAsset = unityAsset?.Filename ?? string.Empty,
+                    UnityAssetHash = string.Empty,
+                    DataBlob = dataBlob,
+                    DataBlobHash = (string?)null,
+                    DataSavedAt = (s.DataModifiedAt == default ? DateTime.UtcNow : s.DataModifiedAt)
+                        .ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                    IsSandbox = s.IsSandbox,
+                    MaxPlayers = s.MaxPlayers,
+                    Accessibility = room.Accessibility,
+                    UnitySceneId = s.RoomSceneLocationId,
+                    CurrentSave = new
+                    {
+                        SubRoomDataSaveId = s.StudioSubRoomDataSaveId ?? 0L,
+                        SubRoomId = (long)s.OrderIndex,
+                        UnityAssetId = s.StudioUnityAssetId,
+                        SubRoomUnityAssetId = s.StudioUnityAssetId,
+                        CreatedByAccountId = room.CreatorPlayerId,
+                        ReferencedUnityAssetIds = Array.Empty<string>(),
+                        DataBlob = dataBlob,
+                        DataBlobHash = (string?)null,
+                        PersistenceVersion = saveVersion,
+                        OMVersion = 0,
+                        SavedByAccountId = room.CreatorPlayerId,
+                        SavedOnPlatform = 0,
+                        SavedOnDeviceClass = 2,
+                        Description = string.Empty,
+                        ModerationState = 0,
+                        CreatedAt = (s.DataModifiedAt == default ? DateTime.UtcNow : s.DataModifiedAt)
+                            .ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                        UgcSubVersion = saveVersion,
+                        UnityAssetHash = string.Empty,
+                        UnityAsset = unityAssetParent,
+                        UnityAssetFilename = unityAsset?.Filename ?? string.Empty,
+                        BakedUnityAssets = bakedAssets,
+                        UnitySubAssets = Array.Empty<object>(),
+                    },
+                    LastModeratedSaveModerationState = 0,
+                    DefaultMatchmakingPolicy = 0,
+                    ShouldAutoStageSaves = true,
+                    StagedSubRoomDataSaveId = (long?)null,
+                };
             }).ToArray()
             : new object[]
             {
                 new
                 {
+                    ReplicationId = room.LocationReplicationId,
+                    PersistenceVersion = 0,
+                    SupportsJoinInProgress = true,
+                    UseLevelBasedMatchmaking = false,
+                    UseAgeBasedMatchmaking = false,
+                    UseRecRoyaleMatchmaking = false,
                     SubRoomId = 0L,
                     RoomId = room.Id,
                     Name = "Home",
+                    UnityAssetId = string.Empty,
+                    SubRoomUnityAssetId = string.Empty,
+                    UnityAsset = string.Empty,
+                    UnityAssetHash = string.Empty,
                     DataBlob = dataBlobName,
+                    DataBlobHash = (string?)null,
                     DataSavedAt = updatedAt,
                     IsSandbox = false,
                     MaxPlayers = 8,
                     Accessibility = room.Accessibility,
                     UnitySceneId = room.LocationReplicationId,
+                    CurrentSave = new
+                    {
+                        SubRoomDataSaveId = 0L,
+                        SubRoomId = 0L,
+                        UnityAssetId = string.Empty,
+                        SubRoomUnityAssetId = string.Empty,
+                        ReferencedUnityAssetIds = Array.Empty<string>(),
+                        DataBlob = dataBlobName,
+                    },
                 },
             };
 
@@ -1389,6 +1747,19 @@ public class RoomsController(
             DisableMicAutoMute = room.DisableMicAutoMute,
             DisableRoomComments = false,
             EncryptVoiceChat = false,
+            // Studio/UGC version family. The 2023 client reads UgcVersion to
+            // decide the asset-bundle version it requests
+            // (unity_assets/{id}/{target}/{UgcVersion}) and PersistenceVersion
+            // to recognise a baked Studio room at all. Matches the real
+            // RecRocks room.json (UgcVersion=1, PersistenceVersion=41). For a
+            // non-Studio room these stay at the legacy 0 so behaviour is
+            // unchanged.
+            PersistenceVersion = room.IsStudioRoom ? StudioPersistenceVersion : 0,
+            UgcVersion = room.IsStudioRoom ? StudioUgcVersion : 0,
+            UgcSubVersion = room.IsStudioRoom ? StudioPersistenceVersion : 0,
+            MinUgcSubVersion = room.IsStudioRoom ? StudioPersistenceVersion : 0,
+            PublishState = 0,
+            MaxPlayerCalculationMode = 0,
             SubRooms = subRooms,
             Roles = wireRoles,
             LoadScreens = Array.Empty<object>(),
@@ -1397,6 +1768,18 @@ public class RoomsController(
             Tags = tags,
         };
     }
+
+    /// <summary>PersistenceVersion / UgcSubVersion stamped on a baked Studio
+    /// scene's CurrentSave. The 2023 client's room-load gate treats anything
+    /// below the Studio-asset-bundle era as a legacy non-baked save and skips
+    /// the Addressables bundle fetch. 41 matches the real RecRocks export
+    /// (room.json + the per-save sidecars).</summary>
+    public const int StudioPersistenceVersion = 41;
+
+    /// <summary>Room-level UgcVersion for a Studio room. The client uses this
+    /// as the asset-bundle version in unity_assets/{id}/{target}/{version}
+    /// (RecRocks bundles bake at v1, room.json UgcVersion=1).</summary>
+    public const int StudioUgcVersion = 1;
 
 
     // ── Clone / create ───────────────────────────────────────────────────
@@ -1564,7 +1947,7 @@ public class RoomsController(
     public async Task<IActionResult> RoomsRequiring(string restriction)
     {
         var key = (restriction ?? string.Empty).Trim().TrimStart('#').ToLowerInvariant();
-        if (key.Length == 0) return Ok(new List<object>());
+        if (key.Length == 0) return Ok(new List<string>());
 
         IQueryable<RoomEntity> query = db.Rooms.AsNoTracking()
             .Where(r => !r.HiddenFromBrowse && r.State == 0);
@@ -1585,9 +1968,10 @@ public class RoomsController(
         var rows = await query
             .OrderByDescending(r => r.HotScore)
             .ThenBy(r => r.Name)
+            .Select(r => r.Name)
             .Take(100)
             .ToListAsync();
-        return Ok(rows.Select(RoomService.ToWireRoom).ToList());
+        return Ok(rows);
     }
 
     [HttpGet("rooms/curated_playlists")]
@@ -2707,6 +3091,93 @@ public class RoomsController(
             return sceneBlobName;
 
         return fallbackBlobName;
+    }
+
+    private sealed record StudioBundleInfo(long SaveId, int Target, int Version, string Filename);
+
+    private sealed record BakedUnityAssetWire(
+        string UnityAssetId,
+        long CreatedByAccountId,
+        string Filename,
+        int Target,
+        int Version,
+        string Hash);
+
+    private sealed record UnityAssetWire(
+        string UnityAssetId,
+        long CreatedByAccountId,
+        string Filename,
+        BakedUnityAssetWire[] BakedUnityAssets);
+
+    private static BakedUnityAssetWire[] BuildStudioBakedAssets(
+        RoomEntity room,
+        RoomSceneEntity? scene,
+        long saveId,
+        int? unityAssetTarget,
+        int? unityAssetVersion)
+    {
+        var bundles = StudioBundlesForScene(scene, saveId);
+        if (unityAssetTarget is int target)
+            bundles = bundles.Where(b => b.Target == target).ToList();
+        if (unityAssetVersion is int requestedVersion && bundles.Any(b => b.Version == requestedVersion))
+            bundles = bundles.Where(b => b.Version == requestedVersion).ToList();
+
+        var unityAssetId = scene?.StudioUnityAssetId ?? string.Empty;
+        return bundles
+            .OrderBy(b => b.Target)
+            .ThenByDescending(b => b.Version)
+            .Select(b => new BakedUnityAssetWire(
+                unityAssetId,
+                room.CreatorPlayerId,
+                b.Filename,
+                b.Target,
+                b.Version,
+                string.Empty))
+            .ToArray();
+    }
+
+    private static UnityAssetWire? BuildStudioUnityAsset(
+        RoomEntity room,
+        RoomSceneEntity? scene,
+        BakedUnityAssetWire[] bakedAssets)
+    {
+        var unityAssetId = scene?.StudioUnityAssetId ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(unityAssetId))
+            return null;
+
+        var filename = bakedAssets.FirstOrDefault()?.Filename ?? string.Empty;
+        return new UnityAssetWire(unityAssetId, room.CreatorPlayerId, filename, bakedAssets);
+    }
+
+    private static List<StudioBundleInfo> StudioBundlesForScene(RoomSceneEntity? scene, long saveId)
+    {
+        return (scene?.StudioAssetBundleNamesCsv ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Select(ParseStudioBundleName)
+            .Where(b => b is not null)
+            .Cast<StudioBundleInfo>()
+            .Where(b => b.SaveId == saveId || scene?.StudioSubRoomDataSaveId == saveId)
+            .OrderBy(b => b.Target)
+            .ThenByDescending(b => b.Version)
+            .ToList();
+    }
+
+    private static StudioBundleInfo? ParseStudioBundleName(string fileName)
+    {
+        var name = Path.GetFileName(fileName);
+        var match = System.Text.RegularExpressions.Regex.Match(
+            name,
+            @"^(?<save>\d+)__bundle_t(?<target>\d+)(?:_v(?<version>\d+))?\.assetbundle$",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+        if (!match.Success) return null;
+        if (!long.TryParse(match.Groups["save"].Value, out var saveId)) return null;
+        if (!int.TryParse(match.Groups["target"].Value, out var target)) return null;
+        var version = 0;
+        if (match.Groups["version"].Success &&
+            !int.TryParse(match.Groups["version"].Value, out version))
+            return null;
+        return new StudioBundleInfo(saveId, target, version, name);
     }
 
     [HttpGet("rooms/{roomId:long}/roles/{playerId:long}")]

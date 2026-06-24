@@ -86,3 +86,5 @@ Recovered(*)/
 
 
 local-releases/**
+DorkNet.Models/bin-verify/**
+DorkNet.Models/bin-verify2/**

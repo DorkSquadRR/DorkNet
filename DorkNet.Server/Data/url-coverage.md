@@ -303,6 +303,11 @@ Note: counts are approximate because several client URLs (`api/avatar/v3/saved`,
 | POST | `api/rooms/v1/bookmark` | REAL | `MissingEndpointsController.BookmarkRoom` — upserts/removes a `RoomBookmarkEntity` based on the `Bookmark` form field |
 | GET  | `api/rooms/v1/datahistory/{roomId}` | REAL | `Rooms.V2.RoomsController.DataHistory` — list of historical scene snapshots |
 | POST | `api/rooms/v1/datahistory/restore` | REAL | `Rooms.V2.RoomsController.RestoreDataHistory` — rolls a room's scenes back to a snapshot |
+| GET  | `rooms/{roomId}/subrooms` | REAL | `Rooms.V2.RoomsController.SubRooms` — Studio/2023 subroom list (one synthesised "Home" for single-scene rooms; `RoomScenes` rows otherwise) |
+| GET  | `rooms/{roomId}/subrooms/{subRoomId}` | REAL | `Rooms.V2.RoomsController.SubRoom` — one subroom by `RoomScene.OrderIndex` |
+| GET  | `rooms/{roomId}/subrooms/{subRoomId}/data` | REAL | `Rooms.V2.RoomsController.SubRoomData` — current `SubRoomDataSave` for the subroom |
+| GET  | `rooms/{roomId}/subrooms/{subRoomId}/saves` | REAL | `Rooms.V2.RoomsController.SubRoomSaves` — current save + historical blobs, newest first |
+| GET  | `rooms/{roomId}/subrooms/{subRoomId}/saves/{saveId}` | REAL | `Rooms.V2.RoomsController.StudioSubRoomSave` — Studio save metadata + baked `unity_assets` bundle list the 2023 client downloads |
 | POST | `api/rooms/v2/report` | REAL | `RoomsModerationController.Report` — files a room report |
 | GET  | `api/rooms/v1/modrooms` | REAL | `Rooms.V2.RoomsController.MyModerated` (route alias `api/rooms/v1/modrooms`) — rooms the caller moderates |
 | GET  | `api/rooms/v2/myrooms` | REAL | `Rooms.V2.RoomsController.MyRooms` |
@@ -382,6 +387,14 @@ These all live on `match.rec.net` (locally: `match.localhost`).
 | POST | `matchmake/dorm` | REAL | `Match.MatchController.MatchmakeDorm` — builds the caller's personal-dorm `RoomInstance` |
 | POST | `matchmake/none` | REAL | `Match.MatchController.MatchmakeNone` — returns the caller's current room (or dorm) without changing it |
 | POST | `player/heartbeat` | REAL | `Match.MatchPlayerController.Heartbeat` — refreshes the caller's `PlayerPresenceService` entry; also has a duplicate in `ApiNamespaceStubsController.Heartbeat` for the api-host case |
+
+### CDN host (`cdn.rec.net` / `storage` / `data`)
+
+Served by `Controllers/Cdn/CdnController` (catch-all that wins routing on every host).
+
+| Verb | URL | Status | Handler |
+|---|---|---|---|
+| GET/HEAD | `unity_assets/{assetId}/{target}/{version}` | REAL | `Cdn.CdnController.ServeUnityAsset` — Studio baked asset-bundle download. The 2023 client builds this URL itself from a save's `UnityAssetId`/`Target`/`Version`; resolves the owning `RoomScene` by `StudioUnityAssetId`, picks the matching `{saveId}__bundle_t{target}_v{version}.assetbundle` from `StudioAssetBundleNamesCsv`, streams it from S3. Without it imported Studio geometry never renders |
 
 ## Catch-all wildcards (informational)
 
