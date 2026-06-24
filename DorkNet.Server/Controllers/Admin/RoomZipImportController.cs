@@ -59,7 +59,7 @@ public class RoomZipImportController(
     ILogger<RoomZipImportController> logger) : ControllerBase
 {
     private long CurrentAdminId => this.RequireCurrentPlayerId();
-    private const long MaxArchiveBytes = 12_000_000_000L;
+    private const long MaxArchiveBytes = 25_000_000_000L;
 
     // ── Room-blob normaliser toggle ─────────────────────────────────────
     // The normaliser does two things now (see RoomBlobNormalizerService):

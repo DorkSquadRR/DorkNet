@@ -1300,6 +1300,8 @@ public class GoToController(
 
         if (!string.IsNullOrWhiteSpace(room.CurrentDataBlobName)) return room.CurrentDataBlobName;
 
+        if (RoomService.IsBakedOriginalRoom(room)) return string.Empty;
+
         return RoomService.SyntheticDefaultRoomDataBlobName(room.Id);
     }
 
@@ -1358,6 +1360,7 @@ public class GoToController(
         "cyberjunkcity" or "lasertagcyberjunk" => "9d6456ce-6264-48b4-808d-2d96b3d91038",
         "recroyalesquads"     => "253fa009-6e65-4c90-91a1-7137a56a267f",
         "recroyalesolos"      => "85b43509-77f7-3884-3a6b-9a4e737d6d11",
+        "recrally"            => "56193568-9ae0-498c-8a77-4df79dec91f5",
         _ => "76d98498-60a1-430c-ab76-b54a29b7a163", // DormRoom
     };
 }

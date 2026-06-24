@@ -13,6 +13,7 @@ import { Plus, RefreshCw, Trash, Upload } from '../components/Icons';
 interface PlayMenuTagSettings {
   pinnedTags: string[];
   popularTags: string[];
+  trendingTags: string[];
   updatedAt: string;
 }
 
@@ -245,6 +246,7 @@ function PlayMenuTagsPanel({
 }) {
   const [pinnedTags, setPinnedTags] = useState<string[]>([]);
   const [popularTags, setPopularTags] = useState<string[]>([]);
+  const [trendingTags, setTrendingTags] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const toast = useToast();
 
@@ -252,6 +254,7 @@ function PlayMenuTagsPanel({
     if (!tags) return;
     setPinnedTags(tags.pinnedTags);
     setPopularTags(tags.popularTags);
+    setTrendingTags(tags.trendingTags);
   }, [tags]);
 
   const save = async (reset = false) => {
@@ -260,8 +263,8 @@ function PlayMenuTagsPanel({
       await api<PlayMenuTagSettings>('/settings/play-menu-tags', {
         method: 'POST',
         body: reset
-          ? { PinnedTags: [], PopularTags: [] }
-          : { PinnedTags: pinnedTags, PopularTags: popularTags },
+          ? { PinnedTags: [], PopularTags: [], TrendingTags: [] }
+          : { PinnedTags: pinnedTags, PopularTags: popularTags, TrendingTags: trendingTags },
       });
       toast.push(reset ? 'Play menu tags reset.' : 'Play menu tags saved.', 'success');
       onSaved();
@@ -299,7 +302,7 @@ function PlayMenuTagsPanel({
       {error && <div className="mt-3 text-sm text-danger">{error}</div>}
       {loading && !tags && <div className="mt-3 text-xs text-ink-400">Loading tags...</div>}
       {tags && (
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
+        <div className="mt-4 grid gap-3 md:grid-cols-3">
           <TagListEditor
             label="Pinned tags"
             tags={pinnedTags}
@@ -310,6 +313,12 @@ function PlayMenuTagsPanel({
             label="Popular tags"
             tags={popularTags}
             onChange={setPopularTags}
+            max={32}
+          />
+          <TagListEditor
+            label="Trending tags"
+            tags={trendingTags}
+            onChange={setTrendingTags}
             max={32}
           />
         </div>

@@ -74,6 +74,95 @@ public class RoomsController(
         });
     }
 
+    [HttpGet("rooms/topcreators")]
+    [HttpGet("roomserver/rooms/topcreators")]
+    public async Task<IActionResult> TopCreators([FromQuery] int skip = 0, [FromQuery] int take = 100)
+    {
+        var rows = await PublicRoomQuery()
+            .OrderByDescending(r => r.HotScore)
+            .ThenByDescending(r => r.VisitCount)
+            .Take(250)
+            .ToListAsync();
+        var page = rows
+            .GroupBy(r => r.CreatorPlayerId)
+            .Select(g => g.First())
+            .Skip(Math.Max(skip, 0))
+            .Take(Math.Clamp(take, 1, 100))
+            .ToList();
+        return Ok(await BuildRoomServerListAsync(page));
+    }
+
+    [HttpGet("rooms/contestwinners")]
+    [HttpGet("roomserver/rooms/contestwinners")]
+    public async Task<IActionResult> ContestWinners([FromQuery] int skip = 0, [FromQuery] int take = 100)
+    {
+        var rows = await PublicRoomQuery()
+            .Where(r =>
+                EF.Functions.Like(r.TagsCsv, "%contest%") ||
+                EF.Functions.Like(r.TagsCsv, "%winner%") ||
+                EF.Functions.Like(r.TagsCsv, "%featured%"))
+            .OrderByDescending(r => r.HotScore)
+            .ThenBy(r => r.Name)
+            .Skip(Math.Max(skip, 0))
+            .Take(Math.Clamp(take, 1, 100))
+            .ToListAsync();
+
+        if (rows.Count == 0)
+        {
+            rows = await PublicRoomQuery()
+                .OrderByDescending(r => r.HotScore)
+                .ThenBy(r => r.Name)
+                .Skip(Math.Max(skip, 0))
+                .Take(Math.Clamp(take, 1, 100))
+                .ToListAsync();
+        }
+
+        return Ok(await BuildRoomServerListAsync(rows));
+    }
+
+    [HttpGet("rooms/fromcreators")]
+    [HttpPost("rooms/fromcreators")]
+    [HttpGet("roomserver/rooms/fromcreators")]
+    [HttpPost("roomserver/rooms/fromcreators")]
+    public async Task<IActionResult> FromCreators([FromQuery] int skip = 0, [FromQuery] int take = 100)
+    {
+        var creatorIds = Request.Query["creatorId"]
+            .Concat(Request.Query["creatorIds"])
+            .Concat(Request.Query["accountId"])
+            .Concat(Request.Query["accountIds"])
+            .Concat(Request.Query["id"])
+            .SelectMany(v => (v ?? string.Empty).Split(',',
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Select(v => long.TryParse(v, out var id) ? id : 0)
+            .Where(id => id > 0)
+            .Distinct()
+            .ToList();
+
+        var query = PublicRoomQuery();
+        if (creatorIds.Count > 0)
+            query = query.Where(r => creatorIds.Contains(r.CreatorPlayerId));
+
+        var rows = await query
+            .OrderByDescending(r => r.HotScore)
+            .ThenByDescending(r => r.UpdatedAt)
+            .Skip(Math.Max(skip, 0))
+            .Take(Math.Clamp(take, 1, 100))
+            .ToListAsync();
+        return Ok(await BuildRoomServerListAsync(rows));
+    }
+
+    [HttpGet("rooms/magic_door")]
+    [HttpGet("roomserver/rooms/magic_door")]
+    public async Task<IActionResult> MagicDoor()
+    {
+        var room = await PublicRoomQuery()
+            .OrderByDescending(r => r.HotScore)
+            .ThenBy(r => r.Id)
+            .FirstOrDefaultAsync();
+        if (room is null) return NotFound();
+        return Ok((await BuildRoomServerListAsync(new[] { room })).First());
+    }
+
     /// <summary>
     /// GET <c>/roomserver/rooms/recommendations</c> — the home-tab
     /// "Recommended" carousel. <b>Wire shape is NOT a flat
@@ -127,6 +216,38 @@ public class RoomsController(
         return Ok(result);
     }
 
+    [HttpGet("rooms/{roomId:long}/similar")]
+    [HttpGet("roomserver/rooms/{roomId:long}/similar")]
+    public async Task<IActionResult> SimilarRooms(long roomId, [FromQuery] int take = 12)
+    {
+        var seed = await rooms.GetByIdAsync(roomId);
+        if (seed is null) return NotFound();
+
+        var tags = (seed.TagsCsv ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToArray();
+        var query = PublicRoomQuery().Where(r => r.Id != roomId);
+        if (tags.Length > 0)
+        {
+            var primaryTag = tags[0];
+            query = query.Where(r => EF.Functions.Like(r.TagsCsv, $"%{primaryTag}%"));
+        }
+
+        var similar = await query
+            .OrderByDescending(r => r.HotScore)
+            .ThenBy(r => r.Name)
+            .Take(Math.Clamp(take, 1, 100))
+            .ToListAsync();
+
+        var seedWire = (await BuildRoomServerListAsync(new[] { seed })).First();
+        var similarWire = await BuildRoomServerListAsync(similar);
+        return Ok(new Dictionary<string, object>(StringComparer.Ordinal)
+        {
+            ["SeedRoom"] = seedWire,
+            ["Rooms"] = similarWire,
+        });
+    }
+
     /// <summary>
     /// `Rooms.SearchForRooms(query)` — free-text room search.
     /// </summary>
@@ -172,6 +293,7 @@ public class RoomsController(
         {
             PinnedFilters = tags.PinnedTags,
             PopularFilters = tags.PopularTags,
+            TrendingFilters = tags.TrendingTags,
         });
     }
 
@@ -179,7 +301,11 @@ public class RoomsController(
     public async Task<IActionResult> Tags()
     {
         var tags = await serverSettings.GetPlayMenuTagsAsync();
-        return Ok(tags.PinnedTags.Concat(tags.PopularTags).Distinct(StringComparer.OrdinalIgnoreCase).ToArray());
+        return Ok(tags.PinnedTags
+            .Concat(tags.PopularTags)
+            .Concat(tags.TrendingTags)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray());
     }
 
     [HttpGet("api/rooms/v1/pinnedtags")]
@@ -189,6 +315,10 @@ public class RoomsController(
     [HttpGet("api/rooms/v1/populartags")]
     public async Task<IActionResult> PopularTags()
         => Ok((await serverSettings.GetPlayMenuTagsAsync()).PopularTags);
+
+    [HttpGet("api/rooms/v1/trendingtags")]
+    public async Task<IActionResult> TrendingTags()
+        => Ok((await serverSettings.GetPlayMenuTagsAsync()).TrendingTags);
 
     // ── Single room lookups ──────────────────────────────────────────────
 
@@ -1388,10 +1518,19 @@ public class RoomsController(
         SupportsWalkVR = src.SupportsWalkVR,
         SupportsTeleportVR = src.SupportsTeleportVR,
         AllowsJuniors = src.AllowsJuniors,
+        AllowNewUsers = src.AllowNewUsers,
+        MinLevel = src.MinLevel,
+        MaxPlayerCalculationMode = src.MaxPlayerCalculationMode,
+        LoadScreensJson = src.LoadScreensJson,
+        PromoImagesJson = src.PromoImagesJson,
+        PromoExternalContentJson = src.PromoExternalContentJson,
         RoomWarningMask = src.RoomWarningMask,
         CustomRoomWarning = src.CustomRoomWarning,
         DisableMicAutoMute = src.DisableMicAutoMute,
         LocationReplicationId = src.LocationReplicationId,
+        IsStudioRoom = src.IsStudioRoom,
+        IsRoomLinkedToRecRoomStudio = src.IsRoomLinkedToRecRoomStudio,
+        StudioSessionId = src.StudioSessionId,
         TagsCsv = src.TagsCsv,
         CheerCount = src.CheerCount,
         FavoriteCount = src.FavoriteCount,
@@ -1425,7 +1564,12 @@ public class RoomsController(
             ? Array.Empty<object>()
             : room.TagsCsv
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Select(t => (object)new { Type = 0, Tag = t })
+                .Select(t => (object)new
+                {
+                    Type = RoomTagTypeForWire(t),
+                    Tag = t,
+                    IsPrimaryGenre = false,
+                })
                 .ToArray();
 
         // Scenes population: every room must produce a Scenes[0] entry
@@ -1710,7 +1854,12 @@ public class RoomsController(
             ? Array.Empty<object>()
             : room.TagsCsv
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Select(t => (object)new { Type = 0, Tag = t })
+                .Select(t => (object)new
+                {
+                    Type = RoomTagTypeForWire(t),
+                    Tag = t,
+                    IsPrimaryGenre = false,
+                })
                 .ToArray();
 
         return new
@@ -1733,6 +1882,9 @@ public class RoomsController(
             SupportsQuest2 = true,
             SupportsMobile = room.SupportsMobile,
             SupportsJuniors = room.AllowsJuniors,
+            AllowNewUsers = room.AllowNewUsers,
+            AllowsNewUsers = room.AllowNewUsers,
+            MinLevel = room.MinLevel,
             CreatedAt = (room.CreatedAt == default ? DateTime.UtcNow : room.CreatedAt)
                 .ToString("yyyy-MM-ddTHH:mm:ssZ"),
             Stats = new
@@ -1743,10 +1895,14 @@ public class RoomsController(
                 VisitCount = room.VisitCount,
             },
             IsDorm = room.IsDormRoom,
+            IsStudioRoom = room.IsStudioRoom,
+            IsRoomLinkedToRecRoomStudio = room.IsRoomLinkedToRecRoomStudio,
+            StudioSessionId = room.StudioSessionId,
             CloningAllowed = room.CloningAllowed,
             DisableMicAutoMute = room.DisableMicAutoMute,
             DisableRoomComments = false,
             EncryptVoiceChat = false,
+            LoadScreenLocked = false,
             // Studio/UGC version family. The 2023 client reads UgcVersion to
             // decide the asset-bundle version it requests
             // (unity_assets/{id}/{target}/{UgcVersion}) and PersistenceVersion
@@ -1758,15 +1914,72 @@ public class RoomsController(
             UgcVersion = room.IsStudioRoom ? StudioUgcVersion : 0,
             UgcSubVersion = room.IsStudioRoom ? StudioPersistenceVersion : 0,
             MinUgcSubVersion = room.IsStudioRoom ? StudioPersistenceVersion : 0,
+            IsDeveloperOwned = room.IsStudioRoom || HasRoomTag(room, "developer"),
+            IsJuniorCreated = false,
+            IsRecRoomApproved = false,
+            ExcludeFromLists = false,
+            BoostCount = 0,
+            RestrictedCircuitsAllowListNames = Array.Empty<string>(),
+            PublishStateAvailability = new
+            {
+                CanSaveAsBeta = false,
+                CanSaveAsUpdate = true,
+                AvailableUpdateTokenCount = 3,
+                NextAvailableUpdateDateTimeUtc = (string?)null,
+            },
             PublishState = 0,
-            MaxPlayerCalculationMode = 0,
+            MaxPlayerCalculationMode = room.MaxPlayerCalculationMode,
             SubRooms = subRooms,
             Roles = wireRoles,
-            LoadScreens = Array.Empty<object>(),
-            PromoImages = Array.Empty<string>(),
-            PromoExternalContent = Array.Empty<object>(),
+            LoadScreens = JsonArrayOrEmpty(room.LoadScreensJson),
+            PromoImages = JsonStringArrayOrEmpty(room.PromoImagesJson),
+            PromoExternalContent = JsonArrayOrEmpty(room.PromoExternalContentJson),
             Tags = tags,
         };
+    }
+
+    private static int RoomTagTypeForWire(string tag)
+    {
+        if (string.Equals(tag, "beta", StringComparison.OrdinalIgnoreCase)) return 1;
+        return tag.ToLowerInvariant() switch
+        {
+            "rrstudio" or "community" or "screen" or "walkvr" or "teleportvr" or "junior" or "pickup" => 2,
+            _ => 0,
+        };
+    }
+
+    private static bool HasRoomTag(RoomEntity room, string tag)
+    {
+        return !string.IsNullOrWhiteSpace(room.TagsCsv) &&
+               room.TagsCsv
+                   .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                   .Any(t => string.Equals(t, tag, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static JsonElement[] JsonArrayOrEmpty(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return Array.Empty<JsonElement>();
+        try
+        {
+            return JsonSerializer.Deserialize<JsonElement[]>(json) ?? Array.Empty<JsonElement>();
+        }
+        catch (JsonException)
+        {
+            return Array.Empty<JsonElement>();
+        }
+    }
+
+    private static string[] JsonStringArrayOrEmpty(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return Array.Empty<string>();
+        try
+        {
+            return JsonSerializer.Deserialize<string[]>(json) ?? Array.Empty<string>();
+        }
+        catch (JsonException)
+        {
+            return Array.Empty<string>();
+        }
     }
 
     /// <summary>PersistenceVersion / UgcSubVersion stamped on a baked Studio
@@ -1845,7 +2058,9 @@ public class RoomsController(
     [HttpGet("api/rooms/v2/createdby/{otherPlayerId:long}")]
     [HttpGet("api/rooms/v3/createdby/{otherPlayerId:long}")]
     [HttpGet("roomserver/rooms/createdby/{otherPlayerId:long}")]
+    [HttpGet("roomserver/rooms/ownedby/{otherPlayerId:long}")]
     [HttpGet("rooms/createdby/{otherPlayerId:long}")]
+    [HttpGet("rooms/ownedby/{otherPlayerId:long}")]
     public async Task<IActionResult> CreatedByOther(long otherPlayerId)
         => Ok((await rooms.CreatedByAsync(otherPlayerId)).Select(RoomService.ToWireRoom).ToList());
 
@@ -1855,7 +2070,36 @@ public class RoomsController(
     [HttpGet("roomserver/rooms/visitedby/me")]
     [HttpGet("rooms/visitedby/me")]
     [Authorize]
-    public IActionResult VisitedByMe() => Ok(Array.Empty<object>());
+    public async Task<IActionResult> VisitedByMe()
+    {
+        var pid = CurrentPlayerId;
+        if (pid is null) return Ok(Array.Empty<object>());
+        return await VisitedBy(pid.Value);
+    }
+
+    [HttpGet("rooms/visitedby/{playerId:long}")]
+    [HttpGet("roomserver/rooms/visitedby/{playerId:long}")]
+    public async Task<IActionResult> VisitedBy(long playerId)
+    {
+        var ids = await db.RoomVisits.AsNoTracking()
+            .Where(v => v.PlayerId == playerId)
+            .OrderByDescending(v => v.LastVisitAt)
+            .Select(v => v.RoomId)
+            .Take(100)
+            .ToListAsync();
+        if (ids.Count == 0) return Ok(Array.Empty<object>());
+
+        var rows = await db.Rooms.AsNoTracking()
+            .Where(r => ids.Contains(r.Id))
+            .ToListAsync();
+        var byId = rows.ToDictionary(r => r.Id);
+        var ordered = ids
+            .Select(id => byId.TryGetValue(id, out var room) ? room : null)
+            .Where(r => r is not null)
+            .Select(r => r!)
+            .ToList();
+        return Ok(await BuildRoomServerListAsync(ordered));
+    }
 
     [HttpGet("api/rooms/v1/moderatedby/me")]
     [HttpGet("api/rooms/v2/moderatedby/me")]
@@ -1863,7 +2107,23 @@ public class RoomsController(
     [HttpGet("roomserver/rooms/moderatedby/me")]
     [HttpGet("rooms/moderatedby/me")]
     [Authorize]
-    public IActionResult ModeratedByMe() => Ok(Array.Empty<object>());
+    public async Task<IActionResult> ModeratedByMe()
+    {
+        var pid = CurrentPlayerId;
+        if (pid is null) return Ok(Array.Empty<object>());
+        var ids = await db.RoomRoles.AsNoTracking()
+            .Where(r => r.PlayerId == pid.Value && r.Accepted)
+            .OrderByDescending(r => r.GrantedAt)
+            .Select(r => r.RoomId)
+            .Distinct()
+            .Take(100)
+            .ToListAsync();
+        var rows = await db.Rooms.AsNoTracking()
+            .Where(r => ids.Contains(r.Id))
+            .OrderByDescending(r => r.UpdatedAt)
+            .ToListAsync();
+        return Ok(await BuildRoomServerListAsync(rows));
+    }
 
     [HttpGet("api/rooms/v1/favoritedby/me")]
     [HttpGet("api/rooms/v2/favoritedby/me")]
@@ -1871,7 +2131,13 @@ public class RoomsController(
     [HttpGet("roomserver/rooms/favoritedby/me")]
     [HttpGet("rooms/favoritedby/me")]
     [Authorize]
-    public IActionResult FavoritedByMe() => Ok(Array.Empty<object>());
+    public async Task<IActionResult> FavoritedByMe()
+    {
+        var pid = CurrentPlayerId;
+        if (pid is null) return Ok(Array.Empty<object>());
+        var rows = await rooms.BookmarkedByAsync(pid.Value);
+        return Ok(await BuildRoomServerListAsync(rows));
+    }
 
     [HttpGet("api/rooms/v1/cheeredby/me")]
     [HttpGet("api/rooms/v2/cheeredby/me")]
@@ -1879,7 +2145,23 @@ public class RoomsController(
     [HttpGet("roomserver/rooms/cheeredby/me")]
     [HttpGet("rooms/cheeredby/me")]
     [Authorize]
-    public IActionResult CheeredByMe() => Ok(Array.Empty<object>());
+    public async Task<IActionResult> CheeredByMe()
+    {
+        var pid = CurrentPlayerId;
+        if (pid is null) return Ok(Array.Empty<object>());
+        var ids = await db.Cheers.AsNoTracking()
+            .Where(c => c.FromPlayerId == pid.Value && c.TargetRoomId != 0)
+            .OrderByDescending(c => c.CheeredAt)
+            .Select(c => c.TargetRoomId)
+            .Distinct()
+            .Take(100)
+            .ToListAsync();
+        var rows = await db.Rooms.AsNoTracking()
+            .Where(r => ids.Contains(r.Id))
+            .OrderByDescending(r => r.HotScore)
+            .ToListAsync();
+        return Ok(await BuildRoomServerListAsync(rows));
+    }
 
     [HttpGet("api/rooms/v2/mybookmarks")]
     [HttpGet("api/rooms/v2/mybookmarkedrooms")]
@@ -2059,6 +2341,40 @@ public class RoomsController(
         if (pid is null) return Unauthorized();
         await rooms.UnbookmarkAsync(pid.Value, roomId);
         return Ok(new { success = true, error = "" });
+    }
+
+    private IQueryable<RoomEntity> PublicRoomQuery() =>
+        db.Rooms.AsNoTracking().Where(r =>
+            r.State == 0 &&
+            r.Accessibility == 1 &&
+            !r.IsDormRoom &&
+            !r.HiddenFromBrowse);
+
+    private async Task<List<object>> BuildRoomServerListAsync(IReadOnlyCollection<RoomEntity> roomRows)
+    {
+        if (roomRows.Count == 0) return new List<object>();
+
+        var ids = roomRows.Select(r => r.Id).Distinct().ToList();
+        var sceneRows = await db.RoomScenes.AsNoTracking()
+            .Where(s => ids.Contains(s.RoomId))
+            .OrderBy(s => s.OrderIndex)
+            .ToListAsync();
+        var scenesByRoom = sceneRows
+            .GroupBy(s => s.RoomId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<RoomSceneEntity>)g.ToList());
+        var roleRows = await db.RoomRoles.AsNoTracking()
+            .Where(r => ids.Contains(r.RoomId))
+            .ToListAsync();
+        var rolesByRoom = roleRows
+            .GroupBy(r => r.RoomId)
+            .ToDictionary(g => g.Key, g => (IReadOnlyList<RoomRoleEntity>)g.ToList());
+
+        return roomRows
+            .Select(r => BuildRoomServerDetails(
+                r,
+                scenesByRoom.GetValueOrDefault(r.Id),
+                roles: rolesByRoom.GetValueOrDefault(r.Id)))
+            .ToList();
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────
@@ -2585,7 +2901,12 @@ public class RoomsController(
             ? new List<object>()
             : p.TagsCsv
                 .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                .Select(t => (object)new { Type = 0, Tag = t })
+                .Select(t => (object)new
+                {
+                    Type = RoomTagTypeForWire(t),
+                    Tag = t,
+                    IsPrimaryGenre = false,
+                })
                 .ToList();
 
         // Start from BuildPlaylistUnionEntry for base + PlaylistId, then
@@ -2865,6 +3186,15 @@ public class RoomsController(
         public string? RoomSceneLocationId { get; set; }
     }
     public sealed class SubRoomMoveRequest { public int? NewIndex { get; set; } }
+    public sealed class PublishSubRoomSaveRequest
+    {
+        public long? SubRoomDataSaveId { get; set; }
+        public long? SaveId { get; set; }
+        public long? StagedSubRoomDataSaveId { get; set; }
+        public string? DataBlob { get; set; }
+        public string? DataBlobName { get; set; }
+        public string? Filename { get; set; }
+    }
 
     [HttpPost("rooms/{roomId:long}/subrooms/{subRoomId:long}/maxplayers")]
     [HttpPut("rooms/{roomId:long}/subrooms/{subRoomId:long}/maxplayers")]
@@ -2877,6 +3207,95 @@ public class RoomsController(
     [Authorize]
     public Task<IActionResult> SubRoomAccessibility(long roomId, long subRoomId, [FromBody] SubRoomBoolRequest req) =>
         MutateScene(roomId, subRoomId, s => { if (req.Value is bool v) s.CanMatchmakeInto = v; });
+
+    [HttpPost("rooms/{roomId:long}/subrooms/{subRoomId:long}/permissions")]
+    [HttpPut("rooms/{roomId:long}/subrooms/{subRoomId:long}/permissions")]
+    [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/permissions")]
+    [HttpPut("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/permissions")]
+    [Authorize]
+    public Task<IActionResult> SubRoomPermissions(long roomId, long subRoomId, [FromBody] SubRoomModifyRequest? req) =>
+        MutateScene(roomId, subRoomId, s =>
+        {
+            if (req?.CanMatchmakeInto is bool canMatchmakeInto) s.CanMatchmakeInto = canMatchmakeInto;
+            if (req?.MaxPlayers is int maxPlayers) s.MaxPlayers = Math.Max(1, maxPlayers);
+            if (req?.IsSandbox is bool isSandbox) s.IsSandbox = isSandbox;
+        });
+
+    [HttpPost("rooms/{roomId:long}/subrooms/{subRoomId:long}/publish_save")]
+    [HttpPut("rooms/{roomId:long}/subrooms/{subRoomId:long}/publish_save")]
+    [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/publish_save")]
+    [HttpPut("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/publish_save")]
+    [Authorize]
+    public async Task<IActionResult> PublishSubRoomSave(long roomId, long subRoomId)
+    {
+        var pid = this.RequireCurrentPlayerId();
+        var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
+        if (room is null) return NotFound();
+        if (room.CreatorPlayerId != pid) return Forbid();
+
+        var scene = await GetOrCreateSceneForMutationAsync(room, subRoomId);
+        if (scene is null) return NotFound();
+
+        var request = await ReadPublishSubRoomSaveRequestAsync();
+        var saveId = request.SubRoomDataSaveId ?? request.SaveId ?? request.StagedSubRoomDataSaveId;
+        var dataBlob = request.DataBlobName ?? request.DataBlob ?? request.Filename;
+
+        if (!string.IsNullOrWhiteSpace(dataBlob))
+        {
+            var blobExists = await db.RoomDataBlobs.AnyAsync(b => b.RoomId == roomId && b.BlobName == dataBlob);
+            if (!blobExists) return NotFound(new { error = "blob_not_found", dataBlob });
+            scene.DataBlobName = dataBlob;
+            if (scene.OrderIndex == 0) room.CurrentDataBlobName = dataBlob;
+        }
+
+        if (saveId is > 0)
+            scene.StudioSubRoomDataSaveId = saveId.Value;
+
+        scene.DataModifiedAt = DateTime.UtcNow;
+        room.UpdatedAt = scene.DataModifiedAt;
+        await db.SaveChangesAsync();
+        return Ok(SceneWire(scene));
+    }
+
+    private async Task<PublishSubRoomSaveRequest> ReadPublishSubRoomSaveRequestAsync()
+    {
+        var request = new PublishSubRoomSaveRequest();
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync();
+            if (long.TryParse(FirstFormValue(form, "subRoomDataSaveId", "SubRoomDataSaveId", "saveId", "SaveId", "stagedSubRoomDataSaveId", "StagedSubRoomDataSaveId"), out var saveId))
+                request.SubRoomDataSaveId = saveId;
+            request.DataBlobName = FirstFormValue(form, "dataBlobName", "DataBlobName", "dataBlob", "DataBlob", "filename", "Filename");
+            return request;
+        }
+
+        if (long.TryParse(Request.Query["subRoomDataSaveId"].FirstOrDefault()
+                          ?? Request.Query["SubRoomDataSaveId"].FirstOrDefault()
+                          ?? Request.Query["saveId"].FirstOrDefault()
+                          ?? Request.Query["SaveId"].FirstOrDefault()
+                          ?? Request.Query["stagedSubRoomDataSaveId"].FirstOrDefault()
+                          ?? Request.Query["StagedSubRoomDataSaveId"].FirstOrDefault(), out var querySaveId))
+            request.SubRoomDataSaveId = querySaveId;
+        request.DataBlobName = Request.Query["dataBlobName"].FirstOrDefault()
+                               ?? Request.Query["DataBlobName"].FirstOrDefault()
+                               ?? Request.Query["dataBlob"].FirstOrDefault()
+                               ?? Request.Query["DataBlob"].FirstOrDefault()
+                               ?? Request.Query["filename"].FirstOrDefault()
+                               ?? Request.Query["Filename"].FirstOrDefault();
+
+        if ((Request.ContentLength ?? 0) <= 0) return request;
+        try
+        {
+            var body = await JsonSerializer.DeserializeAsync<PublishSubRoomSaveRequest>(
+                Request.Body,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            return body ?? request;
+        }
+        catch (JsonException)
+        {
+            return request;
+        }
+    }
 
     /// <summary>POST <c>rooms/{id}/subrooms/{sub}/clone</c> — duplicate
     /// a scene (DataBlobName + location pointer). New scene goes at the
@@ -3033,13 +3452,34 @@ public class RoomsController(
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
         if (room is null) return NotFound();
         if (room.CreatorPlayerId != pid) return Forbid();
-        var scene = await db.RoomScenes
-            .FirstOrDefaultAsync(s => s.RoomId == roomId && s.OrderIndex == subRoomId);
+        var scene = await GetOrCreateSceneForMutationAsync(room, subRoomId);
         if (scene is null) return NotFound();
         mutator(scene);
         scene.DataModifiedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
         return Ok(SceneWire(scene));
+    }
+
+    private async Task<RoomSceneEntity?> GetOrCreateSceneForMutationAsync(RoomEntity room, long subRoomId)
+    {
+        var scene = await db.RoomScenes
+            .FirstOrDefaultAsync(s => s.RoomId == room.Id && s.OrderIndex == subRoomId);
+        if (scene is not null || subRoomId != 0) return scene;
+
+        scene = new RoomSceneEntity
+        {
+            RoomId = room.Id,
+            OrderIndex = 0,
+            Name = "Home",
+            RoomSceneLocationId = room.LocationReplicationId,
+            DataBlobName = CurrentOrSyntheticDataBlobName(room),
+            MaxPlayers = room.MaxCapacity,
+            IsSandbox = false,
+            CanMatchmakeInto = true,
+            DataModifiedAt = DateTime.UtcNow,
+        };
+        db.RoomScenes.Add(scene);
+        return scene;
     }
 
     private static object SceneWire(RoomSceneEntity s) => new
@@ -3078,6 +3518,9 @@ public class RoomsController(
     {
         if (room.IsDormRoom)
             return RoomService.ResolveWireRoomDataBlobName(room.Id, room.CurrentDataBlobName);
+
+        if (RoomService.IsBakedOriginalRoom(room) && string.IsNullOrWhiteSpace(room.CurrentDataBlobName))
+            return string.Empty;
 
         return !string.IsNullOrWhiteSpace(room.CurrentDataBlobName)
             ? room.CurrentDataBlobName

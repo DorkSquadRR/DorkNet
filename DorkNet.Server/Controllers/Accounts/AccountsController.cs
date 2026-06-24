@@ -667,6 +667,31 @@ public class AccountsController(
     [HttpGet("/account/v1/{accountId:long}/platformid")]
     public IActionResult GetPlatformId(long accountId) => Ok(new { PlatformId = 0L });
 
+    [HttpGet("/accountprivacysettings/{accountId:long}")]
+    [HttpGet("/account/v1/privacysettings/{accountId:long}")]
+    [HttpGet("/account/{accountId:long}/privacysettings")]
+    public IActionResult GetAccountPrivacySettings(long accountId) => Ok(new
+    {
+        AccountId = (int)accountId,
+        IsProfileVisible = true,
+        IsOnlineStatusVisible = true,
+        IsActivityVisible = true,
+        ShowOnlineStatus = true,
+        ShowActivity = true,
+        ShowCurrentRoom = true,
+        ReceiveFriendRequests = true,
+        ReceiveInvites = true,
+        ReceiveMessages = true,
+        WhoCanSeeOnlineStatus = 0,
+        WhoCanSeeActivity = 0,
+        WhoCanSeeCurrentRoom = 0,
+        WhoCanSendFriendRequests = 0,
+        WhoCanInviteMe = 0,
+        WhoCanMessageMe = 0,
+        VoicePrivacy = 0,
+        TextChatPrivacy = 0,
+    });
+
     // Previously had a /{*path} catch-all that returned [] / {}. Removed —
     // unknown accounts URLs now 404 so we notice them in logs and wire
     // them properly rather than silently masking missing endpoints.

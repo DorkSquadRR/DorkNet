@@ -56,6 +56,30 @@ public class KeepsakesController(DorkNetDbContext db, DomainConfig domain) : Con
         return Ok(rows.Select(ToWire));
     }
 
+    [HttpGet("events/{eventId:long}")]
+    public async Task<IActionResult> EventInstances(long eventId)
+    {
+        var eventKey = eventId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var rows = await db.Keepsakes
+            .Where(k => k.PlayerId == Me
+                && k.Category == "event"
+                && (k.EventKey == eventKey
+                    || k.EventKey == $"event:{eventKey}"
+                    || k.EventKey == $"event/{eventKey}"
+                    || EF.Functions.Like(k.EventKey, $"event:{eventKey}:%")
+                    || EF.Functions.Like(k.EventKey, $"event/{eventKey}/%")))
+            .OrderByDescending(k => k.EarnedAt)
+            .ToListAsync();
+
+        return Ok(new
+        {
+            KeepsakeProgressionEventId = eventId,
+            Instances = rows.Select(ToWire),
+            CollectionRecords = Array.Empty<object>(),
+            KeepsakeProgressionEventIds = new[] { eventId },
+        });
+    }
+
     [HttpGet("rooms/{roomId:long}")]
     public async Task<IActionResult> RoomKeepsakes(long roomId)
     {

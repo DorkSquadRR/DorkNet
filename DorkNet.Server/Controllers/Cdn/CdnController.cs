@@ -60,6 +60,8 @@ public class CdnController(
 
     private static readonly string ImageDir =
         Path.Combine(AppContext.BaseDirectory, "data", "images");
+    private static readonly Lazy<Dictionary<string, string>> RoomImageAliases =
+        new(LoadRoomImageAliases);
 
     // Specific route prefixes only — NO global catch-all wildcard.
     // A previous version had [Route("/{*path:minlength(1)}")] which
@@ -340,8 +342,8 @@ public class CdnController(
             return RespondWithTransforms(s3Bytes, contentType);
         }
 
-        var full = Path.Combine(ImageDir, safe);
-        if (System.IO.File.Exists(full))
+        var full = ResolveLocalImagePath(safe);
+        if (full is not null)
         {
             logger.LogInformation("[img] disk hit host={Host} path={Path} → {Full}",
                 Request.Host.Host, path, full);
@@ -506,10 +508,21 @@ public class CdnController(
 
         // S3 is the only canonical store — DB carries text-only
         // metadata (BlobName, owner, timestamps) and never holds
-        // bytes. If S3 misses, the bytes don't exist on this server.
-
+        // bytes. RRO thumbnail images are the exception for local dev:
+        // tools/fetch-room-images.py stores them under data/images/, and
+        // the 2023 client requests them through cdn.* rather than img.*.
         if (IsImageName(fileName))
         {
+            var imagePath = ResolveLocalImagePath(fileName);
+            if (imagePath is not null)
+            {
+                var imageBytes = await System.IO.File.ReadAllBytesAsync(imagePath);
+                logger.LogInformation("[cdn] disk image hit host={Host} file={File} -> {Path} bytes={Bytes}",
+                    Request.Host.Host, fileName, imagePath, imageBytes.Length);
+                Response.Headers.CacheControl = "public, max-age=300";
+                return RespondWithTransforms(imageBytes, MimeFromName(fileName));
+            }
+
             logger.LogWarning("[cdn] image MISS host={Host} file={File} query='{Query}' -> transparent png",
                 Request.Host.Host, fileName, Request.QueryString);
             Response.Headers.CacheControl = "public, max-age=60";
@@ -629,5 +642,53 @@ public class CdnController(
     {
         var ext = Path.GetExtension(name).ToLowerInvariant();
         return ext is ".png" or ".jpg" or ".jpeg" or ".gif" or ".webp";
+    }
+
+    private static string? ResolveLocalImagePath(string fileName)
+    {
+        var direct = Path.Combine(ImageDir, fileName);
+        if (System.IO.File.Exists(direct)) return direct;
+
+        var baseName = Path.GetFileNameWithoutExtension(fileName);
+        if (!baseName.StartsWith("image_", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var roomName = baseName["image_".Length..];
+        if (!RoomImageAliases.Value.TryGetValue(roomName, out var mappedName))
+            return null;
+
+        var mapped = Path.Combine(ImageDir, mappedName);
+        return System.IO.File.Exists(mapped) ? mapped : null;
+    }
+
+    private static Dictionary<string, string> LoadRoomImageAliases()
+    {
+        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        var candidates = new[]
+        {
+            Path.Combine(AppContext.BaseDirectory, "data", "room_images.json"),
+            Path.Combine(Directory.GetCurrentDirectory(), "data", "room_images.json"),
+        };
+
+        foreach (var path in candidates)
+        {
+            if (!System.IO.File.Exists(path)) continue;
+            try
+            {
+                using var fs = System.IO.File.OpenRead(path);
+                var map = JsonSerializer.Deserialize<Dictionary<string, string>>(fs);
+                if (map is null) continue;
+                foreach (var (roomName, imageName) in map)
+                    if (!string.IsNullOrWhiteSpace(roomName) && !string.IsNullOrWhiteSpace(imageName))
+                        result[roomName] = imageName;
+                break;
+            }
+            catch
+            {
+                // Fall back to direct filename lookup.
+            }
+        }
+
+        return result;
     }
 }
