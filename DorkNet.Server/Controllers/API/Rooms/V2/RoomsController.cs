@@ -3204,6 +3204,8 @@ public class RoomsController(
 
     [HttpPost("rooms/{roomId:long}/subrooms/{subRoomId:long}/accessibility")]
     [HttpPut("rooms/{roomId:long}/subrooms/{subRoomId:long}/accessibility")]
+    [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/accessibility")]
+    [HttpPut("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/accessibility")]
     [Authorize]
     public Task<IActionResult> SubRoomAccessibility(long roomId, long subRoomId, [FromBody] SubRoomBoolRequest req) =>
         MutateScene(roomId, subRoomId, s => { if (req.Value is bool v) s.CanMatchmakeInto = v; });
