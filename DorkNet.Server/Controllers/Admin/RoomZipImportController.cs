@@ -140,6 +140,14 @@ public class RoomZipImportController(
     {
         PropertyNameCaseInsensitive = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        // RecNet serializes large snowflake-style IDs (SubRoomId, save IDs)
+        // as JSON strings to avoid JS 2^53 precision loss, while smaller/older
+        // IDs stay as raw numbers — and a single SubRooms[] array can mix both
+        // forms (Showdown's export is numeric for entries 0-17, then string
+        // from "SD_Archive_120822_Catalyst" on). Allow numeric properties to
+        // read from either token so the import doesn't crash on the first
+        // string-encoded ID.
+        NumberHandling = JsonNumberHandling.AllowReadingFromString,
     };
 
     // ── RoomDetails.json DTOs ──────────────────────────────────────────
