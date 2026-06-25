@@ -62,8 +62,8 @@ public interface IObjectStorage
 
 public static class Buckets
 {
-    public const string Content = "dorknet-content";
-    public const string Saves   = "dorknet-saves";
+    public static string Content { get; set; } = "dorknet-content";
+    public static string Saves   { get; set; } = "dorknet-saves";
 }
 
 /// <summary>
@@ -157,6 +157,13 @@ public class ObjectStorageService : IObjectStorage, IDisposable
     {
         _log = log;
         _diskFallbackRoot = Path.Combine(AppContext.BaseDirectory, "data", "object-fallback");
+        // Bucket names are env-overridable so a new game generation can point at
+        // fresh buckets (e.g. dorknet2023-*) without a code change. Applied here
+        // (before the disk/S3 branch) so the disk fallback paths use them too.
+        if (config["S3:ContentBucket"] is { Length: > 0 } contentBucket) Buckets.Content = contentBucket;
+        if (config["S3:SavesBucket"]   is { Length: > 0 } savesBucket)   Buckets.Saves   = savesBucket;
+        _log.LogInformation(
+            "[storage] buckets content={Content} saves={Saves}", Buckets.Content, Buckets.Saves);
 
         // Provider switch: env-driven. The Garage one-click service in
         // Coolify exposes its endpoint on http://garage:3900 and supplies
