@@ -95,6 +95,9 @@ interface PreviewRoom {
   /// release window — see CLIENT_BUILD_CUTOFF.
   latestModifiedAt: string | null;
   postBuildCutoff: boolean;
+  /// True when this room came from a Studio single-room dump (room.json +
+  /// SubRooms/<scene>/ saves) rather than a standard RoomDetails.json export.
+  isStudio: boolean;
 }
 
 interface PreviewSubroom {
@@ -545,6 +548,11 @@ export function ImportRoom() {
                         <span className="font-medium text-ink-50">{r.name}</span>
                       </label>
                       <span className="text-xs text-ink-500 font-mono">{r.folder.split('/').pop()}</span>
+                      {r.isStudio && (
+                        <span className="badge-online" title="Imported from a RR Studio single-room dump (room.json + SubRooms/<scene>/ saves).">
+                          Studio
+                        </span>
+                      )}
                       {!r.hasImage && <span className="badge-junior">no image</span>}
                       {r.postBuildCutoff && (
                         <span
@@ -1088,6 +1096,7 @@ async function parseZipPreview(file: File, onProgress?: (percent: number) => voi
       promoImageCount,
       latestModifiedAt,
       postBuildCutoff,
+      isStudio: false,
     });
     bump();
   }
@@ -1213,6 +1222,7 @@ async function parseZipPreview(file: File, onProgress?: (percent: number) => voi
       promoImageCount,
       latestModifiedAt,
       postBuildCutoff,
+      isStudio: true,
     });
     bump();
   }
