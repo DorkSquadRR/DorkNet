@@ -85,16 +85,17 @@ public class AvatarItemsController(DorkNetDbContext db, IConfiguration config) :
         if (!config.GetValue("Avatar:EnableUnlockedItems", true))
             return Ok(new List<UnlockedAvatarItemDto>());
 
-        // Defaults raised (30 → 100, 4 → 20) — the old 4-per-slot silently
-        // dropped any newly-purchased item once a slot held 4+ entries (the
-        // "I bought it but it's gone after relog" symptom). The clamp
-        // ranges stay at [1,120] / [1,20] — those reflect empirical watch
-        // testing on render-budget headroom (per the prior maintainer note
-        // about BrowsableAvatarItem / DynamicAvatarItemImposter thrash
-        // above this count); raising the clamp ceiling without retesting
-        // could crash the watch's wardrobe drawer.
-        var maxItems = Math.Clamp(config.GetValue("Avatar:MaxUnlockedItems", 100), 1, 120);
-        var maxPerSlot = Math.Clamp(config.GetValue("Avatar:MaxUnlockedItemsPerSlot", 20), 1, 20);
+        // The old [1,120] / [1,20] ceilings reflected the 2020 *watch's*
+        // render-budget headroom — feeding it too many BrowsableAvatarItem /
+        // DynamicAvatarItemImposter rows could crash its wardrobe drawer.
+        // This branch (march-2023-03-21) serves the 2023 DESKTOP client, which
+        // has no such limit, and the watch-era cap was silently truncating the
+        // owned wardrobe to 100 ("most of my items don't show"). Raise the
+        // ceilings well above the full catalog (882 base items + variants) so
+        // nothing the player owns is dropped; the config keys still let an
+        // operator dial it back down for a watch build.
+        var maxItems = Math.Clamp(config.GetValue("Avatar:MaxUnlockedItems", 4000), 1, 8000);
+        var maxPerSlot = Math.Clamp(config.GetValue("Avatar:MaxUnlockedItemsPerSlot", 1000), 1, 2000);
 
         var pid = this.CurrentPlayerId();
         if (pid is not long me) return Ok(new List<UnlockedAvatarItemDto>());
