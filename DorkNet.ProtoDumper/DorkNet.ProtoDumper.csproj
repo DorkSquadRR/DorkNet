@@ -1,0 +1,76 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Standalone MelonLoader IL2CPP mod whose ONLY job is to dump every
+    Google.Protobuf FileDescriptor that the running client has loaded.
+
+    It carries no Harmony patches, so it is safe to drop onto ANY Rec Room
+    build (2020, 2023, …) without the version-specific ClientMod patches
+    misfiring. Everything game-side is reached through plain
+    System.Reflection over the Il2CppInterop proxy assemblies, so no game
+    DLLs are referenced at compile time (they would be derivative works).
+
+    Build (desktop net6 MelonLoader, same pin as the ClientMod):
+
+      dotnet build DorkNet.ProtoDumper/DorkNet.ProtoDumper.csproj -c Release
+
+    Drop bin\Release\DorkNet.ProtoDumper.dll into <RecRoom>\Mods\ on a
+    MelonLoader-patched build and launch. Output lands in
+    <RecRoom>\DorkNet-ProtoDump\.
+  -->
+
+  <PropertyGroup>
+    <TargetFramework Condition="'$(TargetFramework)' == ''">net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <RootNamespace>DorkNet.ProtoDumper</RootNamespace>
+    <AssemblyName>DorkNet.ProtoDumper</AssemblyName>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <NoWarn>$(NoWarn);CS8602;CS8604;CS0436</NoWarn>
+  </PropertyGroup>
+
+  <!-- Reuse the MelonLoader DLLs the ClientMod project already downloads. -->
+  <PropertyGroup>
+    <MelonLoaderVersion Condition="'$(MelonLoaderVersion)' == ''">v0.6.6</MelonLoaderVersion>
+    <MelonLoaderCacheRoot>$(MSBuildThisFileDirectory)..\DorkNet.ClientMod\build\melonloader</MelonLoaderCacheRoot>
+    <MelonLoaderZip>$(MelonLoaderCacheRoot)\MelonLoader.x64.$(MelonLoaderVersion).zip</MelonLoaderZip>
+    <MelonLoaderDir Condition="'$(MelonLoaderDir)' == ''">$(MelonLoaderCacheRoot)\MelonLoader</MelonLoaderDir>
+    <MelonLoaderReferenceTfm Condition="'$(MelonLoaderReferenceTfm)' == '' and '$(TargetFramework)' == 'net8.0'">net8</MelonLoaderReferenceTfm>
+    <MelonLoaderReferenceTfm Condition="'$(MelonLoaderReferenceTfm)' == ''">net6</MelonLoaderReferenceTfm>
+  </PropertyGroup>
+
+  <Target Name="EnsureMelonLoaderReferences"
+          BeforeTargets="ResolveAssemblyReferences"
+          Condition="'$(MelonLoaderReferenceTfm)' == 'net6' and !Exists('$(MelonLoaderDir)\$(MelonLoaderReferenceTfm)\MelonLoader.dll')">
+    <MakeDir Directories="$(MelonLoaderCacheRoot)" />
+    <DownloadFile
+      SourceUrl="https://github.com/LavaGang/MelonLoader/releases/download/$(MelonLoaderVersion)/MelonLoader.x64.zip"
+      DestinationFolder="$(MelonLoaderCacheRoot)"
+      DestinationFileName="MelonLoader.x64.$(MelonLoaderVersion).zip"
+      SkipUnchangedFiles="true" />
+    <Unzip SourceFiles="$(MelonLoaderZip)"
+           DestinationFolder="$(MelonLoaderCacheRoot)"
+           OverwriteReadOnlyFiles="true" />
+  </Target>
+
+  <ItemGroup>
+    <Reference Include="MelonLoader">
+      <HintPath>$(MelonLoaderDir)\$(MelonLoaderReferenceTfm)\MelonLoader.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(MelonLoaderDir)\$(MelonLoaderReferenceTfm)\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Runtime">
+      <HintPath>$(MelonLoaderDir)\$(MelonLoaderReferenceTfm)\Il2CppInterop.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Common">
+      <HintPath>$(MelonLoaderDir)\$(MelonLoaderReferenceTfm)\Il2CppInterop.Common.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>
