@@ -115,7 +115,23 @@ public static class ServiceCollectionExtensions
             ?? Environment.GetEnvironmentVariable("DORKNET_DOMAIN")
             ?? "localhost";
         var scheme = builder.Configuration["Domain:Scheme"] ?? "https";
-        var allowedHosts = new List<string> { apex, $"*.{apex}", "localhost", "127.0.0.1" };
+        var hostStyle =
+            builder.Configuration["Domain:HostStyle"]
+            ?? Environment.GetEnvironmentVariable("DORKNET_DOMAIN_STYLE")
+            ?? "dot";
+        var domain = new DomainConfig(apex, scheme, hostStyle);
+        var allowedHosts = new List<string> { apex, "localhost", "127.0.0.1" };
+        if (domain.UsesHyphenSubdomains)
+        {
+            allowedHosts.AddRange(KnownServiceSubdomains
+                .Where(s => !string.IsNullOrWhiteSpace(s))
+                .Select(domain.Sub));
+            allowedHosts.Add(domain.Sub("www"));
+        }
+        else
+        {
+            allowedHosts.Add($"*.{apex}");
+        }
         var bootstrapApex = builder.Configuration["Domain:BootstrapApex"];
         if (!string.IsNullOrWhiteSpace(bootstrapApex))
         {
@@ -123,15 +139,56 @@ public static class ServiceCollectionExtensions
             allowedHosts.Add($"*.{bootstrapApex}");
         }
 
-        builder.Services.AddSingleton(new DomainConfig(apex, scheme));
+        builder.Services.AddSingleton(domain);
         builder.Services.Configure<Microsoft.AspNetCore.HostFiltering.HostFilteringOptions>(opt =>
         {
             opt.AllowedHosts = allowedHosts.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
             opt.AllowEmptyHosts = true;
             opt.IncludeFailureMessage = true;
         });
-        Console.WriteLine($"[domain] apex={apex}, allowedHosts=[{string.Join(", ", allowedHosts)}]");
+        Console.WriteLine($"[domain] apex={apex}, style={domain.HostStyle}, allowedHosts=[{string.Join(", ", allowedHosts)}]");
     }
+
+    private static readonly string[] KnownServiceSubdomains =
+    {
+        "admin",
+        "api",
+        "accounts",
+        "auth",
+        "bugreporting",
+        "cards",
+        "cdn",
+        "chat",
+        "clubs",
+        "cms",
+        "commerce",
+        "data",
+        "datacollection",
+        "discovery",
+        "econ",
+        "feed",
+        "gamelogs",
+        "geo",
+        "img",
+        "leaderboard",
+        "link",
+        "lists",
+        "match",
+        "moderation",
+        "notify",
+        "ns",
+        "platformnotifications",
+        "playersettings",
+        "roomcomments",
+        "roomieintegrations",
+        "rooms",
+        "storage",
+        "strings",
+        "strings-cdn",
+        "studio",
+        "thorn",
+        "videos",
+    };
 
     // ── Services ──────────────────────────────────────────────────────────────
     private static void AddCoreServices(IServiceCollection services)

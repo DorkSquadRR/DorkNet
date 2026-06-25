@@ -54,9 +54,16 @@ export function adminApex(): string {
 
   const host = window.location.hostname.toLowerCase();
   if (host === 'localhost' || host.endsWith('.localhost')) return 'localhost';
+  if (host.endsWith('-dev.dork.sh')) return 'dev.dork.sh';
 
   const parts = host.split('.');
   return parts.length > 2 ? parts.slice(1).join('.') : host;
+}
+
+function serviceHost(subdomain: string, apex: string): string {
+  return apex === 'dev.dork.sh'
+    ? `${subdomain}-${apex}`
+    : `${subdomain}.${apex}`;
 }
 
 function subdomainUrl(subdomain: string, path: string | null | undefined, query?: string, preserveSlashes = false): string | null {
@@ -67,7 +74,7 @@ function subdomainUrl(subdomain: string, path: string | null | undefined, query?
   const encodedPath = preserveSlashes
     ? path.split('/').map(encodeURIComponent).join('/')
     : encodeURIComponent(path);
-  return `${scheme}://${subdomain}.${apex}/${encodedPath}${suffix}`;
+  return `${scheme}://${serviceHost(subdomain, apex)}/${encodedPath}${suffix}`;
 }
 
 export interface Room {

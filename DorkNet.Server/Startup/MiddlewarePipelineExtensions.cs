@@ -54,7 +54,7 @@ public static class MiddlewarePipelineExtensions
         // Public-facing site at the apex (e.g. localhost + www variant).
         // React-router routes are client-side so spaFallback must be true.
         app.MountStaticHost(domainCfg.Apex,          "site",  spaFallback: true);
-        app.MountStaticHost($"www.{domainCfg.Apex}", "site",  spaFallback: true);
+        app.MountStaticHost(domainCfg.Sub("www"),    "site",  spaFallback: true);
         // Old feed.* subdomain kept as legacy; new visitors land on the apex.
         app.MountStaticHost(domainCfg.Sub("feed"),   "feed");
 
