@@ -429,10 +429,6 @@ public class Mod : MelonMod
                                              args: Type.EmptyTypes,
                                              prefix: nameof(ToxModPatches.CanInitializeToxMod_Prefix),
                                              logMiss: logMisses);
-        complete &= TryPatchDiagnosticByName("ToxMod.ToxModVoiceComponent",
-                                             "PhotonVoiceCreated",
-                                             prefix: nameof(ToxModPatches.PhotonVoiceCreated_Prefix),
-                                             logMiss: logMisses);
         _toxModPatchesComplete = complete;
     }
 
@@ -3924,15 +3920,9 @@ internal static class ToxModPatches
     public static bool CanInitializeToxMod_Prefix(ref bool __result)
     {
         __result = false;
-        Mod.Log.Msg("[toxmod] disabled local ToxMod init");
         return false;
     }
 
-    public static bool PhotonVoiceCreated_Prefix()
-    {
-        Mod.Log.Msg("[toxmod] skipped PhotonVoiceCreated");
-        return false;
-    }
 }
 
 internal static class TlsPatches
