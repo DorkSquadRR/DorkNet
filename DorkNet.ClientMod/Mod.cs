@@ -90,6 +90,15 @@ public class Mod : MelonMod
         public static string[] DevCommands = Array.Empty<string>();
         public static bool   DiagnoseDevMenu = false;
         public static bool   EnableBuiltInDevDebugTools = false;
+        // Master switch for the verbose, non-essential DIAGNOSTIC patches
+        // (HTTP header tracing, join/quit traces, studio traces, the deep
+        // RegisterDiagnostics path). OFF by default so the shipping client
+        // mod installs only the patches needed to connect + survive
+        // anti-cheat — the safest possible footprint. Turned ON automatically
+        // when DorkNet.DebugMod.dll is present in the Mods folder (drop it in
+        // to debug, remove it to ship), or by "EnableDiagnostics": true in
+        // the config. Core connectivity/anti-cheat patches are NEVER gated.
+        public static bool   EnableDiagnostics = false;
 
         // ── Desktop Screen Sharing gadget FPS ──
         // RecRoom.Tools.Productivity.DesktopScreenSharingDisplay broadcasts
@@ -167,7 +176,11 @@ public class Mod : MelonMod
                            "NotifyServerCertificate",
                            prefix: nameof(TlsPatches.NotifyServerCertificate_Prefix));
         }
-        RegisterQuitTracePatches(logMisses: true);
+        // Anti-tamper / ToxMod / file-hash-checker are anti-cheat BYPASS
+        // patches — core, always on, or the modded client gets kicked.
+        // Quit-trace is pure diagnostics, so it's gated.
+        if (Cfg.EnableDiagnostics)
+            RegisterQuitTracePatches(logMisses: true);
         RegisterAntiTamperCallbackPatches(logMisses: true);
         RegisterToxModPatches(logMisses: true);
         PatchFileHashCheckerCallback();
@@ -206,7 +219,8 @@ public class Mod : MelonMod
             Log.Msg($"[questsize] armed: target {Cfg.QuestMaxTeamSize} for [{string.Join(", ", Cfg.QuestMaxTeamSizeRooms)}]");
         }
 
-        RegisterStudioTracePatches();
+        if (Cfg.EnableDiagnostics)
+            RegisterStudioTracePatches();
 
         if (Cfg.EnableBuiltInDevDebugTools)
             RegisterBuiltInDevDebugTools();
@@ -525,7 +539,10 @@ public class Mod : MelonMod
                  args: new[] { ResolveType("BestHTTP.HTTPRequest") ?? typeof(object) },
                  prefix: nameof(UriPatches.HttpManagerSendRequestObject_Prefix));
 
-        RegisterHttpDiagnostics();
+        // HTTP header/callback tracing is pure diagnostics (and the noisiest
+        // thing in the log) — only install it when diagnostics are enabled.
+        if (Cfg.EnableDiagnostics)
+            RegisterHttpDiagnostics();
         _networkPatchesRegistered = complete;
     }
 
@@ -697,7 +714,7 @@ public class Mod : MelonMod
             Log.Msg("[lifecycle] first OnUpdate tick (Unity frame loop is live)");
         }
 
-        if (!_quitTraceGameComplete && ++_quitTraceRetryFrame >= 300)
+        if (Cfg.EnableDiagnostics && !_quitTraceGameComplete && ++_quitTraceRetryFrame >= 300)
         {
             _quitTraceRetryFrame = 0;
             RegisterQuitTracePatches(logMisses: false);
@@ -734,6 +751,22 @@ public class Mod : MelonMod
             var userData = ResolveUserDataDirectory();
             Directory.CreateDirectory(userData);
             DiagnosticsLogPath = Path.Combine(userData, "dorknet-diagnostics.log");
+
+            // Auto-enable diagnostics when the separate DorkNet.DebugMod.dll is
+            // dropped in alongside this mod. Done before the config read (and
+            // before the no-config-file early return) so presence alone is
+            // enough — no config edit required to debug.
+            try
+            {
+                var modsDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+                if (modsDir != null && File.Exists(Path.Combine(modsDir, "DorkNet.DebugMod.dll")))
+                {
+                    Cfg.EnableDiagnostics = true;
+                    Log.Msg("[config] DorkNet.DebugMod.dll present → diagnostics ENABLED");
+                }
+            }
+            catch { /* presence detection is best-effort */ }
+
             var path = Path.Combine(userData, "dorknet-clientmod.json");
             if (!File.Exists(path))
             {
@@ -749,6 +782,9 @@ public class Mod : MelonMod
             if (TryGetConfigValue(r, "DebugConsoleToggleKey", out v))     Cfg.DebugConsoleToggleKey = v.GetString() ?? Cfg.DebugConsoleToggleKey;
             if (TryGetConfigValue(r, "DiagnoseDevMenu", out v))           Cfg.DiagnoseDevMenu = v.GetBoolean();
             if (TryGetConfigValue(r, "EnableBuiltInDevDebugTools", out v)) Cfg.EnableBuiltInDevDebugTools = v.GetBoolean();
+            // Config can also enable diagnostics; OR with the debug-mod
+            // presence check above so either path turns them on.
+            if (TryGetConfigValue(r, "EnableDiagnostics", out v))         Cfg.EnableDiagnostics |= v.GetBoolean();
             if (TryGetConfigValue(r, "DevCommands", out v) && v.ValueKind == JsonValueKind.Array)
             {
                 var commands = new List<string>();

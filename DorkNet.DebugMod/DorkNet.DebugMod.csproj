@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    DorkNet.DebugMod — the opt-in debugging companion to DorkNet.ClientMod.
+
+    The shipping ClientMod installs ONLY the patches needed to connect and
+    survive anti-cheat; all of its verbose diagnostic patches (HTTP header
+    tracing, join/quit/studio traces, the deep RegisterDiagnostics path) are
+    gated OFF by default. Dropping THIS dll into the Mods folder next to
+    DorkNet.ClientMod.dll flips Cfg.EnableDiagnostics on (the ClientMod
+    detects this dll's presence at startup), turning all of that tracing
+    back on. Remove it to ship a quiet, minimal client.
+
+    Build:  dotnet build DorkNet.DebugMod/DorkNet.DebugMod.csproj -c Release
+  -->
+
+  <PropertyGroup>
+    <TargetFramework Condition="'$(TargetFramework)' == ''">net6.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <RootNamespace>DorkNet.DebugMod</RootNamespace>
+    <AssemblyName>DorkNet.DebugMod</AssemblyName>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
+    <NoWarn>$(NoWarn);CS8602;CS8604;CS0436</NoWarn>
+  </PropertyGroup>
+
+  <!-- Reuse the MelonLoader the ClientMod build already downloads. -->
+  <PropertyGroup>
+    <MelonLoaderDir Condition="'$(MelonLoaderDir)' == ''">$(MSBuildThisFileDirectory)..\DorkNet.ClientMod\build\melonloader\MelonLoader\net6</MelonLoaderDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="MelonLoader">
+      <HintPath>$(MelonLoaderDir)\MelonLoader.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+</Project>
