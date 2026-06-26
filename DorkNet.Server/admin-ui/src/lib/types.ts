@@ -84,6 +84,7 @@ export interface Room {
   isAGRoom: boolean;
   isDormRoom: boolean;
   creatorPlayerId: number;
+  state: number;
   blobCount: number;
 }
 

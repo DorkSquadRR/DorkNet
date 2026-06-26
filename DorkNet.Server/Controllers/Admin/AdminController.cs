@@ -404,6 +404,7 @@ public class AdminController(
                 r.IsAGRoom,
                 r.IsDormRoom,
                 r.CreatorPlayerId,
+                r.State,
                 BlobCount = db.RoomDataBlobs.Count(b => b.RoomId == r.Id),
             })
             .ToListAsync();
@@ -448,6 +449,21 @@ public class AdminController(
         return Ok(new { room.Id, room.State });
     }
 
+    /// <summary>POST <c>api/admin/v1/rooms/{id}/restore</c> — the inverse of
+    /// the soft-archive above: clears State back to 0 (Active) so the room
+    /// shows up in browse/search again. Idempotent; safe on a non-archived
+    /// room (just re-asserts State=0).</summary>
+    [HttpPost("rooms/{id:long}/restore")]
+    public async Task<ActionResult> RestoreRoom(long id)
+    {
+        var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == id);
+        if (room is null) return NotFound();
+        room.State = 0; // Active
+        await LogAsync("restore_room", "room", id, "");
+        await db.SaveChangesAsync();
+        return Ok(new { room.Id, room.State });
+    }
+
     // The bulk "purge every custom room" endpoint was removed: a single
     // wrong click could wipe every imported map in one shot. Per-room
     // purge (below) is the only hard-delete path, gated by two
@@ -487,8 +503,11 @@ public class AdminController(
     {
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == id);
         if (room is null) return NotFound();
-        if (room.IsDormRoom)
-            return BadRequest(new { error = "refuses_to_hard_delete_dorm", note = "Dorms are per-player state; never purge." });
+        // Dorms are per-player state — purging one wipes that player's dorm
+        // contents, but it's recoverable: EnsurePersonalDormAsync regenerates
+        // a fresh dorm on their next join. An admin sometimes needs to nuke a
+        // corrupted/test dorm, so we ALLOW it; the two typed-name
+        // confirmations below are the guard against an accidental wipe.
         if (room.IsAGRoom && room.CreatorPlayerId == PlayerService.SystemAccountId)
             return BadRequest(new { error = "refuses_to_hard_delete_seeded_room", note = "This row is owned by the system seed account — soft-archive via DELETE /rooms/{id} instead." });
 

@@ -79,6 +79,16 @@ export function Rooms() {
     }
   };
 
+  const restore = async (r: Room) => {
+    try {
+      await api(`/rooms/${r.id}/restore`, { method: 'POST' });
+      toast.push(`Restored ${r.name}`, 'success');
+      refresh();
+    } catch (e) {
+      toast.push((e as Error).message, 'error');
+    }
+  };
+
   return (
     <div>
       <PageHeader
@@ -172,18 +182,22 @@ export function Rooms() {
                   <td className="px-4 py-2.5 text-right text-ink-200 tabular-nums">{r.blobCount}</td>
                   <td className="px-4 py-2.5 text-right whitespace-nowrap">
                     <Link to={`/rooms/${r.id}`} className="btn-ghost text-xs">Manage</Link>
-                    <button onClick={() => setPendingDelete(r)} className="btn-ghost text-xs text-danger ml-1" title="Soft archive (reversible)">
-                      <Trash />
-                    </button>
-                    {!r.isDormRoom && (
-                      <button
-                        onClick={() => setPendingPurge(r)}
-                        className="btn-ghost text-xs text-danger ml-1"
-                        title="Purge — permanent hard delete (requires typing the room name twice)"
-                      >
-                        Purge
+                    {r.state === 1 ? (
+                      <button onClick={() => restore(r)} className="btn-ghost text-xs ml-1" title="Unarchive — set State=Active">
+                        Restore
+                      </button>
+                    ) : (
+                      <button onClick={() => setPendingDelete(r)} className="btn-ghost text-xs text-danger ml-1" title="Soft archive (reversible)">
+                        <Trash />
                       </button>
                     )}
+                    <button
+                      onClick={() => setPendingPurge(r)}
+                      className="btn-ghost text-xs text-danger ml-1"
+                      title="Purge — permanent hard delete (requires typing the room name twice)"
+                    >
+                      Purge
+                    </button>
                   </td>
                 </tr>
               ))}

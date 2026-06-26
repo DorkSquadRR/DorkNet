@@ -1006,13 +1006,27 @@ function DangerTab({ room, onAfter }: { room: RoomDetail; onAfter: () => void })
   const [confirm2, setConfirm2] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const isCustom = !room.isDormRoom && room.owner.id !== 1;
+  // Anything not owned by the system seed account (id 1) can be purged —
+  // including dorms. Purging a dorm wipes its contents but the player's dorm
+  // regenerates on next join; the two typed-name confirmations are the guard.
+  const isCustom = room.owner.id !== 1;
+  const isArchived = room.state === 1;
   const purgeReady = confirm1 === room.name && confirm2 === room.name && !busy;
 
   const archive = async () => {
     try {
       await api(`/rooms/${room.id}`, { method: 'DELETE', body: { Reason: 'admin' } });
       toast.push(`Archived ${room.name}`, 'success');
+      onAfter();
+    } catch (e) {
+      toast.push((e as Error).message, 'error');
+    }
+  };
+
+  const restore = async () => {
+    try {
+      await api(`/rooms/${room.id}/restore`, { method: 'POST' });
+      toast.push(`Restored ${room.name}`, 'success');
       onAfter();
     } catch (e) {
       toast.push((e as Error).message, 'error');
@@ -1041,14 +1055,22 @@ function DangerTab({ room, onAfter }: { room: RoomDetail; onAfter: () => void })
       <div className="card p-4">
         <div className="flex items-center justify-between gap-3">
           <div>
-            <h3 className="text-sm font-semibold text-ink-50">Archive</h3>
+            <h3 className="text-sm font-semibold text-ink-50">{isArchived ? 'Restore' : 'Archive'}</h3>
             <p className="text-xs text-ink-400 mt-1">
-              Soft delete — sets State=Archived. The room stops appearing in browse/search but stays restorable.
+              {isArchived
+                ? 'This room is archived (State=1). Restore sets State=0 (Active) so it shows up in browse/search again.'
+                : 'Soft delete — sets State=Archived. The room stops appearing in browse/search but stays restorable.'}
             </p>
           </div>
-          <button onClick={() => setArchiveOpen(true)} className="btn-secondary text-xs text-danger">
-            <Trash /> Archive
-          </button>
+          {isArchived ? (
+            <button onClick={restore} className="btn-secondary text-xs" disabled={busy}>
+              Restore
+            </button>
+          ) : (
+            <button onClick={() => setArchiveOpen(true)} className="btn-secondary text-xs text-danger">
+              <Trash /> Archive
+            </button>
+          )}
         </div>
       </div>
       {isCustom && (
