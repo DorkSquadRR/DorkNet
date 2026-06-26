@@ -33,13 +33,26 @@ public class StorefrontsController(
     [HttpGet("api/storefronts/v2/all")]
     [HttpGet("api/storefronts/v3/all")]
     [HttpGet("api/storefronts/v1/toptoday")]
-    [HttpGet("api/storefronts/v1/adcarouselitems")]
     [AllowAnonymous]
     public async Task<IActionResult> All()
     {
         var items = await store.GetAllActiveAsync();
         return Ok(items.Select(i => StoreService.ToItemDto(i, domain.Apex)).ToArray());
     }
+
+    /// <summary>GET <c>api/storefronts/v1/adcarouselitems</c> — the rotating
+    /// promo banner at the top of the Shop, NOT the main catalog. The client
+    /// (AdCarouselItemListModel) keys these by <c>AdCarouselItemId</c> in a
+    /// Dictionary; our generic store DTOs don't carry that field, so every
+    /// row deserialised to id 0 and the SECOND item threw
+    /// "An item with the same key has already been added. Key: 0",
+    /// which surfaced as an unobserved task exception that broke the Shop.
+    /// We don't run promo carousels, so return an empty banner — the real
+    /// catalog still comes from /all + /skus. (To add a real carousel later,
+    /// emit one row per item with a UNIQUE AdCarouselItemId.)</summary>
+    [HttpGet("api/storefronts/v1/adcarouselitems")]
+    [AllowAnonymous]
+    public IActionResult AdCarouselItems() => Ok(Array.Empty<object>());
 
     /// <summary>GET api/storefronts/v3/skus — alias for the full
     /// catalog. Some 2020 client paths call this instead of /all
