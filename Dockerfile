@@ -53,12 +53,14 @@ WORKDIR /src
 # DorkNet.Models project ref, so its csproj needs to be present too.
 COPY DorkNet.Server/DorkNet.Server.csproj DorkNet.Server/
 COPY DorkNet.Models/DorkNet.Models.csproj DorkNet.Models/
+COPY DorkNet.Contracts/DorkNet.Contracts.csproj DorkNet.Contracts/
 RUN dotnet restore DorkNet.Server/DorkNet.Server.csproj
 
 # Now copy the rest of the .NET source, then drop the prebuilt admin
 # SPA into wwwroot/admin so the publish step ships it as static content.
 COPY DorkNet.Server/ DorkNet.Server/
 COPY DorkNet.Models/ DorkNet.Models/
+COPY DorkNet.Contracts/ DorkNet.Contracts/
 COPY --from=admin-ui /wwwroot/admin/ DorkNet.Server/wwwroot/admin/
 COPY --from=site      /wwwroot/site/  DorkNet.Server/wwwroot/site/
 

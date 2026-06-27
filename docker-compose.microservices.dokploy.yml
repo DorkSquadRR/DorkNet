@@ -17,8 +17,9 @@ x-dorknet-service-env: &dorknet-service-env
 
 x-dorknet-app-networks: &dorknet-app-networks
   networks:
+    # Internal only — backends are reached by the gateway over `default`,
+    # never directly by Traefik, so keep them off dokploy-network.
     - default
-    - dokploy-network
 
 services:
   gateway:
@@ -42,6 +43,18 @@ services:
       DorkNet__Services__Monolith: http://monolith:8080
     expose:
       - "8080"
+    networks:
+      - default
+      - dokploy-network
+    labels:
+      # Cloudflare terminates TLS at the edge; the tunnel -> Traefik leg is
+      # internal HTTP, so route on the `web` entrypoint with no certresolver.
+      - traefik.enable=true
+      - traefik.docker.network=dokploy-network
+      # Scope routing to YOUR domain (apex + subdomains) instead of catch-all:
+      - traefik.http.routers.dorknet-gw.rule=Host(`${DORKNET_DOMAIN}`) || HostRegexp(`^.+\.${DORKNET_DOMAIN}$`)
+      - traefik.http.routers.dorknet-gw.entrypoints=web
+      - traefik.http.services.dorknet-gw.loadbalancer.server.port=8080
     depends_on:
       - identity
       - rooms
@@ -57,6 +70,10 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     command: tunnel --no-autoupdate run --token ${CLOUDFLARE_TUNNEL_TOKEN:?Set CLOUDFLARE_TUNNEL_TOKEN in Dokploy}
+    # Must share dokploy-network so the tunnel can reach the Traefik
+    # container (dokploy-traefik) by name and hand traffic off to it.
+    networks:
+      - dokploy-network
     depends_on:
       - gateway
     restart: unless-stopped

@@ -26,6 +26,20 @@ var app = builder.Build();
 
 app.MapDorkNetServiceDefaults();
 
+var publicHosts = BuildPublicHosts(apexDomain);
+app.Use(async (ctx, next) =>
+{
+    if (DorkNetRouteOwnership.IsInfrastructurePath(ctx.Request.Path.Value ?? "/")
+        || IsAllowedPublicHost(ctx.Request.Host.Host, publicHosts))
+    {
+        await next();
+        return;
+    }
+
+    ctx.Response.StatusCode = StatusCodes.Status404NotFound;
+    await ctx.Response.WriteAsync("Unknown DorkNet host.");
+});
+
 app.MapGet("/internal/services", (IOptions<DorkNetServiceMapOptions> options) =>
     Results.Ok(options.Value.Endpoints()));
 app.MapGet("/internal/routes", () =>
@@ -188,6 +202,33 @@ static IReadOnlyList<ClusterConfig> BuildClusters(DorkNetServiceMapOptions servi
 static string[] WebBrowserHosts(string apexDomain)
 {
     return [apexDomain, SubdomainHost("www", apexDomain)];
+}
+
+static HashSet<string> BuildPublicHosts(string apexDomain)
+{
+    var hosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        apexDomain,
+        "localhost",
+        "127.0.0.1",
+    };
+
+    foreach (var subdomain in DorkNetRouteOwnership.PublicSubdomains)
+    {
+        hosts.Add(SubdomainHost(subdomain, apexDomain));
+    }
+
+    return hosts;
+}
+
+static bool IsAllowedPublicHost(string? host, HashSet<string> publicHosts)
+{
+    if (string.IsNullOrWhiteSpace(host))
+    {
+        return true;
+    }
+
+    return publicHosts.Contains(host.Split(':', 2)[0].Trim());
 }
 
 static void AddHostRoute(

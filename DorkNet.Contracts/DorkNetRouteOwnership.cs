@@ -164,6 +164,15 @@ public static class DorkNetRouteOwnership
 
     public static IReadOnlyList<DorkNetRouteGroup> RouteGroups => ServiceRouteGroups;
 
+    public static IReadOnlyList<string> PublicSubdomains =>
+        ServiceRouteGroups
+            .SelectMany(group => group.HostSubdomains)
+            .Append(AdminHost)
+            .Append("feed")
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Order(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
     public static bool IsInfrastructurePath(string path)
     {
         return path.Equals("/healthz", StringComparison.OrdinalIgnoreCase)

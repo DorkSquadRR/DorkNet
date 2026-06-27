@@ -78,19 +78,15 @@ $Template = Join-Path $PSScriptRoot 'cloudflared-config.yml.template'
 $CfDir    = Join-Path $env:USERPROFILE '.cloudflared'
 $ConfigPath = Join-Path $CfDir 'config.yml'
 
-# Subdomains we want routed through the tunnel. The wildcard route in
-# config.yml catches everything; this list drives the per-subdomain
-# DNS CNAMEs Cloudflare needs (no automatic wildcard CNAME via the
-# CLI — each one is created explicitly via `cloudflared tunnel route
-# dns`).
+# Subdomains routed through the tunnel. Keep this list aligned with
+# DorkNetRouteOwnership.PublicSubdomains and the cloudflared config
+# template. We intentionally create explicit DNS routes instead of a
+# wildcard so unrelated subdomains do not reach the gateway.
 $Subdomains = @(
     '@',                        # apex (localhost itself)
     'admin', 'api', 'accounts', 'auth', 'cdn', 'chat', 'commerce',
     'discovery', 'econ', 'feed', 'geo', 'img', 'match', 'notify',
     'ns', 'playersettings', 'rooms', 'storage', 'strings', 'strings-cdn',
-    # Long-tail subdomains DorkNet's stub controllers ack — adding
-    # CNAMEs for these means the patched client never hits a NXDOMAIN
-    # for any of the URLs it might probe.
     'bugreporting', 'cards', 'clubs', 'cms', 'data', 'datacollection',
     'gamelogs', 'leaderboard', 'link', 'lists', 'moderation',
     'platformnotifications', 'roomcomments', 'roomieintegrations',
