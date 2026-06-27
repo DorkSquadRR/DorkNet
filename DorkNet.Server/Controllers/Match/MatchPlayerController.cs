@@ -504,5 +504,8 @@ public class PresenceDto
     public bool IsOnline { get; set; } = true;
 
     [JsonPropertyName("appVersion")]
-    public string AppVersion { get; set; } = "20201210";
+    // 2023.03.21 client build version ("20230317"); must match the joining
+    // client's own version or it reports a version mismatch. Was a stale 2020
+    // value (20201210) left over from the December branch this forked from.
+    public string AppVersion { get; set; } = "20230317";
 }

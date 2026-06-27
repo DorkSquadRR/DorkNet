@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using DorkNet.Server.Services;
+using DorkNet.Server.Controllers.API.Avatar.V4;
 
 namespace DorkNet.Server.Controllers.Commerce;
 
@@ -85,6 +86,31 @@ public class CommerceCatalogController(StoreService store, DomainConfig domain) 
     {
         var available = i.IsActive && (i.AvailableUntil == null || i.AvailableUntil > DateTime.UtcNow);
         var imageUrl  = string.IsNullOrEmpty(i.ImageName) ? "" : $"https://cdn.{apex}/{i.ImageName}";
+
+        // Avatar-item linkage — THE thing that makes wardrobe items appear in
+        // the Shop's Clothing tab. The 2023 client does NOT categorize a SKU by
+        // any field on the SKU itself; instead StoreItemListModel resolves the
+        // SKU to the client's baked AvatarItem (by GUID) and reads that item's
+        // OutfitType to place it in a tab. With no AvatarItemId the resolve
+        // returns OutfitType = -1, the item matches no Clothing/Consumables
+        // filter, and the whole Shop renders empty even though all 1531 SKUs
+        // parsed fine. The GUID is the tail of the "wardrobe-{guid}" slug; ship
+        // it (plus the OutfitType) under the keys the client reads
+        // (AvatarItemId / AvatarItemType — verified vs 2023 ISIL store-item
+        // context types EMBCEDNHFLB / CLIANCNHNIE). Coloured variants
+        // (wardrobe-colored-*) resolve through a different descriptor path and
+        // are left alone here.
+        string? avatarItemId = null;
+        int? avatarItemType = null;
+        if (i.Slug.StartsWith("wardrobe-", StringComparison.Ordinal)
+            && !i.Slug.StartsWith("wardrobe-colored-", StringComparison.Ordinal))
+        {
+            var guid = i.Slug["wardrobe-".Length..];
+            avatarItemId = guid;
+            if (AvatarItemsController.TryGetOutfitType(guid, out var ot))
+                avatarItemType = ot;
+        }
+
         return new Dictionary<string, object?>
         {
             // Identity / naming — every alias the watch's strict
@@ -115,6 +141,14 @@ public class CommerceCatalogController(StoreService store, DomainConfig domain) 
             ["id"]          = i.Id,
             ["Slug"]        = i.Slug,
             ["slug"]        = i.Slug,
+
+            // Avatar-item join keys (see resolve block above). Emitted both at
+            // top level and inside Data so whichever the client reads, the
+            // SKU→AvatarItem resolve succeeds and the item lands in a tab.
+            ["AvatarItemId"]   = avatarItemId,
+            ["avatarItemId"]   = avatarItemId,
+            ["AvatarItemType"] = avatarItemType,
+            ["avatarItemType"] = avatarItemType,
 
             ["Name"]        = i.DisplayName,
             ["name"]        = i.DisplayName,
@@ -205,13 +239,21 @@ public class CommerceCatalogController(StoreService store, DomainConfig domain) 
             // string / null sub-purchase are valid.
             ["Data"] = new Dictionary<string, object?>
             {
-                ["GiftDropIds"]          = Array.Empty<int>(),
+                ["AvatarItemId"]         = avatarItemId,
+                ["AvatarItemType"]       = avatarItemType,
+                // Link this SKU to its gift-drop store card (the EFFIEFEFHHB
+                // record `storefronts/v3/giftdropstore` builds, GiftDropId =
+                // this same id) so the client can resolve the card that carries
+                // the AvatarItemId join key. Empty here = SKU points at no card.
+                ["GiftDropIds"]          = new[] { (int)(i.Id & 0x7fffffff) },
                 ["Message"]              = string.Empty,
                 ["SubscriptionPurchase"] = (object?)null,
             },
             ["data"] = new Dictionary<string, object?>
             {
-                ["giftDropIds"]          = Array.Empty<int>(),
+                ["avatarItemId"]         = avatarItemId,
+                ["avatarItemType"]       = avatarItemType,
+                ["giftDropIds"]          = new[] { (int)(i.Id & 0x7fffffff) },
                 ["message"]              = string.Empty,
                 ["subscriptionPurchase"] = (object?)null,
             },

@@ -64,7 +64,12 @@ public class GameSessionService(DorkNetDbContext db)
             // in, so we save once with a placeholder, then patch and save
             // again. Two SaveChangesAsync calls is cheap at our QPS.
             PhotonRoomName = "pending",
-            MaxCapacity = 8,
+            // Track the room's "Max Player Count in This Subroom" slider
+            // instead of a hardcoded 8, so matchmade joiners fill the room to
+            // the host's chosen limit rather than fragmenting into a new
+            // instance every 8 players. (Existing sessions keep whatever cap
+            // they were created with.)
+            MaxCapacity = await ResolveRoomMaxCapacityAsync(effectiveRoom),
             PlayerCount = 1,
             CreatedAt = DateTime.UtcNow,
         };
@@ -73,6 +78,28 @@ public class GameSessionService(DorkNetDbContext db)
         session.PhotonRoomName = $"recroom_{session.Id}_{Guid.NewGuid():N}";
         await db.SaveChangesAsync();
         return ToDto(session);
+    }
+
+    // Default session cap when we can't resolve a room-specific value (system
+    // rooms like the dorm use a GUID roomId that doesn't map to a RoomEntity).
+    private const int DefaultMaxCapacity = 8;
+
+    /// <summary>Resolve a new session's capacity from the room's entry
+    /// subroom (lowest <c>OrderIndex</c>) <see cref="RoomSceneEntity.MaxPlayers"/>
+    /// — the value the in-game "Max Player Count in This Subroom" slider
+    /// writes. Matchmade sessions land in the entry subroom, so its cap is the
+    /// right ceiling. GameSession roomIds are the room's numeric Id as a
+    /// string for user rooms; non-numeric (dorm GUID, etc.) → default. Clamped
+    /// to a sane Photon ceiling.</summary>
+    private async Task<int> ResolveRoomMaxCapacityAsync(string roomId)
+    {
+        if (!long.TryParse(roomId, out var roomLongId)) return DefaultMaxCapacity;
+        var max = await db.RoomScenes
+            .Where(s => s.RoomId == roomLongId)
+            .OrderBy(s => s.OrderIndex)
+            .Select(s => (int?)s.MaxPlayers)
+            .FirstOrDefaultAsync();
+        return max is int v && v > 0 ? Math.Clamp(v, 1, 80) : DefaultMaxCapacity;
     }
 
     public async Task<GameSession?> GetByIdAsync(long id)
