@@ -297,7 +297,10 @@ public class NotificationService(
                 },
             // 2020.12 PlayerPresence.Deserialize requires these.
             ["isOnline"]         = redacted is not null,
-            ["appVersion"]       = 20201210,
+            // 2023.03.21 client build version ("20230317"); must match the
+            // joining client's own version or it reports a version mismatch.
+            // Stale 2020 value (20201210) carried over from the December branch.
+            ["appVersion"]       = 20230317,
         };
 
         var envelope = new System.Text.Json.Nodes.JsonObject

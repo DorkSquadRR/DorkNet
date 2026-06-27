@@ -1051,7 +1051,11 @@ public class RoomsController(
                     EncryptVoiceChat = currentPresence.EncryptVoiceChat,
                 },
                 isOnline = true,
-                appVersion = 20201210,
+                // 2023.03.21 client build version (baked "20230317"). MUST match
+                // the joining client's own version or it reports a version
+                // mismatch and refuses to join. Was a stale December-2020 value
+                // (20201210) carried over when this branch forked.
+                appVersion = 20230317,
             };
             await notifications.NotifyAsync(playerId, PushNotificationId.SubscriptionUpdatePresence, presencePayload);
         }
@@ -3196,8 +3200,17 @@ public class RoomsController(
         public string? Filename { get; set; }
     }
 
+    // The "Max Player Count in This Subroom" slider (SubroomModel.
+    // ChangeSubRoomMaxPlayers) POSTs here on the roomserver host. Like its
+    // siblings (accessibility/permissions/modify) the client prefixes the
+    // path with "roomserver/", so the bare-only routes 404'd and the slider's
+    // change silently never persisted — i.e. the limit couldn't be changed.
+    // The value flows back to the host via the subroom details MaxPlayers,
+    // which sets the Photon room cap.
     [HttpPost("rooms/{roomId:long}/subrooms/{subRoomId:long}/maxplayers")]
     [HttpPut("rooms/{roomId:long}/subrooms/{subRoomId:long}/maxplayers")]
+    [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/maxplayers")]
+    [HttpPut("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/maxplayers")]
     [Authorize]
     public Task<IActionResult> SubRoomMaxPlayers(long roomId, long subRoomId, [FromBody] SubRoomIntRequest req) =>
         MutateScene(roomId, subRoomId, s => { if (req.Value is int v) s.MaxPlayers = Math.Max(1, v); });
