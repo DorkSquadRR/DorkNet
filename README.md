@@ -1,4 +1,4 @@
-# DorkNet — `december-2020-12-18`
+# DorkNet — `march-2023-03-21`
 
 This is the **December 2020.12.18** branch of DorkNet — a self-hostable
 reimplementation of the Rec Room backend tuned to the wire protocol of
@@ -295,6 +295,51 @@ watch, which calls `Relationships.RefreshList` and re-pulls
 `api/relationships/v2/get` — so players see everyone appear (or disappear)
 **without relogging**. It covers the friends list, the friends-online HUD,
 and room-move presence fan-out.
+
+---
+
+## Single-server defaults (review before going public)
+
+Several values are hardcoded or defaulted for the convenience of running a
+small, trusted, single-operator server. They work out of the box for a group
+of friends but should be reviewed / adapted before exposing the server to the
+public internet:
+
+- **Client build version (`appVersion`).** Hardcoded to this branch's client
+  build (`20230317`) in the presence/match/notification responses
+  (`MatchPlayerController`, `PlayerPresenceController`, `NotificationService`,
+  `RoomsController`). It must match the build everyone runs, or players get a
+  "version mismatch" and can't join each other. If you serve a different
+  client build, change it (ideally hoist it to one shared constant).
+- **No real authentication.** Accounts are keyed by a per-install `deviceId`
+  the client generates (`PlayerService.GetOrCreateByDeviceAsync`) — **not** a
+  verified identity (Steam ID is deliberately ignored so emulators work).
+  Anyone who can reach the server with a patched client gets/creates an
+  account. Use **Settings → Server → disable signups** + the
+  [signup-code](#signup-codes) flow to gate who can join; there is no password
+  wall by default.
+- **First account becomes admin.** The first account created on a fresh DB is
+  granted `IsAdmin` so there's always a root admin. On a public server, create
+  your admin account first and verify no one else beat you to it.
+- **Online status = Everyone.** Presence reports `StatusVisibility = 0`
+  (Everyone) so every player appears online to every other player, matching
+  the [everyone-is-friends](#everyone-is-friends-toggle) convenience. A public
+  server may instead want to persist and honor each player's own visibility
+  preference.
+- **Room / matchmaking capacity.** New matchmade sessions and subrooms default
+  to **8** players and are capped at **40** (`GameSessionService`,
+  `RoomSceneEntity.MaxPlayers`, admin `MaxCapacity` clamp). The in-game "Max
+  Player Count in This Subroom" slider raises it per room (slider ceiling 40).
+- **Avatar unlock clamp.** The wardrobe clamp defaults high
+  (`Avatar:MaxUnlockedItems` 4000 / per-slot 1000) for this desktop client —
+  tune in config if you change the ownership model.
+- **Hosts / domain.** The apex and per-service subdomains come from
+  `DomainConfig` (`Domain:Apex`) / `appsettings`; set these to your own
+  domain. The `Everyone-is-friends`, signup-disable, and similar switches live
+  in **admin Settings**, not source.
+
+None of these are security boundaries as shipped — treat the server as trusted
+LAN/friends infrastructure unless you harden the items above.
 
 ---
 

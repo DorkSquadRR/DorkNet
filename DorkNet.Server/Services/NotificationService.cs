@@ -270,7 +270,8 @@ public class NotificationService(
         var msg = new System.Text.Json.Nodes.JsonObject
         {
             ["playerId"]         = (int)playerId,
-            ["statusVisibility"] = 1,
+            // Everyone=0 (was 1=FriendsOnly, which hid you from non-friends).
+            ["statusVisibility"] = 0,
             ["deviceClass"]      = 0,
             ["vrMovementMode"]   = 0,
             ["roomInstance"]     = redacted is null

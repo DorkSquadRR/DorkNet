@@ -66,6 +66,13 @@ public class InventoryController(
         public string PrefabName { get; set; } = string.Empty;
         public string ModificationGuid { get; set; } = string.Empty;
         public bool Favorited { get; set; }
+        // The 2023 client sends Equipped/IsEquipped when a weapon skin is
+        // equipped (distinct from Favorited). We only have one IsActive flag,
+        // and for skins "active" == "equipped", so honor whichever the client
+        // sent. Without this the equip was dropped (only Favorited was read)
+        // and the skin never stuck.
+        public bool? Equipped { get; set; }
+        public bool? IsEquipped { get; set; }
     }
 
     /// <summary>POST <c>api/equipment/v1/update</c> — toggle the
@@ -103,7 +110,27 @@ public class InventoryController(
             // to themselves).
             return Forbid();
         }
-        row.IsActive = req.Favorited;
+        // "equipped" is the meaningful state for weapon skins; prefer it,
+        // fall back to Favorited for plain tool-pin updates.
+        var active = req.Equipped ?? req.IsEquipped ?? req.Favorited;
+
+        // One skin equipped per weapon: when equipping a catalog-backed skin,
+        // clear the equipped flag on the player's OTHER skins for the SAME
+        // prefab (slugs share the "{prefix}{prefab}:" head) so the weapon
+        // doesn't end up with two "equipped" skins.
+        if (active && !string.IsNullOrWhiteSpace(req.ModificationGuid)
+            && !string.IsNullOrWhiteSpace(req.PrefabName))
+        {
+            var prefabPrefix = StoreService.EquipmentSkinSlug(req.PrefabName, string.Empty);
+            var siblings = await db.PlayerInventory
+                .Where(inv => inv.PlayerId == pid && inv.IsActive
+                              && inv.ItemSlug != slug
+                              && inv.ItemSlug.StartsWith(prefabPrefix))
+                .ToListAsync();
+            foreach (var sib in siblings) sib.IsActive = false;
+        }
+
+        row.IsActive = active;
         await db.SaveChangesAsync();
         return Ok(new { Updated = true });
     }
@@ -261,7 +288,11 @@ public class InventoryController(
             FriendlyName = item.DisplayName,
             Tooltip = item.Description,
             Rarity = rarity,
+            // IsActive is the equipped/active flag; surface it under every key
+            // the 2023 client reads so the equipped skin shows on reload.
             Favorited = inv.IsActive,
+            Equipped = inv.IsActive,
+            IsEquipped = inv.IsActive,
         };
     }
 
