@@ -73,6 +73,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DorkNet.Models\DorkNet.Models.csproj" />
+    <ProjectReference Include="..\DorkNet.Contracts\DorkNet.Contracts.csproj" />
   </ItemGroup>
 
   <!-- Service-slice containers reference DorkNet.Server for shared controllers

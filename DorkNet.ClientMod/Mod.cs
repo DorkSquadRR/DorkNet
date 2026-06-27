@@ -610,17 +610,7 @@ public class Mod : MelonMod
     {
         try
         {
-            // Compute the UserData path ourselves rather than calling
-            // MelonLoader.MelonUtils.UserDataDirectory (which is renamed
-            // to MelonEnvironment.UserDataDirectory in newer 0.6.x builds
-            // and shifts again in 0.7.x). Anchoring off the mod DLL's
-            // location keeps this stable across versions: the DLL lives
-            // in <game>/Mods/, so two dirname()'s reach the game root,
-            // then MelonLoader/UserData/ is right next to it.
-            var modDll = Assembly.GetExecutingAssembly().Location;
-            var modsDir = Path.GetDirectoryName(modDll) ?? string.Empty;
-            var gameDir = Path.GetDirectoryName(modsDir) ?? string.Empty;
-            var userData = Path.Combine(gameDir, "MelonLoader", "UserData");
+            var userData = ResolveUserDataDirectory();
             Directory.CreateDirectory(userData);
             DiagnosticsLogPath = Path.Combine(userData, "dorknet-diagnostics.log");
             var path = Path.Combine(userData, "dorknet-clientmod.json");
@@ -631,21 +621,21 @@ public class Mod : MelonMod
             }
             var doc = JsonDocument.Parse(File.ReadAllText(path));
             var r = doc.RootElement;
-            if (r.TryGetProperty("ServerHost", out var v))           Cfg.ServerHost = v.GetString() ?? Cfg.ServerHost;
-            if (r.TryGetProperty("PhotonAppId", out v))              Cfg.PhotonAppId = v.GetString() ?? Cfg.PhotonAppId;
-            if (r.TryGetProperty("PhotonVoiceAppId", out v))         Cfg.PhotonVoiceAppId = v.GetString() ?? Cfg.PhotonVoiceAppId;
-            if (r.TryGetProperty("PhotonCloudRegion", out v))        Cfg.PhotonCloudRegion = v.GetString() ?? Cfg.PhotonCloudRegion;
-            if (r.TryGetProperty("EnableTlsTrustBypass", out v))     Cfg.EnableTlsTrustBypass = v.GetBoolean();
-            if (r.TryGetProperty("TraceRegistrationDialog", out v)) Cfg.TraceRegistrationDialog = v.GetBoolean();
-            if (r.TryGetProperty("EnableDebugConsole", out v))      Cfg.EnableDebugConsole = v.GetBoolean();
-            if (r.TryGetProperty("DebugConsoleToggleKey", out v))   Cfg.DebugConsoleToggleKey = v.GetString() ?? Cfg.DebugConsoleToggleKey;
-            if (r.TryGetProperty("DesktopScreenShareFps", out v))             Cfg.DesktopScreenShareFps = (float)v.GetDouble();
-            if (r.TryGetProperty("DesktopScreenShareRaisePhotonRate", out v)) Cfg.DesktopScreenShareRaisePhotonRate = v.GetBoolean();
-            if (r.TryGetProperty("DesktopScreenShareResolution", out v))      Cfg.DesktopScreenShareResolution = v.GetInt32();
-            if (r.TryGetProperty("DesktopScreenShareQuality", out v))         Cfg.DesktopScreenShareQuality = v.GetInt32();
-            if (r.TryGetProperty("DiagnoseDevMenu", out v))                   Cfg.DiagnoseDevMenu = v.GetBoolean();
-            if (r.TryGetProperty("QuestMaxTeamSize", out v))                  Cfg.QuestMaxTeamSize = v.GetInt32();
-            if (r.TryGetProperty("QuestMaxTeamSizeRooms", out v) && v.ValueKind == JsonValueKind.Array)
+            if (TryGetConfigValue(r, "ServerHost", out var v))           Cfg.ServerHost = v.GetString() ?? Cfg.ServerHost;
+            if (TryGetConfigValue(r, "PhotonAppId", out v))              Cfg.PhotonAppId = v.GetString() ?? Cfg.PhotonAppId;
+            if (TryGetConfigValue(r, "PhotonVoiceAppId", out v))         Cfg.PhotonVoiceAppId = v.GetString() ?? Cfg.PhotonVoiceAppId;
+            if (TryGetConfigValue(r, "PhotonCloudRegion", out v))        Cfg.PhotonCloudRegion = v.GetString() ?? Cfg.PhotonCloudRegion;
+            if (TryGetConfigValue(r, "EnableTlsTrustBypass", out v))     Cfg.EnableTlsTrustBypass = v.GetBoolean();
+            if (TryGetConfigValue(r, "TraceRegistrationDialog", out v))  Cfg.TraceRegistrationDialog = v.GetBoolean();
+            if (TryGetConfigValue(r, "EnableDebugConsole", out v))       Cfg.EnableDebugConsole = v.GetBoolean();
+            if (TryGetConfigValue(r, "DebugConsoleToggleKey", out v))    Cfg.DebugConsoleToggleKey = v.GetString() ?? Cfg.DebugConsoleToggleKey;
+            if (TryGetConfigValue(r, "DesktopScreenShareFps", out v))             Cfg.DesktopScreenShareFps = (float)v.GetDouble();
+            if (TryGetConfigValue(r, "DesktopScreenShareRaisePhotonRate", out v)) Cfg.DesktopScreenShareRaisePhotonRate = v.GetBoolean();
+            if (TryGetConfigValue(r, "DesktopScreenShareResolution", out v))      Cfg.DesktopScreenShareResolution = v.GetInt32();
+            if (TryGetConfigValue(r, "DesktopScreenShareQuality", out v))         Cfg.DesktopScreenShareQuality = v.GetInt32();
+            if (TryGetConfigValue(r, "DiagnoseDevMenu", out v))                   Cfg.DiagnoseDevMenu = v.GetBoolean();
+            if (TryGetConfigValue(r, "QuestMaxTeamSize", out v))                  Cfg.QuestMaxTeamSize = v.GetInt32();
+            if (TryGetConfigValue(r, "QuestMaxTeamSizeRooms", out v) && v.ValueKind == JsonValueKind.Array)
             {
                 var rooms = new List<string>();
                 foreach (var e in v.EnumerateArray())
@@ -653,8 +643,8 @@ public class Mod : MelonMod
                         rooms.Add(e.GetString()!);
                 Cfg.QuestMaxTeamSizeRooms = rooms.ToArray(); // explicit (incl. empty = none)
             }
-            if (r.TryGetProperty("EnableDevWatchButton", out v))              Cfg.EnableDevWatchButton = v.GetBoolean();
-            if (r.TryGetProperty("DevCommands", out v) && v.ValueKind == JsonValueKind.Array)
+            if (TryGetConfigValue(r, "EnableDevWatchButton", out v))          Cfg.EnableDevWatchButton = v.GetBoolean();
+            if (TryGetConfigValue(r, "DevCommands", out v) && v.ValueKind == JsonValueKind.Array)
             {
                 var list = new List<string>();
                 foreach (var e in v.EnumerateArray())
@@ -666,13 +656,51 @@ public class Mod : MelonMod
             }
             // "InjectAuthValues" key in the template is now ignored —
             // see attic/AuthValuesInjector.cs.attic.
-            Log.Msg($"[config] loaded: ServerHost={Cfg.ServerHost}, PhotonAppId={(string.IsNullOrEmpty(Cfg.PhotonAppId) ? "<unset>" : "<set>")}, " +
+            Log.Msg($"[config] loaded from {path}: ServerHost={Cfg.ServerHost}, PhotonAppId={(string.IsNullOrEmpty(Cfg.PhotonAppId) ? "<unset>" : "<set>")}, " +
                     $"EnableTlsTrustBypass={Cfg.EnableTlsTrustBypass}");
         }
         catch (Exception ex)
         {
             Log.Warning($"[config] load failed, using defaults: {ex.Message}");
         }
+    }
+
+    private static string ResolveUserDataDirectory()
+    {
+        foreach (var typeName in new[]
+        {
+            "MelonLoader.MelonEnvironment, MelonLoader",
+            "MelonLoader.MelonUtils, MelonLoader",
+        })
+        {
+            var type = Type.GetType(typeName);
+            var prop = type?.GetProperty("UserDataDirectory", BindingFlags.Public | BindingFlags.Static);
+            if (prop?.GetValue(null) is string value && !string.IsNullOrWhiteSpace(value))
+                return value;
+        }
+
+        var modDll = Assembly.GetExecutingAssembly().Location;
+        var modsDir = Path.GetDirectoryName(modDll) ?? string.Empty;
+        var gameDir = Path.GetDirectoryName(modsDir) ?? AppContext.BaseDirectory;
+        return Path.Combine(gameDir, "MelonLoader", "UserData");
+    }
+
+    private static bool TryGetConfigValue(JsonElement root, string name, out JsonElement value)
+    {
+        if (root.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var prop in root.EnumerateObject())
+            {
+                if (string.Equals(prop.Name, name, StringComparison.OrdinalIgnoreCase))
+                {
+                    value = prop.Value;
+                    return true;
+                }
+            }
+        }
+
+        value = default;
+        return false;
     }
 
     // ── Patch dispatch helpers ────────────────────────────────────────
