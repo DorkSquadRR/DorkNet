@@ -98,12 +98,14 @@ public class PlayerPresenceController(
             return new PlayerPresenceDto
             {
                 PlayerId         = (int)id,
-                // StatusVisibility is the player's *preference* (would
-                // they like to appear online if they were online?). For
-                // offline players we still report Visible so when they
-                // come back the friend's cached preference is correct,
-                // and IsOnline=false is what gates the "Online" badge.
-                StatusVisibility = 1,           // Visible
+                // StatusVisibility is the player's *preference* for who may
+                // see them online. The enum is Everyone=0 / FriendsOnly=1 /
+                // Nobody=2 — so the previous value 1 (mislabeled "Visible")
+                // actually meant FriendsOnly, and anyone who wasn't your
+                // friend saw you as OFFLINE. On a private server everyone
+                // should see everyone, so report Everyone (0). IsOnline=false
+                // still gates the "Online" badge for offline players.
+                StatusVisibility = 0,           // Everyone
                 DeviceClass      = 0,           // Desktop / unknown — not VR
                 VrMovementMode   = 0,
                 // Full instance details are safe, and necessary, when the

@@ -158,7 +158,7 @@ public class MatchPlayerController(
         return Ok(new PresenceDto
         {
             PlayerId = playerId,
-            StatusVisibility = 1,
+            StatusVisibility = 0,   // Everyone (was 1 = FriendsOnly)
             DeviceClass = 0,
             VrMovementMode = 0,
             RoomInstance = room,
@@ -174,7 +174,7 @@ public class MatchPlayerController(
         return Ok(new PresenceDto
         {
             PlayerId = playerId,
-            StatusVisibility = value ?? 1,
+            StatusVisibility = value ?? 0,   // default Everyone; honor explicit client choice
             DeviceClass = 0,
             VrMovementMode = 0,
             RoomInstance = room,
@@ -190,7 +190,7 @@ public class MatchPlayerController(
         return Ok(new PresenceDto
         {
             PlayerId = playerId,
-            StatusVisibility = 1,
+            StatusVisibility = 0,   // Everyone (was 1 = FriendsOnly)
             DeviceClass = 0,
             VrMovementMode = value ?? 0,
             RoomInstance = room,

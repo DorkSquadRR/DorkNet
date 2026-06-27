@@ -2534,6 +2534,8 @@ public class RoomsController(
     /// verifying ownership and intra-room uniqueness.</summary>
     [HttpPost("rooms/{roomId:long}/subrooms/{subRoomId:long}/name")]
     [HttpPut("rooms/{roomId:long}/subrooms/{subRoomId:long}/name")]
+    [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/name")]
+    [HttpPut("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/name")]
     [Authorize]
     public async Task<IActionResult> RenameSubroom(
         long roomId,
@@ -3353,8 +3355,13 @@ public class RoomsController(
         return Ok(SceneWire(clone));
     }
 
+    // Subroom settings save POSTs here on the roomserver host ("failed to
+    // modify room" = the bare-only routes 404'd). Same roomserver/ prefix as
+    // the sibling subroom mutations.
     [HttpPost("rooms/{roomId:long}/subrooms/{subRoomId:long}/modify")]
     [HttpPut("rooms/{roomId:long}/subrooms/{subRoomId:long}/modify")]
+    [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/modify")]
+    [HttpPut("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/modify")]
     [Authorize]
     public Task<IActionResult> ModifySubRoom(long roomId, long subRoomId, [FromBody] SubRoomModifyRequest req) =>
         MutateScene(roomId, subRoomId, s =>
@@ -3370,6 +3377,7 @@ public class RoomsController(
     /// scene. Body NewIndex is the target OrderIndex; the in-between
     /// rows shift to fill the gap.</summary>
     [HttpPost("rooms/{roomId:long}/subrooms/{subRoomId:long}/move")]
+    [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/move")]
     [Authorize]
     public async Task<IActionResult> MoveSubRoom(long roomId, long subRoomId, [FromBody] SubRoomMoveRequest req)
     {
