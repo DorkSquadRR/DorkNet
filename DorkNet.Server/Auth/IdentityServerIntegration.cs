@@ -3,7 +3,6 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using System.Text.Json;
 using Duende.IdentityServer;
 using Duende.IdentityServer.Models;
 using Duende.IdentityServer.Services;
@@ -130,9 +129,8 @@ public static class RecRoomIdentityServerRegistration
 
 internal static class RecRoomIdentityServerConfig
 {
-    public const string ClientId = "recroom.client";
-    public const string NativeClientId = "recroom";
-    public const string NativeClientSecret = "VxZ53kgbbEaRoZAeMe00MagtgD12GLL2";
+    public const string ClientId = "recroom";
+    public const string ClientSecret = "VxZ53kgbbEaRoZAeMe00MagtgD12GLL2";
     public const string GameClientScope = "gameClient";
     public const string CachedLoginGrantType = "cached_login";
 
@@ -159,25 +157,9 @@ internal static class RecRoomIdentityServerConfig
         new()
         {
             ClientId = ClientId,
-            ClientName = "Rec Room compatibility client",
-            RequireClientSecret = false,
-            AllowedGrantTypes = { GrantType.ResourceOwnerPassword, GrantType.RefreshToken, CachedLoginGrantType },
-            AllowedScopes = RecRoomScopes(),
-            AllowOfflineAccess = true,
-            AccessTokenLifetime = 60 * 60 * 12,
-            AbsoluteRefreshTokenLifetime = 60 * 60 * 24 * 30,
-            SlidingRefreshTokenLifetime = 60 * 60 * 24 * 30,
-            RefreshTokenUsage = TokenUsage.ReUse,
-            RefreshTokenExpiration = TokenExpiration.Absolute,
-            UpdateAccessTokenClaimsOnRefresh = true,
-            AlwaysIncludeUserClaimsInIdToken = true,
-        },
-        new()
-        {
-            ClientId = NativeClientId,
-            ClientName = "Rec Room native client",
+            ClientName = "Rec Room game client",
             RequireClientSecret = true,
-            ClientSecrets = { new Secret(NativeClientSecret.Sha256()) },
+            ClientSecrets = { new Secret(ClientSecret.Sha256()) },
             AllowedGrantTypes = { GrantType.ResourceOwnerPassword, GrantType.RefreshToken, CachedLoginGrantType },
             AllowedScopes = RecRoomScopes(),
             AllowOfflineAccess = true,
@@ -201,7 +183,7 @@ internal static class RecRoomIdentityServerConfig
     ];
 }
 
-public sealed class IdentityServerLegacyTokenRequestMiddleware(RequestDelegate next)
+public sealed class IdentityServerGameTokenRequestMiddleware(RequestDelegate next)
 {
     public async Task InvokeAsync(HttpContext context)
     {
@@ -217,12 +199,6 @@ public sealed class IdentityServerLegacyTokenRequestMiddleware(RequestDelegate n
             kvp => kvp.Value,
             StringComparer.OrdinalIgnoreCase);
         var changed = false;
-
-        if (!values.ContainsKey("client_id"))
-        {
-            values["client_id"] = RecRoomIdentityServerConfig.ClientId;
-            changed = true;
-        }
 
         if (IsDevicePasswordGrant(values))
         {
@@ -288,114 +264,6 @@ public sealed class IdentityServerLegacyTokenRequestMiddleware(RequestDelegate n
         scopes.Add(IdentityServerConstants.StandardScopes.OfflineAccess);
         scopes.Add(RecRoomIdentityServerConfig.GameClientScope);
         return string.Join(' ', scopes);
-    }
-}
-
-public sealed class IdentityServerTokenResponseMiddleware(RequestDelegate next, DomainConfig domain)
-{
-    public async Task InvokeAsync(HttpContext context)
-    {
-        if (!IsTokenRequest(context))
-        {
-            await next(context);
-            return;
-        }
-
-        var originalBody = context.Response.Body;
-        await using var buffer = new MemoryStream();
-        context.Response.Body = buffer;
-
-        await next(context);
-
-        context.Response.Body = originalBody;
-        buffer.Position = 0;
-
-        if (context.Response.StatusCode != StatusCodes.Status200OK ||
-            !IsJson(context.Response.ContentType))
-        {
-            await buffer.CopyToAsync(originalBody);
-            return;
-        }
-
-        using var document = await JsonDocument.ParseAsync(buffer);
-        var response = new Dictionary<string, object?>(StringComparer.Ordinal);
-        foreach (var property in document.RootElement.EnumerateObject())
-            response[property.Name] = ConvertJsonValue(property.Value);
-
-        if (response.TryGetValue("access_token", out var accessValue) &&
-            accessValue is string accessToken &&
-            !string.IsNullOrWhiteSpace(accessToken))
-        {
-            AddLegacyTokenAliases(response, accessToken);
-            SetAccessCookie(context, accessToken);
-        }
-
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(response);
-        context.Response.ContentLength = bytes.Length;
-        context.Response.ContentType = "application/json; charset=utf-8";
-        await originalBody.WriteAsync(bytes);
-    }
-
-    private static bool IsTokenRequest(HttpContext context) =>
-        HttpMethods.IsPost(context.Request.Method)
-        && context.Request.Path.Equals("/connect/token", StringComparison.OrdinalIgnoreCase);
-
-    private static bool IsJson(string? contentType) =>
-        contentType?.StartsWith("application/json", StringComparison.OrdinalIgnoreCase) == true;
-
-    private static object? ConvertJsonValue(JsonElement value) =>
-        value.ValueKind switch
-        {
-            JsonValueKind.String => value.GetString(),
-            JsonValueKind.Number when value.TryGetInt64(out var l) => l,
-            JsonValueKind.Number => value.GetDouble(),
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            JsonValueKind.Null => null,
-            _ => JsonSerializer.Deserialize<object>(value.GetRawText()),
-        };
-
-    private static void AddLegacyTokenAliases(Dictionary<string, object?> response, string accessToken)
-    {
-        response["Access_token"] = accessToken;
-        response["accessToken"] = accessToken;
-        response["AccessToken"] = accessToken;
-        response["token"] = accessToken;
-        response["Token"] = accessToken;
-        response["tokenType"] = "Bearer";
-        response["TokenType"] = "Bearer";
-
-        if (response.TryGetValue("expires_in", out var expiresIn))
-        {
-            response["expiresIn"] = expiresIn;
-            response["ExpiresIn"] = expiresIn;
-        }
-
-        if (response.TryGetValue("refresh_token", out var refreshToken))
-        {
-            response["Refresh_token"] = refreshToken;
-            response["refreshToken"] = refreshToken;
-            response["RefreshToken"] = refreshToken;
-        }
-
-        var signingKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
-        response["key"] = signingKey;
-        response["Key"] = signingKey;
-    }
-
-    private void SetAccessCookie(HttpContext context, string accessToken)
-    {
-        var cookie = new CookieOptions
-        {
-            HttpOnly = true,
-            Secure = string.Equals(domain.Scheme, "https", StringComparison.OrdinalIgnoreCase),
-            SameSite = SameSiteMode.None,
-            Expires = DateTimeOffset.UtcNow.AddHours(12),
-            IsEssential = true,
-        };
-        if (domain.Apex.Contains('.'))
-            cookie.Domain = "." + domain.Apex;
-        context.Response.Cookies.Append(AuthService.AccessCookieName, accessToken, cookie);
     }
 }
 
