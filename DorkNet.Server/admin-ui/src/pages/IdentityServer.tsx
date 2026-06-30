@@ -29,9 +29,6 @@ interface IdentityServerSettings {
     notAfterUtc: string;
     algorithm: string;
   };
-  license: {
-    configured: boolean;
-  };
   persistedGrants: {
     store: string;
     warning: string;
@@ -86,7 +83,6 @@ export function IdentityServer() {
                 </div>
                 <div className="flex flex-wrap gap-2 text-xs">
                   <StatusBadge ok={settings.signing.certificateExists} on="Signing key" off="Missing key" />
-                  <StatusBadge ok={settings.license.configured} on="License set" off="No license key" />
                 </div>
               </div>
 
