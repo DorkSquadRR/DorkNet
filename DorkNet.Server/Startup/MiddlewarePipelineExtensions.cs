@@ -62,8 +62,7 @@ public static class MiddlewarePipelineExtensions
 
         app.UseMiddleware<IpBanCheckMiddleware>();
 
-        app.UseMiddleware<IdentityServerTokenResponseMiddleware>();
-        app.UseMiddleware<IdentityServerLegacyTokenRequestMiddleware>();
+        app.UseMiddleware<IdentityServerGameTokenRequestMiddleware>();
         app.UseIdentityServer();
 
         app.UseAuthentication();
