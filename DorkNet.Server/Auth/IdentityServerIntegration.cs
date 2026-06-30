@@ -203,6 +203,27 @@ public sealed class IdentityServerLegacyTokenRequestMiddleware(RequestDelegate n
             changed = true;
         }
 
+        if (IsDevicePasswordGrant(values))
+        {
+            if (!values.ContainsKey("username") || string.IsNullOrWhiteSpace(values["username"].ToString()))
+            {
+                values["username"] = First(
+                    values.TryGetValue("deviceId", out var deviceId) ? deviceId.ToString() : null,
+                    values.TryGetValue("device_id", out var deviceIdSnake) ? deviceIdSnake.ToString() : null,
+                    values.TryGetValue("platformId", out var platformId) ? platformId.ToString() : null,
+                    values.TryGetValue("platform_id", out var platformIdSnake) ? platformIdSnake.ToString() : null,
+                    "anonymous");
+                changed = true;
+            }
+
+            if (!values.ContainsKey("password") || string.IsNullOrWhiteSpace(values["password"].ToString()))
+            {
+                values["password"] = "__dorknet_device_login__";
+                values["dorknet_device_login"] = "true";
+                changed = true;
+            }
+        }
+
         var scopes = values.TryGetValue("scope", out var rawScope)
             ? rawScope.ToString()
             : string.Empty;
@@ -223,6 +244,18 @@ public sealed class IdentityServerLegacyTokenRequestMiddleware(RequestDelegate n
         HttpMethods.IsPost(context.Request.Method)
         && context.Request.Path.Equals("/connect/token", StringComparison.OrdinalIgnoreCase)
         && context.Request.HasFormContentType;
+
+    private static bool IsDevicePasswordGrant(Dictionary<string, StringValues> values)
+    {
+        if (!values.TryGetValue("grant_type", out var grantType) ||
+            !string.Equals(grantType.ToString(), GrantType.ResourceOwnerPassword, StringComparison.OrdinalIgnoreCase))
+            return false;
+        return !values.TryGetValue("password", out var password) ||
+               string.IsNullOrWhiteSpace(password.ToString());
+    }
+
+    private static string First(params string?[] values) =>
+        values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v)) ?? "anonymous";
 
     private static string MergeScopes(string existing)
     {
@@ -358,8 +391,9 @@ public sealed class RecRoomPasswordValidator(
         var deviceId = First(raw.Get("deviceId"), raw.Get("device_id"));
         var platformId = First(raw.Get("platformId"), raw.Get("platform_id"));
         var platform = int.TryParse(raw.Get("platform"), out var p) ? p : 0;
+        var deviceLogin = string.Equals(raw.Get("dorknet_device_login"), "true", StringComparison.OrdinalIgnoreCase);
 
-        if (!string.IsNullOrEmpty(context.Password) && !string.IsNullOrEmpty(context.UserName))
+        if (!deviceLogin && !string.IsNullOrEmpty(context.Password) && !string.IsNullOrEmpty(context.UserName))
         {
             var byName = await playerService.GetByUsernameAsync(context.UserName);
             if (byName is null || byName.PasswordHash is null)
