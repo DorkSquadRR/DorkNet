@@ -72,6 +72,10 @@ cd DorkNet
 | `S3:SecretKey` | `S3__SecretKey` | production | S3 secret key |
 | `S3:Region` | `S3__Region` | no | defaults to `garage`; use `auto` for R2 |
 
+`/connect/token` issues access and refresh tokens with the configured
+auth host as the issuer. Set `DORKNET_DOMAIN` for production so OpenID
+discovery and JWT validation agree on `https://auth.<domain>`.
+
 **4. Boot a local standalone server:**
 
 ```pwsh
