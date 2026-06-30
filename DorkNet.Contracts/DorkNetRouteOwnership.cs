@@ -167,6 +167,11 @@ public static class DorkNetRouteOwnership
     public static IReadOnlyList<string> PublicSubdomains =>
         ServiceRouteGroups
             .SelectMany(group => group.HostSubdomains)
+            // api.* is a shared public host: it owns no service by host and is
+            // dispatched by path (see ResolvePublicService's path-prefix pass),
+            // so it never appears in a group's HostSubdomains. It must still be
+            // whitelisted here or HostFiltering rejects every api.{apex} request.
+            .Append("api")
             .Append(AdminHost)
             .Append("feed")
             .Distinct(StringComparer.OrdinalIgnoreCase)
