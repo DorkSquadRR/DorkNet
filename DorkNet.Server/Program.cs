@@ -1161,8 +1161,7 @@ app.Use(async (ctx, next) =>
 // no DB hit beyond the (small) IpBans lookup.
 app.UseMiddleware<DorkNet.Server.Auth.IpBanCheckMiddleware>();
 
-app.UseMiddleware<IdentityServerTokenResponseMiddleware>();
-app.UseMiddleware<IdentityServerLegacyTokenRequestMiddleware>();
+app.UseMiddleware<IdentityServerGameTokenRequestMiddleware>();
 app.UseIdentityServer();
 
 app.UseAuthentication();
