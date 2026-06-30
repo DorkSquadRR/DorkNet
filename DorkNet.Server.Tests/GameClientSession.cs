@@ -26,6 +26,8 @@ public static class GameClientSessionFactory
         tokenRequest.Content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
             ["grant_type"] = "password",
+            ["client_id"] = "recroom",
+            ["client_secret"] = "VxZ53kgbbEaRoZAeMe00MagtgD12GLL2",
             ["username"] = "EndpointContract",
             ["device_id"] = deviceId,
             ["platform"] = "0",
