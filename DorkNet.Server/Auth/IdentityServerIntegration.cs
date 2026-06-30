@@ -32,12 +32,26 @@ public sealed class IdentityServerSigningKeyProvider
                 "JWT secret not configured. Set DORKNET_JWT_SECRET env var or Jwt:Secret in appsettings.Local.json.");
 
         CertificatePath = ResolveCertificatePath(config);
-        Certificate = LoadOrCreateCertificate(CertificatePath, config, _legacySecret);
+        var password = config["IdentityServer:SigningCertificatePassword"] ?? _legacySecret;
+        var certificateBase64 = config["IdentityServer:SigningCertificateBase64"];
+        if (!string.IsNullOrWhiteSpace(certificateBase64))
+        {
+            LoadedFromBase64 = true;
+            Certificate = LoadCertificateFromBase64(certificateBase64, password);
+        }
+        else
+        {
+            Certificate = LoadOrCreateCertificate(CertificatePath, password);
+        }
         SigningKey = new X509SecurityKey(Certificate);
         LegacyJwtKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_legacySecret));
     }
 
     public string CertificatePath { get; }
+    public bool LoadedFromBase64 { get; }
+    public string CertificateSource => LoadedFromBase64
+        ? "IdentityServer:SigningCertificateBase64"
+        : CertificatePath;
     public X509Certificate2 Certificate { get; }
     public SecurityKey SigningKey { get; }
     public SecurityKey LegacyJwtKey { get; }
@@ -51,9 +65,16 @@ public sealed class IdentityServerSigningKeyProvider
         return path;
     }
 
-    private static X509Certificate2 LoadOrCreateCertificate(string path, IConfiguration config, string fallbackPassword)
+    private static X509Certificate2 LoadCertificateFromBase64(string certificateBase64, string password)
     {
-        var password = config["IdentityServer:SigningCertificatePassword"] ?? fallbackPassword;
+        var flags = X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.Exportable;
+        var compact = new string(certificateBase64.Where(c => !char.IsWhiteSpace(c)).ToArray());
+        var bytes = Convert.FromBase64String(compact);
+        return new X509Certificate2(bytes, password, flags);
+    }
+
+    private static X509Certificate2 LoadOrCreateCertificate(string path, string password)
+    {
         var flags = X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.Exportable;
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 

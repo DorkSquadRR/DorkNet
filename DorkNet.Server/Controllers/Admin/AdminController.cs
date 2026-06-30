@@ -1169,6 +1169,7 @@ public class AdminController(
         var client = RecRoomIdentityServerConfig.Clients[0];
         var certPath = signingKeys.CertificatePath;
         var fullCertPath = Path.GetFullPath(certPath);
+        var certificateExists = signingKeys.LoadedFromBase64 || System.IO.File.Exists(fullCertPath);
         var licenseConfigured =
             !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("DUENDE_IDENTITYSERVER_LICENSE_KEY"))
             || !string.IsNullOrWhiteSpace(config["IdentityServer:LicenseKey"]);
@@ -1194,8 +1195,10 @@ public class AdminController(
             },
             Signing = new
             {
+                signingKeys.CertificateSource,
+                signingKeys.LoadedFromBase64,
                 CertificatePath = fullCertPath,
-                CertificateExists = System.IO.File.Exists(fullCertPath),
+                CertificateExists = certificateExists,
                 signingKeys.Certificate.Thumbprint,
                 NotBeforeUtc = signingKeys.Certificate.NotBefore.ToUniversalTime(),
                 NotAfterUtc = signingKeys.Certificate.NotAfter.ToUniversalTime(),
