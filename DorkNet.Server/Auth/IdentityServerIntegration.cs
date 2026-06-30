@@ -277,7 +277,8 @@ internal static class RecRoomIdentityServerConfig
 public sealed class IdentityServerGameTokenRequestMiddleware(
     RequestDelegate next,
     DomainConfig domain,
-    IConfiguration config)
+    IConfiguration config,
+    ILogger<IdentityServerGameTokenRequestMiddleware> logger)
 {
     public async Task InvokeAsync(HttpContext context)
     {
@@ -380,10 +381,10 @@ public sealed class IdentityServerGameTokenRequestMiddleware(
             var options = new CookieOptions
             {
                 HttpOnly = true,
-                Secure = context.Request.IsHttps || domain.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase),
-                SameSite = SameSiteMode.Lax,
-                Path = "/",
+                Secure = string.Equals(domain.Scheme, "https", StringComparison.OrdinalIgnoreCase),
+                SameSite = SameSiteMode.None,
                 Expires = expires,
+                IsEssential = true,
             };
 
             var cookieDomain = ResolveCookieDomain(context.Request.Host.Host);
@@ -391,6 +392,13 @@ public sealed class IdentityServerGameTokenRequestMiddleware(
                 options.Domain = cookieDomain;
 
             context.Response.Cookies.Append(AuthService.AccessCookieName, accessToken, options);
+            logger.LogInformation(
+                "[auth-cookie] issued access cookie host={Host} domain={Domain} secure={Secure} sameSite={SameSite} essential={IsEssential}",
+                context.Request.Host.Host,
+                cookieDomain ?? "<host-only>",
+                options.Secure,
+                options.SameSite,
+                options.IsEssential);
         }
         catch (JsonException)
         {
@@ -422,7 +430,31 @@ public sealed class IdentityServerGameTokenRequestMiddleware(
             return "." + apex;
         }
 
+        if (domain.UsesHyphenSubdomains)
+        {
+            var parent = HyphenCookieParent(apex, host);
+            if (parent is not null)
+                return "." + parent;
+        }
+
         return null;
+    }
+
+    private static string? HyphenCookieParent(string apex, string host)
+    {
+        var parts = apex.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length < 3)
+            return null;
+
+        var environmentLabel = parts[0];
+        var parent = string.Join('.', parts.Skip(1));
+        if (!host.EndsWith("." + parent, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var hostLabel = host[..^(parent.Length + 1)];
+        return hostLabel.EndsWith("-" + environmentLabel, StringComparison.OrdinalIgnoreCase)
+            ? parent
+            : null;
     }
 
     private static bool IsTokenRequest(HttpContext context) =>
