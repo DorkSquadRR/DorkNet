@@ -72,13 +72,17 @@ cd DorkNet
 | `ConnectionStrings:Redis` | `ConnectionStrings__Redis` | no | enables SignalR backplane |
 | `Domain:Apex` | `DORKNET_DOMAIN` | no | defaults to `localhost`; set for production |
 
+`/connect/token` issues access and refresh tokens with the configured
+auth host as the issuer. Set `DORKNET_DOMAIN` for production so OpenID
+discovery and JWT validation agree on `https://auth.<domain>`.
+
 **4. Boot:**
 
 ```pwsh
 dotnet run --project DorkNet.Server
 ```
 
-First boot creates `bin/Debug/net9.0/data/dorknet.db`, applies all EF
+First boot creates `bin/Debug/net10.0/data/dorknet.db`, applies all EF
 migrations under `DorkNet.Server/Migrations/`, seeds canonical rooms +
 store catalog, and starts listening. You should see `Application
 started.` in the log; `curl http://localhost:8080/healthz` returns 200.
