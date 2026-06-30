@@ -72,6 +72,10 @@ cd DorkNet
 | `ConnectionStrings:Redis` | `ConnectionStrings__Redis` | no | enables SignalR backplane |
 | `Domain:Apex` | `DORKNET_DOMAIN` | no | defaults to `localhost`; set for production |
 
+`/connect/token` issues access and refresh tokens with the configured
+auth host as the issuer. Set `DORKNET_DOMAIN` for production so OpenID
+discovery and JWT validation agree on `https://auth.<domain>`.
+
 **4. Boot:**
 
 ```pwsh
