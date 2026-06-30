@@ -11,11 +11,11 @@ namespace DorkNet.Server.Tests;
 public sealed class VersionCheckControllerTests
 {
     [Fact]
-    public void December_2020_build_is_valid_with_minimal_service_config()
+    public void March_2023_build_is_valid_with_minimal_service_config()
     {
         var controller = CreateController();
 
-        var result = Assert.IsType<OkObjectResult>(controller.Check("20201210", "0"));
+        var result = Assert.IsType<OkObjectResult>(controller.Check("20230321", "0"));
 
         Assert.Equal(0, ReadVersionStatus(result.Value));
     }
@@ -37,9 +37,9 @@ public sealed class VersionCheckControllerTests
             [new Late2020VersionPlugin()],
             new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                "december_2020_12_18",
+                "march_2023_03_21",
             },
-            "december_2020_12_18");
+            "march_2023_03_21");
 
         return new VersionCheckController(
             config,

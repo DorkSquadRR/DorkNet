@@ -333,8 +333,8 @@ static Assembly LoadServerAssembly(string? configuredPath)
     var repositoryRoot = FindRepositoryRoot();
     var candidates = new[]
     {
-        Path.Combine(repositoryRoot, "DorkNet.Server", "bin", "Debug", "net9.0", "DorkNet.Server.dll"),
-        Path.Combine(repositoryRoot, "DorkNet.Server", "bin", "Release", "net9.0", "DorkNet.Server.dll")
+        Path.Combine(repositoryRoot, "DorkNet.Server", "bin", "Debug", "net10.0", "DorkNet.Server.dll"),
+        Path.Combine(repositoryRoot, "DorkNet.Server", "bin", "Release", "net10.0", "DorkNet.Server.dll")
     };
     var existingCandidates = candidates.Where(File.Exists).ToArray();
     if (existingCandidates.Length == 0)
