@@ -28,6 +28,8 @@ public sealed class DomainConfig
         return UsesHyphenSubdomains ? $"{prefix}-{Apex}" : $"{prefix}.{Apex}";
     }
 
+    public string AuthIssuer => Url("auth");
+
     public string Url(string prefix, string path = "")
     {
         var host = string.IsNullOrEmpty(prefix) ? Apex : Sub(prefix);

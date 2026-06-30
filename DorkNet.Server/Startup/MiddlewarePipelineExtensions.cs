@@ -87,6 +87,10 @@ public static class MiddlewarePipelineExtensions
         // calls (login, photon custom auth) are gated too.
         app.UseMiddleware<VersionDetectionMiddleware>();
 
+        app.UseMiddleware<IdentityServerTokenResponseMiddleware>();
+        app.UseMiddleware<IdentityServerLegacyTokenRequestMiddleware>();
+        app.UseIdentityServer();
+
         app.UseAuthentication();
         app.UseAuthorization();
         // Sits between auth and the controllers — by this point ctx.User has

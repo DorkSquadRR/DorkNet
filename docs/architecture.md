@@ -38,7 +38,7 @@ DorkNet.sln
 | `DorkNet.Contracts` | Service names, route ownership, service-map options, health responses, probe responses | .NET 9 |
 | `DorkNet.ServiceDefaults` | Common service health checks, JSON defaults, HTTP clients, service identity, route guard | .NET 9 |
 | `DorkNet.Gateway` | Edge reverse proxy; routes host/path slices to services and exposes service health probes | .NET 9 |
-| `DorkNet.Services.Identity` | Accounts, auth, platform login, JWT issuance route slice | .NET 9 |
+| `DorkNet.Services.Identity` | Accounts, auth, platform login, OpenID discovery, JWT issuance route slice | .NET 9 |
 | `DorkNet.Services.Rooms` | Rooms, room keys, matchmaking, discovery route slice | .NET 9 |
 | `DorkNet.Services.Notify` | SignalR edge, messages/chat, notification fan-out route slice | .NET 9 |
 | `DorkNet.Services.Content` | CDN paths, image/photo APIs, uploads, S3-backed blobs | .NET 9 |
@@ -112,6 +112,10 @@ Compose network and forwards Cloudflare Tunnel traffic to
 `http://gateway:8080`. Object storage is external S3-compatible storage
 configured with `DORKNET_S3_*` environment variables; the compose files
 do not run MinIO or Garage.
+
+The identity slice is the token issuer in the service split. Discovery at
+`/.well-known/openid-configuration` advertises the configured auth host,
+and access/refresh tokens minted by `/connect/token` use that same issuer.
 
 `Dockerfile.service` is the reusable service image. It accepts
 `PROJECT_PATH` and `APP_DLL` build args, rebuilds the admin/site Vite

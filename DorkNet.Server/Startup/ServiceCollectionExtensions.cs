@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using DorkNet.Server.Auth;
 using DorkNet.Server.Compat;
 using DorkNet.Server.Data;
 using DorkNet.Server.Services;
@@ -24,11 +25,11 @@ public static class ServiceCollectionExtensions
     {
         ConfigureLogging(builder);
         AddDatabase(builder);
-        AddDomain(builder);
+        var domain = AddDomain(builder);
         AddCoreServices(builder.Services);
         AddVersionCompatibility(builder);
         var redisConn = AddRedis(builder);
-        AddAuthentication(builder);
+        AddAuthentication(builder, domain);
         AddKestrelAndSignalR(builder, redisConn);
     }
 
@@ -108,7 +109,7 @@ public static class ServiceCollectionExtensions
     // Replaces per-controller [Host(...)] filters that hard-coded
     // rec.net/localhost pairs — the singleton DomainConfig is injected
     // anywhere code needs to build outbound URLs.
-    private static void AddDomain(WebApplicationBuilder builder)
+    private static DomainConfig AddDomain(WebApplicationBuilder builder)
     {
         var apex =
             builder.Configuration["Domain:Apex"]
@@ -147,6 +148,7 @@ public static class ServiceCollectionExtensions
             opt.IncludeFailureMessage = true;
         });
         Console.WriteLine($"[domain] apex={apex}, style={domain.HostStyle}, allowedHosts=[{string.Join(", ", allowedHosts)}]");
+        return domain;
     }
 
     private static readonly string[] KnownServiceSubdomains =
@@ -319,15 +321,11 @@ public static class ServiceCollectionExtensions
     // Never commit a real secret to appsettings.json. DORKNET_JWT_SECRET is the
     // canonical env var name; RECNET_JWT_SECRET kept for backward compat with
     // older Coolify configs.
-    private static void AddAuthentication(WebApplicationBuilder builder)
+    private static void AddAuthentication(WebApplicationBuilder builder, DomainConfig domain)
     {
-        var jwtSecret = Environment.GetEnvironmentVariable("DORKNET_JWT_SECRET")
-            ?? Environment.GetEnvironmentVariable("RECNET_JWT_SECRET")
-            ?? builder.Configuration["Jwt:Secret"]
-            ?? throw new InvalidOperationException(
-                "JWT secret not configured. Set the DORKNET_JWT_SECRET env var or " +
-                "add `Jwt:Secret` to appsettings.Local.json (the install-plugin.ps1 " +
-                "script generates one automatically on same-machine setup).");
+        var signingKeyProvider = new IdentityServerSigningKeyProvider(builder.Configuration);
+        builder.Services.AddSingleton(signingKeyProvider);
+        builder.Services.AddRecRoomIdentityServer(builder.Configuration, domain, signingKeyProvider);
 
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(opt =>
@@ -335,9 +333,9 @@ public static class ServiceCollectionExtensions
                 opt.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+                    IssuerSigningKeys = signingKeyProvider.ValidationKeys,
                     ValidateIssuer = true,
-                    ValidIssuer = "https://api.rec.net/",
+                    ValidIssuers = new[] { domain.AuthIssuer, AuthService.LegacyIssuer },
                     ValidateAudience = false,
                     ClockSkew = TimeSpan.Zero,
                 };
