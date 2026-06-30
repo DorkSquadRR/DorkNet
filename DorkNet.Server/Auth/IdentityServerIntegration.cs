@@ -81,7 +81,58 @@ public sealed class IdentityServerSigningKeyProvider
                 "without a file path or shell assignment text.",
                 ex);
         }
-        return new X509Certificate2(bytes, password, flags);
+        try
+        {
+            return new X509Certificate2(bytes, password, flags);
+        }
+        catch (CryptographicException ex)
+        {
+            if (TryLoadPemCertificate(bytes, password, flags, out var certificate))
+                return certificate;
+
+            throw new InvalidOperationException(
+                "IdentityServer signing certificate base64 decoded successfully, but it is not a valid PFX/PKCS#12 certificate. " +
+                "Set IdentityServer__SigningCertificateBase64 to the PFX bytes encoded as base64 and make sure " +
+                "IdentityServer__SigningCertificatePassword matches the PFX password.",
+                ex);
+        }
+    }
+
+    private static bool TryLoadPemCertificate(
+        byte[] bytes,
+        string password,
+        X509KeyStorageFlags flags,
+        out X509Certificate2 certificate)
+    {
+        certificate = null!;
+
+        string pem;
+        try
+        {
+            pem = Encoding.UTF8.GetString(bytes);
+        }
+        catch (DecoderFallbackException)
+        {
+            return false;
+        }
+
+        if (!pem.Contains("-----BEGIN", StringComparison.Ordinal))
+            return false;
+
+        try
+        {
+            using var pemCertificate = X509Certificate2.CreateFromPem(pem, pem);
+            if (!pemCertificate.HasPrivateKey)
+                return false;
+
+            var pfxBytes = pemCertificate.Export(X509ContentType.Pfx, password);
+            certificate = new X509Certificate2(pfxBytes, password, flags);
+            return true;
+        }
+        catch (CryptographicException)
+        {
+            return false;
+        }
     }
 
     private static string NormalizeCertificateBase64(string value)
