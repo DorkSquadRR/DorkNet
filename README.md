@@ -82,7 +82,7 @@ discovery and JWT validation agree on `https://auth.<domain>`.
 dotnet run --project DorkNet.Server
 ```
 
-First boot creates `bin/Debug/net9.0/data/dorknet.db`, applies all EF
+First boot creates `bin/Debug/net10.0/data/dorknet.db`, applies all EF
 migrations under `DorkNet.Server/Migrations/`, seeds canonical rooms +
 store catalog, and starts listening. You should see `Application
 started.` in the log; `curl http://localhost:8080/healthz` returns 200.
