@@ -20,6 +20,9 @@ public sealed class DomainConfig
     }
 
     public string Sub(string prefix) => $"{prefix}.{Apex}";
+
+    public string AuthIssuer => Url("auth");
+
     public string Url(string prefix, string path = "")
     {
         var host = string.IsNullOrEmpty(prefix) ? Apex : Sub(prefix);
