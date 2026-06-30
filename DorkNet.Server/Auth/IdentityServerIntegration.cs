@@ -6,7 +6,9 @@ using System.Text;
 using System.Text.Json;
 using Open.IdentityServer;
 using Open.IdentityServer.Models;
+using Open.IdentityServer.ResponseHandling;
 using Open.IdentityServer.Services;
+using Open.IdentityServer.Stores;
 using Open.IdentityServer.Validation;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
@@ -215,6 +217,8 @@ public static class RecRoomIdentityServerRegistration
             .AddResourceOwnerValidator<RecRoomPasswordValidator>()
             .AddExtensionGrantValidator<CachedLoginGrantValidator>()
             .AddProfileService<RecRoomProfileService>();
+
+        services.AddTransient<ITokenResponseGenerator, RecRoomTokenResponseGenerator>();
     }
 }
 
@@ -484,6 +488,67 @@ public sealed class IdentityServerGameTokenRequestMiddleware(
         scopes.Add(IdentityServerConstants.StandardScopes.OfflineAccess);
         scopes.Add(RecRoomIdentityServerConfig.GameClientScope);
         return string.Join(' ', scopes);
+    }
+}
+
+public sealed class RecRoomTokenResponseGenerator(
+    TimeProvider clock,
+    ITokenService tokenService,
+    IRefreshTokenService refreshTokenService,
+    IScopeParser scopeParser,
+    IResourceStore resources,
+    IClientStore clients,
+    ILogger<TokenResponseGenerator> logger) : ITokenResponseGenerator
+{
+    private readonly TokenResponseGenerator _inner = new(
+        clock,
+        tokenService,
+        refreshTokenService,
+        scopeParser,
+        resources,
+        clients,
+        logger);
+
+    public async Task<TokenResponse> ProcessAsync(TokenRequestValidationResult request)
+    {
+        var response = await _inner.ProcessAsync(request);
+        AddLegacyGameFields(response);
+        return response;
+    }
+
+    private static void AddLegacyGameFields(TokenResponse response)
+    {
+        if (string.IsNullOrWhiteSpace(response.AccessToken))
+            return;
+
+        response.Custom ??= new Dictionary<string, object>(StringComparer.Ordinal);
+        AddIfMissing(response.Custom, "Access_token", response.AccessToken);
+        AddIfMissing(response.Custom, "accessToken", response.AccessToken);
+        AddIfMissing(response.Custom, "AccessToken", response.AccessToken);
+        AddIfMissing(response.Custom, "token", response.AccessToken);
+        AddIfMissing(response.Custom, "Token", response.AccessToken);
+
+        AddIfMissing(response.Custom, "tokenType", "Bearer");
+        AddIfMissing(response.Custom, "TokenType", "Bearer");
+        AddIfMissing(response.Custom, "expiresIn", response.AccessTokenLifetime);
+        AddIfMissing(response.Custom, "ExpiresIn", response.AccessTokenLifetime);
+
+        if (!string.IsNullOrWhiteSpace(response.RefreshToken))
+        {
+            AddIfMissing(response.Custom, "Refresh_token", response.RefreshToken);
+            AddIfMissing(response.Custom, "refreshToken", response.RefreshToken);
+            AddIfMissing(response.Custom, "RefreshToken", response.RefreshToken);
+        }
+
+        var signingKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        AddIfMissing(response.Custom, "key", signingKey);
+        AddIfMissing(response.Custom, "Key", signingKey);
+    }
+
+    private static void AddIfMissing(IDictionary<string, object> values, string key, object value)
+    {
+        if (!values.ContainsKey(key))
+            values[key] = value;
     }
 }
 
