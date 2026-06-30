@@ -59,6 +59,18 @@ public class PublicSiteController(
 
         var photoCount = await db.Photos
             .CountAsync(ph => ph.UploaderPlayerId == id && ph.IsPublic && ph.DeletedAt == null);
+        var taggedNeedle = $",{id},";
+        var photosOfPlayerCount = await db.Photos
+            .CountAsync(ph => ph.IsPublic && ph.DeletedAt == null &&
+                              ("," + ph.TaggedPlayerIdsCsv + ",").Contains(taggedNeedle));
+        var friendCount = await db.Relationships
+            .Where(r => r.Status == RelationshipStatus.Friend &&
+                        (r.RequesterId == id || r.TargetId == id))
+            .Select(r => r.RequesterId == id ? r.TargetId : r.RequesterId)
+            .Distinct()
+            .CountAsync();
+        var publicRoomCount = await PublicPublishedRooms()
+            .CountAsync(r => r.CreatorPlayerId == id);
 
         return Ok(new
         {
@@ -75,6 +87,10 @@ public class PublicSiteController(
             createdAt = p.CreatedAt,
             profileImageName = p.ProfileImageName,
             photoCount,
+            photosTakenCount = photoCount,
+            photosOfPlayerCount,
+            friendCount,
+            publicRoomCount,
         });
     }
 
@@ -92,6 +108,54 @@ public class PublicSiteController(
             .Skip(skip).Take(take)
             .ToListAsync();
         return Ok(await EnrichPhotosAsync(rows));
+    }
+
+    /// <summary>GET /api/site/v1/players/{id}/photos/of — public photos
+    /// where this player was tagged by the camera.</summary>
+    [HttpGet("players/{id:long}/photos/of")]
+    public async Task<IActionResult> GetPhotosOfPlayer(long id,
+        [FromQuery] int take = 24, [FromQuery] int skip = 0)
+    {
+        take = Math.Clamp(take, 1, 100);
+        skip = Math.Max(0, skip);
+        var needle = $",{id},";
+        var rows = await db.Photos
+            .Where(p => p.IsPublic && p.DeletedAt == null &&
+                        ("," + p.TaggedPlayerIdsCsv + ",").Contains(needle))
+            .OrderByDescending(p => p.CreatedAt)
+            .Skip(skip).Take(take)
+            .ToListAsync();
+        return Ok(await EnrichPhotosAsync(rows));
+    }
+
+    /// <summary>GET /api/site/v1/players/{id}/rooms — public rooms
+    /// published by this player.</summary>
+    [HttpGet("players/{id:long}/rooms")]
+    public async Task<IActionResult> GetPlayerRooms(long id,
+        [FromQuery] int take = 24, [FromQuery] int skip = 0)
+    {
+        take = Math.Clamp(take, 1, 100);
+        skip = Math.Max(0, skip);
+        var rows = await PublicPublishedRooms()
+            .Where(r => r.CreatorPlayerId == id)
+            .OrderByDescending(r => r.HotScore)
+            .ThenByDescending(r => r.UpdatedAt)
+            .Skip(skip).Take(take)
+            .Select(r => new
+            {
+                id = r.Id,
+                name = r.Name,
+                description = r.Description,
+                creatorPlayerId = r.CreatorPlayerId,
+                isDormRoom = r.IsDormRoom,
+                isAGRoom = r.IsAGRoom,
+                visitCount = r.VisitCount,
+                visitorCount = r.VisitorCount,
+                cheerCount = r.CheerCount,
+                imageName = r.ImageName,
+            })
+            .ToListAsync();
+        return Ok(rows);
     }
 
     // ── Photos ───────────────────────────────────────────────────────
@@ -195,6 +259,12 @@ public class PublicSiteController(
         profileImageName = p.ProfileImageName,
     };
 
+    private IQueryable<RoomEntity> PublicPublishedRooms() =>
+        db.Rooms.Where(r => r.State == 0 &&
+                            r.Accessibility == 1 &&
+                            !r.IsDormRoom &&
+                            !r.HiddenFromBrowse);
+
     /// <summary>Materialise photo rows into wire DTOs with display names
     /// + room names + an absolute image URL. The URL apex switches
     /// based on the request host so a localhost visitor gets localhost
@@ -205,10 +275,15 @@ public class PublicSiteController(
         if (list.Count == 0) return new();
 
         var uploaderIds = list.Select(p => p.UploaderPlayerId).Distinct().ToList();
+        var taggedIds = list
+            .SelectMany(p => ParseTaggedPlayerIds(p.TaggedPlayerIdsCsv))
+            .Distinct()
+            .ToList();
+        var playerIds = uploaderIds.Concat(taggedIds).Distinct().ToList();
         var roomIds = list.Select(p => p.RoomId).Where(id => id > 0).Distinct().ToList();
 
-        var uploaders = await db.Players
-            .Where(p => uploaderIds.Contains(p.Id))
+        var playersById = await db.Players
+            .Where(p => playerIds.Contains(p.Id))
             .Select(p => new { p.Id, p.Username, p.DisplayName, p.ProfileImageName })
             .ToListAsync();
         var rooms = await db.Rooms
@@ -216,14 +291,14 @@ public class PublicSiteController(
             .Select(r => new { r.Id, r.Name })
             .ToListAsync();
 
-        var uMap = uploaders.ToDictionary(u => u.Id);
+        var pMap = playersById.ToDictionary(u => u.Id);
         var rMap = rooms.ToDictionary(r => r.Id);
 
         var cdnHost = domain.Sub("cdn");
 
         return list.Select(p =>
         {
-            uMap.TryGetValue(p.UploaderPlayerId, out var u);
+            pMap.TryGetValue(p.UploaderPlayerId, out var u);
             rMap.TryGetValue(p.RoomId, out var r);
             return (object)new
             {
@@ -237,12 +312,33 @@ public class PublicSiteController(
                 caption = p.Caption,
                 roomId = p.RoomId,
                 roomName = r?.Name ?? string.Empty,
+                taggedPlayers = ParseTaggedPlayerIds(p.TaggedPlayerIdsCsv)
+                    .Select(id => pMap.TryGetValue(id, out var tagged) ? tagged : null)
+                    .Where(tagged => tagged is not null)
+                    .Select(tagged => new
+                    {
+                        id = tagged!.Id,
+                        username = tagged.Username,
+                        displayName = tagged.DisplayName,
+                        profileImageName = tagged.ProfileImageName,
+                    })
+                    .ToArray(),
                 isPublic = p.IsPublic,
                 cheerCount = p.CheerCount,
                 viewCount = p.ViewCount,
                 createdAt = p.CreatedAt,
             };
         }).ToList();
+    }
+
+    private static List<long> ParseTaggedPlayerIds(string? csv)
+    {
+        if (string.IsNullOrWhiteSpace(csv)) return [];
+        return csv.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(s => long.TryParse(s, out var id) ? id : 0)
+            .Where(id => id > 0)
+            .Distinct()
+            .ToList();
     }
 
     // ── Signup (code redemption) ─────────────────────────────────────

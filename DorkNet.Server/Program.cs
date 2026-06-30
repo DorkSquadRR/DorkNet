@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using DorkNet.Server.Auth;
 using DorkNet.Server.Data;
 using DorkNet.Server.Services;
 using Serilog;
@@ -105,7 +106,8 @@ var domainPort =
 var singleOriginBaseUrl =
     builder.Configuration["Domain:SingleOriginBaseUrl"]
     ?? Environment.GetEnvironmentVariable("DORKNET_SINGLE_ORIGIN_BASE_URL");
-builder.Services.AddSingleton(new DomainConfig(apex, domainScheme, domainPort, singleOriginBaseUrl));
+var domainConfig = new DomainConfig(apex, domainScheme, domainPort, singleOriginBaseUrl);
+builder.Services.AddSingleton(domainConfig);
 builder.Services.Configure<Microsoft.AspNetCore.HostFiltering.HostFilteringOptions>(opt =>
 {
     opt.AllowedHosts = new[] { apex, $"*.{apex}", "localhost", "127.0.0.1" };
@@ -214,12 +216,9 @@ static string NormalizeRedisConn(string raw)
 // kept for backward compat with older Coolify configs (will warn at
 // startup, can be removed once everyone has migrated). AuthService
 // has the matching fallback so signing + validation use the same key.
-var jwtSecret = Environment.GetEnvironmentVariable("DORKNET_JWT_SECRET")
-    ?? Environment.GetEnvironmentVariable("RECNET_JWT_SECRET")
-    ?? builder.Configuration["Jwt:Secret"]
-    ?? throw new InvalidOperationException(
-        "JWT secret not configured. Set the DORKNET_JWT_SECRET env var or " +
-        "add `Jwt:Secret` to appsettings.Local.json.");
+var signingKeyProvider = new IdentityServerSigningKeyProvider(builder.Configuration);
+builder.Services.AddSingleton(signingKeyProvider);
+builder.Services.AddRecRoomIdentityServer(builder.Configuration, domainConfig, signingKeyProvider);
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(opt =>
@@ -227,9 +226,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         opt.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+            IssuerSigningKeys = signingKeyProvider.ValidationKeys,
             ValidateIssuer = true,
-            ValidIssuer = "https://api.rec.net/",
+            ValidIssuers = new[] { domainConfig.AuthIssuer, AuthService.LegacyIssuer },
             ValidateAudience = false,
             ClockSkew = TimeSpan.Zero,
         };
@@ -251,6 +250,12 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                 var path = ctx.HttpContext.Request.Path;
                 if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hub"))
                     ctx.Token = accessToken;
+                if (string.IsNullOrEmpty(ctx.Token) &&
+                    ctx.Request.Cookies.TryGetValue(AuthService.AccessCookieName, out var cookieToken) &&
+                    !string.IsNullOrWhiteSpace(cookieToken))
+                {
+                    ctx.Token = cookieToken;
+                }
                 return Task.CompletedTask;
             },
         };
@@ -1150,6 +1155,10 @@ app.Use(async (ctx, next) =>
 // gets cut off at the earliest point possible — no JWT round-trip,
 // no DB hit beyond the (small) IpBans lookup.
 app.UseMiddleware<DorkNet.Server.Auth.IpBanCheckMiddleware>();
+
+app.UseMiddleware<IdentityServerTokenResponseMiddleware>();
+app.UseMiddleware<IdentityServerLegacyTokenRequestMiddleware>();
+app.UseIdentityServer();
 
 app.UseAuthentication();
 app.UseAuthorization();

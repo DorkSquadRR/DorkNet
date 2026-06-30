@@ -20,6 +20,17 @@ export interface SitePlayerDetail extends SitePlayerCard {
   xp: number;
   createdAt: string;
   photoCount: number;
+  photosTakenCount: number;
+  photosOfPlayerCount: number;
+  friendCount: number;
+  publicRoomCount: number;
+}
+
+export interface SitePhotoPlayer {
+  id: number;
+  username: string;
+  displayName: string;
+  profileImageName: string | null;
 }
 
 export interface SitePhoto {
@@ -33,6 +44,7 @@ export interface SitePhoto {
   caption: string;
   roomId: number;
   roomName: string;
+  taggedPlayers: SitePhotoPlayer[];
   isPublic: boolean;
   cheerCount: number;
   viewCount: number;

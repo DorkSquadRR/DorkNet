@@ -27,6 +27,7 @@ public sealed class DomainConfig
     }
 
     public string Sub(string prefix) => $"{prefix}.{Apex}";
+    public string AuthIssuer => SubUrl("auth");
     public string Url(string host) => Port is null ? $"{Scheme}://{host}" : $"{Scheme}://{host}:{Port}";
     public string SubUrl(string prefix) => Url(Sub(prefix));
     public static bool MatchesSubdomain(string host, string prefix)
