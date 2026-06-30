@@ -131,6 +131,8 @@ public static class RecRoomIdentityServerRegistration
 internal static class RecRoomIdentityServerConfig
 {
     public const string ClientId = "recroom.client";
+    public const string NativeClientId = "recroom";
+    public const string NativeClientSecret = "VxZ53kgbbEaRoZAeMe00MagtgD12GLL2";
     public const string GameClientScope = "gameClient";
     public const string CachedLoginGrantType = "cached_login";
 
@@ -157,17 +159,27 @@ internal static class RecRoomIdentityServerConfig
         new()
         {
             ClientId = ClientId,
-            ClientName = "Rec Room Client",
+            ClientName = "Rec Room compatibility client",
             RequireClientSecret = false,
-            AllowedGrantTypes = { GrantType.ResourceOwnerPassword, CachedLoginGrantType },
-            AllowedScopes =
-            {
-                IdentityServerConstants.StandardScopes.OpenId,
-                IdentityServerConstants.StandardScopes.Profile,
-                IdentityServerConstants.StandardScopes.OfflineAccess,
-                GameClientScope,
-                "api",
-            },
+            AllowedGrantTypes = { GrantType.ResourceOwnerPassword, GrantType.RefreshToken, CachedLoginGrantType },
+            AllowedScopes = RecRoomScopes(),
+            AllowOfflineAccess = true,
+            AccessTokenLifetime = 60 * 60 * 12,
+            AbsoluteRefreshTokenLifetime = 60 * 60 * 24 * 30,
+            SlidingRefreshTokenLifetime = 60 * 60 * 24 * 30,
+            RefreshTokenUsage = TokenUsage.ReUse,
+            RefreshTokenExpiration = TokenExpiration.Absolute,
+            UpdateAccessTokenClaimsOnRefresh = true,
+            AlwaysIncludeUserClaimsInIdToken = true,
+        },
+        new()
+        {
+            ClientId = NativeClientId,
+            ClientName = "Rec Room native client",
+            RequireClientSecret = true,
+            ClientSecrets = { new Secret(NativeClientSecret.Sha256()) },
+            AllowedGrantTypes = { GrantType.ResourceOwnerPassword, GrantType.RefreshToken, CachedLoginGrantType },
+            AllowedScopes = RecRoomScopes(),
             AllowOfflineAccess = true,
             AccessTokenLifetime = 60 * 60 * 12,
             AbsoluteRefreshTokenLifetime = 60 * 60 * 24 * 30,
@@ -178,6 +190,15 @@ internal static class RecRoomIdentityServerConfig
             AlwaysIncludeUserClaimsInIdToken = true,
         },
     };
+
+    private static ICollection<string> RecRoomScopes() =>
+    [
+        IdentityServerConstants.StandardScopes.OpenId,
+        IdentityServerConstants.StandardScopes.Profile,
+        IdentityServerConstants.StandardScopes.OfflineAccess,
+        GameClientScope,
+        "api",
+    ];
 }
 
 public sealed class IdentityServerLegacyTokenRequestMiddleware(RequestDelegate next)
