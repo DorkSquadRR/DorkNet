@@ -274,7 +274,10 @@ internal static class RecRoomIdentityServerConfig
     ];
 }
 
-public sealed class IdentityServerGameTokenRequestMiddleware(RequestDelegate next, DomainConfig domain)
+public sealed class IdentityServerGameTokenRequestMiddleware(
+    RequestDelegate next,
+    DomainConfig domain,
+    IConfiguration config)
 {
     public async Task InvokeAsync(HttpContext context)
     {
@@ -397,6 +400,13 @@ public sealed class IdentityServerGameTokenRequestMiddleware(RequestDelegate nex
 
     private string? ResolveCookieDomain(string host)
     {
+        var configuredCookieDomain =
+            Environment.GetEnvironmentVariable("DORKNET_AUTH_COOKIE_DOMAIN")
+            ?? config["Auth:CookieDomain"]
+            ?? config["IdentityServer:CookieDomain"];
+        if (!string.IsNullOrWhiteSpace(configuredCookieDomain))
+            return configuredCookieDomain.Trim().TrimStart('.') is { Length: > 0 } value ? "." + value : null;
+
         var apex = domain.Apex.Trim().TrimStart('.');
         if (string.IsNullOrWhiteSpace(apex) ||
             apex.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
@@ -406,12 +416,6 @@ public sealed class IdentityServerGameTokenRequestMiddleware(RequestDelegate nex
             return null;
         }
 
-        if (domain.UsesHyphenSubdomains && host.EndsWith("-" + apex, StringComparison.OrdinalIgnoreCase))
-        {
-            var parentDomain = ResolveParentDomain(apex);
-            return parentDomain is null ? null : "." + parentDomain;
-        }
-
         if (host.Equals(apex, StringComparison.OrdinalIgnoreCase) ||
             host.EndsWith("." + apex, StringComparison.OrdinalIgnoreCase))
         {
@@ -419,16 +423,6 @@ public sealed class IdentityServerGameTokenRequestMiddleware(RequestDelegate nex
         }
 
         return null;
-    }
-
-    private static string? ResolveParentDomain(string host)
-    {
-        var firstDot = host.IndexOf('.');
-        if (firstDot <= 0 || firstDot == host.Length - 1)
-            return null;
-
-        var parent = host[(firstDot + 1)..];
-        return parent.Contains('.') ? parent : null;
     }
 
     private static bool IsTokenRequest(HttpContext context) =>
