@@ -82,7 +82,7 @@ discovery and JWT validation agree on `https://auth.<domain>`.
 dotnet run --project DorkNet.Server
 ```
 
-First boot creates `bin/Debug/net9.0/data/dorknet.db`, runs every
+First boot creates `bin/Debug/net10.0/data/dorknet.db`, runs every
 `LegacyUpgrades` pass, seeds canonical rooms / store catalog / club
 categories / playlists, and starts listening. You should see
 `Application started.` in the log; `curl http://localhost:8080/healthz`

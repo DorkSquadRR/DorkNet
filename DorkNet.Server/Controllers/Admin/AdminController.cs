@@ -40,7 +40,6 @@ public class AdminController(
     SignupCodeService signupCodes,
     IObjectStorage storage,
     DomainConfig domain,
-    IConfiguration config,
     IdentityServerSigningKeyProvider signingKeys,
     ILogger<AdminController> adminLogger) : ControllerBase
 {
@@ -1490,9 +1489,6 @@ public class AdminController(
         var certPath = signingKeys.CertificatePath;
         var fullCertPath = Path.GetFullPath(certPath);
         var certificateExists = signingKeys.LoadedFromBase64 || System.IO.File.Exists(fullCertPath);
-        var licenseConfigured =
-            !string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("DUENDE_IDENTITYSERVER_LICENSE_KEY"))
-            || !string.IsNullOrWhiteSpace(config["IdentityServer:LicenseKey"]);
 
         return Ok(new
         {
@@ -1523,10 +1519,6 @@ public class AdminController(
                 NotBeforeUtc = signingKeys.Certificate.NotBefore.ToUniversalTime(),
                 NotAfterUtc = signingKeys.Certificate.NotAfter.ToUniversalTime(),
                 Algorithm = SecurityAlgorithms.RsaSha256,
-            },
-            License = new
-            {
-                Configured = licenseConfigured,
             },
             PersistedGrants = new
             {

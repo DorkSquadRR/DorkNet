@@ -61,8 +61,8 @@ public sealed class GameClientEndpointContractTests :
             ToHttpMethod(route.Method),
             new Uri($"http://{host}{path}"));
         request.Headers.Accept.ParseAdd("application/json");
-        request.Headers.UserAgent.ParseAdd("RecRoom/2020.12.18");
-        request.Headers.TryAddWithoutValidation("X-DorkNet-Version", "december_2020_12_18");
+        request.Headers.UserAgent.ParseAdd("RecRoom/2023.03.21");
+        request.Headers.TryAddWithoutValidation("X-DorkNet-Version", "march_2023_03_21");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", session.AccessToken);
 
         if (NeedsRequestBody(request.Method))
