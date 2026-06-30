@@ -67,9 +67,54 @@ public sealed class IdentityServerSigningKeyProvider
     private static X509Certificate2 LoadCertificateFromBase64(string certificateBase64, string password)
     {
         var flags = X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.Exportable;
-        var compact = new string(certificateBase64.Where(c => !char.IsWhiteSpace(c)).ToArray());
-        var bytes = Convert.FromBase64String(compact);
+        var compact = NormalizeCertificateBase64(certificateBase64);
+        byte[] bytes;
+        try
+        {
+            bytes = Convert.FromBase64String(compact);
+        }
+        catch (FormatException ex)
+        {
+            throw new InvalidOperationException(
+                "IdentityServer signing certificate base64 is invalid. " +
+                "Set IdentityServer__SigningCertificateBase64 to the PFX bytes encoded as base64, " +
+                "without a file path or shell assignment text.",
+                ex);
+        }
         return new X509Certificate2(bytes, password, flags);
+    }
+
+    private static string NormalizeCertificateBase64(string value)
+    {
+        var text = value.Trim().Trim('"', '\'');
+        var equals = text.IndexOf('=');
+        if (equals > 0)
+        {
+            var key = text[..equals].Trim();
+            if (key.Equals("IdentityServer__SigningCertificateBase64", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("IdentityServer:SigningCertificateBase64", StringComparison.OrdinalIgnoreCase))
+                text = text[(equals + 1)..].Trim().Trim('"', '\'');
+        }
+
+        if (text.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+        {
+            var comma = text.IndexOf(',');
+            if (comma >= 0)
+                text = text[(comma + 1)..];
+        }
+
+        if (text.StartsWith("base64:", StringComparison.OrdinalIgnoreCase))
+            text = text["base64:".Length..];
+
+        var compact = new string(text.Where(c => !char.IsWhiteSpace(c)).ToArray())
+            .Replace('-', '+')
+            .Replace('_', '/');
+        return (compact.Length % 4) switch
+        {
+            2 => compact + "==",
+            3 => compact + "=",
+            _ => compact,
+        };
     }
 
     private static X509Certificate2 LoadOrCreateCertificate(string path, string password)
