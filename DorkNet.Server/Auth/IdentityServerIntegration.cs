@@ -3,6 +3,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
+using System.Text.Json;
 using Open.IdentityServer;
 using Open.IdentityServer.Models;
 using Open.IdentityServer.Services;
@@ -273,7 +274,7 @@ internal static class RecRoomIdentityServerConfig
     ];
 }
 
-public sealed class IdentityServerGameTokenRequestMiddleware(RequestDelegate next)
+public sealed class IdentityServerGameTokenRequestMiddleware(RequestDelegate next, DomainConfig domain)
 {
     public async Task InvokeAsync(HttpContext context)
     {
@@ -324,7 +325,110 @@ public sealed class IdentityServerGameTokenRequestMiddleware(RequestDelegate nex
         if (changed)
             context.Features.Set<IFormFeature>(new FormFeature(new FormCollection(values)));
 
-        await next(context);
+        await InvokeAndPersistAccessTokenCookieAsync(context);
+    }
+
+    private async Task InvokeAndPersistAccessTokenCookieAsync(HttpContext context)
+    {
+        var originalBody = context.Response.Body;
+        await using var bufferedBody = new MemoryStream();
+        context.Response.Body = bufferedBody;
+
+        try
+        {
+            await next(context);
+
+            bufferedBody.Position = 0;
+            if (IsSuccessfulJsonResponse(context.Response))
+                TryPersistAccessTokenCookie(context, bufferedBody);
+
+            bufferedBody.Position = 0;
+            await bufferedBody.CopyToAsync(originalBody);
+        }
+        finally
+        {
+            context.Response.Body = originalBody;
+        }
+    }
+
+    private static bool IsSuccessfulJsonResponse(HttpResponse response) =>
+        response.StatusCode is >= 200 and < 300
+        && response.ContentType?.Contains("application/json", StringComparison.OrdinalIgnoreCase) == true;
+
+    private void TryPersistAccessTokenCookie(HttpContext context, Stream responseBody)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(responseBody);
+            if (!document.RootElement.TryGetProperty("access_token", out var accessTokenElement))
+                return;
+            var accessToken = accessTokenElement.GetString();
+            if (string.IsNullOrWhiteSpace(accessToken))
+                return;
+
+            var expires = DateTimeOffset.UtcNow.AddHours(12);
+            if (document.RootElement.TryGetProperty("expires_in", out var expiresInElement) &&
+                expiresInElement.TryGetInt32(out var expiresIn) &&
+                expiresIn > 0)
+            {
+                expires = DateTimeOffset.UtcNow.AddSeconds(expiresIn);
+            }
+
+            var options = new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = context.Request.IsHttps || domain.Scheme.Equals("https", StringComparison.OrdinalIgnoreCase),
+                SameSite = SameSiteMode.Lax,
+                Path = "/",
+                Expires = expires,
+            };
+
+            var cookieDomain = ResolveCookieDomain(context.Request.Host.Host);
+            if (cookieDomain is not null)
+                options.Domain = cookieDomain;
+
+            context.Response.Cookies.Append(AuthService.AccessCookieName, accessToken, options);
+        }
+        catch (JsonException)
+        {
+            // Leave the token response untouched if the upstream payload is not JSON.
+        }
+    }
+
+    private string? ResolveCookieDomain(string host)
+    {
+        var apex = domain.Apex.Trim().TrimStart('.');
+        if (string.IsNullOrWhiteSpace(apex) ||
+            apex.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+            apex.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
+            apex.Equals("::1", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (domain.UsesHyphenSubdomains && host.EndsWith("-" + apex, StringComparison.OrdinalIgnoreCase))
+        {
+            var parentDomain = ResolveParentDomain(apex);
+            return parentDomain is null ? null : "." + parentDomain;
+        }
+
+        if (host.Equals(apex, StringComparison.OrdinalIgnoreCase) ||
+            host.EndsWith("." + apex, StringComparison.OrdinalIgnoreCase))
+        {
+            return "." + apex;
+        }
+
+        return null;
+    }
+
+    private static string? ResolveParentDomain(string host)
+    {
+        var firstDot = host.IndexOf('.');
+        if (firstDot <= 0 || firstDot == host.Length - 1)
+            return null;
+
+        var parent = host[(firstDot + 1)..];
+        return parent.Contains('.') ? parent : null;
     }
 
     private static bool IsTokenRequest(HttpContext context) =>
