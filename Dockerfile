@@ -1,14 +1,14 @@
 # DorkNet.Server container image — Coolify deploy target.
 # ────────────────────────────────────────────────────────────────────
 # Multi-stage: SDK image builds + publishes, runtime image is the
-# slimmer aspnet:9.0 with only the published output.
+# slimmer aspnet:10.0 with only the published output.
 #
 # Build context: repo root (so Tools/ and DorkNet.Models/ are visible
 # to ProjectReference + dotnet restore). The .dockerignore at the
 # repo root keeps the bin/, obj/, and other dev junk out of the
 # context.
 
-ARG DOTNET_VERSION=9.0
+ARG DOTNET_VERSION=10.0
 ARG NODE_VERSION=20
 
 # ── admin SPA build stage ──────────────────────────────────────────
@@ -76,13 +76,13 @@ WORKDIR /app
 
 # curl + wget for healthcheck probes — Coolify v4 defaults to wget for
 # its own probe regardless of what the image's HEALTHCHECK uses, so
-# both have to be present. The aspnet:9.0 base image strips both by
+# both have to be present. The aspnet:10.0 base image strips both by
 # default to keep the surface area small.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends curl wget \
     && rm -rf /var/lib/apt/lists/*
 
-# Run as a non-root user — aspnet:9.0 ships with the `app` UID 1654.
+# Run as a non-root user — aspnet:10.0 ships with the `app` UID 1654.
 # Coolify mounts persistent volumes with write permission for this UID.
 USER app
 
