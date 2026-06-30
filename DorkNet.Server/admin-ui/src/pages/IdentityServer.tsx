@@ -20,6 +20,8 @@ interface IdentityServerSettings {
     refreshTokenExpiration: string;
   };
   signing: {
+    certificateSource: string;
+    loadedFromBase64: boolean;
     certificatePath: string;
     certificateExists: boolean;
     thumbprint: string;
@@ -139,7 +141,10 @@ export function IdentityServer() {
             <div className="card !p-5">
               <h2 className="text-sm font-semibold text-ink-50">Signing certificate</h2>
               <div className="mt-4 space-y-3">
-                <Detail label="Path" value={settings.signing.certificatePath} mono />
+                <Detail label="Source" value={settings.signing.certificateSource} mono />
+                {!settings.signing.loadedFromBase64 && (
+                  <Detail label="Path" value={settings.signing.certificatePath} mono />
+                )}
                 <Detail label="Thumbprint" value={settings.signing.thumbprint} mono />
                 <Detail label="Algorithm" value={settings.signing.algorithm} mono />
                 <Detail label="Valid from" value={formatDate(settings.signing.notBeforeUtc)} />
