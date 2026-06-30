@@ -72,13 +72,17 @@ cd DorkNet
 | `S3:SecretKey` | `S3__SecretKey` | production | S3 secret key |
 | `S3:Region` | `S3__Region` | no | defaults to `garage`; use `auto` for R2 |
 
+`/connect/token` issues access and refresh tokens with the configured
+auth host as the issuer. Set `DORKNET_DOMAIN` for production so OpenID
+discovery and JWT validation agree on `https://auth.<domain>`.
+
 **4. Boot a local standalone server:**
 
 ```pwsh
 dotnet run --project DorkNet.Server
 ```
 
-First boot creates `bin/Debug/net9.0/data/dorknet.db`, runs every
+First boot creates `bin/Debug/net10.0/data/dorknet.db`, runs every
 `LegacyUpgrades` pass, seeds canonical rooms / store catalog / club
 categories / playlists, and starts listening. You should see
 `Application started.` in the log; `curl http://localhost:8080/healthz`

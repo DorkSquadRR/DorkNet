@@ -1,11 +1,8 @@
-using System.Text;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HostFiltering;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.IdentityModel.Tokens;
 
 namespace DorkNet.Server.Tests;
 
@@ -55,18 +52,6 @@ public sealed class DorkNetServerFactory : WebApplicationFactory<Program>
                 ];
                 options.AllowEmptyHosts = true;
                 options.IncludeFailureMessage = true;
-            });
-            services.PostConfigure<JwtBearerOptions>(JwtBearerDefaults.AuthenticationScheme, options =>
-            {
-                options.TokenValidationParameters = new TokenValidationParameters
-                {
-                    ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(JwtSecret)),
-                    ValidateIssuer = true,
-                    ValidIssuer = "https://api.rec.net/",
-                    ValidateAudience = false,
-                    ClockSkew = TimeSpan.Zero,
-                };
             });
         });
     }
