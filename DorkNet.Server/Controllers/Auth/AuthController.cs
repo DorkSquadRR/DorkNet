@@ -6,7 +6,7 @@ using DorkNet.Server.Services;
 namespace DorkNet.Server.Controllers.Auth;
 
 /// <summary>
-/// auth.rec.net game-specific auth helpers. OAuth/OIDC endpoints are owned by Duende IdentityServer.
+/// auth.rec.net game-specific auth helpers. OAuth/OIDC endpoints are owned by IdentityServer.
 /// </summary>
 [ApiController]
 public class AuthController(

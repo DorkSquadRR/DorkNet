@@ -3,10 +3,10 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
-using Duende.IdentityServer;
-using Duende.IdentityServer.Models;
-using Duende.IdentityServer.Services;
-using Duende.IdentityServer.Validation;
+using Open.IdentityServer;
+using Open.IdentityServer.Models;
+using Open.IdentityServer.Services;
+using Open.IdentityServer.Validation;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Primitives;
@@ -206,12 +206,6 @@ public static class RecRoomIdentityServerRegistration
             .AddIdentityServer(options =>
             {
                 options.IssuerUri = domain.AuthIssuer.TrimEnd('/');
-                options.KeyManagement.Enabled = false;
-                var licenseKey =
-                    Environment.GetEnvironmentVariable("DUENDE_IDENTITYSERVER_LICENSE_KEY")
-                    ?? config["IdentityServer:LicenseKey"];
-                if (!string.IsNullOrWhiteSpace(licenseKey))
-                    options.LicenseKey = licenseKey;
             })
             .AddInMemoryIdentityResources(RecRoomIdentityServerConfig.IdentityResources)
             .AddInMemoryApiScopes(RecRoomIdentityServerConfig.ApiScopes)
@@ -256,7 +250,7 @@ internal static class RecRoomIdentityServerConfig
             ClientName = "Rec Room game client",
             RequireClientSecret = true,
             ClientSecrets = { new Secret(ClientSecret.Sha256()) },
-            AllowedGrantTypes = { GrantType.ResourceOwnerPassword, GrantType.RefreshToken, CachedLoginGrantType },
+            AllowedGrantTypes = { GrantType.ResourceOwnerPassword, "refresh_token", CachedLoginGrantType },
             AllowedScopes = RecRoomScopes(),
             AllowOfflineAccess = true,
             AccessTokenLifetime = 60 * 60 * 12,
