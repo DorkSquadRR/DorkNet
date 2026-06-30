@@ -1514,13 +1514,6 @@ public class AdminController(
                 Store = "in-memory",
                 Warning = "Refresh tokens are process-local until an operational store is configured.",
             },
-            LegacyCompatibility = new
-            {
-                InjectsClientId = true,
-                InjectsDefaultScopes = true,
-                AddsLegacyTokenAliases = true,
-                AcceptsLegacyJwtSigningKey = true,
-            },
         });
     }
     /// <summary>GET <c>api/admin/v1/settings</c> — current server-wide

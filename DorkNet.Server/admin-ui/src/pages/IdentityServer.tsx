@@ -36,12 +36,6 @@ interface IdentityServerSettings {
     store: string;
     warning: string;
   };
-  legacyCompatibility: {
-    injectsClientId: boolean;
-    injectsDefaultScopes: boolean;
-    addsLegacyTokenAliases: boolean;
-    acceptsLegacyJwtSigningKey: boolean;
-  };
 }
 
 export function IdentityServer() {
@@ -126,15 +120,6 @@ export function IdentityServer() {
               </div>
             </div>
 
-            <div className="card !p-5">
-              <h2 className="text-sm font-semibold text-ink-50">Legacy compatibility</h2>
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <Compatibility label="Inject client_id for old clients" ok={settings.legacyCompatibility.injectsClientId} />
-                <Compatibility label="Merge default scopes" ok={settings.legacyCompatibility.injectsDefaultScopes} />
-                <Compatibility label="Add legacy token aliases" ok={settings.legacyCompatibility.addsLegacyTokenAliases} />
-                <Compatibility label="Accept legacy JWT signing key" ok={settings.legacyCompatibility.acceptsLegacyJwtSigningKey} />
-              </div>
-            </div>
           </div>
 
           <div className="space-y-5">
@@ -194,15 +179,6 @@ function Metric({ label, value }: { label: string; value: string }) {
     <div className="rounded-lg border border-ink-800 bg-ink-950/30 p-3">
       <div className="text-[11px] uppercase text-ink-500">{label}</div>
       <div className="mt-1 text-sm font-semibold text-ink-50">{value}</div>
-    </div>
-  );
-}
-
-function Compatibility({ label, ok }: { label: string; ok: boolean }) {
-  return (
-    <div className="flex min-h-10 items-center justify-between gap-3 rounded-md border border-ink-800 bg-ink-950/30 px-3 py-2">
-      <span className="text-xs text-ink-100">{label}</span>
-      <StatusBadge ok={ok} on="On" off="Off" />
     </div>
   );
 }
