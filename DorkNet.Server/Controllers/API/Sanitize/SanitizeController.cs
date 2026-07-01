@@ -10,10 +10,29 @@ namespace DorkNet.Server.Controllers.API.Sanitize;
 /// invention name / chat message to be submitted. Delegates to
 /// <see cref="ProfanityFilter"/> for the actual scrubbing. Response
 /// shape: <c>{Text (purified), IsClean (bool)}</c>.
+///
+/// When the admin has flipped
+/// <see cref="Data.Entities.ServerSettingsEntity.ProfanityFilterDisabled"/>,
+/// every route short-circuits to "clean" — input is returned unmodified
+/// and purity checks always pass — so nothing gets censored.
 /// </summary>
 [ApiController]
-public class SanitizeController(ILogger<SanitizeController> logger) : ControllerBase
+public class SanitizeController(
+    ILogger<SanitizeController> logger,
+    ServerSettingsService settings) : ControllerBase
 {
+    /// <summary>Purify unless the filter is admin-disabled, in which case
+    /// the input is returned untouched.</summary>
+    private async Task<string> PurifyAsync(string input)
+        => await settings.IsProfanityFilterDisabledAsync()
+            ? input
+            : ProfanityFilter.Purify(input);
+
+    /// <summary>Clean-check unless the filter is admin-disabled, in which
+    /// case everything is treated as clean.</summary>
+    private async Task<bool> IsCleanAsync(string input)
+        => await settings.IsProfanityFilterDisabledAsync() || ProfanityFilter.IsClean(input);
+
     [HttpPost("api/sanitize/v1")]
     [HttpPost("api/sanitize/v1/text")]
     public async Task<IActionResult> Sanitize()
@@ -73,7 +92,7 @@ public class SanitizeController(ILogger<SanitizeController> logger) : Controller
         // ASP.NET Core's StringOutputFormatter doesn't serialize as
         // text/plain (raw string sans quotes), which the watch then sees
         // as an empty cleanVersion after LitJson decode.
-        var purified = ProfanityFilter.Purify(text);
+        var purified = await PurifyAsync(text);
         var json = System.Text.Json.JsonSerializer.Serialize(purified);
         logger.LogInformation("[sanitize] input=\"{Input}\" purified=\"{Purified}\" json={Json}", text, purified, json);
         return Content(json, "application/json");
@@ -95,7 +114,7 @@ public class SanitizeController(ILogger<SanitizeController> logger) : Controller
     /// <c>{Text}</c> with profanity replaced. Wire shape matches
     /// <c>StringSanitization.PurifyString</c>.</summary>
     [HttpPost("api/sanitize/v1/purifyString")]
-    public IActionResult PurifyString(
+    public async Task<IActionResult> PurifyString(
         [FromBody] SanitizeBody? body,
         [FromForm(Name = "Text")] string? textForm,
         [FromForm(Name = "Input")] string? inputForm,
@@ -104,28 +123,28 @@ public class SanitizeController(ILogger<SanitizeController> logger) : Controller
     {
         var input = body?.Text ?? body?.Input ?? body?.Value
             ?? textForm ?? inputForm ?? valueForm ?? textQuery ?? string.Empty;
-        return Ok(new { Text = ProfanityFilter.Purify(input) });
+        return Ok(new { Text = await PurifyAsync(input) });
     }
 
     /// <summary>POST <c>api/sanitize/v1/requestIsStringPure</c> —
     /// returns a bare JSON bool. Watch's <c>ExpectPrimitiveResponse</c>
     /// rejects object bodies here.</summary>
     [HttpPost("api/sanitize/v1/requestIsStringPure")]
-    public IActionResult IsStringPure(
+    public async Task<IActionResult> IsStringPure(
         [FromBody] SanitizeBody? body,
         [FromForm(Name = "Text")] string? textForm,
         [FromQuery(Name = "text")] string? textQuery)
     {
         var input = body?.Text ?? body?.Input ?? body?.Value
             ?? textForm ?? textQuery ?? string.Empty;
-        return Ok(ProfanityFilter.IsClean(input));
+        return Ok(await IsCleanAsync(input));
     }
 
     /// <summary>POST <c>api/sanitize/v1/isPure</c> — 2023 route used
     /// by CV2 maker pen text such as port names. It imports an object
     /// field named <c>IsPure</c>.</summary>
     [HttpPost("api/sanitize/v1/isPure")]
-    public IActionResult IsPureV1(
+    public async Task<IActionResult> IsPureV1(
         [FromBody] SanitizeBody? body,
         [FromForm(Name = "Text")] string? textForm,
         [FromForm(Name = "Input")] string? inputForm,
@@ -134,7 +153,7 @@ public class SanitizeController(ILogger<SanitizeController> logger) : Controller
     {
         var input = body?.Text ?? body?.Input ?? body?.Value
             ?? textForm ?? inputForm ?? valueForm ?? textQuery ?? string.Empty;
-        var isPure = ProfanityFilter.IsClean(input);
+        var isPure = await IsCleanAsync(input);
         logger.LogInformation(
             "[sanitize] isPure context={Context} intent={Intent} ruleset={Ruleset} valueLength={ValueLength} isPure={IsPure}",
             body?.Context ?? string.Empty,
@@ -151,13 +170,13 @@ public class SanitizeController(ILogger<SanitizeController> logger) : Controller
     /// used by room/settings forms. Its importer reads an <c>IsPure</c>
     /// object field, unlike the newer bare-bool route above.</summary>
     [HttpPost("api/sanitize/isPure")]
-    public IActionResult IsPure(
+    public async Task<IActionResult> IsPure(
         [FromBody] SanitizeBody? body,
         [FromForm(Name = "Text")] string? textForm,
         [FromQuery(Name = "text")] string? textQuery)
     {
         var input = body?.Text ?? body?.Input ?? body?.Value
             ?? textForm ?? textQuery ?? string.Empty;
-        return Ok(new { IsPure = ProfanityFilter.IsClean(input) });
+        return Ok(new { IsPure = await IsCleanAsync(input) });
     }
 }

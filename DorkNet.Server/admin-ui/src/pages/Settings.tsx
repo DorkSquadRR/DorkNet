@@ -8,6 +8,7 @@ interface ServerSettings {
   signupsDisabled: boolean;
   globalFriendsEnabled: boolean;
   weeklyChallengesCompletedRequired: boolean;
+  profanityFilterDisabled: boolean;
   updatedAt: string;
 }
 
@@ -208,6 +209,30 @@ export function Settings({ embedded }: { embedded?: boolean } = {}) {
       });
       setSettings(updated);
       toast.push(next ? 'Everyone is now friends — players refreshing live.' : 'All-friends turned off.', 'success');
+    } catch (e) {
+      toast.push((e as Error).message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleProfanity = async () => {
+    if (!settings) return;
+    const next = !settings.profanityFilterDisabled;
+    const verb = next ? 'turn OFF the profanity filter' : 'turn the profanity filter back on';
+    if (!confirm(
+      next
+        ? 'Turn off the profanity filter? Room names, invention names and chat will no longer be censored by the server. Toggle back on any time.'
+        : `Really ${verb}? Text will be filtered again server-side.`,
+    )) return;
+    setBusy(true);
+    try {
+      const updated = await api<ServerSettings>('/settings/profanity', {
+        method: 'POST',
+        body: { Disabled: next },
+      });
+      setSettings(updated);
+      toast.push(next ? 'Profanity filter disabled.' : 'Profanity filter enabled.', 'success');
     } catch (e) {
       toast.push((e as Error).message, 'error');
     } finally {
@@ -481,6 +506,37 @@ export function Settings({ embedded }: { embedded?: boolean } = {}) {
             {settings.globalFriendsEnabled
               ? <span className="badge-online">Everyone is friends</span>
               : <span className="badge-neutral">Normal friend lists</span>}
+          </div>
+        </div>
+      )}
+
+      {settings && (
+        <div className="card !p-5 max-w-2xl mt-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm font-semibold text-ink-50">Profanity filter</h2>
+              <p className="mt-1 text-xs text-ink-400">
+                The server-side filter behind <span className="font-mono">api/sanitize/*</span> that
+                the watch calls before letting a player submit a room name, invention name, or chat
+                message. Turn it off to stop censoring text entirely — every check returns "clean"
+                and input is passed through unchanged. Takes effect immediately.
+              </p>
+              <p className="mt-2 text-[11px] text-ink-500">
+                Last changed {new Date(settings.updatedAt).toLocaleString()}.
+              </p>
+            </div>
+            <button
+              onClick={toggleProfanity}
+              disabled={busy}
+              className={(settings.profanityFilterDisabled ? 'btn-primary' : 'btn-danger') + ' text-xs shrink-0'}
+            >
+              {busy ? 'Working…' : settings.profanityFilterDisabled ? 'Enable filter' : 'Disable filter'}
+            </button>
+          </div>
+          <div className="mt-4 text-xs">
+            {settings.profanityFilterDisabled
+              ? <span className="badge-banned">Filter off — nothing censored</span>
+              : <span className="badge-online">Filter active</span>}
           </div>
         </div>
       )}

@@ -151,6 +151,52 @@ public class ServerSettingsService(DorkNetDbContext db)
         return ToWeeklySettings(existing);
     }
 
+    /// <summary>Whether the server-side profanity filter behind
+    /// <c>api/sanitize/*</c> is bypassed. Off by default (filter active).</summary>
+    public async Task<bool> IsProfanityFilterDisabledAsync()
+    {
+        var row = await db.ServerSettings.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == RowId);
+        return row?.ProfanityFilterDisabled ?? false;
+    }
+
+    public async Task<ServerSettingsEntity> SetProfanityFilterDisabledAsync(bool disabled)
+    {
+        var existing = await GetTrackedRowAsync();
+        existing.ProfanityFilterDisabled = disabled;
+        existing.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return existing;
+    }
+
+    /// <summary>Live charades slot→list bindings. Empty/unparseable JSON
+    /// resolves to <see cref="CharadesSlotBindings.Empty"/> (every slot
+    /// falls back to its built-in seed list).</summary>
+    public async Task<CharadesSlotBindings> GetCharadesSlotBindingsAsync()
+    {
+        var row = await GetAsync();
+        if (string.IsNullOrWhiteSpace(row.CharadesSlotBindingsJson))
+            return CharadesSlotBindings.Empty;
+        try
+        {
+            return JsonSerializer.Deserialize<CharadesSlotBindings>(
+                row.CharadesSlotBindingsJson, JsonOptions) ?? CharadesSlotBindings.Empty;
+        }
+        catch
+        {
+            return CharadesSlotBindings.Empty;
+        }
+    }
+
+    public async Task<CharadesSlotBindings> SetCharadesSlotBindingsAsync(CharadesSlotBindings bindings)
+    {
+        var existing = await GetTrackedRowAsync();
+        existing.CharadesSlotBindingsJson = JsonSerializer.Serialize(bindings, JsonOptions);
+        existing.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return bindings;
+    }
+
     private async Task<ServerSettingsEntity> GetTrackedRowAsync()
     {
         var existing = await db.ServerSettings.FirstOrDefaultAsync(s => s.Id == RowId);

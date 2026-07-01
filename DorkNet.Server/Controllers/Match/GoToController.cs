@@ -505,6 +505,11 @@ public class GoToController(
     /// dorm if the instance was forgotten (server restart, owner
     /// already left and nobody re-created it).</summary>
     [HttpPost("/goto/instance/{roomInstanceId:long}")]
+    // The 2023 client renamed the whole matchmaking surface from goto/* to
+    // matchmake/* (verified 2023.03.21 il2cpp dump — RecNet.Matchmaking
+    // ANOAAIHGHMG builds "matchmake/instance/{0}"). Same handler, both
+    // mounts, so December and 2023 clients each hit the path they build.
+    [HttpPost("/matchmake/instance/{roomInstanceId:long}")]
     public async Task<ActionResult<MatchmakingResponseDto>> GoToInstance(long roomInstanceId)
     {
         var resp = await BuildPrivateInstanceJoinResponseAsync(roomInstanceId);
@@ -512,7 +517,51 @@ public class GoToController(
         return Ok(resp);
     }
 
+    /// <summary>POST <c>matchmake/chatinvite/{accountId}/{roomInstanceId}</c>
+    /// — the 2023 "pull into my match" path. When a party owner invites
+    /// someone over chat (PlayerParty.AcceptChatPartyInvite →
+    /// RecNet.Matchmaking chatinvite, verified in the 2023.03.21 il2cpp
+    /// dump), the invitee's watch posts here to matchmake into the owner's
+    /// instance. The two path params are the inviter's account id and the
+    /// room instance id in an order the client doesn't document; a private
+    /// instance id is always ≥ 2^24 while account ids are small sequential,
+    /// so we take the param that resolves to a registered instance (falling
+    /// back to the larger value). Unlike the message-based
+    /// <c>POST /invite</c> flow, a chat party invite writes no invitee row,
+    /// so we add the caller to the allow-list here before resolving the
+    /// join — the owner explicitly pulled them in.</summary>
+    [HttpPost("/matchmake/chatinvite/{p0:long}/{p1:long}")]
+    public async Task<ActionResult<MatchmakingResponseDto>> MatchmakeChatInvite(long p0, long p1)
+    {
+        var roomInstanceId = await ResolveChatInviteInstanceAsync(p0, p1);
+
+        if (this.CurrentPlayerId() is long callerId && roomInstanceId > 0)
+            await privateInstances.InviteAsync(roomInstanceId, callerId);
+
+        var resp = await BuildPrivateInstanceJoinResponseAsync(roomInstanceId);
+        await RecordResponseAsync(resp);
+        logger.LogInformation(
+            "[matchmake-chatinvite] caller={Caller} p0={P0} p1={P1} → instance={Instance} error={Error}",
+            this.CurrentPlayerId(), p0, p1, roomInstanceId, resp.ErrorCode);
+        return Ok(resp);
+    }
+
+    /// <summary>Pick the room-instance param out of a chatinvite's two path
+    /// segments. Prefers whichever resolves to a registered private
+    /// instance; if neither does (e.g. a public-room party pull whose id is
+    /// synthetic), falls back to the larger value since instance ids dwarf
+    /// account ids.</summary>
+    private async Task<long> ResolveChatInviteInstanceAsync(long p0, long p1)
+    {
+        if (await privateInstances.GetAsync(p0) is not null) return p0;
+        if (await privateInstances.GetAsync(p1) is not null) return p1;
+        return Math.Max(p0, p1);
+    }
+
     [HttpPost("/goto/invite/{inviteId:long}")]
+    // 2023 rename of goto/invite → matchmake/invite (RecNet.Matchmaking
+    // OIEDPBLNMOP). {inviteId} is the invite message id, same as December.
+    [HttpPost("/matchmake/invite/{inviteId:long}")]
     public async Task<ActionResult<MatchmakingResponseDto>> GoToInvite(long inviteId)
     {
         var callerId = this.CurrentPlayerId();

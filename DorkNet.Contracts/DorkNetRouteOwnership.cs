@@ -46,6 +46,12 @@ public static class DorkNetRouteOwnership
                 "/discover",
                 "/featuredrooms",
                 "/goto",
+                // 2023 clients renamed the whole goto/* matchmaking surface
+                // to matchmake/* (matchmake/room, /instance, /invite,
+                // /chatinvite, …). Same controller as /goto, so it belongs
+                // to the match service; without this it fell through to the
+                // Monolith default owner.
+                "/matchmake",
                 "/hot_rooms",
                 "/hot_roomsandplaylists",
                 "/invite",
