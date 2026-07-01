@@ -57,8 +57,8 @@ that outer check.
 | Overview | `/` | Live ops dashboard, online players, active sessions, quick kick/ban/broadcast actions |
 | Moderation | `/players` | Player directory, bans, reports, per-player ban/grant/gift/password/avatar/account actions |
 | Activity | `/activity` | Admin audit log and per-player request logs |
-| Content | `/rooms`, `/rooms/:id`, `/import-room`, `/content` | Room list/detail, room import, instances, leaderboards, community board, loading tips |
-| Operations | `/broadcast`, `/settings` | Server broadcast, server toggles, signup codes, weekly challenges, Play menu tags, Rec Center doors, game config values |
+| Content | `/rooms`, `/rooms/:id`, `/import-room`, `/content` | Room list/detail, room import, instances, leaderboards, community board, loading tips, 3D Charades word lists |
+| Operations | `/broadcast`, `/settings` | Server broadcast, server toggles (signups, everyone-is-friends, profanity filter), signup codes, weekly challenges, Play menu tags, Rec Center doors, game config values |
 
 Several older admin URLs are kept as redirects:
 
@@ -75,6 +75,39 @@ Several older admin URLs are kept as redirects:
 | `/signup-codes` | `/settings?tab=signup` |
 
 `/import-room-legacy` still exists for the legacy room importer.
+
+## 3D Charades word lists (`/content?tab=charades`)
+
+The March 2023 client fetches a charades deck at card-box spawn from
+`GET api/activities/charades/v1/words/{source}`, where `{source}` is one
+of three baked `CardBox.cardSource` slots — `Charades`,
+`CharadesAprilFoolsDay`, and `Icebreakers` (verified in the 2023.03.21
+il2cpp dump). The response is a JSON array of
+`{ "EN_US": "<phrase>", "Difficulty": <int> }` (`Difficulty` is the client
+`CNMMMNJJDMM` enum: 0 easy, 1 hard, 10 very hard, 20 icebreaker).
+
+The admin tab exposes:
+
+- A **library** of unlimited named word lists (`CharadesWordListEntity`
+  rows), each with a per-card difficulty. Paste-import accepts one phrase
+  per line with an optional `| easy|hard|veryhard|icebreaker` suffix.
+- **Live card slots** — three dropdowns binding each client slot to any
+  library list. Switching a slot just repoints its binding
+  (`ServerSettingsEntity.CharadesSlotBindingsJson`); it takes effect on the
+  next card-box refresh (room rejoin). An unbound slot falls back to the
+  built-in list seeded for it.
+
+Three built-in lists (Default / April Fools / Icebreakers) are seeded on
+first boot and bound to their slots. Seeding is idempotent — admin edits
+survive restarts.
+
+## Profanity filter toggle (`/settings`)
+
+`ServerSettingsEntity.ProfanityFilterDisabled` gates the server-side
+`api/sanitize/*` filter. When on, every sanitize route returns input
+unchanged and treats all text as clean, so room/invention names and chat
+are never censored. Off by default; checked per request so it takes effect
+immediately.
 
 ## Build And Deploy
 
