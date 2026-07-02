@@ -217,6 +217,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<PrivateInstanceService>();
         services.AddScoped<CommunityBoardService>();
         services.AddScoped<ServerSettingsService>();
+        services.AddScoped<CharadesWordListService>();
         // Singletons — these own connectionless state (Redis-backed or
         // process-local) and don't need a per-request scope.
         services.AddSingleton<NotificationService>();
