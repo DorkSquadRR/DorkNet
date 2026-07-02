@@ -28,6 +28,10 @@ public sealed class MatchmakePullInviteTests : IClassFixture<DorkNetServerFactor
     [InlineData("/matchmake/instance/999")]
     [InlineData("/matchmake/invite/999")]
     [InlineData("/matchmake/chatinvite/2/16777216")] // {accountId}/{roomInstanceId}
+    [InlineData("/matchmake/player/2")]
+    [InlineData("/matchmake/event/999")]
+    [InlineData("/matchmake/club/999")]
+    [InlineData("/matchmake/code/5/ABCDEF")] // {roomId}/{code}
     public async Task Matchmake_pull_routes_exist(string path)
     {
         using var client = ApiClient();
@@ -44,6 +48,10 @@ public sealed class MatchmakePullInviteTests : IClassFixture<DorkNetServerFactor
     [InlineData("/matchmake/invite/999")]
     [InlineData("/matchmake/chatinvite/2/16777216")]
     [InlineData("/matchmake/room/5")]
+    [InlineData("/matchmake/player/2")]
+    [InlineData("/matchmake/event/999")]
+    [InlineData("/matchmake/club/999")]
+    [InlineData("/matchmake/code/5/ABCDEF")]
     public void Matchmake_paths_route_to_same_service_as_goto(string path)
     {
         const string apex = "dork.test";
