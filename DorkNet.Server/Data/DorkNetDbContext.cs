@@ -60,6 +60,7 @@ public class DorkNetDbContext(DbContextOptions<DorkNetDbContext> options) : DbCo
     public DbSet<GameSessionEntity> GameSessions => Set<GameSessionEntity>();
     public DbSet<CommunityBoardEntity> CommunityBoardRows => Set<CommunityBoardEntity>();
     public DbSet<LoadingScreenTipEntity> LoadingScreenTips => Set<LoadingScreenTipEntity>();
+    public DbSet<CharadesWordListEntity> CharadesWordLists => Set<CharadesWordListEntity>();
     public DbSet<ServerSettingsEntity> ServerSettings => Set<ServerSettingsEntity>();
     public DbSet<RoomKeyEntity> RoomKeys => Set<RoomKeyEntity>();
     public DbSet<RoomKeyPurchaseEntity> RoomKeyPurchases => Set<RoomKeyPurchaseEntity>();
