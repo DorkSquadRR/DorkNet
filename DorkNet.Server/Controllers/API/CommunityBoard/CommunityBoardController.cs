@@ -65,7 +65,6 @@ public class CommunityBoardController(
                 ? new()
                 : await db.Rooms
                     .Where(r => ids.Contains(r.Id))
-                    .Select(r => new { r.Id, r.Name, r.ImageName })
                     .ToDictionaryAsync(r => r.Id);
             // 2020.12 FeaturedRoomGroup deserializer (NMPFCIJPODA.PPGFHEDFBEA)
             // reads required keys: FeaturedRoomGroupId, Name, Rooms (NOT
@@ -76,13 +75,13 @@ public class CommunityBoardController(
                 FeaturedRoomGroupId = 0L,
                 Name = group.Name ?? string.Empty,
                 Rooms = ids.Select(id => rooms.TryGetValue(id, out var r)
-                    ? new { RoomName = r.Name, RoomId = r.Id, ImageName = r.ImageName ?? string.Empty }
-                    : new { RoomName = string.Empty, RoomId = id, ImageName = string.Empty })
+                    ? new { RoomName = r.Name, RoomId = r.Id, ImageName = RoomService.ResolveDisplayImageName(r) }
+                    : new { RoomName = string.Empty, RoomId = id, ImageName = RoomService.DefaultRoomImageName })
                     .ToArray(),
                 // Keep the old key around for any 2020.03 clients hitting prod.
                 FeaturedRooms = ids.Select(id => rooms.TryGetValue(id, out var r)
-                    ? new { RoomName = r.Name, RoomId = r.Id, ImageName = r.ImageName ?? string.Empty }
-                    : new { RoomName = string.Empty, RoomId = id, ImageName = string.Empty })
+                    ? new { RoomName = r.Name, RoomId = r.Id, ImageName = RoomService.ResolveDisplayImageName(r) }
+                    : new { RoomName = string.Empty, RoomId = id, ImageName = RoomService.DefaultRoomImageName })
                     .ToArray(),
             };
         }
