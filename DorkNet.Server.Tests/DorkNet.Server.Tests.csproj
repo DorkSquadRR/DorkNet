@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DorkNet.Server\DorkNet.Server.csproj" />
+    <ProjectReference Include="..\DorkNet.Contracts\DorkNet.Contracts.csproj" />
   </ItemGroup>
 
   <ItemGroup>

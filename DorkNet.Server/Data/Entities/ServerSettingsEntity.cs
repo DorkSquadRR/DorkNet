@@ -64,5 +64,23 @@ public class ServerSettingsEntity
     /// migration each time.</summary>
     public string DiscoveredGameConfigsJson { get; set; } = string.Empty;
 
+    /// <summary>When true, the server-side profanity filter behind
+    /// <c>api/sanitize/*</c> is bypassed — every string is treated as
+    /// clean and returned unmodified. Built for private friend servers
+    /// that don't want room/invention names or chat censored. Off by
+    /// default (filter active). See <see cref="Services.ProfanityFilter"/>
+    /// and <c>SanitizeController</c>.</summary>
+    public bool ProfanityFilterDisabled { get; set; }
+
+    /// <summary>Which charades word list (row id in
+    /// <see cref="CharadesWordListEntity"/>) is live for each of the
+    /// client's three baked card-source slots. JSON object keyed by the
+    /// client enum name — <c>{"Charades":id,"CharadesAprilFoolsDay":id,
+    /// "Icebreakers":id}</c>. Empty/0 or a dangling id falls back to the
+    /// list the seeder created for that slot. Lets admins keep an
+    /// unlimited library and switch which list a slot serves without a
+    /// redeploy.</summary>
+    public string CharadesSlotBindingsJson { get; set; } = string.Empty;
+
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

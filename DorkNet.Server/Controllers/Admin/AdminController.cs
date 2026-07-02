@@ -36,6 +36,7 @@ public class AdminController(
     PlayerPresenceService playerPresence,
     PlayerLogService playerLog,
     ServerSettingsService serverSettings,
+    CharadesWordListService charades,
     SignupCodeService signupCodes,
     IObjectStorage storage,
     DomainConfig domain,
@@ -1490,12 +1491,121 @@ public class AdminController(
             row.SignupsDisabled,
             row.GlobalFriendsEnabled,
             row.WeeklyChallengesCompletedRequired,
+            row.ProfanityFilterDisabled,
             row.UpdatedAt,
         });
     }
 
     public sealed record SignupsToggleRequest(bool Disabled);
     public sealed record GlobalFriendsToggleRequest(bool Enabled);
+    public sealed record ProfanityFilterToggleRequest(bool Disabled);
+
+    /// <summary>POST <c>api/admin/v1/settings/profanity</c> — flip the
+    /// server-side profanity filter. While disabled, every
+    /// <c>api/sanitize/*</c> route returns input unchanged and treats all
+    /// text as clean, so room/invention names and chat are never censored.
+    /// Takes effect immediately (checked per request).</summary>
+    [HttpPost("settings/profanity")]
+    public async Task<ActionResult> SetProfanityFilterDisabled([FromBody] ProfanityFilterToggleRequest body)
+    {
+        var row = await serverSettings.SetProfanityFilterDisabledAsync(body.Disabled);
+        await LogAsync(body.Disabled ? "profanity_filter_disabled" : "profanity_filter_enabled", "system", 0, "");
+        await db.SaveChangesAsync();
+        return Ok(new
+        {
+            row.SignupsDisabled,
+            row.GlobalFriendsEnabled,
+            row.WeeklyChallengesCompletedRequired,
+            row.ProfanityFilterDisabled,
+            row.UpdatedAt,
+        });
+    }
+
+    // ── 3D Charades word lists ───────────────────────────────────────────
+
+    public sealed record CharadesWordDto(string Text, int Difficulty);
+    public sealed record CharadesWordListWriteDto(string? Name, List<CharadesWordDto>? Words);
+    public sealed record CharadesImportDto(string? Text, int DefaultDifficulty, bool Replace);
+    public sealed record CharadesBindingsDto(long Charades, long CharadesAprilFoolsDay, long Icebreakers);
+
+    private static List<CharadesWordListService.CharadesWord>? MapWords(List<CharadesWordDto>? words)
+        => words?.Select(w => new CharadesWordListService.CharadesWord(w.Text, w.Difficulty)).ToList();
+
+    /// <summary>GET <c>api/admin/v1/charades/wordlists</c> — the whole word
+    /// list library plus the live slot→list bindings, so the SPA can render
+    /// the editor and the three slot pickers in one round trip.</summary>
+    [HttpGet("charades/wordlists")]
+    public async Task<ActionResult> ListCharadesWordLists()
+    {
+        var lists = await charades.GetAllAsync();
+        var bindings = await charades.GetBindingsAsync();
+        return Ok(new { lists, bindings });
+    }
+
+    /// <summary>POST <c>api/admin/v1/charades/wordlists</c> — create a new
+    /// word list (optionally pre-populated).</summary>
+    [HttpPost("charades/wordlists")]
+    public async Task<ActionResult> CreateCharadesWordList([FromBody] CharadesWordListWriteDto body)
+    {
+        var dto = await charades.CreateAsync(body.Name ?? string.Empty, MapWords(body.Words));
+        await LogAsync("create_charades_list", "global", dto.Id, dto.Name);
+        return Ok(dto);
+    }
+
+    /// <summary>PUT <c>api/admin/v1/charades/wordlists/{id}</c> — rename
+    /// and/or replace the words of a list. Null fields are left as-is.</summary>
+    [HttpPut("charades/wordlists/{id:long}")]
+    public async Task<ActionResult> UpdateCharadesWordList(long id, [FromBody] CharadesWordListWriteDto body)
+    {
+        var dto = await charades.UpdateAsync(id, body.Name, MapWords(body.Words));
+        if (dto is null) return NotFound();
+        await LogAsync("update_charades_list", "global", id, dto.Name);
+        return Ok(dto);
+    }
+
+    /// <summary>DELETE <c>api/admin/v1/charades/wordlists/{id}</c> — remove a
+    /// list. Any slot pointing at it is unbound (falls back to its built-in).</summary>
+    [HttpDelete("charades/wordlists/{id:long}")]
+    public async Task<ActionResult> DeleteCharadesWordList(long id)
+    {
+        var ok = await charades.DeleteAsync(id);
+        if (!ok) return NotFound();
+        await LogAsync("delete_charades_list", "global", id, "");
+        return Ok(new { deleted = id });
+    }
+
+    /// <summary>POST <c>api/admin/v1/charades/wordlists/{id}/import</c> —
+    /// bulk-add cards from pasted text (one phrase per line, optional
+    /// <c>| difficulty</c> suffix). <c>Replace=true</c> overwrites the
+    /// list; otherwise the cards are appended.</summary>
+    [HttpPost("charades/wordlists/{id:long}/import")]
+    public async Task<ActionResult> ImportCharadesWordList(long id, [FromBody] CharadesImportDto body)
+    {
+        var dto = await charades.ImportAsync(id, body.Text ?? string.Empty, body.DefaultDifficulty, body.Replace);
+        if (dto is null) return NotFound();
+        await LogAsync("import_charades_list", "global", id, dto.Name);
+        return Ok(dto);
+    }
+
+    /// <summary>PUT <c>api/admin/v1/charades/bindings</c> — set which list is
+    /// live for each of the client's three card-source slots. A list id of
+    /// 0 unbinds that slot (falls back to its built-in). This is the
+    /// "switch between lists" control.</summary>
+    [HttpPut("charades/bindings")]
+    public async Task<ActionResult> SetCharadesBindings([FromBody] CharadesBindingsDto body)
+    {
+        foreach (var listId in new[] { body.Charades, body.CharadesAprilFoolsDay, body.Icebreakers })
+        {
+            if (listId != 0 && !await db.CharadesWordLists.AnyAsync(l => l.Id == listId))
+                return BadRequest(new { error = "unknown_list", id = listId });
+        }
+
+        var bindings = await serverSettings.SetCharadesSlotBindingsAsync(
+            new CharadesSlotBindings(body.Charades, body.CharadesAprilFoolsDay, body.Icebreakers));
+        await LogAsync("set_charades_bindings", "system", 0,
+            $"{bindings.Charades}/{bindings.CharadesAprilFoolsDay}/{bindings.Icebreakers}");
+        return Ok(bindings);
+    }
 
     /// <summary>POST <c>api/admin/v1/settings/global-friends</c> — flip the
     /// "everyone is friends" toggle. No relationship rows are written; the
