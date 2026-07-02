@@ -11,6 +11,8 @@ namespace DorkNet.Server.Services;
 /// </summary>
 public class RoomService(DorkNetDbContext db)
 {
+    public const string DefaultRoomImageName = "image_RecCenter.png";
+
     /// <summary>
     /// Idempotent seed of the well-known Rec Room Original rooms — pulled
     /// from the AGRoomRuntimeConfig.Locations array we walked in
@@ -232,7 +234,6 @@ public class RoomService(DorkNetDbContext db)
         // image/<blob-name> keys, so do NOT require the mapped blob
         // filename to exist on local disk before using it. Local disk
         // is only a fallback for rooms with no blob-name mapping.
-        const string ultimateFallback = "image_RecCenter.png";
         var imagesDir = Path.Combine(AppContext.BaseDirectory, "data", "images");
         bool OnDisk(string name) =>
             !string.IsNullOrEmpty(name) && File.Exists(Path.Combine(imagesDir, name));
@@ -248,7 +249,7 @@ public class RoomService(DorkNetDbContext db)
             else if (OnDisk(r.ImageName))
                 preferred = r.ImageName;
             else
-                preferred = ultimateFallback;
+                preferred = DefaultRoomImageName;
 
             if (r.ImageName != preferred)
             {
@@ -1085,7 +1086,7 @@ public class RoomService(DorkNetDbContext db)
         Description = r.Description,
         CreatorPlayerId = r.CreatorPlayerId,
         CreatorAccountId = r.CreatorPlayerId,
-        ImageName = r.ImageName,
+        ImageName = ResolveDisplayImageName(r),
         State = r.State,
         Accessibility = r.Accessibility,
         SupportsLevelVoting = r.SupportsLevelVoting,
@@ -1128,6 +1129,16 @@ public class RoomService(DorkNetDbContext db)
             VisitCount = r.VisitCount,
         },
     };
+
+    public static string ResolveDisplayImageName(RoomEntity r)
+    {
+        if (!string.IsNullOrWhiteSpace(r.ImageName))
+            return r.ImageName;
+
+        return RoomImagesByName.TryGetValue(r.Name, out var imageName) && !string.IsNullOrWhiteSpace(imageName)
+            ? imageName
+            : DefaultRoomImageName;
+    }
 
     /// <summary>
     /// Idempotent admin overrides applied AFTER SeedAsync. Keeps the seed
