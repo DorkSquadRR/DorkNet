@@ -1,0 +1,785 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
+using System.Text;
+using System.Text.Json;
+using Open.IdentityServer;
+using Open.IdentityServer.Models;
+using Open.IdentityServer.ResponseHandling;
+using Open.IdentityServer.Services;
+using Open.IdentityServer.Stores;
+using Open.IdentityServer.Validation;
+using Microsoft.AspNetCore.Http.Features;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Primitives;
+using Microsoft.IdentityModel.Tokens;
+using DorkNet.Server.Data;
+using DorkNet.Server.Data.Entities;
+using DorkNet.Server.Services;
+
+namespace DorkNet.Server.Auth;
+
+public sealed class IdentityServerSigningKeyProvider
+{
+    private readonly string _legacySecret;
+
+    public IdentityServerSigningKeyProvider(IConfiguration config)
+    {
+        _legacySecret =
+            Environment.GetEnvironmentVariable("DORKNET_JWT_SECRET")
+            ?? Environment.GetEnvironmentVariable("RECNET_JWT_SECRET")
+            ?? config["Jwt:Secret"]
+            ?? throw new InvalidOperationException(
+                "JWT secret not configured. Set DORKNET_JWT_SECRET env var or Jwt:Secret in appsettings.Local.json.");
+
+        CertificatePath = ResolveCertificatePath(config);
+        var password = config["IdentityServer:SigningCertificatePassword"] ?? _legacySecret;
+        var certificateBase64 = config["IdentityServer:SigningCertificateBase64"];
+        if (!string.IsNullOrWhiteSpace(certificateBase64))
+        {
+            LoadedFromBase64 = true;
+            Certificate = LoadCertificateFromBase64(certificateBase64, password);
+        }
+        else
+        {
+            Certificate = LoadOrCreateCertificate(CertificatePath, password);
+        }
+        SigningKey = new X509SecurityKey(Certificate);
+        LegacyJwtKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_legacySecret));
+    }
+
+    public string CertificatePath { get; }
+    public bool LoadedFromBase64 { get; }
+    public string CertificateSource => LoadedFromBase64
+        ? "IdentityServer:SigningCertificateBase64"
+        : CertificatePath;
+    public X509Certificate2 Certificate { get; }
+    public SecurityKey SigningKey { get; }
+    public SecurityKey LegacyJwtKey { get; }
+    public SecurityKey[] ValidationKeys => new[] { SigningKey, LegacyJwtKey };
+
+    private static string ResolveCertificatePath(IConfiguration config)
+    {
+        var path = config["IdentityServer:SigningCertificatePath"];
+        if (string.IsNullOrWhiteSpace(path))
+            path = Path.Combine(AppContext.BaseDirectory, "data", "identityserver-signing.pfx");
+        return path;
+    }
+
+    private static X509Certificate2 LoadCertificateFromBase64(string certificateBase64, string password)
+    {
+        var flags = X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.Exportable;
+        var compact = NormalizeCertificateBase64(certificateBase64);
+        byte[] bytes;
+        try
+        {
+            bytes = Convert.FromBase64String(compact);
+        }
+        catch (FormatException ex)
+        {
+            throw new InvalidOperationException(
+                "IdentityServer signing certificate base64 is invalid. " +
+                "Set IdentityServer__SigningCertificateBase64 to the PFX bytes encoded as base64, " +
+                "without a file path or shell assignment text.",
+                ex);
+        }
+        try
+        {
+            return new X509Certificate2(bytes, password, flags);
+        }
+        catch (CryptographicException ex)
+        {
+            if (TryLoadPemCertificate(bytes, password, flags, out var certificate))
+                return certificate;
+
+            throw new InvalidOperationException(
+                "IdentityServer signing certificate base64 decoded successfully, but it is not a valid PFX/PKCS#12 certificate. " +
+                "Set IdentityServer__SigningCertificateBase64 to the PFX bytes encoded as base64 and make sure " +
+                "IdentityServer__SigningCertificatePassword matches the PFX password.",
+                ex);
+        }
+    }
+
+    private static bool TryLoadPemCertificate(
+        byte[] bytes,
+        string password,
+        X509KeyStorageFlags flags,
+        out X509Certificate2 certificate)
+    {
+        certificate = null!;
+
+        string pem;
+        try
+        {
+            pem = Encoding.UTF8.GetString(bytes);
+        }
+        catch (DecoderFallbackException)
+        {
+            return false;
+        }
+
+        if (!pem.Contains("-----BEGIN", StringComparison.Ordinal))
+            return false;
+
+        try
+        {
+            using var pemCertificate = X509Certificate2.CreateFromPem(pem, pem);
+            if (!pemCertificate.HasPrivateKey)
+                return false;
+
+            var pfxBytes = pemCertificate.Export(X509ContentType.Pfx, password);
+            certificate = new X509Certificate2(pfxBytes, password, flags);
+            return true;
+        }
+        catch (CryptographicException)
+        {
+            return false;
+        }
+    }
+
+    private static string NormalizeCertificateBase64(string value)
+    {
+        var text = value.Trim().Trim('"', '\'');
+        var equals = text.IndexOf('=');
+        if (equals > 0)
+        {
+            var key = text[..equals].Trim();
+            if (key.Equals("IdentityServer__SigningCertificateBase64", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("IdentityServer:SigningCertificateBase64", StringComparison.OrdinalIgnoreCase))
+                text = text[(equals + 1)..].Trim().Trim('"', '\'');
+        }
+
+        if (text.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+        {
+            var comma = text.IndexOf(',');
+            if (comma >= 0)
+                text = text[(comma + 1)..];
+        }
+
+        if (text.StartsWith("base64:", StringComparison.OrdinalIgnoreCase))
+            text = text["base64:".Length..];
+
+        var compact = new string(text.Where(c => !char.IsWhiteSpace(c)).ToArray())
+            .Replace('-', '+')
+            .Replace('_', '/');
+        return (compact.Length % 4) switch
+        {
+            2 => compact + "==",
+            3 => compact + "=",
+            _ => compact,
+        };
+    }
+
+    private static X509Certificate2 LoadOrCreateCertificate(string path, string password)
+    {
+        var flags = X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.Exportable;
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+
+        if (File.Exists(path))
+            return new X509Certificate2(path, password, flags);
+
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest(
+            "CN=DorkNet IdentityServer Signing",
+            rsa,
+            HashAlgorithmName.SHA256,
+            RSASignaturePadding.Pkcs1);
+        request.CertificateExtensions.Add(
+            new X509KeyUsageExtension(X509KeyUsageFlags.DigitalSignature, critical: false));
+
+        using var created = request.CreateSelfSigned(
+            DateTimeOffset.UtcNow.AddDays(-1),
+            DateTimeOffset.UtcNow.AddYears(10));
+        var bytes = created.Export(X509ContentType.Pfx, password);
+        File.WriteAllBytes(path, bytes);
+        return new X509Certificate2(bytes, password, flags);
+    }
+}
+
+public static class RecRoomIdentityServerRegistration
+{
+    public static void AddRecRoomIdentityServer(
+        this IServiceCollection services,
+        IConfiguration config,
+        DomainConfig domain,
+        IdentityServerSigningKeyProvider signingKeyProvider)
+    {
+        services
+            .AddIdentityServer(options =>
+            {
+                options.IssuerUri = domain.AuthIssuer.TrimEnd('/');
+            })
+            .AddInMemoryIdentityResources(RecRoomIdentityServerConfig.IdentityResources)
+            .AddInMemoryApiScopes(RecRoomIdentityServerConfig.ApiScopes)
+            .AddInMemoryClients(RecRoomIdentityServerConfig.Clients)
+            .AddSigningCredential(signingKeyProvider.SigningKey, SecurityAlgorithms.RsaSha256)
+            .AddResourceOwnerValidator<RecRoomPasswordValidator>()
+            .AddExtensionGrantValidator<CachedLoginGrantValidator>()
+            .AddProfileService<RecRoomProfileService>();
+
+        services.AddTransient<ITokenResponseGenerator, RecRoomTokenResponseGenerator>();
+    }
+}
+
+internal static class RecRoomIdentityServerConfig
+{
+    public const string ClientId = "recroom";
+    public const string ClientSecret = "VxZ53kgbbEaRoZAeMe00MagtgD12GLL2";
+    public const string GameClientScope = "gameClient";
+    public const string CachedLoginGrantType = "cached_login";
+
+    public static readonly IdentityResource[] IdentityResources =
+    {
+        new IdentityResources.OpenId(),
+        new IdentityResources.Profile(),
+    };
+
+    public static readonly ApiScope[] ApiScopes =
+    {
+        new(GameClientScope, "Game client")
+        {
+            UserClaims = RecRoomIdentityClaims.UserClaimTypes,
+        },
+        new("api", "DorkNet API")
+        {
+            UserClaims = RecRoomIdentityClaims.UserClaimTypes,
+        },
+    };
+
+    public static readonly Client[] Clients =
+    {
+        new()
+        {
+            ClientId = ClientId,
+            ClientName = "Rec Room game client",
+            RequireClientSecret = true,
+            ClientSecrets = { new Secret(ClientSecret.Sha256()) },
+            AllowedGrantTypes = { GrantType.ResourceOwnerPassword, "refresh_token", CachedLoginGrantType },
+            AllowedScopes = RecRoomScopes(),
+            AllowOfflineAccess = true,
+            AccessTokenLifetime = 60 * 60 * 12,
+            AbsoluteRefreshTokenLifetime = 60 * 60 * 24 * 30,
+            SlidingRefreshTokenLifetime = 60 * 60 * 24 * 30,
+            RefreshTokenUsage = TokenUsage.ReUse,
+            RefreshTokenExpiration = TokenExpiration.Absolute,
+            UpdateAccessTokenClaimsOnRefresh = true,
+            AlwaysIncludeUserClaimsInIdToken = true,
+        },
+    };
+
+    private static ICollection<string> RecRoomScopes() =>
+    [
+        IdentityServerConstants.StandardScopes.OpenId,
+        IdentityServerConstants.StandardScopes.Profile,
+        IdentityServerConstants.StandardScopes.OfflineAccess,
+        GameClientScope,
+        "api",
+    ];
+}
+
+public sealed class IdentityServerGameTokenRequestMiddleware(
+    RequestDelegate next,
+    DomainConfig domain,
+    IConfiguration config,
+    ILogger<IdentityServerGameTokenRequestMiddleware> logger)
+{
+    public async Task InvokeAsync(HttpContext context)
+    {
+        if (!IsTokenRequest(context))
+        {
+            await next(context);
+            return;
+        }
+
+        var form = await context.Request.ReadFormAsync();
+        var values = form.ToDictionary(
+            kvp => kvp.Key,
+            kvp => kvp.Value,
+            StringComparer.OrdinalIgnoreCase);
+        var changed = false;
+
+        if (IsDevicePasswordGrant(values))
+        {
+            if (!values.ContainsKey("username") || string.IsNullOrWhiteSpace(values["username"].ToString()))
+            {
+                values["username"] = First(
+                    values.TryGetValue("deviceId", out var deviceId) ? deviceId.ToString() : null,
+                    values.TryGetValue("device_id", out var deviceIdSnake) ? deviceIdSnake.ToString() : null,
+                    values.TryGetValue("platformId", out var platformId) ? platformId.ToString() : null,
+                    values.TryGetValue("platform_id", out var platformIdSnake) ? platformIdSnake.ToString() : null,
+                    "anonymous");
+                changed = true;
+            }
+
+            if (!values.ContainsKey("password") || string.IsNullOrWhiteSpace(values["password"].ToString()))
+            {
+                values["password"] = "__dorknet_device_login__";
+                values["dorknet_device_login"] = "true";
+                changed = true;
+            }
+        }
+
+        var scopes = values.TryGetValue("scope", out var rawScope)
+            ? rawScope.ToString()
+            : string.Empty;
+        var mergedScopes = MergeScopes(scopes);
+        if (!string.Equals(scopes, mergedScopes, StringComparison.Ordinal))
+        {
+            values["scope"] = mergedScopes;
+            changed = true;
+        }
+
+        if (changed)
+            context.Features.Set<IFormFeature>(new FormFeature(new FormCollection(values)));
+
+        await InvokeAndPersistAccessTokenCookieAsync(context);
+    }
+
+    private async Task InvokeAndPersistAccessTokenCookieAsync(HttpContext context)
+    {
+        var originalBody = context.Response.Body;
+        await using var bufferedBody = new MemoryStream();
+        context.Response.Body = bufferedBody;
+
+        try
+        {
+            await next(context);
+
+            bufferedBody.Position = 0;
+            if (IsSuccessfulJsonResponse(context.Response))
+                TryPersistAccessTokenCookie(context, bufferedBody);
+
+            bufferedBody.Position = 0;
+            await bufferedBody.CopyToAsync(originalBody);
+        }
+        finally
+        {
+            context.Response.Body = originalBody;
+        }
+    }
+
+    private static bool IsSuccessfulJsonResponse(HttpResponse response) =>
+        response.StatusCode is >= 200 and < 300
+        && response.ContentType?.Contains("application/json", StringComparison.OrdinalIgnoreCase) == true;
+
+    private void TryPersistAccessTokenCookie(HttpContext context, Stream responseBody)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(responseBody);
+            if (!document.RootElement.TryGetProperty("access_token", out var accessTokenElement))
+                return;
+            var accessToken = accessTokenElement.GetString();
+            if (string.IsNullOrWhiteSpace(accessToken))
+                return;
+
+            var expires = DateTimeOffset.UtcNow.AddHours(12);
+            if (document.RootElement.TryGetProperty("expires_in", out var expiresInElement) &&
+                expiresInElement.TryGetInt32(out var expiresIn) &&
+                expiresIn > 0)
+            {
+                expires = DateTimeOffset.UtcNow.AddSeconds(expiresIn);
+            }
+
+            var options = new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = string.Equals(domain.Scheme, "https", StringComparison.OrdinalIgnoreCase),
+                SameSite = SameSiteMode.None,
+                Expires = expires,
+                IsEssential = true,
+            };
+
+            var cookieDomain = ResolveCookieDomain(context.Request.Host.Host);
+            if (cookieDomain is not null)
+                options.Domain = cookieDomain;
+
+            context.Response.Cookies.Append(AuthService.AccessCookieName, accessToken, options);
+            logger.LogInformation(
+                "[auth-cookie] issued access cookie host={Host} domain={Domain} secure={Secure} sameSite={SameSite} essential={IsEssential}",
+                context.Request.Host.Host,
+                cookieDomain ?? "<host-only>",
+                options.Secure,
+                options.SameSite,
+                options.IsEssential);
+        }
+        catch (JsonException)
+        {
+            // Leave the token response untouched if the upstream payload is not JSON.
+        }
+    }
+
+    private string? ResolveCookieDomain(string host)
+    {
+        var configuredCookieDomain =
+            Environment.GetEnvironmentVariable("DORKNET_AUTH_COOKIE_DOMAIN")
+            ?? config["Auth:CookieDomain"]
+            ?? config["IdentityServer:CookieDomain"];
+        if (!string.IsNullOrWhiteSpace(configuredCookieDomain))
+            return configuredCookieDomain.Trim().TrimStart('.') is { Length: > 0 } value ? "." + value : null;
+
+        var apex = domain.Apex.Trim().TrimStart('.');
+        if (string.IsNullOrWhiteSpace(apex) ||
+            apex.Equals("localhost", StringComparison.OrdinalIgnoreCase) ||
+            apex.Equals("127.0.0.1", StringComparison.OrdinalIgnoreCase) ||
+            apex.Equals("::1", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        if (host.Equals(apex, StringComparison.OrdinalIgnoreCase) ||
+            host.EndsWith("." + apex, StringComparison.OrdinalIgnoreCase))
+        {
+            return "." + apex;
+        }
+
+        if (domain.UsesHyphenSubdomains)
+        {
+            var parent = HyphenCookieParent(apex, host);
+            if (parent is not null)
+                return "." + parent;
+        }
+
+        return null;
+    }
+
+    private static string? HyphenCookieParent(string apex, string host)
+    {
+        var parts = apex.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length < 3)
+            return null;
+
+        var environmentLabel = parts[0];
+        var parent = string.Join('.', parts.Skip(1));
+        if (!host.EndsWith("." + parent, StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        var hostLabel = host[..^(parent.Length + 1)];
+        return hostLabel.EndsWith("-" + environmentLabel, StringComparison.OrdinalIgnoreCase)
+            ? parent
+            : null;
+    }
+
+    private static bool IsTokenRequest(HttpContext context) =>
+        HttpMethods.IsPost(context.Request.Method)
+        && context.Request.Path.Equals("/connect/token", StringComparison.OrdinalIgnoreCase)
+        && context.Request.HasFormContentType;
+
+    private static bool IsDevicePasswordGrant(Dictionary<string, StringValues> values)
+    {
+        if (!values.TryGetValue("grant_type", out var grantType) ||
+            !string.Equals(grantType.ToString(), GrantType.ResourceOwnerPassword, StringComparison.OrdinalIgnoreCase))
+            return false;
+        return !values.TryGetValue("password", out var password) ||
+               string.IsNullOrWhiteSpace(password.ToString());
+    }
+
+    private static string First(params string?[] values) =>
+        values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v)) ?? "anonymous";
+
+    private static string MergeScopes(string existing)
+    {
+        var scopes = existing
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        scopes.Add(IdentityServerConstants.StandardScopes.OpenId);
+        scopes.Add(IdentityServerConstants.StandardScopes.Profile);
+        scopes.Add(IdentityServerConstants.StandardScopes.OfflineAccess);
+        scopes.Add(RecRoomIdentityServerConfig.GameClientScope);
+        return string.Join(' ', scopes);
+    }
+}
+
+public sealed class RecRoomTokenResponseGenerator(
+    TimeProvider clock,
+    ITokenService tokenService,
+    IRefreshTokenService refreshTokenService,
+    IScopeParser scopeParser,
+    IResourceStore resources,
+    IClientStore clients,
+    ILogger<TokenResponseGenerator> logger) : ITokenResponseGenerator
+{
+    private readonly TokenResponseGenerator _inner = new(
+        clock,
+        tokenService,
+        refreshTokenService,
+        scopeParser,
+        resources,
+        clients,
+        logger);
+
+    public async Task<TokenResponse> ProcessAsync(TokenRequestValidationResult request)
+    {
+        var response = await _inner.ProcessAsync(request);
+        AddLegacyGameFields(response);
+        return response;
+    }
+
+    private static void AddLegacyGameFields(TokenResponse response)
+    {
+        if (string.IsNullOrWhiteSpace(response.AccessToken))
+            return;
+
+        response.Custom ??= new Dictionary<string, object>(StringComparer.Ordinal);
+        AddIfMissing(response.Custom, "Access_token", response.AccessToken);
+        AddIfMissing(response.Custom, "accessToken", response.AccessToken);
+        AddIfMissing(response.Custom, "AccessToken", response.AccessToken);
+        AddIfMissing(response.Custom, "token", response.AccessToken);
+        AddIfMissing(response.Custom, "Token", response.AccessToken);
+
+        AddIfMissing(response.Custom, "tokenType", "Bearer");
+        AddIfMissing(response.Custom, "TokenType", "Bearer");
+        AddIfMissing(response.Custom, "expiresIn", response.AccessTokenLifetime);
+        AddIfMissing(response.Custom, "ExpiresIn", response.AccessTokenLifetime);
+
+        if (!string.IsNullOrWhiteSpace(response.RefreshToken))
+        {
+            AddIfMissing(response.Custom, "Refresh_token", response.RefreshToken);
+            AddIfMissing(response.Custom, "refreshToken", response.RefreshToken);
+            AddIfMissing(response.Custom, "RefreshToken", response.RefreshToken);
+        }
+
+        var signingKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
+        AddIfMissing(response.Custom, "key", signingKey);
+        AddIfMissing(response.Custom, "Key", signingKey);
+    }
+
+    private static void AddIfMissing(IDictionary<string, object> values, string key, object value)
+    {
+        if (!values.ContainsKey(key))
+            values[key] = value;
+    }
+}
+
+public sealed class RecRoomPasswordValidator(
+    PlayerService playerService,
+    LevelService level,
+    ServerSettingsService settings,
+    DorkNetDbContext db,
+    ILogger<RecRoomPasswordValidator> logger) : IResourceOwnerPasswordValidator
+{
+    public async Task ValidateAsync(ResourceOwnerPasswordValidationContext context)
+    {
+        var raw = context.Request.Raw;
+        var deviceId = First(raw.Get("deviceId"), raw.Get("device_id"));
+        var platformId = First(raw.Get("platformId"), raw.Get("platform_id"));
+        var platform = int.TryParse(raw.Get("platform"), out var p) ? p : 0;
+        var deviceLogin = string.Equals(raw.Get("dorknet_device_login"), "true", StringComparison.OrdinalIgnoreCase);
+
+        if (!deviceLogin && !string.IsNullOrEmpty(context.Password) && !string.IsNullOrEmpty(context.UserName))
+        {
+            var byName = await playerService.GetByUsernameAsync(context.UserName);
+            if (byName is null || byName.PasswordHash is null)
+            {
+                context.Result = new GrantValidationResult(
+                    TokenRequestErrors.InvalidGrant,
+                    "unknown_user_or_no_password");
+                return;
+            }
+
+            if (!BCrypt.Net.BCrypt.Verify(context.Password, byName.PasswordHash))
+            {
+                context.Result = new GrantValidationResult(
+                    TokenRequestErrors.InvalidGrant,
+                    "password_mismatch");
+                return;
+            }
+
+            await playerService.TagPlatformAsync(byName.Id, platform, platformId);
+            await TryAwardLoginXpAsync(byName.Id);
+            context.Result = await CreateSuccessAsync(byName, "password");
+            return;
+        }
+
+        var effectiveDeviceId = !string.IsNullOrWhiteSpace(deviceId)
+            ? deviceId
+            : $"legacy-{(context.UserName ?? "anonymous").ToLowerInvariant()}";
+
+        if (await settings.AreSignupsDisabledAsync())
+        {
+            var existing = await playerService.GetByDeviceAsync(effectiveDeviceId);
+            if (existing is null)
+            {
+                logger.LogInformation(
+                    "[auth] IdentityServer password grant device fallback refused - signups disabled (device={Device})",
+                    effectiveDeviceId);
+                context.Result = new GrantValidationResult(
+                    TokenRequestErrors.InvalidGrant,
+                    "signups_disabled");
+                return;
+            }
+        }
+
+        var player = await playerService.GetOrCreateByDeviceAsync(
+            deviceId: effectiveDeviceId,
+            platform: platform,
+            platformId: platformId,
+            displayName: context.UserName);
+        await TryAwardLoginXpAsync(player.Id);
+        context.Result = await CreateSuccessAsync(player, "device_password");
+    }
+
+    private async Task<GrantValidationResult> CreateSuccessAsync(PlayerEntity player, string authMethod) =>
+        new(
+            subject: player.Id.ToString(),
+            authenticationMethod: authMethod,
+            claims: await RecRoomIdentityClaims.CreateAsync(db, player.Id, player.Username));
+
+    private async Task TryAwardLoginXpAsync(long playerId)
+    {
+        var lastSeen = await db.Players
+            .Where(p => p.Id == playerId)
+            .Select(p => p.LastSeenAt)
+            .FirstOrDefaultAsync();
+        if (lastSeen.Date < DateTime.UtcNow.Date)
+            await level.AwardXpAsync(playerId, LevelService.FirstLoginXp, "first_login_today");
+    }
+
+    private static string? First(params string?[] values) =>
+        values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
+}
+
+public sealed class CachedLoginGrantValidator(
+    PlayerService playerService,
+    LevelService level,
+    OrphanAccountTracker orphans,
+    DorkNetDbContext db,
+    ILogger<CachedLoginGrantValidator> logger) : IExtensionGrantValidator
+{
+    public string GrantType => RecRoomIdentityServerConfig.CachedLoginGrantType;
+
+    public async Task ValidateAsync(ExtensionGrantValidationContext context)
+    {
+        var raw = context.Request.Raw;
+        if (!long.TryParse(raw.Get("account_id"), out var pickedId))
+        {
+            context.Result = new GrantValidationResult(
+                TokenRequestErrors.InvalidGrant,
+                "missing account_id");
+            return;
+        }
+
+        var picked = await playerService.GetByIdAsync(pickedId);
+        if (picked is null)
+        {
+            context.Result = new GrantValidationResult(
+                TokenRequestErrors.InvalidGrant,
+                "unknown account_id");
+            return;
+        }
+
+        var deviceId = First(raw.Get("deviceId"), raw.Get("device_id"));
+        var platformId = First(raw.Get("platformId"), raw.Get("platform_id"));
+        var platform = int.TryParse(raw.Get("platform"), out var p) ? p : 0;
+
+        var pendingId = orphans.PeekPending(deviceId, platformId);
+        if (pendingId is long orphanId && orphanId != pickedId)
+        {
+            await playerService.DeleteOrphanAsync(orphanId);
+            logger.LogInformation(
+                "[orphan-cleanup] cached_login picked {PickedId}; deleted just-created {OrphanId}",
+                pickedId,
+                orphanId);
+        }
+        orphans.Clear(deviceId, platformId);
+
+        await TryAwardLoginXpAsync(picked.Id);
+        await playerService.TagPlatformAsync(picked.Id, platform, platformId);
+        context.Result = new GrantValidationResult(
+            subject: picked.Id.ToString(),
+            authenticationMethod: GrantType,
+            claims: await RecRoomIdentityClaims.CreateAsync(db, picked.Id, picked.Username));
+    }
+
+    private async Task TryAwardLoginXpAsync(long playerId)
+    {
+        var lastSeen = await db.Players
+            .Where(p => p.Id == playerId)
+            .Select(p => p.LastSeenAt)
+            .FirstOrDefaultAsync();
+        if (lastSeen.Date < DateTime.UtcNow.Date)
+            await level.AwardXpAsync(playerId, LevelService.FirstLoginXp, "first_login_today");
+    }
+
+    private static string? First(params string?[] values) =>
+        values.FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
+}
+
+public sealed class RecRoomProfileService(PlayerService playerService, DorkNetDbContext db) : IProfileService
+{
+    public async Task GetProfileDataAsync(ProfileDataRequestContext context)
+    {
+        if (!TryGetSubjectId(context.Subject, out var playerId))
+            return;
+
+        var player = await playerService.GetByIdAsync(playerId);
+        if (player is null)
+            return;
+
+        context.IssuedClaims.AddRange(
+            await RecRoomIdentityClaims.CreateAsync(db, player.Id, player.Username));
+    }
+
+    public async Task IsActiveAsync(IsActiveContext context)
+    {
+        context.IsActive =
+            TryGetSubjectId(context.Subject, out var playerId)
+            && await playerService.GetByIdAsync(playerId) is not null;
+    }
+
+    private static bool TryGetSubjectId(ClaimsPrincipal subject, out long playerId)
+    {
+        var value = subject.FindFirstValue(JwtRegisteredClaimNames.Sub)
+            ?? subject.FindFirstValue(ClaimTypes.NameIdentifier);
+        return long.TryParse(value, out playerId);
+    }
+}
+
+public static class RecRoomIdentityClaims
+{
+    public static readonly List<string> UserClaimTypes =
+    [
+        JwtRegisteredClaimNames.Sub,
+        ClaimTypes.NameIdentifier,
+        "name",
+        "role",
+        ClaimTypes.Role,
+        "roles",
+        "accountId",
+        "account_id",
+        "accountid",
+    ];
+
+    public static async Task<List<Claim>> CreateAsync(DorkNetDbContext db, long playerId, string? username = null)
+    {
+        var playerInfo = await db.Players
+            .Where(p => p.Id == playerId)
+            .Select(p => new { p.Username, IsDev = p.IsDeveloper || p.IsAdmin })
+            .FirstOrDefaultAsync();
+        var name = username ?? playerInfo?.Username ?? playerId.ToString();
+        var isDev = playerInfo?.IsDev ?? false;
+
+        var claims = new List<Claim>
+        {
+            new(ClaimTypes.NameIdentifier, playerId.ToString()),
+            new(JwtRegisteredClaimNames.Sub, playerId.ToString()),
+            new("name", name),
+            new("accountId", playerId.ToString()),
+            new("account_id", playerId.ToString()),
+            new("accountid", playerId.ToString()),
+            new(ClaimTypes.Role, "gameClient"),
+            new("role", "gameClient"),
+            new("roles", "gameClient"),
+        };
+
+        if (isDev)
+        {
+            claims.Add(new Claim(ClaimTypes.Role, "developer"));
+            claims.Add(new Claim("role", "developer"));
+            claims.Add(new Claim("roles", "developer"));
+        }
+
+        return claims;
+    }
+}

@@ -2756,6 +2756,8 @@ internal static class AuthPatches
             var accessToken = __0?.ToString();
             if (LooksLikeJwt(accessToken))
                 _latestAccessToken = accessToken;
+            else if (string.IsNullOrWhiteSpace(__0?.ToString()) && string.IsNullOrWhiteSpace(__1?.ToString()))
+                _latestAccessToken = null;
 
             if (_tokenLogCount++ < 3)
             {
@@ -2782,6 +2784,75 @@ internal static class AuthPatches
 
     private static string Presence(object? value) =>
         string.IsNullOrWhiteSpace(value?.ToString()) ? "missing" : "present";
+
+    public static void ApplyBearerTokenHeader(object? request)
+    {
+        try
+        {
+            if (request is null || string.IsNullOrWhiteSpace(_latestAccessToken)) return;
+            var uri = TryReadUri(request);
+            if (uri is null || !IsDorkNetServiceHost(uri.Host)) return;
+
+            var type = request.GetType();
+            var setHeader = AccessTools.Method(type, "SetHeader", new[] { typeof(string), typeof(string) })
+                            ?? AccessTools.Method(type, "AddHeader", new[] { typeof(string), typeof(string) });
+            setHeader?.Invoke(request, new object[] { "Authorization", "Bearer " + _latestAccessToken });
+        }
+        catch (Exception ex)
+        {
+            if (_tokenLogCount++ < 6)
+                Mod.Log.Warning($"[auth-trace] bearer propagation failed: {ex.Message}");
+        }
+    }
+
+    private static Uri? TryReadUri(object request)
+    {
+        var type = request.GetType();
+        const BindingFlags flags = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
+
+        if (TryGetUri(type.GetProperty("Uri", flags), request, out var uri)) return uri;
+        if (TryGetUri(type.GetField("<Uri>k__BackingField", flags), request, out uri)) return uri;
+
+        foreach (var prop in type.GetProperties(flags))
+        {
+            if (prop.Name.IndexOf("Uri", StringComparison.OrdinalIgnoreCase) < 0) continue;
+            if (TryGetUri(prop, request, out uri)) return uri;
+        }
+
+        foreach (var field in type.GetFields(flags))
+        {
+            if (field.Name.IndexOf("Uri", StringComparison.OrdinalIgnoreCase) < 0) continue;
+            if (TryGetUri(field, request, out uri)) return uri;
+        }
+
+        return null;
+    }
+
+    private static bool TryGetUri(PropertyInfo? prop, object request, out Uri? uri)
+    {
+        uri = null;
+        if (prop is null || !prop.CanRead || prop.GetIndexParameters().Length != 0) return false;
+        uri = prop.GetValue(request) as Uri;
+        return uri is not null;
+    }
+
+    private static bool TryGetUri(FieldInfo? field, object request, out Uri? uri)
+    {
+        uri = null;
+        if (field is null) return false;
+        uri = field.GetValue(request) as Uri;
+        return uri is not null;
+    }
+
+    private static bool IsDorkNetServiceHost(string host)
+    {
+        var configuredHost = Mod.Cfg.ServerHost?.Trim().TrimStart('.');
+        if (string.IsNullOrWhiteSpace(configuredHost)) return false;
+
+        return host.Equals(configuredHost, StringComparison.OrdinalIgnoreCase)
+               || host.EndsWith("." + configuredHost, StringComparison.OrdinalIgnoreCase)
+               || host.EndsWith("-" + configuredHost, StringComparison.OrdinalIgnoreCase);
+    }
 }
 
 internal static class HttpTracePatches
@@ -3559,6 +3630,7 @@ internal static class UriPatches
     public static void HttpManagerSendRequestObject_Prefix(object request)
     {
         RewriteRequestUri(request, "httpmanager-request-rewrite");
+        AuthPatches.ApplyBearerTokenHeader(request);
     }
 
     public static void UriStringCtor_Prefix(ref string uriString)
@@ -3570,6 +3642,7 @@ internal static class UriPatches
     public static void HttpRequestSend_Prefix(object __instance)
     {
         RewriteRequestUri(__instance, "http-rewrite");
+        AuthPatches.ApplyBearerTokenHeader(__instance);
     }
 
     private static void RewriteRequestUri(object request, string label)

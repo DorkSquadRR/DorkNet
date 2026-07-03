@@ -42,6 +42,11 @@ shared `DorkNet.Server` controller/service stack behind route ownership
 guards, so response contracts stay identical while the architecture is
 split.
 
+Auth tokens are issued by the identity service using the configured
+auth host (`https://auth.<apex>` or the equivalent configured host style)
+as the JWT/OpenID issuer. `DORKNET_JWT_SECRET` still supplies the signing
+key for every service that validates bearer tokens.
+
 ---
 
 ## Dokploy Microservices
