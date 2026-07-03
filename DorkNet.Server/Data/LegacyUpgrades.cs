@@ -75,6 +75,7 @@ public static class LegacyUpgrades
             ["Park"] = "4o5lschc01nani8xeywao622n.png",
             ["Soccer"] = "apo2sd115tuwueyoprp8jhx7b.png",
             ["StuntRunner"] = "8j4f516axpnpjgnj342t85vkd.png",
+            ["RecRally"] = "image_RecRally.jpg",
         };
 
         var names = canonical.Keys.ToArray();

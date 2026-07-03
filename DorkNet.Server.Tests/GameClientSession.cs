@@ -21,8 +21,8 @@ public static class GameClientSessionFactory
             HttpMethod.Post,
             new Uri($"http://auth.{apexDomain}/connect/token"));
         tokenRequest.Headers.Accept.ParseAdd("application/json");
-        tokenRequest.Headers.UserAgent.ParseAdd("RecRoom/2020.12.18");
-        tokenRequest.Headers.TryAddWithoutValidation("X-DorkNet-Version", "december_2020_12_18");
+        tokenRequest.Headers.UserAgent.ParseAdd("RecRoom/2023.03.21");
+        tokenRequest.Headers.TryAddWithoutValidation("X-DorkNet-Version", "march_2023_03_21");
         tokenRequest.Content = new FormUrlEncodedContent(new Dictionary<string, string>
         {
             ["grant_type"] = "password",
@@ -49,8 +49,8 @@ public static class GameClientSessionFactory
             HttpMethod.Get,
             new Uri($"http://auth.{apexDomain}/connect/userinfo"));
         userInfoRequest.Headers.Accept.ParseAdd("application/json");
-        userInfoRequest.Headers.UserAgent.ParseAdd("RecRoom/2020.12.18");
-        userInfoRequest.Headers.TryAddWithoutValidation("X-DorkNet-Version", "december_2020_12_18");
+        userInfoRequest.Headers.UserAgent.ParseAdd("RecRoom/2023.03.21");
+        userInfoRequest.Headers.TryAddWithoutValidation("X-DorkNet-Version", "march_2023_03_21");
         userInfoRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
         using var userInfoResponse = await client.SendAsync(userInfoRequest);

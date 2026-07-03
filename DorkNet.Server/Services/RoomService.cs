@@ -108,7 +108,7 @@ public class RoomService(DorkNetDbContext db)
             ("IsleOfLostSkulls", "The Isle of Lost Skulls", "Can your pirate crew get to the Isle, defeat its fearsome guardian, and escape with the gold?", "7e01cfe0-820a-406f-b1b3-0a5bf575235c", "recroomoriginal,quest,co-op,adventure", "image_IsleOfLostSkulls.png"),
             ("Crescendo",        "Crescendo of the Blood Moon", "Brave the haunted halls of Castle Dracula and survive the night.", "49cb8993-a956-43e2-86f4-1318f279b22a", "recroomoriginal,quest,co-op,adventure", "by3mjs9jbozpdvu6g9aje7jgz.png"),
             ("StuntRunner",      "Stunt Runner",       "A solo platforming gauntlet — sprint, climb and dodge to reach the trophy at the top.", "b7281665-a715-4051-826b-8e08e69c6172", "recroomoriginal,sport,quest,stuntrunner,parkour", "image_StuntRunner.png"),
-            ("RecRally",         "Rec Rally",          "Race across Chaparral with friends in off-road vehicles built for jumps, boosts, and tight turns.", "56193568-9ae0-498c-8a77-4df79dec91f5", "recroomoriginal,featured,sport,recrally,racing,pvp", "image_RecRally.png"),
+            ("RecRally",         "Rec Rally",          "Race across Chaparral with friends in off-road vehicles built for jumps, boosts, and tight turns.", "56193568-9ae0-498c-8a77-4df79dec91f5", "recroomoriginal,featured,sport,recrally,racing,pvp", "image_RecRally.jpg"),
             ("Drive-In",         "Rec Drive-In",       "Watch movies, hang out with friends, or chill at the bar.", "65ddbb48-5a01-4e3e-972d-e5c7419e2bc3", "recroomoriginal,featured,hangout,chill", "image_DriveIn.png"),
             // Hub / hang rooms — no specific gameplay, just shared spaces.
             ("Park",             "The Park",           "An outdoor park with picnic tables and lawn games — a chill place to hang out.", "0a864c86-5a71-4e18-8041-8124e4dc9d98", "recroomoriginal,featured,hangout,chill", "image_Park.png"),
@@ -193,7 +193,7 @@ public class RoomService(DorkNetDbContext db)
             ["Quarry"]          = "image_Quarry.png",
             ["Clearcut"]        = "image_Clearcut.png",
             ["Spillway"]        = "image_Spillway.png",
-            ["RecRally"]        = "image_RecRally.png",
+            ["RecRally"]        = "image_RecRally.jpg",
         };
         var candidates = new[]
         {
@@ -371,7 +371,7 @@ public class RoomService(DorkNetDbContext db)
             ("BowlingAlley",    "Bowling Alley",         "Classic ten-pin bowling. Roll strikes, beat your friends.", "ae929543-9a07-41d5-8ee9-dbbee8c36800", "recroomoriginal,sport", "image_BowlingAlley.png"),
             ("Crescendo",       "Crescendo of the Blood Moon", "Brave the haunted halls of Castle Dracula and survive the night.", "49cb8993-a956-43e2-86f4-1318f279b22a", "recroomoriginal,quest", "by3mjs9jbozpdvu6g9aje7jgz.png"),
             ("LaserTagHangar",  "Laser Tag Hangar",      "Teams battle in an industrial warehouse map.", "239e676c-f12f-489f-bf3a-d4c383d692c3", "recroomoriginal,sport", "image_LaserTag.png"),
-            ("RecRally",        "Rec Rally",             "Race across Chaparral with friends in off-road vehicles built for jumps, boosts, and tight turns.", "56193568-9ae0-498c-8a77-4df79dec91f5", "recroomoriginal,featured,sport,recrally,racing,pvp", "image_RecRally.png"),
+            ("RecRally",        "Rec Rally",             "Race across Chaparral with friends in off-road vehicles built for jumps, boosts, and tight turns.", "56193568-9ae0-498c-8a77-4df79dec91f5", "recroomoriginal,featured,sport,recrally,racing,pvp", "image_RecRally.jpg"),
             ("MakerRoom",       "Maker Room",            "A blank-walled canvas. The classic starting point for a Maker Pen build.", "a75f7547-79eb-47c6-8986-6767abcb4f92", "recroomoriginal,template,featured", "image_RecCenter.png"),
         };
 
@@ -1229,6 +1229,21 @@ public class RoomService(DorkNetDbContext db)
             await EnsureScenesAsync(lasertag.Id, lasertagScenes);
         }
 
+        // Stunt Runner's lobby contains a portal to TheMainEvent. The
+        // client resolves that sub-room from RoomDetails before it sends
+        // /goto/room/StuntRunner/TheMainEvent, so both scenes must be in
+        // RoomScenes, with OrderIndex 0 matching the base lobby join.
+        var stuntRunner = await db.Rooms.FirstOrDefaultAsync(r => r.Name == "StuntRunner");
+        if (stuntRunner is not null)
+        {
+            var stuntRunnerScenes = new (int OrderIndex, string Name, string Location)[]
+            {
+                (0, "StuntRunner",  "b7281665-a715-4051-826b-8e08e69c6172"),
+                (1, "TheMainEvent", "3a636bd2-f896-424c-9225-c184522c0d87"),
+            };
+            await EnsureOrderedScenesAsync(stuntRunner.Id, stuntRunnerScenes);
+        }
+
         await db.SaveChangesAsync();
     }
 
@@ -1258,6 +1273,50 @@ public class RoomService(DorkNetDbContext db)
                 CanMatchmakeInto = true,
                 DataModifiedAt = DateTime.UtcNow,
             });
+        }
+    }
+
+    /// <summary>Upserts canonical scenes whose order is part of the
+    /// client contract. Used for baked rooms where in-world portals reference
+    /// the scene names and the base room join must keep SubRoomId=0.</summary>
+    private async Task EnsureOrderedScenesAsync(
+        long roomId,
+        (int OrderIndex, string Name, string Location)[] scenes)
+    {
+        var existing = await db.RoomScenes
+            .Where(s => s.RoomId == roomId)
+            .ToListAsync();
+        var existingByName = existing
+            .GroupBy(s => s.Name, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var (orderIndex, name, location) in scenes)
+        {
+            if (!existingByName.TryGetValue(name, out var scene))
+            {
+                db.RoomScenes.Add(new RoomSceneEntity
+                {
+                    RoomId = roomId,
+                    OrderIndex = orderIndex,
+                    Name = name,
+                    RoomSceneLocationId = location,
+                    DataBlobName = "",
+                    MaxPlayers = 8,
+                    IsSandbox = false,
+                    CanMatchmakeInto = true,
+                    DataModifiedAt = DateTime.UtcNow,
+                });
+                continue;
+            }
+
+            scene.OrderIndex = orderIndex;
+            scene.RoomSceneLocationId = location;
+            scene.DataBlobName = "";
+            scene.MaxPlayers = 8;
+            scene.IsSandbox = false;
+            scene.CanMatchmakeInto = true;
+            if (scene.DataModifiedAt == default)
+                scene.DataModifiedAt = DateTime.UtcNow;
         }
     }
 
