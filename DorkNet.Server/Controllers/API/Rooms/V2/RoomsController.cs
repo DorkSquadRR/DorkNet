@@ -2078,31 +2078,34 @@ public class RoomsController(
     {
         var pid = CurrentPlayerId;
         if (pid is null) return Ok(Array.Empty<object>());
-        return await VisitedBy(pid.Value);
+        return await VisitedByForViewerAsync(pid.Value, pid.Value);
     }
 
     [HttpGet("rooms/visitedby/{playerId:long}")]
     [HttpGet("roomserver/rooms/visitedby/{playerId:long}")]
     public async Task<IActionResult> VisitedBy(long playerId)
     {
-        var ids = await db.RoomVisits.AsNoTracking()
+        return await VisitedByForViewerAsync(playerId, CurrentPlayerId);
+    }
+
+    private async Task<IActionResult> VisitedByForViewerAsync(long playerId, long? viewerPlayerId)
+    {
+        var rows = await db.RoomVisits.AsNoTracking()
             .Where(v => v.PlayerId == playerId)
-            .OrderByDescending(v => v.LastVisitAt)
-            .Select(v => v.RoomId)
+            .Join(
+                db.Rooms.AsNoTracking(),
+                visit => visit.RoomId,
+                room => room.Id,
+                (visit, room) => new { visit, room })
+            .Where(x => x.room.Accessibility == 1 ||
+                        (viewerPlayerId.HasValue && x.room.CreatorPlayerId == viewerPlayerId.Value))
+            .OrderByDescending(x => x.visit.LastVisitAt)
+            .Select(x => x.room)
             .Take(100)
             .ToListAsync();
-        if (ids.Count == 0) return Ok(Array.Empty<object>());
 
-        var rows = await db.Rooms.AsNoTracking()
-            .Where(r => ids.Contains(r.Id))
-            .ToListAsync();
-        var byId = rows.ToDictionary(r => r.Id);
-        var ordered = ids
-            .Select(id => byId.TryGetValue(id, out var room) ? room : null)
-            .Where(r => r is not null)
-            .Select(r => r!)
-            .ToList();
-        return Ok(await BuildRoomServerListAsync(ordered));
+        if (rows.Count == 0) return Ok(Array.Empty<object>());
+        return Ok(await BuildRoomServerListAsync(rows));
     }
 
     [HttpGet("api/rooms/v1/moderatedby/me")]

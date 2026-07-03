@@ -38,8 +38,8 @@ public sealed class DorkNetServerFactory : WebApplicationFactory<Program>
                 ["S3:Endpoint"] = "",
                 ["S3:AccessKey"] = "",
                 ["S3:SecretKey"] = "",
-                ["DorkNet:DefaultClientVersion"] = "december_2020_12_18",
-                ["DorkNet:SupportedVersions:0"] = "december_2020_12_18",
+                ["DorkNet:DefaultClientVersion"] = "march_2023_03_21",
+                ["DorkNet:SupportedVersions:0"] = "march_2023_03_21",
             });
         });
         builder.ConfigureServices(services =>
