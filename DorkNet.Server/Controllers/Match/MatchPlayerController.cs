@@ -20,6 +20,7 @@ namespace DorkNet.Server.Controllers.Match;
 [ApiController]
 public class MatchPlayerController(
     PlayerPresenceService presence,
+    NotificationService notifications,
     RoomService rooms,
     PrivateInstanceService privateInstances,
     IConfiguration config,
@@ -36,7 +37,7 @@ public class MatchPlayerController(
     /// </summary>
     [HttpPost("/player/login")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
-    public IActionResult PlayerLogin([FromForm(Name = "LoginLock")] string? loginLock)
+    public async Task<IActionResult> PlayerLogin([FromForm(Name = "LoginLock")] string? loginLock)
     {
         var playerId = TryGetCurrentPlayerId();
         if (playerId != 0 && !string.IsNullOrWhiteSpace(loginLock))
@@ -45,15 +46,17 @@ public class MatchPlayerController(
             if (replaced)
             {
                 log.LogWarning(
-                    "[player-login] concurrent session marker replaced for player={PlayerId}; stale SignalR connections will be evicted on hub connect",
+                    "[player-login] concurrent session for player={PlayerId}; kicking old session(s) via ModerationKick push",
                     playerId);
-                // Do not broadcast ModerationKick to the whole player group
-                // here. During reconnects the active watch can already have a
-                // SignalR connection in that group, and the 2020 client crashes
-                // hard if it receives a malformed/stale moderation payload.
-                // NotifyHub.OnConnectedAsync snapshots existing connection ids
-                // before adding the new connection and sends a targeted kick to
-                // those ids only.
+                // The new session hasn't opened its SignalR socket yet
+                // (negotiate fires AFTER /player/login on the watch's
+                // boot sequence — verified in the live trace), so the
+                // ModerationKick push hits only the OLDER session's
+                // existing connections. They'll show the "you've been
+                // kicked" dialog and gracefully disconnect via the
+                // watch's LocalModerationKickSelf path.
+                await notifications.KickStaleSession(playerId,
+                    "Your account was signed in on another device.");
             }
         }
         return Ok(Array.Empty<object>());

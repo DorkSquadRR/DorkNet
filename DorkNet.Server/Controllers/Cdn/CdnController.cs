@@ -446,6 +446,7 @@ public class CdnController(
     /// that Skia doesn't support, etc.) we fall back to serving the raw
     /// bytes rather than 5xxing the whole image request.
     /// </summary>
+    /// Response.Headers["Content-Signature"] = "key-id=KEY:RSA:p1.rec.net; data=" + Stella.Signatures.Sign(bytes);
     private IActionResult RespondWithTransforms(byte[] sourceBytes, string sourceContentType)
     {
         var cropSquare = ParseFlag(Request.Query["cropSquare"]);
@@ -456,11 +457,11 @@ public class CdnController(
 
         if (transformed is { } t)
         {
-            signatures.AddContentSignature(Response, t.Bytes);
+            Response.Headers["Content-Signature"] = "key-id=KEY:RSA:p1.rec.net; data=" + Stella.Signatures.Sign(t.Bytes);
             return File(t.Bytes, t.ContentType);
         }
 
-        signatures.AddContentSignature(Response, sourceBytes);
+        Response.Headers["Content-Signature"] = "key-id=KEY:RSA:p1.rec.net; data=" + Stella.Signatures.Sign(sourceBytes);
         return File(sourceBytes, sourceContentType);
     }
 

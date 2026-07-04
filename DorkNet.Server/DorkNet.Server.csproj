@@ -14,6 +14,7 @@
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.4" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.1" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="9.0.4" />
     <!-- RenderedCompactJsonFormatter for stdout JSON logs in production
          (Coolify-friendly). The host pipeline reads stdout line-by-line,
@@ -73,7 +74,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\DorkNet.Models\DorkNet.Models.csproj" />
-    <ProjectReference Include="..\DorkNet.Contracts\DorkNet.Contracts.csproj" />
   </ItemGroup>
 
   <!-- Service-slice containers reference DorkNet.Server for shared controllers
@@ -96,8 +96,7 @@
        Dockerfile, which builds the SPA in a dedicated node:* stage
        and copies the dist into wwwroot/admin/ before `dotnet publish`
        runs (the .NET SDK image doesn't ship npm). -->
-  <Target Name="BuildAdminUI" BeforeTargets="Publish"
-          Condition="Exists('admin-ui\package.json') AND '$(SkipAdminUIBuild)' != 'true'">
+  <Target Name="BuildAdminUI" BeforeTargets="Publish" Condition="Exists('admin-ui\package.json') AND '$(SkipAdminUIBuild)' != 'true'">
     <Message Text="[admin-ui] npm ci + npm run build" Importance="high" />
     <Exec Command="npm ci --no-fund --no-audit --loglevel=error" WorkingDirectory="admin-ui" />
     <Exec Command="npm run build" WorkingDirectory="admin-ui" />
@@ -107,8 +106,7 @@
        admin-ui target above — separate Vite project under site/,
        output into wwwroot/site/. Dockerfile builds this in its own
        node stage and sets SkipSiteBuild=true so this no-ops there. -->
-  <Target Name="BuildSite" BeforeTargets="Publish"
-          Condition="Exists('site\package.json') AND '$(SkipAdminUIBuild)' != 'true'">
+  <Target Name="BuildSite" BeforeTargets="Publish" Condition="Exists('site\package.json') AND '$(SkipAdminUIBuild)' != 'true'">
     <Message Text="[site] npm ci + npm run build" Importance="high" />
     <Exec Command="npm ci --no-fund --no-audit --loglevel=error" WorkingDirectory="site" />
     <Exec Command="npm run build" WorkingDirectory="site" />

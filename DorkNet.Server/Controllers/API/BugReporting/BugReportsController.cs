@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json;
 using DorkNet.Server.Auth;
 using DorkNet.Server.Data;
 using DorkNet.Server.Data.Entities;
@@ -9,16 +10,27 @@ namespace DorkNet.Server.Controllers.API.BugReporting;
 
 /// <summary>
 /// api.rec.net/api/bugreporting/* — in-game "Report a Bug" UI.
-/// Wire request DTO matches <c>RecNet.BugReporting+BugReportDTO</c>
-/// (<c>Cpp2IL_CS/.../RecNet/BugReporting.cs</c>): <c>Summary,
-/// Description, TestCaseKey, BuildVersion, BuildTimestamp,
-/// BundleVersionCode</c>.
 ///
-/// Plus <c>POST /api/bugreporting/v1/submit</c> (legacy v1 path) and
-/// <c>POST /api/bugreporting/v2/submit</c> (renamed v2). The
-/// <c>ReportBug</c> client API also includes screenshot + log byte
-/// arrays as multipart parts; we accept-and-discard those (no
-/// storage flow yet) but persist the text fields.
+/// Two distinct wire shapes hit this controller:
+///
+/// • Legacy "submit" routes (v1/v2) post a plain JSON body matching
+///   <c>BugReportRequest</c> below.
+/// • The real client's <c>ReportBug</c> API
+///   (<c>Cpp2IL_CS/.../RecNet/BugReporting.cs</c>) posts
+///   <c>multipart/form-data</c> with a single text part named
+///   <c>bugReport</c> containing the JSON payload (Summary,
+///   Description, TestCaseKey, BuildVersion, BuildTimestamp,
+///   BundleVersionCode), plus optional <c>screenshotData</c> and
+///   <c>outputLogData</c> file parts. We accept-and-discard the
+///   binary parts (no storage flow yet) but persist the text fields.
+///
+/// The previous version of this controller routed
+/// v1/reportbug and v2/reportbug to the JSON-body handler and put
+/// flat form fields (Summary, Description, ...) on a separate
+/// "-multipart" route the real client never calls — so the actual
+/// in-game bug report button was silently hitting the wrong shape.
+/// Fixed by routing reportbug → the multipart "bugReport" JSON-part
+/// handler, matching BugReporting.cs.
 /// </summary>
 [ApiController]
 [Authorize]
@@ -36,34 +48,53 @@ public class BugReportsController(DorkNetDbContext db) : ControllerBase
         public int? BundleVersionCode { get; set; }
     }
 
+    /// <summary>Legacy plain-JSON submit routes.</summary>
     [HttpPost("api/bugreporting/v1/submit")]
     [HttpPost("api/bugreporting/v2/submit")]
-    [HttpPost("api/bugreporting/v1/reportbug")]
-    [HttpPost("api/bugreporting/v2/reportbug")]
     [Consumes("application/json")]
     public async Task<IActionResult> SubmitJson([FromBody] BugReportRequest req)
         => await PersistAsync(req);
 
-    /// <summary>Multipart form variant — the watch posts screenshot
-    /// + log as separate parts. We pull the text-only fields and
-    /// drop the binary attachments.</summary>
-    [HttpPost("api/bugreporting/v1/submit-multipart")]
-    [HttpPost("api/bugreporting/v2/reportbug-multipart")]
+    /// <summary>
+    /// Real client route. Matches BugReporting.cs: multipart form
+    /// with a "bugReport" JSON text part plus optional
+    /// screenshotData/outputLogData file parts.
+    /// </summary>
+    [RequestSizeLimit(50_000_000)]
+    [HttpPost("api/bugreporting/v1/reportbug")]
+    [HttpPost("api/bugreporting/v2/reportbug")]
     [Consumes("multipart/form-data")]
-    public async Task<IActionResult> SubmitMultipart(
-        [FromForm(Name = "Summary")] string? summary,
-        [FromForm(Name = "Description")] string? description,
-        [FromForm(Name = "TestCaseKey")] string? testCaseKey,
-        [FromForm(Name = "BuildVersion")] string? buildVersion,
-        [FromForm(Name = "BuildTimestamp")] long? buildTimestamp)
-        => await PersistAsync(new BugReportRequest
+    public async Task<IActionResult> SubmitMultipart()
+    {
+        if (!Request.HasFormContentType)
+            return BadRequest("Expected multipart/form-data.");
+
+        var form = await Request.ReadFormAsync();
+
+        string? bugReportJson = form["bugReport"];
+        if (string.IsNullOrWhiteSpace(bugReportJson))
+            return BadRequest("Missing bugReport field.");
+
+        BugReportRequest? req;
+        try
         {
-            Summary = summary,
-            Description = description,
-            TestCaseKey = testCaseKey,
-            BuildVersion = buildVersion,
-            BuildTimestamp = buildTimestamp,
-        });
+            req = JsonSerializer.Deserialize<BugReportRequest>(
+                bugReportJson,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (JsonException)
+        {
+            return BadRequest("Invalid bugReport JSON.");
+        }
+
+        if (req is null)
+            return BadRequest("Invalid bugReport JSON.");
+
+        // screenshotData / outputLogData are accepted and discarded here —
+        // no storage flow yet. form.Files["screenshotData"] / ["outputLogData"]
+        // are available if/when that lands.
+        return await PersistAsync(req);
+    }
 
     private async Task<IActionResult> PersistAsync(BugReportRequest req)
     {
@@ -73,16 +104,53 @@ public class BugReportsController(DorkNetDbContext db) : ControllerBase
         if (summary.Length == 0 && body.Length == 0)
             return BadRequest(new { Error = "summary or description required" });
 
-        db.BugReports.Add(new BugReportEntity
+        var userAgent = HttpContext.Request.Headers.UserAgent.ToString();
+
+        var report = new BugReportEntity
         {
             ReporterPlayerId = pid,
             Title = summary[..Math.Min(128, summary.Length)],
             Body = body[..Math.Min(4000, body.Length)],
             ClientVersion = req.BuildVersion ?? string.Empty,
-            Platform = HttpContext.Request.Headers.UserAgent.ToString()[..Math.Min(32, HttpContext.Request.Headers.UserAgent.ToString().Length)],
+            Platform = userAgent[..Math.Min(32, userAgent.Length)],
             Category = string.IsNullOrEmpty(req.TestCaseKey) ? "bug" : $"bug:{req.TestCaseKey}",
-        });
+        };
+        db.BugReports.Add(report);
         await db.SaveChangesAsync();
-        return Ok(new { Submitted = true });
+
+        var testCase = await CreateTestCaseAsync(report, req);
+
+        return Ok(new { Submitted = true, Id = report.Id, TestCaseId = testCase.Id });
+    }
+
+    /// <summary>
+    /// Creates a new TestCase for this bug report, with a randomly
+    /// generated UUID as its Id, and links it back to the report via
+    /// JiraBugUrl so it shows up in the QA tooling
+    /// (TestCaseManagementController) already marked Failed.
+    /// </summary>
+    private async Task<TestCaseEntity> CreateTestCaseAsync(BugReportEntity report, BugReportRequest req)
+    {
+        var testCase = new TestCaseEntity
+        {
+            Id = Guid.NewGuid().ToString(),
+            Key = string.IsNullOrEmpty(req.TestCaseKey) ? $"BUG-{report.Id}" : req.TestCaseKey,
+            Title = report.Title,
+            Description = report.Body,
+            RoomName = string.Empty,
+            Status = 0, // Unclaimed
+            MinNumAssignedPlayers = 0,
+            AssignedPlayerIdsJson = JsonSerializer.Serialize(new List<int>()),
+            AssignedPlayerNamesJson = JsonSerializer.Serialize(new List<string>()),
+            TagsJson = JsonSerializer.Serialize(new List<string> { "bugreport" }),
+            JiraUrl = "",
+            JiraBugUrl = $"",
+            UpdatedAt = DateTime.UtcNow,
+            TestPassId = 1,
+        };
+
+        db.TestCases.Add(testCase);
+        await db.SaveChangesAsync();
+        return testCase;
     }
 }

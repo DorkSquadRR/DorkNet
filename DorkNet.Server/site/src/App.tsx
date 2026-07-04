@@ -30,12 +30,7 @@ export function App() {
       </main>
       <footer className="border-t border-ink-800 text-xs text-ink-400">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 py-4 flex flex-wrap items-center justify-between gap-2">
-          <span>DorkNet — a private Rec Room server.</span>
-          <span>
-            <a className="hover:text-ink-200" href="https://github.com/Alexa-RR/Dorknet">GitHub</a>
-            <span className="mx-2">·</span>
-            <a className="hover:text-ink-200" href="/admin">Admin</a>
-          </span>
+          <span>Made by Alexa-RR - Adapted by miaadev.</span>
         </div>
       </footer>
     </div>

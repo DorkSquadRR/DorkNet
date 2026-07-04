@@ -180,13 +180,8 @@ public static class LegacyUpgrades
         // either no-op (Crescendo now exists) or the only writer.
         for (var attempt = 1; attempt <= 2; attempt++)
         {
-            var renameCandidates = await db.Rooms
-                .Where(r => r.Name.ToLower() == "bloodmoon" || r.Name.ToLower() == "crescendo")
-                .ToListAsync(ct);
-            var crescendoExists = renameCandidates.Any(r =>
-                string.Equals(r.Name, "Crescendo", StringComparison.OrdinalIgnoreCase));
-            var bloodMoon = renameCandidates.FirstOrDefault(r =>
-                string.Equals(r.Name, "BloodMoon", StringComparison.OrdinalIgnoreCase));
+            var crescendoExists = await db.Rooms.AnyAsync(r => r.Name == "Crescendo", ct);
+            var bloodMoon = await db.Rooms.FirstOrDefaultAsync(r => r.Name == "BloodMoon", ct);
 
             if (bloodMoon is null && crescendoExists)
             {
@@ -222,15 +217,15 @@ public static class LegacyUpgrades
                 {
                     // Both exist — the rename ran on a different row at
                     // some point, and the original BloodMoon row is now
-                    // a stale duplicate. Park it under a unique legacy
-                    // name and hide from browse so /goto/name/... still
+                    // a stale duplicate. Park it under CrescendoLegacy
+                    // and hide from browse so /goto/name/... still
                     // resolves Crescendo to the right row.
-                    bloodMoon.Name = await PickUniqueRoomNameAsync(db, "CrescendoLegacy", bloodMoon.Id, ct);
+                    bloodMoon.Name = "CrescendoLegacy";
                     bloodMoon.HiddenFromBrowse = true;
                     await db.SaveChangesAsync(ct);
                     logger.LogInformation(
-                        "[legacy-upgrade] RenameBloodMoonToCrescendo: applied — Rooms.Id={Id} parked as {Name} (Crescendo already existed on a different row)",
-                        bloodMoon.Id, bloodMoon.Name);
+                        "[legacy-upgrade] RenameBloodMoonToCrescendo: applied — Rooms.Id={Id} parked as CrescendoLegacy (Crescendo already existed on a different row)",
+                        bloodMoon.Id);
                     return;
                 }
             }
@@ -245,23 +240,5 @@ public static class LegacyUpgrades
                 if (bloodMoon is not null) db.Entry(bloodMoon).State = EntityState.Detached;
             }
         }
-    }
-
-    private static async Task<string> PickUniqueRoomNameAsync(
-        DorkNetDbContext db, string preferred, long currentRoomId, CancellationToken ct)
-    {
-        var taken = await db.Rooms
-            .Where(r => r.Id != currentRoomId && r.Name.ToLower().StartsWith(preferred.ToLower()))
-            .Select(r => r.Name)
-            .ToListAsync(ct);
-
-        if (!taken.Any(n => string.Equals(n, preferred, StringComparison.OrdinalIgnoreCase)))
-            return preferred;
-
-        var suffix = 2;
-        while (taken.Any(n => string.Equals(n, $"{preferred}{suffix}", StringComparison.OrdinalIgnoreCase)))
-            suffix++;
-
-        return $"{preferred}{suffix}";
     }
 }

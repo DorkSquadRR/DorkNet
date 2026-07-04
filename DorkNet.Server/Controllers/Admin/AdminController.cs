@@ -7,6 +7,8 @@ using DorkNet.Server.Data;
 using DorkNet.Server.Data.Entities;
 using DorkNet.Server.Hubs;
 using DorkNet.Server.Services;
+using System.Text.Json.Serialization;
+using Newtonsoft.Json;
 
 namespace DorkNet.Server.Controllers.Admin;
 
@@ -2914,6 +2916,8 @@ public class AdminController(
 
     public sealed record SetMotdRequest(string Message);
 
+    public sealed record SetMotdRequestInt(int Message);
+
     /// <summary>Push a server-maintenance broadcast to every connected
     /// player. The MOTD config value is changed via appsettings.json
     /// (server restart required); this is for ad-hoc announcements.</summary>
@@ -2926,6 +2930,23 @@ public class AdminController(
         await LogAsync("broadcast", "system", 0, body.Message);
         await db.SaveChangesAsync();
         return Ok();
+    }
+
+    [HttpPost("maint")]
+    public async Task<ActionResult> BroadcastRaw([FromBody] SetMotdRequestInt body)
+    {
+        ConfigService.ServerMaintMins = body.Message;
+        await notifications.BroadcastAsync(PushNotificationId.ServerMaintenance,
+            new { StartsInMinutes = ConfigService.ServerMaintMins }, forceServerMaint: true);
+        await LogAsync("broadcast", "system", 0, $"Maint: {body.Message.ToString()}");
+        await db.SaveChangesAsync();
+        return Ok();
+    }
+
+    public class BroadcastRawFormat
+    {
+        public PushNotificationId id { get; set; }
+        public object message { get; set; }
     }
 
     // ── Store catalog management ─────────────────────────────────────────
@@ -3221,6 +3242,334 @@ public class AdminController(
         return $"deleted_rows={deleted} reassigned_rows={reassigned}";
     }
 
+    // ── Test case management ────────────────────────────────────────────
+
+    public sealed record AdminTestPassDto(
+        uint Id,
+        string? Name,
+        string? Description,
+        DateTime StartDate,
+        DateTime? EndDate,
+        bool WasManuallyClosed,
+        List<string>? Tags);
+
+    public sealed record AdminTestCaseDto(
+        string? Id,
+        string? Key,
+        string? Title,
+        string? Description,
+        string? RoomName,
+        int Status,
+        int MinNumAssignedPlayers,
+        List<int>? AssignedPlayerIds,
+        List<string>? AssignedPlayerNames,
+        List<string>? Tags,
+        string? JiraUrl,
+        string? JiraBugUrl,
+        uint? TestPassId);
+
+    private sealed record TestPassCounts(uint PassId, int Total, int Claimed, int Passed, int Failed);
+
+    [HttpGet("testpasses")]
+    public async Task<IActionResult> ListTestPasses()
+    {
+        var passes = await db.TestPasses
+            .OrderByDescending(p => p.StartDate)
+            .ThenByDescending(p => p.Id)
+            .AsNoTracking()
+            .ToListAsync();
+        var counts = await GetTestPassCountsAsync();
+        return Ok(passes.Select(p => ToAdminTestPass(p, counts)));
+    }
+
+    [HttpGet("testpasses/{id:long}")]
+    public async Task<IActionResult> GetTestPass(long id)
+    {
+        if (id < 0 || id > uint.MaxValue) return NotFound();
+        var pid = (uint)id;
+        var pass = await db.TestPasses.AsNoTracking().FirstOrDefaultAsync(p => p.Id == pid);
+        if (pass is null) return NotFound();
+        var counts = await GetTestPassCountsAsync(pid);
+        var cases = await db.TestCases
+            .Where(c => c.TestPassId == pid)
+            .OrderBy(c => c.Key).ThenBy(c => c.Id)
+            .AsNoTracking()
+            .ToListAsync();
+        return Ok(new
+        {
+            Pass = ToAdminTestPass(pass, counts),
+            TestCases = cases.Select(ToAdminTestCase),
+        });
+    }
+
+    [HttpPost("testpasses")]
+    public async Task<IActionResult> CreateTestPass([FromBody] AdminTestPassDto body)
+    {
+        var passId = body.Id != 0
+            ? body.Id
+            : (uint)Math.Min(uint.MaxValue, (await db.TestPasses.Select(p => (uint?)p.Id).MaxAsync() ?? 0) + 1);
+        if (await db.TestPasses.AnyAsync(p => p.Id == passId))
+            return BadRequest(new { error = "duplicate_test_pass", message = $"Test pass {passId} already exists." });
+
+        var pass = new TestPassEntity
+        {
+            Id = passId,
+            Name = Clean(body.Name, 128),
+            Description = Clean(body.Description, 2000),
+            StartDate = body.StartDate == default ? DateTime.UtcNow : body.StartDate.ToUniversalTime(),
+            EndDate = body.EndDate?.ToUniversalTime(),
+            WasManuallyClosed = body.WasManuallyClosed,
+            TagsJson = ToJsonList(body.Tags),
+        };
+        db.TestPasses.Add(pass);
+        await LogAsync("create_test_pass", "testpass", pass.Id, pass.Name);
+        await db.SaveChangesAsync();
+        return Ok(ToAdminTestPass(pass, new Dictionary<uint, TestPassCounts>()));
+    }
+
+    [HttpPut("testpasses/{id:long}")]
+    public async Task<IActionResult> UpdateTestPass(long id, [FromBody] AdminTestPassDto body)
+    {
+        if (id < 0 || id > uint.MaxValue) return NotFound();
+        var pid = (uint)id;
+        var pass = await db.TestPasses.FirstOrDefaultAsync(p => p.Id == pid);
+        if (pass is null) return NotFound();
+
+        pass.Name = Clean(body.Name, 128);
+        pass.Description = Clean(body.Description, 2000);
+        pass.StartDate = body.StartDate == default ? pass.StartDate : body.StartDate.ToUniversalTime();
+        pass.EndDate = body.EndDate?.ToUniversalTime();
+        pass.WasManuallyClosed = body.WasManuallyClosed;
+        pass.TagsJson = ToJsonList(body.Tags);
+
+        await LogAsync("update_test_pass", "testpass", pass.Id, pass.Name);
+        await db.SaveChangesAsync();
+        var counts = await GetTestPassCountsAsync(pid);
+        return Ok(ToAdminTestPass(pass, counts));
+    }
+
+    [HttpDelete("testpasses/{id:long}")]
+    public async Task<IActionResult> DeleteTestPass(long id, [FromQuery] bool deleteCases = false)
+    {
+        if (id < 0 || id > uint.MaxValue) return NotFound();
+        var pid = (uint)id;
+        var pass = await db.TestPasses.FirstOrDefaultAsync(p => p.Id == pid);
+        if (pass is null) return NotFound();
+
+        var cases = await db.TestCases.Where(c => c.TestPassId == pid).ToListAsync();
+        if (cases.Count > 0 && !deleteCases)
+        {
+            foreach (var c in cases)
+            {
+                c.TestPassId = null;
+                c.UpdatedAt = DateTime.UtcNow;
+            }
+        }
+        else if (cases.Count > 0)
+        {
+            db.TestCases.RemoveRange(cases);
+        }
+
+        db.TestPasses.Remove(pass);
+        await LogAsync("delete_test_pass", "testpass", pass.Id,
+            $"{pass.Name}; cases={(deleteCases ? "deleted" : "detached")}:{cases.Count}");
+        await db.SaveChangesAsync();
+        return Ok(new { deleted = pid, affectedCases = cases.Count, deletedCases = deleteCases });
+    }
+
+    [HttpGet("testcases")]
+    public async Task<IActionResult> ListTestCases(
+        [FromQuery] uint? testPassId,
+        [FromQuery] int? status,
+        [FromQuery] string? query,
+        [FromQuery] int take = 200,
+        [FromQuery] int skip = 0)
+    {
+        take = Math.Clamp(take, 1, 500);
+        skip = Math.Max(0, skip);
+        IQueryable<TestCaseEntity> q = db.TestCases.AsNoTracking();
+        if (testPassId is not null) q = q.Where(c => c.TestPassId == testPassId);
+        if (status is not null) q = q.Where(c => c.Status == status);
+        if (!string.IsNullOrWhiteSpace(query))
+        {
+            var term = query.Trim();
+            q = q.Where(c => c.Id.Contains(term) || c.Key.Contains(term) || c.Title.Contains(term) || c.RoomName.Contains(term));
+        }
+
+        var total = await q.CountAsync();
+        var rows = await q
+            .OrderBy(c => c.TestPassId == null)
+            .ThenBy(c => c.TestPassId)
+            .ThenBy(c => c.Key)
+            .ThenBy(c => c.Id)
+            .Skip(skip)
+            .Take(take)
+            .ToListAsync();
+        return Ok(new { Total = total, Items = rows.Select(ToAdminTestCase) });
+    }
+
+    [HttpGet("testcases/{id}")]
+    public async Task<IActionResult> GetTestCaseAdmin(string id)
+    {
+        var tc = await db.TestCases.AsNoTracking().FirstOrDefaultAsync(c => c.Id == id);
+        return tc is null ? NotFound() : Ok(ToAdminTestCase(tc));
+    }
+
+    [HttpPost("testcases")]
+    public async Task<IActionResult> CreateTestCase([FromBody] AdminTestCaseDto body)
+    {
+        var caseId = Clean(body.Id, 64);
+        var key = Clean(body.Key, 64);
+        if (string.IsNullOrWhiteSpace(caseId)) caseId = key;
+        if (string.IsNullOrWhiteSpace(caseId)) caseId = await NextTestCaseIdAsync();
+        if (await db.TestCases.AnyAsync(c => c.Id == caseId))
+            return BadRequest(new { error = "duplicate_test_case", message = $"Test case {caseId} already exists." });
+        if (body.TestPassId is not null && !await db.TestPasses.AnyAsync(p => p.Id == body.TestPassId))
+            return BadRequest(new { error = "unknown_test_pass", message = $"Test pass {body.TestPassId} does not exist." });
+
+        var tc = new TestCaseEntity { Id = caseId };
+        ApplyTestCaseDto(tc, body);
+        db.TestCases.Add(tc);
+        await LogAsync("create_test_case", "testcase", 0, $"{tc.Id} {tc.Title}");
+        await db.SaveChangesAsync();
+        return Ok(ToAdminTestCase(tc));
+    }
+
+    [HttpPut("testcases/{id}")]
+    public async Task<IActionResult> UpdateTestCaseAdmin(string id, [FromBody] AdminTestCaseDto body)
+    {
+        var tc = await db.TestCases.FirstOrDefaultAsync(c => c.Id == id);
+        if (tc is null) return NotFound();
+        if (body.TestPassId is not null && !await db.TestPasses.AnyAsync(p => p.Id == body.TestPassId))
+            return BadRequest(new { error = "unknown_test_pass", message = $"Test pass {body.TestPassId} does not exist." });
+
+        var nextId = Clean(body.Id, 64);
+        if (!string.IsNullOrWhiteSpace(nextId) && !string.Equals(nextId, tc.Id, StringComparison.Ordinal))
+        {
+            if (await db.TestCases.AnyAsync(c => c.Id == nextId))
+                return BadRequest(new { error = "duplicate_test_case", message = $"Test case {nextId} already exists." });
+            tc.Id = nextId;
+        }
+
+        ApplyTestCaseDto(tc, body);
+        await LogAsync("update_test_case", "testcase", tc.Pk, $"{tc.Id} {tc.Title}");
+        await db.SaveChangesAsync();
+        return Ok(ToAdminTestCase(tc));
+    }
+
+    [HttpDelete("testcases/{id}")]
+    public async Task<IActionResult> DeleteTestCaseAdmin(string id)
+    {
+        var tc = await db.TestCases.FirstOrDefaultAsync(c => c.Id == id);
+        if (tc is null) return NotFound();
+        db.TestCases.Remove(tc);
+        await LogAsync("delete_test_case", "testcase", tc.Pk, $"{tc.Id} {tc.Title}");
+        await db.SaveChangesAsync();
+        return Ok(new { deleted = id });
+    }
+
+    private async Task<Dictionary<uint, TestPassCounts>> GetTestPassCountsAsync(uint? passId = null)
+    {
+        var q = db.TestCases.Where(c => c.TestPassId != null);
+        if (passId is not null) q = q.Where(c => c.TestPassId == passId);
+        return await q.GroupBy(c => c.TestPassId!.Value)
+            .Select(g => new TestPassCounts(
+                g.Key,
+                g.Count(),
+                g.Count(c => c.Status == 1),
+                g.Count(c => c.Status == 3),
+                g.Count(c => c.Status == 2)))
+            .ToDictionaryAsync(x => x.PassId);
+    }
+
+    private static object ToAdminTestPass(TestPassEntity p, IDictionary<uint, TestPassCounts> counts)
+    {
+        var c = counts.TryGetValue(p.Id, out var v) ? v : new TestPassCounts(p.Id, 0, 0, 0, 0);
+        return new
+        {
+            p.Id,
+            p.Name,
+            p.Description,
+            p.StartDate,
+            p.EndDate,
+            p.WasManuallyClosed,
+            Tags = ParseStringJson(p.TagsJson),
+            NumTestCases = c.Total,
+            NumClaimedTestCases = c.Claimed,
+            NumPassedTestCases = c.Passed,
+            NumFailedTestCases = c.Failed,
+        };
+    }
+
+    private static object ToAdminTestCase(TestCaseEntity c) => new
+    {
+        c.Id,
+        c.Key,
+        c.Title,
+        c.Description,
+        c.RoomName,
+        c.Status,
+        c.MinNumAssignedPlayers,
+        AssignedPlayerIds = ParseIntJson(c.AssignedPlayerIdsJson),
+        AssignedPlayerNames = ParseStringJson(c.AssignedPlayerNamesJson),
+        Tags = ParseStringJson(c.TagsJson),
+        c.JiraUrl,
+        c.JiraBugUrl,
+        c.TestPassId,
+        c.CreatedAt,
+        c.UpdatedAt,
+    };
+
+    private static void ApplyTestCaseDto(TestCaseEntity tc, AdminTestCaseDto body)
+    {
+        tc.Key = Clean(body.Key, 64);
+        tc.Title = Clean(body.Title, 256);
+        tc.Description = Clean(body.Description, 2000);
+        tc.RoomName = Clean(body.RoomName, 128);
+        tc.Status = Math.Clamp(body.Status, 0, 3);
+        tc.MinNumAssignedPlayers = Math.Clamp(body.MinNumAssignedPlayers <= 0 ? 1 : body.MinNumAssignedPlayers, 1, 64);
+        tc.AssignedPlayerIdsJson = ToJsonList(body.AssignedPlayerIds);
+        tc.AssignedPlayerNamesJson = ToJsonList(body.AssignedPlayerNames);
+        tc.TagsJson = ToJsonList(body.Tags);
+        tc.JiraUrl = Clean(body.JiraUrl, 512);
+        tc.JiraBugUrl = Clean(body.JiraBugUrl, 512);
+        tc.TestPassId = body.TestPassId;
+        tc.UpdatedAt = DateTime.UtcNow;
+    }
+
+    private async Task<string> NextTestCaseIdAsync()
+    {
+        var next = ((await db.TestCases.Select(c => (long?)c.Pk).MaxAsync()) ?? 0) + 1;
+        string id;
+        do
+        {
+            id = $"TC-{next++:0000}";
+        } while (await db.TestCases.AnyAsync(c => c.Id == id));
+        return id;
+    }
+
+    private static string Clean(string? value, int max)
+    {
+        var s = (value ?? string.Empty).Trim();
+        return s.Length <= max ? s : s[..max];
+    }
+
+    private static string ToJsonList<T>(IEnumerable<T>? values)
+        => System.Text.Json.JsonSerializer.Serialize(values?.ToList() ?? new List<T>());
+
+    private static List<string> ParseStringJson(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return new();
+        try { return System.Text.Json.JsonSerializer.Deserialize<List<string>>(json) ?? new(); }
+        catch { return new(); }
+    }
+
+    private static List<int> ParseIntJson(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return new();
+        try { return System.Text.Json.JsonSerializer.Deserialize<List<int>>(json) ?? new(); }
+        catch { return new(); }
+    }
     private Task LogAsync(string action, string targetType, long targetId, string reason)
     {
         db.AdminActions.Add(new AdminActionEntity

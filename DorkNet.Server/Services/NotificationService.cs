@@ -116,11 +116,21 @@ public class NotificationService(
     private static string Serialize(PushNotificationId id, object? msg) =>
         JsonSerializer.Serialize(new { Id = WireName(id), Msg = msg }, Json);
 
+    private static string Serialize2(PushNotificationId id, object? msg) =>
+        JsonSerializer.Serialize(new { Id = 25, Msg = msg }, Json);
+
+    private static string SerializeFixedWireFormats(PushNotificationId id, object? msg) =>
+        JsonSerializer.Serialize(new { Id = id, Msg = msg }, Json);
+
     /// <summary>Push a single notification to one player. No-op if the
     /// player has no active connections.</summary>
-    public async Task NotifyAsync(long playerId, PushNotificationId id, object? msg = null)
+    public async Task NotifyAsync(long playerId, PushNotificationId id, object? msg = null, bool skipWire = false)
     {
         var payload = Serialize(id, msg);
+        if (skipWire)
+        {
+            payload = SerializeFixedWireFormats(id, msg);
+        }
         // Include the connection count so we can tell at a glance
         // whether the push had a recipient. Zero connections = the
         // watch isn't on SignalR right now (transport churn, just-
@@ -204,8 +214,14 @@ public class NotificationService(
 
     /// <summary>Push a notification to every currently-connected
     /// player. Used for global announcements and admin broadcasts.</summary>
-    public async Task BroadcastAsync(PushNotificationId id, object? msg = null)
+    /// Alexa, why is your broadcast wire format so fucking wrong :sob:
+    public async Task BroadcastAsync(PushNotificationId id, object? msg = null, bool forceServerMaint = false)
     {
+        
+        if (forceServerMaint)
+        {
+            await hub.Clients.All.SendAsync(HubMethod, Serialize2(id, msg));
+        }
         await hub.Clients.All.SendAsync(HubMethod, Serialize(id, msg));
     }
 
@@ -224,23 +240,23 @@ public class NotificationService(
 
     public Task FriendRequestReceived(long targetPlayerId, long fromPlayerId) =>
         NotifyAsync(targetPlayerId, PushNotificationId.RelationshipChanged,
-            new { Reason = "FriendRequestReceived", From = fromPlayerId });
+            new { Reason = "FriendRequestReceived", From = fromPlayerId }, skipWire:false);
 
     public Task FriendRequestAccepted(long requesterPlayerId, long byPlayerId) =>
         NotifyAsync(requesterPlayerId, PushNotificationId.RelationshipChanged,
-            new { Reason = "FriendRequestAccepted", By = byPlayerId });
+            new { Reason = "FriendRequestAccepted", By = byPlayerId }, skipWire: false);
 
     public Task FriendRequestDeclined(long requesterPlayerId, long byPlayerId) =>
         NotifyAsync(requesterPlayerId, PushNotificationId.RelationshipChanged,
-            new { Reason = "FriendRequestDeclined", By = byPlayerId });
+            new { Reason = "FriendRequestDeclined", By = byPlayerId }, skipWire: false);
 
     public Task FriendRemoved(long otherPlayerId, long byPlayerId) =>
         NotifyAsync(otherPlayerId, PushNotificationId.RelationshipChanged,
-            new { Reason = "FriendRemoved", By = byPlayerId });
+            new { Reason = "FriendRemoved", By = byPlayerId }, skipWire: false);
 
     public Task FriendBlocked(long blockedPlayerId, long byPlayerId) =>
         NotifyAsync(blockedPlayerId, PushNotificationId.RelationshipChanged,
-            new { Reason = "FriendBlocked", By = byPlayerId });
+            new { Reason = "FriendBlocked", By = byPlayerId }, skipWire: false);
 
     /// <summary>Push a presence delta so subscribed friends re-render
     /// their friend-list row without waiting for the watch's 15-45 s
@@ -304,6 +320,8 @@ public class NotificationService(
         {
             // String dispatch key (NOT the int enum value) —
             // see WireName for rationale.
+            // SerializeFixedWireFormats - New Func
+            // ["Id"] = PushNotificationId.SubscriptionUpdatePresence,
             ["Id"]  = WireName(PushNotificationId.SubscriptionUpdatePresence),
             ["Msg"] = msg,
         };
