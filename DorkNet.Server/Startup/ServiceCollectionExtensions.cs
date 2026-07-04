@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
-using DorkNet.Contracts;
 using DorkNet.Server.Compat;
 using DorkNet.Server.Data;
 using DorkNet.Server.Services;
@@ -107,19 +106,14 @@ public static class ServiceCollectionExtensions
             builder.Configuration["Domain:Apex"]
             ?? Environment.GetEnvironmentVariable("DORKNET_DOMAIN")
             ?? "localhost";
-        var scheme = builder.Configuration["Domain:Scheme"] ?? "https";
-        builder.Services.AddSingleton(new DomainConfig(apex, scheme));
-        var allowedHosts = new[] { apex, "localhost", "127.0.0.1" }
-            .Concat(DorkNetRouteOwnership.PublicSubdomains.Select(subdomain => $"{subdomain}.{apex}"))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToArray();
+        builder.Services.AddSingleton(new DomainConfig(apex));
         builder.Services.Configure<Microsoft.AspNetCore.HostFiltering.HostFilteringOptions>(opt =>
         {
-            opt.AllowedHosts = allowedHosts;
+            opt.AllowedHosts = new[] { apex, $"*.{apex}", "localhost", "127.0.0.1" };
             opt.AllowEmptyHosts = true;
             opt.IncludeFailureMessage = true;
         });
-        Console.WriteLine($"[domain] apex={apex}, allowedHosts=[{string.Join(", ", allowedHosts)}]");
+        Console.WriteLine($"[domain] apex={apex}, allowedHosts=[{apex}, *.{apex}, localhost]");
     }
 
     // ── Services ──────────────────────────────────────────────────────────────

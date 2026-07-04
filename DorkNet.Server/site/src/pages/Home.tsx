@@ -22,7 +22,7 @@ export function Home() {
             Rec Room, kept alive.
           </h1>
           <p className="mt-3 text-ink-300 text-base sm:text-lg">
-            DorkNet is a private server for the 2020.03.10 Rec Room client. Browse the
+            Skyelight is a private server for the 2020.12.18 Rec Room client. Browse the
             photo feed below, find friends, and explore rooms made by the community.
           </p>
           <div className="mt-5 flex flex-wrap gap-2">

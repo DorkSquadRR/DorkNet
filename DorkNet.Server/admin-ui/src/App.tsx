@@ -13,6 +13,8 @@ import { LegacyImportRoom } from './pages/LegacyImportRoom';
 import { Broadcast } from './pages/Broadcast';
 import { Content } from './pages/Content';
 import { SettingsHome } from './pages/SettingsHome';
+import { Store } from './pages/Store';
+import { TestManagement } from './pages/TestManagement';
 
 export default function App() {
   return (
@@ -56,7 +58,11 @@ export default function App() {
           <Route path="community"    element={<Navigate to="/content?tab=community" replace />} />
           <Route path="loading-tips" element={<Navigate to="/content?tab=tips" replace />} />
 
+          {/* Store */}
+          <Route path="store" element={<Store />} />
+
           <Route path="broadcast"  element={<Broadcast />} />
+          <Route path="test-management" element={<TestManagement />} />
 
           {/* Settings hub — server toggles + signup codes. */}
           <Route path="settings"     element={<SettingsHome />} />

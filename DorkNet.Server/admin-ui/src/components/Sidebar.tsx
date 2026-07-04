@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard, Users, Building2, Activity,
-  Megaphone, MessageSquare, Settings, X,
+    LayoutDashboard, Users, Building2, Activity,
+    Megaphone, MessageSquare, Settings, X, ShoppingBag, Wrench
 } from './Icons';
 import { BrandMark } from './BrandMark';
 
@@ -30,13 +30,15 @@ const groups: Array<{ title: string; items: Array<{ to: string; label: string; i
     title: 'Content',
     items: [
       { to: '/rooms',  label: 'Rooms',   icon: <Building2 /> },
-      { to: '/content', label: 'Content', icon: <MessageSquare /> },
+        { to: '/content', label: 'Content', icon: <MessageSquare /> },
+        { to: '/store', label: 'Store', icon: <ShoppingBag /> },
     ],
   },
   {
     title: 'Operations',
     items: [
       { to: '/broadcast', label: 'Broadcast', icon: <Megaphone /> },
+      { to: '/test-management', label: 'Tests', icon: <Wrench /> },
       { to: '/settings',  label: 'Settings',  icon: <Settings /> },
     ],
   },

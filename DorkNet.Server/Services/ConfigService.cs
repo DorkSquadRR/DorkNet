@@ -4,6 +4,7 @@ namespace DorkNet.Server.Services;
 
 public class ConfigService(IConfiguration config, DomainConfig domain)
 {
+    public static int ServerMaintMins = 999999999;
     public RecRoomConfig GetConfig(string baseUrl)
     {
         var photon = new PhotonConfig
@@ -25,22 +26,22 @@ public class ConfigService(IConfiguration config, DomainConfig domain)
         return new RecRoomConfig
         {
             MessageOfTheDay = config["Server:MOTD"] ?? "Welcome to the private server!",
-            CdnBaseUri = domain.Url("cdn"),
+            CdnBaseUri = $"https://{domain.Sub("cdn")}",
             PhotonConfig = photon,
-            ServiceUrls = BuildServiceUrlMap(domain),
+            ServiceUrls = BuildServiceUrlMap(apex),
             ConfigTable = new Dictionary<string, string>
             {
                 // Season keys the 2019/2020 client checks at startup
-                ["Season"]             = "Spring",
-                ["CurrentSeason"]      = "Spring",
-                ["SeasonId"]           = "1",
-                ["SeasonName"]         = "Spring",
-                ["ActiveEvent"]        = "None",
-                ["EventName"]          = "",
+                ["Season"] = "Spring",
+                ["CurrentSeason"] = "Spring",
+                ["SeasonId"] = "1",
+                ["SeasonName"] = "Spring",
+                ["ActiveEvent"] = "None",
+                ["EventName"] = "",
                 // Feature flags — keep everything on
-                ["FriendsEnabled"]     = "true",
-                ["ChatEnabled"]        = "true",
-                ["VoiceEnabled"]       = "true",
+                ["FriendsEnabled"] = "true",
+                ["ChatEnabled"] = "true",
+                ["VoiceEnabled"] = "true",
                 // Rec Center category doors are baked with these
                 // config lookups. Missing values leave the door browser
                 // and door-specific return spawns without a category.
@@ -48,13 +49,14 @@ public class ConfigService(IConfiguration config, DomainConfig domain)
                 ["Door.Shooters.Query"] = "#paintball|#lasertag|#recroyale",
                 ["Door.Creative.Title"] = "Creative",
                 ["Door.Creative.Query"] = "#creative|#makerpen|#template",
-                ["Door.Quests.Title"]   = "Quests",
-                ["Door.Quests.Query"]   = "#quest",
-                ["Door.Sports.Title"]   = "Sports",
-                ["Door.Sports.Query"]   = "#sport",
+                ["Door.Quests.Title"] = "Quests",
+                ["Door.Quests.Query"] = "#quest",
+                ["Door.Sports.Title"] = "Sports",
+                ["Door.Sports.Query"] = "#sport",
                 ["Door.Featured.Title"] = "Featured",
                 ["Door.Featured.Query"] = "#featured|#recroomoriginal",
             },
+            ServerMaintenance = new ServerMaintenanceDTO { StartsInMinutes = ServerMaintMins }
         };
     }
 
@@ -110,14 +112,12 @@ public class ConfigService(IConfiguration config, DomainConfig domain)
     /// <see cref="DomainConfig.Apex"/>) so the map stays a single
     /// source of truth.</summary>
     public static Dictionary<string, string> BuildServiceUrlMap(string apex)
-        => BuildServiceUrlMap(new DomainConfig(apex));
-
-    public static Dictionary<string, string> BuildServiceUrlMap(DomainConfig domain)
     {
         var map = new Dictionary<string, string>(ServiceSubdomains.Length);
         foreach (var (service, sub) in ServiceSubdomains)
         {
-            map[service] = domain.Url(sub);
+            var host = string.IsNullOrEmpty(sub) ? apex : $"{sub}.{apex}";
+            map[service] = $"https://{host}";
         }
         return map;
     }

@@ -70,7 +70,7 @@ public static class MiddlewarePipelineExtensions
             if (ctx.Request.Host.Host.Equals(domainCfg.Sub("api"), StringComparison.OrdinalIgnoreCase) &&
                 (ctx.Request.Path == "/admin" || ctx.Request.Path.StartsWithSegments("/admin")))
             {
-                ctx.Response.Redirect(domainCfg.Url("admin", "/"), permanent: false);
+                ctx.Response.Redirect($"https://{domainCfg.Sub("admin")}/", permanent: false);
                 return;
             }
             await next();

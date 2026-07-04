@@ -130,12 +130,12 @@ public class TestCaseManagementController(DorkNetDbContext db) : ControllerBase
 
     [HttpPost("api/testcasemanagement/v1/testcase/{id}/status")]
     [Authorize]
-    public async Task<IActionResult> UpdateStatus(string id, [FromBody] StatusUpdateRequest req)
+    public async Task<IActionResult> UpdateStatus(string id, [FromBody] int req)
     {
         var tc = await db.TestCases.FirstOrDefaultAsync(c => c.Id == id);
         if (tc is null) return NotFound();
-        if (req.NewStatus is < 0 or > 3) return BadRequest("invalid status");
-        tc.Status = req.NewStatus;
+        if (req is < 0 or > 3) return BadRequest("invalid status");
+        tc.Status = req;
         tc.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
         return Ok(ToWireCase(tc));

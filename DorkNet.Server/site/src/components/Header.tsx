@@ -32,7 +32,7 @@ export function Header() {
       <div className="mx-auto max-w-6xl flex items-center gap-4 px-4 sm:px-6 py-3">
         <Link to="/" className="flex items-center gap-2 shrink-0">
           <BrandMark className="size-7" />
-          <span className="font-semibold text-ink-50">DorkNet</span>
+          <span className="font-semibold text-ink-50">Skyelight</span>
         </Link>
 
         <nav className="hidden md:flex items-center gap-1 ml-2">

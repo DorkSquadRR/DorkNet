@@ -15,5 +15,5 @@ public class ServiceUrlsController(DomainConfig domain) : ControllerBase
 {
     [HttpGet("services")]
     public ActionResult<Dictionary<string, string>> Get()
-        => Ok(ConfigService.BuildServiceUrlMap(domain));
+        => Ok(ConfigService.BuildServiceUrlMap(domain.Apex));
 }

@@ -120,6 +120,7 @@ public class SanitizeController(ILogger<SanitizeController> logger) : Controller
     /// used by room/settings forms. Its importer reads an <c>IsPure</c>
     /// object field, unlike the newer bare-bool route above.</summary>
     [HttpPost("api/sanitize/isPure")]
+    [HttpPost("api/sanitize/v1/isPure")]
     public IActionResult IsPure(
         [FromBody] SanitizeBody? body,
         [FromForm(Name = "Text")] string? textForm,

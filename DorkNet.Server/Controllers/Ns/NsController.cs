@@ -37,13 +37,13 @@ public class NsController : ControllerBase
     // code: locker)" in BootSequence.
     [HttpGet("/", Order = -1000)]
     public ActionResult<Dictionary<string, string>> Root() =>
-        Ok(ConfigService.BuildServiceUrlMap(_domain));
+        Ok(ConfigService.BuildServiceUrlMap(_domain.Apex));
 
     // Some builds fetch /v1 or /v1/services directly
     [HttpGet("/v1")]
     [HttpGet("/v1/services")]
     public ActionResult<Dictionary<string, string>> Services() =>
-        Ok(ConfigService.BuildServiceUrlMap(_domain));
+        Ok(ConfigService.BuildServiceUrlMap(_domain.Apex));
 
     // Ping / health used by the client keep-alive loop
     [HttpGet("/v1/ping")]

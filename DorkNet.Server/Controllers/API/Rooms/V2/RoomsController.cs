@@ -135,7 +135,7 @@ public class RoomsController(
     [HttpGet("api/rooms/v3/baserooms")]
     [HttpGet("rooms/base")]
     public async Task<IActionResult> BaseRooms()
-        => Ok((await rooms.HotAsync("#recroomoriginal")).Select(RoomService.ToWireRoom).ToList());
+        => Ok((await rooms.HotAsync("recroomoriginal")).Select(RoomService.ToWireRoom).ToList());
 
     /// <summary>
     /// `Rooms.GetFilters` — pinned/popular tag chips shown above the room
