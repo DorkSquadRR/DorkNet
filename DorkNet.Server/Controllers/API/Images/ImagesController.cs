@@ -401,14 +401,14 @@ public class ImagesController(
     [HttpGet("api/images/v4/player/{accountId:long}")]
     [HttpGet("api/images/v5/player/{accountId:long}")]
     public async Task<IActionResult> GetByAccount(long accountId,
-        [FromQuery] int take = 50, [FromQuery] int skip = 0, [FromQuery] int sort = 0)
+        [FromQuery] int take = 50, [FromQuery] int skip = 0, [FromQuery] string? sort = null)
     {
         take = Math.Clamp(take, 1, 200);
         skip = Math.Max(0, skip);
         var query = db.Photos
             .Where(p => p.UploaderPlayerId == accountId && p.IsPublic && p.DeletedAt == null)
             .AsQueryable();
-        query = sort switch
+        query = ParseSort(sort) switch
         {
             1 => query.OrderByDescending(p => p.CheerCount).ThenByDescending(p => p.CreatedAt),
             2 => query.OrderByDescending(p => p.ViewCount).ThenByDescending(p => p.CreatedAt),
@@ -422,6 +422,13 @@ public class ImagesController(
         return Ok(rows.Select(p => BuildImageInfo(p, accountId)));
     }
 
+    /// <summary>GET api/images/v{2-5}/room/{roomId} — a room's public
+    /// photo gallery. The 2023 client sends <c>sort</c>/<c>filter</c> as
+    /// ENUM NAMES (<c>?sort=CheerCount_Desc&amp;filter=PublicOnly</c>),
+    /// not ints — binding them as <c>int</c> makes [ApiController]
+    /// auto-400 and the watch toasts "Could not show images for room".
+    /// <c>filter</c> is accepted but unused: we only store public,
+    /// non-deleted photos for this view anyway (PublicOnly semantics).</summary>
     [HttpGet("api/images/v2/room/{roomId:long}")]
     [HttpGet("api/images/v3/room/{roomId:long}")]
     [HttpGet("api/images/v4/room/{roomId:long}")]
@@ -430,16 +437,17 @@ public class ImagesController(
         long roomId,
         [FromQuery] int take = 50,
         [FromQuery] int skip = 0,
-        [FromQuery] int sort = 0,
-        [FromQuery] int filter = 0)
+        [FromQuery] string? sort = null,
+        [FromQuery] string? filter = null)
     {
         take = Math.Clamp(take, 1, 200);
         skip = Math.Max(0, skip);
+        _ = filter;
 
         var query = db.Photos
             .Where(p => p.RoomId == roomId && p.IsPublic && p.DeletedAt == null)
             .AsQueryable();
-        query = sort switch
+        query = ParseSort(sort) switch
         {
             1 => query.OrderByDescending(p => p.CheerCount).ThenByDescending(p => p.CreatedAt),
             2 => query.OrderByDescending(p => p.ViewCount).ThenByDescending(p => p.CreatedAt),
@@ -451,6 +459,19 @@ public class ImagesController(
             .Take(take)
             .ToListAsync();
         return Ok(rows.Select(p => BuildImageInfo(p, p.UploaderPlayerId)));
+    }
+
+    /// <summary>Sort selector shared by the album views. Accepts the
+    /// 2020 client's ints (0/1/2) and the 2023 client's enum names —
+    /// the names contain the metric ("CheerCount_Desc", "ViewCount_…");
+    /// anything unrecognised falls back to newest-first.</summary>
+    private static int ParseSort(string? sort)
+    {
+        if (string.IsNullOrWhiteSpace(sort)) return 0;
+        if (int.TryParse(sort, out var n)) return n;
+        if (sort.Contains("Cheer", StringComparison.OrdinalIgnoreCase)) return 1;
+        if (sort.Contains("View", StringComparison.OrdinalIgnoreCase)) return 2;
+        return 0;
     }
 
     /// <summary>POST api/images/v{2-5}/share/{id} — flip a saved photo

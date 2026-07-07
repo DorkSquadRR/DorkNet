@@ -2758,18 +2758,21 @@ public class RoomsController(
     /// </summary>
     [HttpGet("roomserver/hot_roomsandplaylists/{tagsJoined?}")]
     [HttpGet("hot_roomsandplaylists/{tagsJoined?}")]
+    [HttpGet("rooms/hot_roomsandplaylists/{tagsJoined?}")]
     public async Task<IActionResult> HotRoomsAndPlaylistsPath(string? tagsJoined)
     {
         // Watch joins multiple tags with "," — use the first one as a
         // substring filter since RoomService.HotAsync takes a single
-        // tag arg. Empty / null = unfiltered.
+        // tag arg. Empty / null = unfiltered. The 2023 client embeds
+        // &skip/&take in the same segment (see ParsePagedPathSegment).
         //
         // Returns rooms-only for the same reason as the wrapped
         // RoomsAndPlaylistsHot endpoint above: playlists belong in
         // Moods, not in the Hot tab. See that endpoint's doc-comment.
-        var firstTag = string.IsNullOrWhiteSpace(tagsJoined)
+        var (tagsValue, _, _) = ParsePagedPathSegment(tagsJoined, defaultTake: 100);
+        var firstTag = string.IsNullOrWhiteSpace(tagsValue)
             ? null
-            : tagsJoined.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            : tagsValue.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .FirstOrDefault();
         var (entries, _) = await BuildHotRoomsAsync(firstTag);
         return Ok(entries);
@@ -2782,11 +2785,14 @@ public class RoomsController(
     /// rows so the watch's rooms-only browse tab doesn't render
     /// playlist tiles that have nowhere to go.</summary>
     [HttpGet("hot_rooms/{tagsJoined?}")]
+    [HttpGet("rooms/hot_rooms/{tagsJoined?}")]
+    [HttpGet("roomserver/hot_rooms/{tagsJoined?}")]
     public async Task<IActionResult> HotRoomsOnlyPath(string? tagsJoined)
     {
-        var firstTag = string.IsNullOrWhiteSpace(tagsJoined)
+        var (tagsValue, _, _) = ParsePagedPathSegment(tagsJoined, defaultTake: 12);
+        var firstTag = string.IsNullOrWhiteSpace(tagsValue)
             ? null
-            : tagsJoined.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            : tagsValue.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                 .FirstOrDefault();
         var roomList = await rooms.HotAsync(firstTag, take: 12);
         var roomIds = roomList.Select(r => r.Id).ToList();
@@ -2983,22 +2989,35 @@ public class RoomsController(
     /// </summary>
     [HttpGet("roomserver/search_roomsandplaylists/{query}")]
     [HttpGet("search_roomsandplaylists/{query}")]
+    [HttpGet("rooms/search_roomsandplaylists/{query}")]
     public async Task<IActionResult> SearchRoomsAndPlaylists(string query)
     {
-        var (merged, _) = await BuildSearchUnionAsync(query);
+        var (text, _, _) = ParsePagedPathSegment(query, defaultTake: 50);
+        var (merged, _) = await BuildSearchUnionAsync(text);
         return Ok(merged);
     }
 
     /// <summary>GET <c>search_rooms/{query}</c> — rooms-only search
     /// variant. Same <c>MKAMHOIHOJK</c> union entry shape as
     /// <c>search_roomsandplaylists/{query}</c>, just skips playlist
-    /// rows.</summary>
+    /// rows.
+    ///
+    /// The 2023 client's play-menu search (<c>IBEOONPEELF.SearchRooms</c>,
+    /// URL builder <c>GGDPFFDEDKN</c>) calls the <c>rooms/</c>-prefixed
+    /// variant and embeds paging in the SAME path segment:
+    /// <c>rooms/search_rooms/{query}&amp;skip={skip}&amp;take={take}</c>.
+    /// Missing the prefixed route = "Error refreshing rooms from source
+    /// ServerSearch" in the play menu.</summary>
     [HttpGet("search_rooms/{query}")]
+    [HttpGet("rooms/search_rooms/{query}")]
+    [HttpGet("roomserver/search_rooms/{query}")]
     public async Task<IActionResult> SearchRoomsOnly(string query)
     {
-        if (string.IsNullOrWhiteSpace(query))
+        var (text, skip, take) = ParsePagedPathSegment(query, defaultTake: 50);
+        if (string.IsNullOrWhiteSpace(text))
             return Ok(Array.Empty<object>());
-        var roomList = await rooms.SearchAsync(query);
+        var roomList = (await rooms.SearchAsync(text, take: skip + take))
+            .Skip(skip).Take(take).ToList();
         var roomIds = roomList.Select(r => r.Id).ToList();
         var sceneRows = roomIds.Count == 0
             ? new List<RoomSceneEntity>()
@@ -3009,6 +3028,29 @@ public class RoomsController(
         return Ok(roomList
             .Select(r => BuildRoomUnionEntry(r, scenesByRoom.GetValueOrDefault(r.Id)))
             .ToList());
+    }
+
+    /// <summary>Split a 2023-style browse-source path segment into its
+    /// value and paging. The 2023 URL builder (<c>GGDPFFDEDKN</c>)
+    /// formats <c>search_rooms/{0}&amp;skip={1}&amp;take={2}</c> /
+    /// <c>hot_rooms/{0}&amp;skip={1}&amp;take={2}</c> — the paging pairs
+    /// land inside the final path segment, not the query string, so
+    /// route params capture "pizza&amp;skip=0&amp;take=20" verbatim.
+    /// 2020 URLs have no '&amp;' and pass through unchanged.</summary>
+    private static (string Value, int Skip, int Take) ParsePagedPathSegment(string? raw, int defaultTake)
+    {
+        if (string.IsNullOrEmpty(raw)) return (string.Empty, 0, defaultTake);
+        var parts = raw.Split('&');
+        var skip = 0;
+        var take = defaultTake;
+        foreach (var pair in parts.Skip(1))
+        {
+            var kv = pair.Split('=', 2);
+            if (kv.Length != 2 || !int.TryParse(kv[1], out var n)) continue;
+            if (kv[0].Equals("skip", StringComparison.OrdinalIgnoreCase)) skip = n;
+            else if (kv[0].Equals("take", StringComparison.OrdinalIgnoreCase)) take = n;
+        }
+        return (parts[0], Math.Max(0, skip), Math.Clamp(take, 1, 100));
     }
 
     /// <summary>
