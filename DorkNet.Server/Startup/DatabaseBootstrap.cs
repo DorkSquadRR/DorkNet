@@ -109,6 +109,7 @@ public static class DatabaseBootstrap
         await EnsureRoomColumnsAsync(db);
         await EnsureRoomSceneColumnsAsync(db);
         await EnsureInventionColumnsAsync(db);
+        await EnsureGameRewardColumnsAsync(db);
         await EnsureMarch2023TablesAsync(db);
 
         // Coach system account at Player.Id=1. The RR-Original room seeder
@@ -395,6 +396,30 @@ public static class DatabaseBootstrap
                 @"ALTER TABLE ""Inventions"" ADD COLUMN ""Price"" INTEGER NOT NULL DEFAULT 0;");
         }
         catch { }
+    }
+
+    /// <summary>Post-Initial columns on GameRewardSelections for the real
+    /// item-reward flow (offered store-item ids + granted marker).</summary>
+    private static async Task EnsureGameRewardColumnsAsync(DorkNetDbContext db)
+    {
+        var provider = db.Database.ProviderName ?? string.Empty;
+        if (provider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
+        {
+            foreach (var col in new[] { "Offer1ItemId", "Offer2ItemId", "Offer3ItemId", "GrantedItemId" })
+                await db.Database.ExecuteSqlRawAsync(
+                    $@"ALTER TABLE ""GameRewardSelections"" ADD COLUMN IF NOT EXISTS ""{col}"" bigint NOT NULL DEFAULT 0;");
+            return;
+        }
+
+        foreach (var col in new[] { "Offer1ItemId", "Offer2ItemId", "Offer3ItemId", "GrantedItemId" })
+        {
+            try
+            {
+                await db.Database.ExecuteSqlRawAsync(
+                    $@"ALTER TABLE ""GameRewardSelections"" ADD COLUMN ""{col}"" INTEGER NOT NULL DEFAULT 0;");
+            }
+            catch { }
+        }
     }
 
     private static async Task EnsureRoomSceneColumnsAsync(DorkNetDbContext db)

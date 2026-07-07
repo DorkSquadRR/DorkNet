@@ -76,6 +76,16 @@ public sealed class RoomSave2023Tests : IClassFixture<DorkNetServerFactory>
         using var json = JsonDocument.Parse(responseText);
         Assert.True(json.RootElement.GetProperty("success").GetBoolean(), responseText);
 
+        // 2023 commit-response contract (NEOPBOMGIOG): value must carry
+        // BOTH a Room and a SubRoomDataSave or the client's post-parse
+        // validator NREs and the watch shows "Failed to save room".
+        var value = json.RootElement.GetProperty("value");
+        Assert.Equal(JsonValueKind.Object, value.GetProperty("Room").ValueKind);
+        var save = value.GetProperty("SubRoomDataSave");
+        Assert.Equal(blobName, save.GetProperty("DataBlob").GetString());
+        Assert.True(save.TryGetProperty("SubRoomDataSaveId", out _), responseText);
+        Assert.True(save.TryGetProperty("CreatedAt", out _), responseText);
+
         await using (var scope = _factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<DorkNetDbContext>();

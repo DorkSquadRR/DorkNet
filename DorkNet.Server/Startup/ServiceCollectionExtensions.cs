@@ -201,6 +201,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ClubService>();
         services.AddScoped<LevelService>();
         services.AddScoped<StoreService>();
+        services.AddScoped<QuestRewardService>();
         services.AddScoped<SignupCodeService>();
         // Singleton — the protobuf blob is identical for every room and built
         // once at startup; no need to rebuild per request.

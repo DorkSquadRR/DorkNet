@@ -882,6 +882,79 @@ public class StoreService(DorkNetDbContext db, LevelService level, IConfiguratio
         return new(true, null, newBalance, item.Slug);
     }
 
+    /// <summary>Grant a store item to a player WITHOUT charging currency —
+    /// the payout path for game rewards (RRO quest / Stunt Runner loot).
+    /// Mirrors <see cref="PurchaseAsync"/>'s inventory writes (wardrobe
+    /// GUID list for avatar items, stack list for everything else) but
+    /// skips the balance check + debit. Idempotent for unique avatar
+    /// items; stacks consumables.</summary>
+    public async Task<PurchaseResult> GrantItemAsync(long playerId, long itemId)
+    {
+        var item = await GetByIdAsync(itemId);
+        if (item is null || !item.IsActive)
+            return new(false, "item_not_available", null, null);
+
+        var avatar = await db.Avatars.FirstOrDefaultAsync(a => a.PlayerId == playerId);
+        if (avatar is null)
+        {
+            avatar = new AvatarEntity { PlayerId = playerId };
+            db.Avatars.Add(avatar);
+        }
+
+        if (TryGetAvatarItemPayload(item.Slug, out _, out var avatarItemDesc))
+        {
+            var guid = InventoryAvatarItemDesc(avatarItemDesc);
+            var ownedGuids = ParseWardrobeInventory(avatar.InventoryJson);
+            if (!ownedGuids.Contains(guid, StringComparer.OrdinalIgnoreCase))
+            {
+                ownedGuids.Add(guid);
+                avatar.InventoryJson = System.Text.Json.JsonSerializer.Serialize(ownedGuids);
+                avatar.UpdatedAt = DateTime.UtcNow;
+                await db.SaveChangesAsync();
+            }
+            return new(true, null, null, item.Slug);
+        }
+
+        var inventory = ParseInventory(avatar.InventoryJson);
+        var existing = inventory.FirstOrDefault(e => e.ItemId == item.Slug);
+        var isConsumable = string.Equals(item.Category, "consumable", StringComparison.OrdinalIgnoreCase);
+        if (existing is not null)
+        {
+            if (!isConsumable) return new(true, "already_owned", null, item.Slug);
+            existing.Quantity += 1;
+        }
+        else
+        {
+            inventory.Add(new InventoryEntry { ItemId = item.Slug, Quantity = 1 });
+        }
+        avatar.InventoryJson = System.Text.Json.JsonSerializer.Serialize(inventory);
+        avatar.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return new(true, null, null, item.Slug);
+    }
+
+    /// <summary>Pick <paramref name="count"/> distinct renderable store
+    /// items to offer as a game-reward choice. Deterministic given the
+    /// seed (we key off the reward-selection id) so re-fetching the same
+    /// pending reward always offers the same items.</summary>
+    public async Task<List<StoreItemEntity>> PickRewardItemsAsync(int count, int seed)
+    {
+        var pool = await db.StoreItems
+            .Where(i => i.IsActive &&
+                (i.AvailableUntil == null || i.AvailableUntil > DateTime.UtcNow))
+            .ToListAsync();
+        var renderable = pool.Where(IsRenderableGiftDrop).ToList();
+        if (renderable.Count == 0) return new();
+
+        // Stable shuffle: order by a hash of (id, seed) so the same seed
+        // reproduces the same picks without persisting the offered set.
+        var picked = renderable
+            .OrderBy(i => HashCode.Combine(i.Id, seed))
+            .Take(Math.Min(count, renderable.Count))
+            .ToList();
+        return picked;
+    }
+
     private static List<string> ParseWardrobeInventory(string? json)
     {
         if (string.IsNullOrWhiteSpace(json) || json == "[]") return new();
@@ -1012,7 +1085,8 @@ public class StoreService(DorkNetDbContext db, LevelService level, IConfiguratio
     {
         // PurchasableItemId is an int and must be unique within the
         // storefront — we use the StoreItem row id, capped to int range.
-        var itemId = (int)(i.Id & 0x7fffffff);
+        var itemId = PurchasableItemIdFor(i);
+        var giftDrop = BuildGiftDrop(i, itemId);
 
         var price = new
         {
@@ -1020,6 +1094,32 @@ public class StoreService(DorkNetDbContext db, LevelService level, IConfiguratio
             Price        = (int)i.Price,
         };
 
+        return new
+        {
+            // Base PurchasableItem keys.
+            PurchasableItemId = itemId,
+            Type              = 0,                       // PurchasableItemType.GiftDrop
+            IsFeatured        = positionalIndex < 12,    // first dozen show in Featured tab
+            Prices            = new[] { price },
+            SubscriberPrices  = Array.Empty<object>(),
+            // 2020 PurchasableGiftDrop carries a GiftDrops LIST; the 2023
+            // row (POGBAGAHGIA formatter) reads a single "GiftDrop" object
+            // instead. Ship both: whichever formatter parses the row skips
+            // the key it doesn't know.
+            GiftDrop          = giftDrop,
+            GiftDrops         = new[] { giftDrop },
+        };
+    }
+
+    /// <summary>Build one StorefrontGiftDrop (EFFIEFEFHHB) object for a
+    /// store row. Shared by the storefront rows and the game-reward
+    /// selection so both go through the same, wire-verified 2023 shape —
+    /// notably <c>AvatarItemId</c> is an <b>Int32</b> (the descriptor
+    /// string lives in <c>AvatarItemDesc</c>); a string there makes the
+    /// strict reader throw "Malformed Response" for the whole
+    /// payload.</summary>
+    public static object BuildGiftDrop(StoreItemEntity i, int giftDropId)
+    {
         // Pull the AvatarItem GUID out of the slug for wardrobe-imported
         // entries. Hand-curated <c>dorknet-*</c> SKUs leave AvatarItemDesc
         // empty — they're cosmetic store tiles only.
@@ -1048,10 +1148,10 @@ public class StoreService(DorkNetDbContext db, LevelService level, IConfiguratio
             consumableItemDesc = consumableHairDyeDesc;
         }
 
-        var giftDrop = new
+        return new
         {
             // REQUIRED.
-            GiftDropId   = itemId,
+            GiftDropId   = giftDropId,
             Rarity       = MapRarity(i.Category),
             // 2023 additions (EMBCEDNHFLB formatter): TagList is a CSV
             // string, Currency is the CurrencyType enum repeated, ItemSet*
@@ -1071,7 +1171,7 @@ public class StoreService(DorkNetDbContext db, LevelService level, IConfiguratio
             // +0x38). Shipping the {guid},,, descriptor here made the
             // strict Utf8Json reader throw "Malformed Response" on the
             // whole giftdropstore payload, so the Shop tab loaded nothing.
-            AvatarItemId              = itemId,
+            AvatarItemId              = giftDropId,
             AvatarItemType            = string.IsNullOrEmpty(avatarItemDesc) ? (int?)null : avatarItemType,
             ConsumableItemDesc        = consumableItemDesc,
             EquipmentPrefabName       = equipmentPrefabName,
@@ -1083,24 +1183,6 @@ public class StoreService(DorkNetDbContext db, LevelService level, IConfiguratio
             Context                   = 0,
             Content                   = isHairDye ? GiftBoxContentHairDye : 0,
             EquipmentRarity           = equipmentEntry?.rarity ?? 0,
-        };
-
-        return new
-        {
-            // Base PurchasableItem keys.
-            PurchasableItemId = itemId,
-            Type              = 0,                       // PurchasableItemType.GiftDrop
-            IsFeatured        = positionalIndex < 12,    // first dozen show in Featured tab
-            Prices            = new[] { price },
-            SubscriberPrices  = Array.Empty<object>(),
-            // 2020 PurchasableGiftDrop carries a GiftDrops LIST; the 2023
-            // row (POGBAGAHGIA formatter) reads a single "GiftDrop" object
-            // instead. Ship both: whichever formatter parses the row skips
-            // the key it doesn't know. Missing "GiftDrop" leaves the 2023
-            // row's inner desc null and StoreItemListModel's filter
-            // predicate NREs on every item — the Shop tab shows nothing.
-            GiftDrop          = giftDrop,
-            GiftDrops         = new[] { giftDrop },
         };
     }
 

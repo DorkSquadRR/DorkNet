@@ -705,6 +705,9 @@ public class RoomsController(
             SavedByAccountId = room.CreatorPlayerId,
             SavedOnPlatform = 7,
             SavedOnDeviceClass = 2,
+            CreatedAt = (scene?.DataModifiedAt ?? room.UpdatedAt) is var created && created != default
+                ? created.ToString("yyyy-MM-ddTHH:mm:ssZ")
+                : DateTime.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ"),
             CreatedByAccountId = room.CreatorPlayerId,
             UnityAssetHash = string.Empty,
             UnityAsset = unityAsset,
@@ -1074,6 +1077,30 @@ public class RoomsController(
         };
         if (wrapCreateModifyResponse)
         {
+            // 2023 nested-JSON save commit: the response deserializer
+            // (NEOPBOMGIOG via KMBHAKAHNGH mapper) REQUIRES value =
+            // { Room: <room DTO>, SubRoomDataSave: <save DTO> } — both
+            // non-null, or its post-parse validator NREs and the watch
+            // reports "Failed to save room" even though the save
+            // persisted. Room reuses the GET rooms/{id} shape; the save
+            // reuses BuildStudioSaveWire (JKIFFPPAJNK keys per
+            // PELEHJLMKJO mapper: SubRoomDataSaveId/SubRoomId/
+            // UnityAssetId/DataBlob/DataBlobHash/SavedByAccountId/
+            // SavedOnPlatform/SavedOnDeviceClass/Description/CreatedAt).
+            if (body.SubRoomData is not null)
+            {
+                var subRoomId = (long)(sceneRow?.OrderIndex ?? (int)body.RoomSceneId);
+                var value = new
+                {
+                    Room = BuildRoomServerDetails(pushRoom, sceneRowsForRoom, newBlob),
+                    SubRoomDataSave = BuildStudioSaveWire(
+                        room, sceneRow, subRoomId,
+                        sceneRow?.StudioSubRoomDataSaveId ?? 0L,
+                        unityAssetTarget: null, unityAssetVersion: null),
+                };
+                return Ok(new { success = true, value, error = string.Empty });
+            }
+
             var roomServerDetails = BuildRoomServerDetails(pushRoom, sceneRowsForRoom, newBlob);
             return Ok(new { success = true, value = roomServerDetails, error = string.Empty });
         }
