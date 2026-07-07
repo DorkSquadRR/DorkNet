@@ -363,11 +363,17 @@ public class AvatarItemsController(DorkNetDbContext db, IConfiguration config) :
     /// inside the wardrobe parser. Stored colored descs are already
     /// "{guid},{swatch},{mask}," (3 commas); this pads any shorter legacy
     /// value.</summary>
-    private static string ToWatchDesc(string storedDesc)
-    {
-        var commas = storedDesc.Count(c => c == ',');
-        return commas >= 3 ? storedDesc : storedDesc + new string(',', 3 - commas);
-    }
+    // A stored colored descriptor is the EXACT RecNet equip string
+    // ({itemGuid},{combinationGuid…}) — the client feeds everything after the
+    // item GUID into combinationLookup.TryGetValue as an opaque, case-sensitive
+    // key, so it must be returned byte-for-byte. Do NOT pad to 3 commas: the
+    // 2023 combination model has short-form descriptors ({item},{combo}) whose
+    // trailing commas are significant — padding "{item},{combo}" to
+    // "{item},{combo},," corrupts the key and the watch fails to resolve the
+    // combination (renders a broken/default mesh). Only genuinely bare entries
+    // (FullDesc == BaseGuid) get the "{guid},,," base form, and those never
+    // reach here (the caller emits the catalog DTO directly for them).
+    private static string ToWatchDesc(string storedDesc) => storedDesc;
 
     private static HashSet<string> ParseEquippedItemGuids(string? outfitSelections)
     {
