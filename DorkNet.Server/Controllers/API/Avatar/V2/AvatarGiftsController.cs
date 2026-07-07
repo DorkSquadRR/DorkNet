@@ -33,6 +33,7 @@ public class AvatarGiftsController(
     DorkNetDbContext db,
     NotificationService notifications,
     LevelService level,
+    StoreService store,
     QuestRewardService questRewards,
     PlayerPresenceService presence) : ControllerBase
 {
@@ -49,26 +50,42 @@ public class AvatarGiftsController(
         return Ok(rows.Select(ToWire));
     }
 
-    public sealed record GenerateGiftRequest(int? GiftContext);
+    public sealed record GenerateGiftRequest(int? GiftContext, bool? IsGameGift, int? AlternateGiftContext, string? Message);
 
-    /// <summary>POST <c>api/avatar/v2/gifts/generate</c> — server picks
-    /// a random unlocked-avatar item and queues a gift package. The
-    /// 2020 client posts to this when the user clicks a free-gift
-    /// tile or hits a context the client maps to <c>GiftContext</c>.</summary>
+    /// <summary>POST <c>api/avatar/v2/gifts/generate</c> — the end-of-
+    /// activity gift box (chest). For a game/quest gift (IsGameGift) the
+    /// server first tries the quest's configured item pool, keyed by the
+    /// RRO room the player is in (the request carries no quest id). If
+    /// that room has no pool — or for non-game free-gift tiles — it falls
+    /// back to a random wardrobe item. The rolled item is stamped as a
+    /// gift package; opening the box (<c>gifts/consume</c>) grants it.</summary>
     [HttpPost("api/avatar/v2/gifts/generate")]
+    [Consumes("application/json", "application/x-www-form-urlencoded", "multipart/form-data")]
     public async Task<IActionResult> Generate([FromBody] GenerateGiftRequest? req)
     {
         var pid = this.RequireCurrentPlayerId();
-        // Pick a random wardrobe StoreItem (Slug starts with
-        // "wardrobe-" — that's the convention StoreService uses for
-        // catalogue rows derived from outfits_assets bundles).
+        var isGameGift = req?.IsGameGift ?? false;
+        var rng = new Random();
+
+        // Quest chest: pick from this room's configured reward pool.
+        if (isGameGift && presence.GetRoom(pid) is { RoomId: > 0 } room
+            && await questRewards.PickForRoomAsync(room.RoomId, rng.Next()) is { } questItem)
+        {
+            var gift = BuildGiftFromItem(pid, questItem, req?.GiftContext ?? 0, rng);
+            gift.SourceStoreItemId = questItem.Id;
+            db.GiftPackages.Add(gift);
+            await db.SaveChangesAsync();
+            await notifications.NotifyAsync(pid, PushNotificationId.GiftPackageReceived, ToWire(gift));
+            return Ok(ToWire(gift));
+        }
+
+        // Fallback: random wardrobe StoreItem (Slug "wardrobe-{guid}").
         var pool = await db.StoreItems
             .Where(s => s.IsActive && s.Slug.StartsWith("wardrobe-"))
             .Select(s => new { s.Slug, s.DisplayName })
             .ToListAsync();
         if (pool.Count == 0) return StatusCode(503, "no wardrobe items in catalogue");
 
-        var rng = new Random();
         var pick = pool[rng.Next(pool.Count)];
         var guid = pick.Slug["wardrobe-".Length..];
 
@@ -76,7 +93,7 @@ public class AvatarGiftsController(
         // so the watch's parse-and-iterate doesn't blow up in
         // GiftManager.DequeueGift. See AvatarItemsController.cs:31-40
         // for the canonical wire-format note.
-        var gift = new GiftPackageEntity
+        var randomGift = new GiftPackageEntity
         {
             RecipientPlayerId = pid,
             FromPlayerId = null,
@@ -92,14 +109,56 @@ public class AvatarGiftsController(
             IsValid = true,
             SupportsCurrentPlatform = true,
         };
-        db.GiftPackages.Add(gift);
+        db.GiftPackages.Add(randomGift);
         await db.SaveChangesAsync();
 
         // Push so the watch shows the new-gift toast.
         await notifications.NotifyAsync(pid,
-            PushNotificationId.GiftPackageReceived, ToWire(gift));
-        return Ok(ToWire(gift));
+            PushNotificationId.GiftPackageReceived, ToWire(randomGift));
+        return Ok(ToWire(randomGift));
     }
+
+    /// <summary>Build a gift package for a specific store item, filling
+    /// the wire payload that matches its kind (avatar item vs equipment
+    /// vs consumable) so <c>gifts/consume</c> grants the right thing.</summary>
+    private static GiftPackageEntity BuildGiftFromItem(long pid, GiftPackageItem item, int giftContext, Random rng)
+    {
+        var gift = new GiftPackageEntity
+        {
+            RecipientPlayerId = pid,
+            FromPlayerId = null,
+            CurrencyType = 0,
+            GiftContext = giftContext,
+            GiftRarity = RollRarity(rng),
+            Message = $"You earned {item.DisplayName}!",
+            Platform = -1,
+            PackageVariant = "Standard",
+            PackageMaterial = string.Empty,
+            IsValid = true,
+            SupportsCurrentPlatform = true,
+        };
+
+        if (StoreService.TryGetAvatarItemPayload(item.Slug, out var avatarItemType, out var avatarItemDesc))
+        {
+            gift.AvatarItemType = avatarItemType;
+            gift.AvatarItemDescOrHairDyeDesc = avatarItemDesc;
+        }
+        else if (StoreService.TryGetEquipmentPayload(item.Slug, out var prefab, out var modGuid, out _))
+        {
+            gift.EquipmentPrefabName = prefab;
+            gift.EquipmentModificationGuid = modGuid;
+        }
+        else if (StoreService.TryGetConsumableItemDesc(item.Slug, out var consumableDesc))
+        {
+            gift.ConsumableItemDesc = consumableDesc;
+        }
+        return gift;
+    }
+
+    private static GiftPackageEntity BuildGiftFromItem(long pid, StoreItemEntity item, int giftContext, Random rng) =>
+        BuildGiftFromItem(pid, new GiftPackageItem(item.Slug, item.DisplayName), giftContext, rng);
+
+    private readonly record struct GiftPackageItem(string Slug, string DisplayName);
 
     [HttpPost("api/avatar/v2/gifts/consume/{id:long}")]
     public Task<IActionResult> ConsumeViaPath(long id) => ConsumeImpl(id);
@@ -169,6 +228,19 @@ public class AvatarGiftsController(
         if (gift is null) return NotFound();
         if (gift.RecipientPlayerId != pid) return Forbid();
         if (gift.Consumed) return Ok(ToWire(gift)); // idempotent
+
+        // Quest-reward chest: grant the exact backing store item (handles
+        // avatar / equipment / consumable uniformly, idempotently). The
+        // per-kind wire-derivation below is skipped for these — the wire
+        // fields are still populated for the client to render the box.
+        if (gift.SourceStoreItemId > 0)
+        {
+            await store.GrantItemAsync(pid, gift.SourceStoreItemId);
+            gift.Consumed = true;
+            gift.ConsumedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+            return Ok(ToWire(gift));
+        }
 
         // Append avatar item to player's inventory list (JSON list of
         // GUID strings). Defensive parse — corrupted JSON resets to

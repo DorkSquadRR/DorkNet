@@ -93,4 +93,11 @@ public class GiftPackageEntity
     public DateTime? ConsumedAt { get; set; }
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    /// <summary>When &gt; 0, the exact StoreItem this gift grants on
+    /// consume — used by quest-reward chests so consuming grants the
+    /// right item regardless of kind (avatar / equipment / consumable)
+    /// via <c>StoreService.GrantItemAsync</c>. 0 = legacy gift whose
+    /// payload is derived from the wire fields above. Not on wire.</summary>
+    public long SourceStoreItemId { get; set; }
 }
