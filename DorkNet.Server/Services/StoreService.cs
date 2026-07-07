@@ -973,6 +973,13 @@ public class StoreService(DorkNetDbContext db, LevelService level, IConfiguratio
             // REQUIRED.
             GiftDropId   = itemId,
             Rarity       = MapRarity(i.Category),
+            // 2023 additions (EMBCEDNHFLB formatter): TagList is a CSV
+            // string, Currency is the CurrencyType enum repeated, ItemSet*
+            // group multi-part outfits (we don't sell sets).
+            TagList      = "",
+            Currency     = i.CurrencyType,
+            ItemSetId    = (int?)null,
+            ItemSetFriendlyName = "",
             // Optional / nullable string fields the watch reads.
             FriendlyName              = i.DisplayName,
             Tooltip                   = i.Description,
@@ -1008,10 +1015,21 @@ public class StoreService(DorkNetDbContext db, LevelService level, IConfiguratio
             IsFeatured        = positionalIndex < 12,    // first dozen show in Featured tab
             Prices            = new[] { price },
             SubscriberPrices  = Array.Empty<object>(),
-            // PurchasableGiftDrop adds GiftDrops on top.
+            // 2020 PurchasableGiftDrop carries a GiftDrops LIST; the 2023
+            // row (POGBAGAHGIA formatter) reads a single "GiftDrop" object
+            // instead. Ship both: whichever formatter parses the row skips
+            // the key it doesn't know. Missing "GiftDrop" leaves the 2023
+            // row's inner desc null and StoreItemListModel's filter
+            // predicate NREs on every item — the Shop tab shows nothing.
+            GiftDrop          = giftDrop,
             GiftDrops         = new[] { giftDrop },
         };
     }
+
+    /// <summary>The wire PurchasableItemId for a store row — must match
+    /// what <see cref="BuildPurchasableGiftDrop"/> puts on the row so
+    /// id-lists (toptoday) resolve against the gift-drop cache.</summary>
+    public static int PurchasableItemIdFor(StoreItemEntity i) => (int)(i.Id & 0x7fffffff);
 
     /// <summary>GiftManager.GiftRarity wire values:
     /// None=-1, Common=0, Uncommon=10, Rare=20, Epic=30, Legendary=50.</summary>

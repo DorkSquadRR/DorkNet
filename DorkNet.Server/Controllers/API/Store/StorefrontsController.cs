@@ -32,12 +32,29 @@ public class StorefrontsController(
     [HttpGet("api/storefronts/v1/all")]
     [HttpGet("api/storefronts/v2/all")]
     [HttpGet("api/storefronts/v3/all")]
-    [HttpGet("api/storefronts/v1/toptoday")]
     [AllowAnonymous]
     public async Task<IActionResult> All()
     {
         var items = await store.GetAllActiveAsync();
         return Ok(items.Select(i => StoreService.ToItemDto(i, domain.Apex)).ToArray());
+    }
+
+    /// <summary>GET <c>api/storefronts/v1/toptoday</c> — the 2023 Shop
+    /// tab's "featured today" strip. The client (DCFKEFHJAGC.IDCIMNLBINC)
+    /// deserialises the body as a bare <c>List&lt;int&gt;</c> of
+    /// PurchasableItemIds and resolves each against the gift-drop cache
+    /// it loaded from <c>/v3/giftdropstore/{id}</c> — so these ids MUST
+    /// be ids that appear on that storefront's rows, or the client logs
+    /// "Could not find purchasable giftdrop" and drops them. Returning
+    /// item OBJECTS here (the old /all alias) made the whole featured
+    /// fetch fail to parse.</summary>
+    [HttpGet("api/storefronts/v1/toptoday")]
+    [AllowAnonymous]
+    public async Task<IActionResult> TopToday()
+    {
+        var items = await store.GetRenderableGiftDropItemsAsync();
+        var max = Math.Max(1, config.GetValue("Store:MaxTopTodayItems", 12));
+        return Ok(items.Take(max).Select(StoreService.PurchasableItemIdFor).ToArray());
     }
 
     /// <summary>GET <c>api/storefronts/v1/adcarouselitems</c> — the rotating

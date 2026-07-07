@@ -176,6 +176,25 @@ public sealed class RoomConsumablesShopTests : IClassFixture<DorkNetServerFactor
         Assert.Equal(0, emptied.GetArrayLength());
     }
 
+    [Fact]
+    public async Task Unprefixed_2023_commerce_probes_respond()
+    {
+        // The 2023 client calls these WITHOUT the api/ prefix on startup;
+        // a 404 here surfaces as "CleanupPendingTransactions failed" +
+        // unobserved-HTTP-404 crash reports in Player.log.
+        using var client = ApiClient();
+
+        using var cleanup = await client.PostAsync("/purchase/v1/cleanuppending",
+            new StringContent("", Encoding.UTF8, "application/x-www-form-urlencoded"));
+        Assert.True(cleanup.IsSuccessStatusCode);
+
+        using var hasSpent = await client.GetAsync("/purchase/v1/hasspentmoney");
+        Assert.Equal("false", await hasSpent.Content.ReadAsStringAsync());
+
+        var bundles = await GetJsonAsync(client, "/reminder/currentTokenBundles/v2");
+        Assert.Equal(JsonValueKind.Array, bundles.ValueKind);
+    }
+
     private HttpClient ApiClient(GameClientSession? session = null)
     {
         var client = _factory.CreateClient(new() { AllowAutoRedirect = false });
