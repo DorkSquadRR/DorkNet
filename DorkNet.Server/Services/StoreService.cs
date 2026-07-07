@@ -441,6 +441,13 @@ public class StoreService(DorkNetDbContext db, LevelService level, IConfiguratio
         public string item_guid { get; set; } = string.Empty;
         public int? item_outfit_type { get; set; }
         public string mask_guid { get; set; } = string.Empty;
+        // 2023 colored-variant identity + equip string. A variant is
+        // identified by its COMBINATION guid (not the swatch — one swatch
+        // material is shared across many colorways), and the client equips
+        // the descriptor VERBATIM as an opaque combinationLookup key. See
+        // color_variants.json (schema v2, dumped from allPossibleCombinations).
+        public string combination_id { get; set; } = string.Empty;
+        public string descriptor { get; set; } = string.Empty;
     }
     private sealed class ColorVariantFile
     {
@@ -469,7 +476,10 @@ public class StoreService(DorkNetDbContext db, LevelService level, IConfiguratio
             var byKey = new Dictionary<string, ColorVariantEntry>(StringComparer.OrdinalIgnoreCase);
             foreach (var m in data.matches)
             {
-                if (string.IsNullOrEmpty(m.item_guid) || string.IsNullOrEmpty(m.swatch_guid)) continue;
+                // A variant is valid if it has an item + a descriptor (the
+                // verbatim equip string). swatch_guid is now informational
+                // only — it is NOT the identity (shared across colorways).
+                if (string.IsNullOrEmpty(m.item_guid) || string.IsNullOrEmpty(m.descriptor)) continue;
                 var key = $"{WardrobeColoredPrefix}{m.item_guid}-{m.color}".ToLowerInvariant();
                 byKey[key] = m;
             }
@@ -1022,20 +1032,20 @@ public class StoreService(DorkNetDbContext db, LevelService level, IConfiguratio
         if (string.IsNullOrWhiteSpace(slug)) return false;
 
         // Colored variant slug (wardrobe-colored-<itemGuid>-<color>) —
-        // resolve via the static catalog to get the swatch + mask
-        // GUIDs. AvatarItem RecNet desc format verified against the
-        // watch's AvatarItemVisualData.ToRecNetString (Cpp2IL_ISIL/.../
-        // RecRoom/Avatar/Data/Shared/AvatarItemVisualData.txt:474-585):
-        //   <prefabGuid>,<swatchGuid>,<maskGuid>,<decalGuid>
-        // — swatch BEFORE mask, not the other way around. Earlier code
-        // had them flipped, which made the watch read the mask GUID as
-        // a swatch GUID, fail to resolve it, and fall back to the
-        // default swatch.
+        // resolve via the static catalog and return its descriptor
+        // VERBATIM. The 2023 client identifies a colorway by its COMBINATION
+        // guid, not the swatch: one swatch material is shared across many
+        // colorways (e.g. Angler hat's swatch renders Blue/Gray/Tan), so a
+        // {item},{swatch},{mask} string collapses distinct colors and renders
+        // the wrong one. The descriptor ({item},{combinationGuid…}, byte-for-
+        // byte from the dumped allPossibleCombinations) is fed straight into
+        // the client's combinationLookup.TryGetValue as an opaque key.
         if (slug.StartsWith(WardrobeColoredPrefix, StringComparison.OrdinalIgnoreCase))
         {
-            if (_variantCatalog.Value.TryGetValue(slug.ToLowerInvariant(), out var entry))
+            if (_variantCatalog.Value.TryGetValue(slug.ToLowerInvariant(), out var entry)
+                && !string.IsNullOrEmpty(entry.descriptor))
             {
-                avatarItemDesc = $"{entry.item_guid},{entry.swatch_guid},{entry.mask_guid},";
+                avatarItemDesc = entry.descriptor;
                 return true;
             }
             // Fall through to wardrobe- handling if not in catalog.

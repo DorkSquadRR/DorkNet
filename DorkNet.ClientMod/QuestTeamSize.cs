@@ -42,14 +42,6 @@ internal static class QuestTeamSize
 {
     private const BindingFlags BF = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
 
-    private static readonly HashSet<string> _seen = new(StringComparer.Ordinal);
-    private static bool _loggedBump;
-    private static bool _activeAllowedQuestConfig;
-    private static int _teamIndexNormalizeLogCount;
-    private static int _spawnModeDataNormalizeLogCount;
-    private static int _requiredSpawnIndexNormalizeLogCount;
-    private static int _spawnRelaxLogCount;
-
     public static bool TryPatchSpawnIndexNormalizers(HarmonyLib.Harmony harmony)
     {
         var ok = true;
@@ -82,7 +74,6 @@ internal static class QuestTeamSize
                 .GetMethod(nameof(NormalizeTeamPlayerIndex_Postfix), BindingFlags.Public | BindingFlags.Static)!
                 .MakeGenericMethod(indexType);
             harmony.Patch(target, postfix: new HarmonyMethod(patch));
-            Mod.Log.Msg("[patch-ok] GameTeamManager.GetTeamPlayerIndex");
             return true;
         }
         catch (Exception ex)
@@ -115,7 +106,6 @@ internal static class QuestTeamSize
                 .GetMethod(nameof(NormalizeSpawnModeData_Postfix), BindingFlags.Public | BindingFlags.Static)!
                 .MakeGenericMethod(indexType);
             harmony.Patch(target, postfix: new HarmonyMethod(patch));
-            Mod.Log.Msg("[patch-ok] GameSpawnManager.ALCADGJKKHJ");
             return true;
         }
         catch (Exception ex)
@@ -148,7 +138,6 @@ internal static class QuestTeamSize
                 .GetMethod(nameof(NormalizeRequiredSpawnIndex_Prefix), BindingFlags.Public | BindingFlags.Static)!
                 .MakeGenericMethod(indexType);
             harmony.Patch(target, prefix: new HarmonyMethod(patch));
-            Mod.Log.Msg("[patch-ok] GameSpawnManager.FKEICBPCMPJ index normalizer");
             return true;
         }
         catch (Exception ex)
@@ -173,13 +162,6 @@ internal static class QuestTeamSize
             if (!TryNormalizeIndex(value, out var normalized)) return;
 
             __result = (T)Enum.ToObject(typeof(T), normalized);
-
-            if (_teamIndexNormalizeLogCount < 12)
-            {
-                _teamIndexNormalizeLogCount++;
-                Mod.Log.Msg($"[questsize] normalized team-player index {value} -> {normalized} for quest spawn lookup " +
-                            $"activeQuest={_activeAllowedQuestConfig}");
-            }
         }
         catch (Exception ex)
         {
@@ -200,13 +182,6 @@ internal static class QuestTeamSize
             if (!TryNormalizeIndex(value, out var normalized)) return;
 
             __3 = (T)Enum.ToObject(typeof(T), normalized);
-
-            if (_spawnModeDataNormalizeLogCount < 12)
-            {
-                _spawnModeDataNormalizeLogCount++;
-                Mod.Log.Msg($"[questsize] normalized spawn-mode team-player index {value} -> {normalized} " +
-                            $"activeQuest={_activeAllowedQuestConfig}");
-            }
         }
         catch (Exception ex)
         {
@@ -226,13 +201,6 @@ internal static class QuestTeamSize
             if (!TryNormalizeIndex(value, out var normalized)) return;
 
             __2 = (T)Enum.ToObject(typeof(T), normalized);
-
-            if (_requiredSpawnIndexNormalizeLogCount < 12)
-            {
-                _requiredSpawnIndexNormalizeLogCount++;
-                Mod.Log.Msg($"[questsize] normalized required spawn index {value} -> {normalized} " +
-                            $"activeQuest={_activeAllowedQuestConfig}");
-            }
         }
         catch (Exception ex)
         {
@@ -255,11 +223,7 @@ internal static class QuestTeamSize
             if (target <= 0 || __instance is null) return;
 
             var name = GetMember(__instance, "Name") as string ?? "";
-            var allowed = IsAllowed(name);
-            _activeAllowedQuestConfig = allowed;
-            if (_seen.Add(name))
-                Mod.Log.Msg($"[questsize] config build '{name}' allowed={allowed}");
-            if (!allowed) return;
+            if (!IsAllowed(name)) return;
 
             var arr = GetMember(__instance, "TeamConfigurations");
             int len = ArrLen(arr);
@@ -275,12 +239,6 @@ internal static class QuestTeamSize
                     WriteInt(elem, "MaxTeamSize", target) &&
                     SetArrItem(arr!, i, elem))   // write the mutated struct back
                     bumped++;
-            }
-
-            if (bumped > 0 && !_loggedBump)
-            {
-                _loggedBump = true;
-                Mod.Log.Msg($"[questsize] '{name}': bumped {bumped} team slot(s) → {target}");
             }
         }
         catch (Exception ex) { Mod.Log.Warning($"[questsize] build prefix failed: {ex.Message}"); }
@@ -315,14 +273,7 @@ internal static class QuestTeamSize
             var sourceCount = Count(__0);
             if (sourceCount <= 0) return;
 
-            var copied = CopyListItems(__0, __7);
-            if (_spawnRelaxLogCount < 12)
-            {
-                _spawnRelaxLogCount++;
-                Mod.Log.Msg($"[questsize] relaxed empty quest spawn filter; activeQuest={_activeAllowedQuestConfig} " +
-                            $"source={sourceCount} copied={copied} " +
-                            $"sourceType={TypeName(__0)} outputType={TypeName(__7)}");
-            }
+            CopyListItems(__0, __7);
         }
         catch (Exception ex)
         {

@@ -280,7 +280,7 @@ Note: counts are approximate because several client URLs (`api/avatar/v3/saved`,
 |---|---|---|---|
 | GET  | `api/rooms/v1/featuredRoomGroup` | REAL | `MissingEndpointsController.FeaturedRooms` — returns the top-12 hot AG rooms wrapped in the `{Name, FeaturedRooms}` shape |
 | GET  | `api/rooms/v3/featured` | REAL | Same handler — `MissingEndpointsController.FeaturedRooms` (route also registered for v3) |
-| GET  | `api/rooms/v2/myRecent` | REAL | `Rooms.V2.RoomsController.MyRecent` (`api/rooms/v2/myrecent`) — reads the caller's recent-room history |
+| GET  | `api/rooms/v2/myRecent` | REAL | `Rooms.V2.RoomsController.MyOtherTabs` (`api/rooms/v2/myrecent`) — legacy route returns an empty list; the active Continue feed is `rooms/visitedby/me`, which hides private or limited rooms from non-owners |
 | GET  | `api/rooms/v2/mySubscriptions` | REAL | `Rooms.V2.RoomsController.MySubscribed` (`api/rooms/v2/mysubscribed`) — rooms the caller has subscribed to |
 | GET  | `api/rooms/v2/baserooms` | REAL | `Rooms.V2.RoomsController.BaseRooms` — list of "base" world templates / Rec Center rooms |
 | GET  | `api/rooms/v1/filters` | REAL | `Rooms.V2.RoomsController.Filters` — discovery filter chips |

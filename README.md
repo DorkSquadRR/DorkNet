@@ -140,16 +140,26 @@ Quest notes:
   `install-melon.ps1`; this is the porting path, not a public one-click
   installer yet.
 
-### Debug console (opt-in)
+### Debugging (opt-in — `DorkNet.DebugMod`)
 
-The 2020 client ships a built-in dev console
-(`RecRoom.Debugging.DebugConsole`) with commands like `SetTimeScale`,
-`Fly`, `Teleport`, `GoToRoom`, and `KillAllEnemies` — normally locked to
-developer accounts. Set `"EnableDebugConsole": true` in
-`dorknet-clientmod.json` and relaunch: the mod force-toggles the console
-UI on a hotkey (`"DebugConsoleToggleKey"`, default `BackQuote` = the `~`
-key) and silences `CheatManager` so the movement/time commands don't drop
-you to the dorm. Both default off.
+The shipping `DorkNet.ClientMod` carries only what's needed to connect and
+survive anti-cheat. All diagnostics — HTTP/request tracing, join/quit/studio/
+room-load traces, the process-exception sink, auth-token tracing, the
+registration-dialog trace, and the in-game debug console — live in a separate
+`DorkNet.DebugMod`. Drop `DorkNet.DebugMod.dll` into the `Mods` folder next to
+`DorkNet.ClientMod.dll` to turn them on; remove it to ship a quiet, minimal
+client. Debug knobs are read from the same `dorknet-clientmod.json`.
+
+Retail builds keep the `RecRoom.Debugging.DebugConsole` UI and serialized
+`DebugConsoleCommandConfig` list, but the public 2023 client strips the
+native command submit path. With `DorkNet.DebugMod` installed, set
+`"EnableDebugConsole": true` and relaunch: it force-toggles the console UI on
+a hotkey (`"DebugConsoleToggleKey"`, default `BackQuote` = the `~` key),
+intercepts the dead submit callback, and invokes commands from the runtime
+command metadata directly. Type `help` in the console to list discovered
+commands. `"DevCommands"` may contain optional `"Label=Command args"`
+shortcuts. The feature stays off by default and also silences the retail
+`CheatManager` callbacks used by movement/time commands.
 
 ### Desktop Screen Sharing FPS (opt-in)
 

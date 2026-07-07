@@ -428,12 +428,16 @@ $cfgPath = Join-Path $UserDataDir 'dorknet-clientmod.json'
 $cfg = [ordered]@{
     ServerHost           = $ServerHost
     EnableTlsTrustBypass = $true
-    # Opt-in: force-enable the client's built-in debug console (dev gate
-    # bypassed) + silence CheatManager so SetTimeScale / Fly / Teleport etc.
-    # don't drop you to the dorm. Flip to $true and relaunch; press the
-    # toggle key (a UnityEngine.KeyCode name; BackQuote = the `~` key).
+    # Opt-in debug console (read by DorkNet.DebugMod — only active when
+    # DorkNet.DebugMod.dll is present in the Mods folder). Force-enables the
+    # client's built-in debug console UI and routes the stripped retail
+    # submit path through the runtime command metadata. Also silences
+    # CheatManager so movement/time commands don't drop you to the dorm.
+    # Flip to $true and relaunch; press the toggle key (a UnityEngine.KeyCode
+    # name; BackQuote = the `~` key).
     EnableDebugConsole    = $false
     DebugConsoleToggleKey = 'BackQuote'
+    DevCommands           = @()
     # Desktop Screen Sharing gadget FPS. 0 = leave the game's baked rate
     # (~5 fps). Set a target (e.g. 30) to override it; the mod also raises
     # the Photon serialization rate so the higher capture rate actually
@@ -443,10 +447,6 @@ $cfg = [ordered]@{
     DesktopScreenShareRaisePhotonRate = $true
     DesktopScreenShareResolution      = 0
     DesktopScreenShareQuality         = 0
-    # One-shot dev-UI diagnostic: logs (once, ~5s after load) whether the
-    # watch's native dev menu content exists in this build vs is stripped,
-    # and whether the debug console's static command path works. Log-only.
-    DiagnoseDevMenu                   = $false
 }
 Write-Step "Writing mod config -> $cfgPath"
 [System.IO.File]::WriteAllText($cfgPath, ($cfg | ConvertTo-Json -Depth 4))
