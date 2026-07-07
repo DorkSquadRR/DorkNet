@@ -14,10 +14,13 @@ namespace DorkNet.Server.Services;
 /// The generate request carries no quest id (only GiftContext /
 /// IsGameGift / Message), so the quest is identified by the room the
 /// player is in — <see cref="PlayerPresenceService.GetRoom"/>. This
-/// service maps that room id to the quest's item pool
-/// (<c>data/quest_rewards.json</c>) and resolves one to a real store
-/// item to award. When a room has no configured pool the caller falls
-/// back to the generic random-wardrobe gift.
+/// service maps that room's <b>name</b> (the seeded RRO slug, e.g.
+/// <c>GoldenTrophy</c> / <c>Crescendo</c> / <c>StuntRunner</c>) to the
+/// quest's item pool (<c>data/quest_rewards.json</c>) and resolves one
+/// to a real store item to award. Keyed by name rather than the numeric
+/// id because seed ids are array-order-derived and brittle. When a room
+/// has no configured pool the caller falls back to the generic
+/// random-wardrobe gift.
 /// </summary>
 public sealed class QuestRewardService(DorkNetDbContext db)
 {
@@ -26,22 +29,23 @@ public sealed class QuestRewardService(DorkNetDbContext db)
         public Dictionary<string, List<string>> rooms { get; set; } = new();
     }
 
-    private static readonly Lazy<Dictionary<long, List<string>>> _map = new(Load);
+    private static readonly Lazy<Dictionary<string, List<string>>> _map = new(Load);
 
-    /// <summary>Room id → candidate item slugs for that quest's chest.</summary>
-    public static IReadOnlyDictionary<long, List<string>> Map => _map.Value;
+    /// <summary>Room name (case-insensitive) → candidate item slugs.</summary>
+    public static IReadOnlyDictionary<string, List<string>> Map => _map.Value;
 
-    public static bool HasRewardsForRoom(long roomId) =>
-        Map.TryGetValue(roomId, out var slugs) && slugs.Count > 0;
-
-    /// <summary>Resolve one active store item for the quest chest in
-    /// <paramref name="roomId"/>, chosen deterministically from
-    /// <paramref name="seed"/> so repeated generate calls in the same
-    /// context are stable. Returns null when the room has no configured
-    /// pool or none of its slugs resolve to an active item.</summary>
+    /// <summary>Resolve one active store item for the quest chest in the
+    /// room with id <paramref name="roomId"/>, chosen deterministically
+    /// from <paramref name="seed"/> so repeated generate calls in the
+    /// same context are stable. Returns null when the room has no
+    /// configured pool or none of its slugs resolve to an active
+    /// item.</summary>
     public async Task<StoreItemEntity?> PickForRoomAsync(long roomId, int seed)
     {
-        if (!Map.TryGetValue(roomId, out var slugs) || slugs.Count == 0) return null;
+        if (Map.Count == 0) return null;
+        var name = await db.Rooms.Where(r => r.Id == roomId).Select(r => r.Name).FirstOrDefaultAsync();
+        if (string.IsNullOrWhiteSpace(name) || !Map.TryGetValue(name, out var slugs) || slugs.Count == 0)
+            return null;
 
         var items = await db.StoreItems
             .Where(i => i.IsActive && slugs.Contains(i.Slug))
@@ -55,7 +59,7 @@ public sealed class QuestRewardService(DorkNetDbContext db)
             .First();
     }
 
-    private static Dictionary<long, List<string>> Load()
+    private static Dictionary<string, List<string>> Load()
     {
         var candidates = new[]
         {
@@ -65,7 +69,7 @@ public sealed class QuestRewardService(DorkNetDbContext db)
             Path.Combine(Directory.GetCurrentDirectory(), "DorkNet.Server", "Data", "quest_rewards.json"),
         };
         var path = candidates.FirstOrDefault(File.Exists);
-        if (path is null) return new();
+        if (path is null) return new(StringComparer.OrdinalIgnoreCase);
 
         try
         {
@@ -73,22 +77,22 @@ public sealed class QuestRewardService(DorkNetDbContext db)
             var data = JsonSerializer.Deserialize<QuestRewardFile>(fs,
                 new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new QuestRewardFile();
 
-            var map = new Dictionary<long, List<string>>();
+            var map = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
             foreach (var (key, slugs) in data.rooms)
             {
-                if (!long.TryParse(key, out var roomId)) continue;
+                if (string.IsNullOrWhiteSpace(key) || key.StartsWith('_')) continue;
                 var clean = (slugs ?? new())
                     .Where(s => !string.IsNullOrWhiteSpace(s))
                     .Select(s => s.Trim())
                     .Distinct(StringComparer.OrdinalIgnoreCase)
                     .ToList();
-                if (clean.Count > 0) map[roomId] = clean;
+                if (clean.Count > 0) map[key.Trim()] = clean;
             }
             return map;
         }
         catch
         {
-            return new();
+            return new(StringComparer.OrdinalIgnoreCase);
         }
     }
 }

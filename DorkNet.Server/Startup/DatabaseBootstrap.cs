@@ -110,6 +110,7 @@ public static class DatabaseBootstrap
         await EnsureRoomSceneColumnsAsync(db);
         await EnsureInventionColumnsAsync(db);
         await EnsureGameRewardColumnsAsync(db);
+        await EnsureGiftPackageColumnsAsync(db);
         await EnsureMarch2023TablesAsync(db);
 
         // Coach system account at Player.Id=1. The RR-Original room seeder
@@ -420,6 +421,26 @@ public static class DatabaseBootstrap
             }
             catch { }
         }
+    }
+
+    /// <summary>Post-Initial column on GiftPackages for quest-reward
+    /// chests (the exact store item the gift grants on consume).</summary>
+    private static async Task EnsureGiftPackageColumnsAsync(DorkNetDbContext db)
+    {
+        var provider = db.Database.ProviderName ?? string.Empty;
+        if (provider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""GiftPackages"" ADD COLUMN IF NOT EXISTS ""SourceStoreItemId"" bigint NOT NULL DEFAULT 0;");
+            return;
+        }
+
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""GiftPackages"" ADD COLUMN ""SourceStoreItemId"" INTEGER NOT NULL DEFAULT 0;");
+        }
+        catch { }
     }
 
     private static async Task EnsureRoomSceneColumnsAsync(DorkNetDbContext db)
