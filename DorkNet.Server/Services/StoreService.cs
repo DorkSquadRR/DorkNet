@@ -985,15 +985,13 @@ public class StoreService(DorkNetDbContext db, LevelService level, IConfiguratio
             Tooltip                   = i.Description,
             AvatarItemDesc            = avatarItemDesc,
             AvatarItemDescOrHairDyeDesc = avatarItemDesc,
-            // AvatarItemId is the field the 2023 client's StoreItemListModel
-            // actually reads (store-item +0x38) to resolve the card to a baked
-            // AvatarItem and read its OutfitType for tab placement — verified
-            // vs 2023 ISIL (EMBCEDNHFLB/CLIANCNHNIE, AvatarItem.GIJPCPDKHPO).
-            // AvatarItemDesc alone is NOT the join key, so clothing cards
-            // resolved to OutfitType=-1 and the Shop rendered empty. Ship the
-            // same {guid},,, descriptor (GIJPCPDKHPO accepts bare {guid} or the
-            // composite and falls back to parsing it to the immutable Guid).
-            AvatarItemId              = avatarItemDesc,
+            // AvatarItemId is an Int32 on the 2023 wire (EMBCEDNHFLB
+            // serialiser writes field +0x60 with the same int writer as
+            // GiftDropId; the descriptor string lives in AvatarItemDesc
+            // +0x38). Shipping the {guid},,, descriptor here made the
+            // strict Utf8Json reader throw "Malformed Response" on the
+            // whole giftdropstore payload, so the Shop tab loaded nothing.
+            AvatarItemId              = itemId,
             AvatarItemType            = string.IsNullOrEmpty(avatarItemDesc) ? (int?)null : avatarItemType,
             ConsumableItemDesc        = consumableItemDesc,
             EquipmentPrefabName       = equipmentPrefabName,

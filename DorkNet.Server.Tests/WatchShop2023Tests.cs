@@ -42,6 +42,12 @@ public sealed class WatchShop2023Tests : IClassFixture<DorkNetServerFactory>
             Assert.Equal(JsonValueKind.String, giftDrop.GetProperty("TagList").ValueKind);
             var rarity = giftDrop.GetProperty("Rarity").GetInt32();
             Assert.Contains(rarity, new[] { 0, 10, 20, 30, 50 });
+
+            // Int32 on the 2023 wire — a descriptor STRING here makes the
+            // strict Utf8Json reader throw "Malformed Response" for the
+            // whole storefront payload (expected:'Number Token').
+            Assert.Equal(JsonValueKind.Number, giftDrop.GetProperty("AvatarItemId").ValueKind);
+            Assert.Equal(JsonValueKind.String, giftDrop.GetProperty("AvatarItemDesc").ValueKind);
         }
 
         // Featured strip: bare int ids, every one resolvable in the rows.
