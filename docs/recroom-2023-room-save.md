@@ -1,0 +1,63 @@
+# 2023 client room-save flow
+
+Wire contract for the 2023.03.21 client's room save, reverse-engineered
+from `OGPDOMCNIFM.UploadRoomDataBlobAndSyncReload`
+(RecRoom.RoomLoading.Runtime) and verified against dev server traffic
+on 2026-07-07. Diagnosed while fixing "Failed to save room" /
+"An error occurred" save failures.
+
+## Sequence
+
+1. **Upload room metadata** — `POST https://storage.<apex>/upload`,
+   multipart (`File`=file.bin, `FileType=6`, optional `References`).
+   FileType **6 = RoomMetadata** is new in 2023 (2020 enum stopped at
+   5=Invention). Small payload (~4 bytes observed for a dorm). Response:
+   `{"filename": "roommeta_p<player>_<guid>.bin"}`.
+2. **Upload scene save** — same endpoint, `FileType=1` (RoomSave),
+   payload is the scene blob. Response:
+   `{"filename": "<blob>.dat"}` (e.g. `dorm_p<id>_v<N>.dat`).
+   The upload response DTO is `{Filename, Hash, OwnershipProof}` — the
+   client accepts both `Filename`/`filename` casings; `Hash` and
+   `OwnershipProof` may be null.
+3. **Commit** — `POST https://rooms.<apex>/rooms/{roomId}/subrooms/{subRoomId}/data`
+   with JSON:
+
+   ```json
+   {
+     "UnityAssetId": null,
+     "RoomData":    { "Filename": "roommeta_….bin", "Hash": null, "OwnershipProof": null },
+     "SubRoomData": { "Filename": "dorm_p…_vN.dat", "Hash": null, "OwnershipProof": null }
+   }
+   ```
+
+   `SubRoomData.Filename` is the scene save and must become the room's
+   `CurrentDataBlobName` (and the dorm-state row for dorms).
+   `RoomData.Filename` is the FileType=6 metadata blob.
+
+Server handling: `StorageController.Upload` (FileType 6 →
+`UploadGenericAsync("roommeta")`, CDN-servable) and
+`RoomsController.SubRoomData` → `ReadSaveRoomSceneRequestAsync` (nested
+2023 JSON via `BlobRefDto`) → `SaveDataCore`.
+
+## Failure modes seen
+
+| Symptom (client) | Cause |
+|---|---|
+| `NDIKGKCFOCG: An error occurred` at `UploadRoomDataBlobAndSyncReload`, upload frame (`KPLOPGMJOLE`) in stack | `storage.<apex>` host not routed at the edge (Traefik `404 page not found`) — the save dies before reaching DorkNet. Probe `https://storage.<apex>/healthz`. |
+| `NDIKGKCFOCG: Failed to save room`, no upload frame in stack | Commit POST rejected — historically 400 `missing_room_data_filename` because the server parsed only the flat 2020 body and missed `SubRoomData.Filename`. |
+
+## Related 2023 quirks fixed alongside
+
+- **Play-menu search** (`IBEOONPEELF.SearchRooms`): calls
+  `rooms/search_rooms/{query}&skip={n}&take={n}` — `rooms/`-prefixed
+  AND paging embedded in the final path segment. Same segment style on
+  `hot_rooms`, `hot_roomsandplaylists`, `search_roomsandplaylists`
+  (parsed by `RoomsController.ParsePagedPathSegment`).
+- **Room photo gallery** (`KLJOGJHBONK`, "Could not show images for
+  room"): `api/images/v{2-5}/room/{id}?sort=CheerCount_Desc&filter=PublicOnly`
+  — `sort`/`filter` arrive as enum NAMES; binding them as `int` makes
+  `[ApiController]` auto-400. Bound as strings, mapped in
+  `ImagesController.ParseSort`.
+
+Tests: `DorkNet.Server.Tests/RoomSave2023Tests.cs`,
+`DorkNet.Server.Tests/RoomBrowse2023Tests.cs`.

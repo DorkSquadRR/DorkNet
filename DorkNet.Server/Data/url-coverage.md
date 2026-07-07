@@ -306,8 +306,10 @@ Note: counts are approximate because several client URLs (`api/avatar/v3/saved`,
 | GET  | `rooms/{roomId}/subrooms` | REAL | `Rooms.V2.RoomsController.SubRooms` — Studio/2023 subroom list (one synthesised "Home" for single-scene rooms; `RoomScenes` rows otherwise) |
 | GET  | `rooms/{roomId}/subrooms/{subRoomId}` | REAL | `Rooms.V2.RoomsController.SubRoom` — one subroom by `RoomScene.OrderIndex` |
 | GET  | `rooms/{roomId}/subrooms/{subRoomId}/data` | REAL | `Rooms.V2.RoomsController.SubRoomData` — current `SubRoomDataSave` for the subroom |
+| POST | `rooms/{roomId}/subrooms/{subRoomId}/data` | REAL | `Rooms.V2.RoomsController.SubRoomData` — 2023 save commit. JSON body `{UnityAssetId, RoomData:{Filename,Hash,OwnershipProof}, SubRoomData:{Filename,…}}`; `SubRoomData.Filename` (the FileType=1 `/upload` result) becomes `CurrentDataBlobName`. 2020 form-urlencoded variant unchanged. See `docs/recroom-2023-room-save.md` |
 | GET  | `rooms/{roomId}/subrooms/{subRoomId}/saves` | REAL | `Rooms.V2.RoomsController.SubRoomSaves` — current save + historical blobs, newest first |
 | GET  | `rooms/{roomId}/subrooms/{subRoomId}/saves/{saveId}` | REAL | `Rooms.V2.RoomsController.StudioSubRoomSave` — Studio save metadata + baked `unity_assets` bundle list the 2023 client downloads |
+| GET  | `rooms/search_rooms/{query}&skip={n}&take={n}` | REAL | `Rooms.V2.RoomsController.SearchRoomsOnly` — 2023 play-menu search (`IBEOONPEELF.SearchRooms`); paging pairs are embedded in the path segment, parsed by `ParsePagedPathSegment`. Also bare + `roomserver/` aliases; same pattern on `rooms/hot_rooms`, `rooms/hot_roomsandplaylists`, `rooms/search_roomsandplaylists` |
 | POST | `api/rooms/v2/report` | REAL | `RoomsModerationController.Report` — files a room report |
 | GET  | `api/rooms/v1/modrooms` | REAL | `Rooms.V2.RoomsController.MyModerated` (route alias `api/rooms/v1/modrooms`) — rooms the caller moderates |
 | GET  | `api/rooms/v2/myrooms` | REAL | `Rooms.V2.RoomsController.MyRooms` |

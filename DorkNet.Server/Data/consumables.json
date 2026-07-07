@@ -1,0 +1,426 @@
+[
+  {
+    "slug": "consumable-camerafilterconsumable-bw",
+    "name": "Black & White Camera Film",
+    "consumable_desc": "[CameraFilterConsumable_BW]",
+    "guid": "frOMH6WxDEG1fBqC4_83vg",
+    "family": "CameraFilter",
+    "family_label": "Camera Film"
+  },
+  {
+    "slug": "consumable-camerafilterconsumable-dawn",
+    "name": "Dawn Camera Film",
+    "consumable_desc": "[CameraFilterConsumable_Dawn]",
+    "guid": "m0bVLwWGj0GuIBSb6wCk6Q",
+    "family": "CameraFilter",
+    "family_label": "Camera Film"
+  },
+  {
+    "slug": "consumable-camerafilterconsumable-dracula",
+    "name": "Dracula Film",
+    "consumable_desc": "[CameraFilterConsumable_Dracula]",
+    "guid": "oG7CdvW7p0-S8sVe9w5vRw",
+    "family": "CameraFilter",
+    "family_label": "Camera Film"
+  },
+  {
+    "slug": "consumable-camerafilterconsumable-ghostbeard",
+    "name": "Ghost Beard Film",
+    "consumable_desc": "[CameraFilterConsumable_GhostBeard]",
+    "guid": "1c0Djlp090uBDczEobYNQw",
+    "family": "CameraFilter",
+    "family_label": "Camera Film"
+  },
+  {
+    "slug": "consumable-camerafilterconsumable-goblinking",
+    "name": "Goblin King Film",
+    "consumable_desc": "[CameraFilterConsumable_GoblinKing]",
+    "guid": "6SyCoJCgo0Wd6qlPlnMOtg",
+    "family": "CameraFilter",
+    "family_label": "Camera Film"
+  },
+  {
+    "slug": "consumable-camerafilterconsumable-jumbotron",
+    "name": "Jumbotron Film",
+    "consumable_desc": "[CameraFilterConsumable_Jumbotron]",
+    "guid": "Il4VmrnjDkqjmjzddqoIEw",
+    "family": "CameraFilter",
+    "family_label": "Camera Film"
+  },
+  {
+    "slug": "consumable-camerafilterconsumable-sepia",
+    "name": "Sepia Camera Film",
+    "consumable_desc": "[CameraFilterConsumable_Sepia]",
+    "guid": "A5M-yf9tgUihq1uab3v58g",
+    "family": "CameraFilter",
+    "family_label": "Camera Film"
+  },
+  {
+    "slug": "consumable-camerafilterconsumable-witch",
+    "name": "Witch Film",
+    "consumable_desc": "[CameraFilterConsumable_Witch]",
+    "guid": "mL3zCEuy2UWZxAV4V-OsMA",
+    "family": "CameraFilter",
+    "family_label": "Camera Film"
+  },
+  {
+    "slug": "consumable-handpotionconsumable-goblin1",
+    "name": "High Five O'Gold",
+    "consumable_desc": "[HandPotionConsumable_Goblin1]",
+    "guid": "-hy0qD-iUk-v4NHxNzanmg",
+    "family": "HandPotion",
+    "family_label": "Hand Potion"
+  },
+  {
+    "slug": "consumable-handpotionconsumable-pirate1",
+    "name": "High Five O'Gunpowder",
+    "consumable_desc": "[HandPotionConsumable_Pirate1]",
+    "guid": "YEfbJTnsR0yT_p7e7tb_kQ",
+    "family": "HandPotion",
+    "family_label": "Hand Potion"
+  },
+  {
+    "slug": "consumable-handpotionconsumable-scifi1",
+    "name": "High Five O'Lasers",
+    "consumable_desc": "[HandPotionConsumable_SciFi1]",
+    "guid": "xHOwjwpXd0GDkvBz2VqieA",
+    "family": "HandPotion",
+    "family_label": "Hand Potion"
+  },
+  {
+    "slug": "consumable-handpotionconsumable-goblin2",
+    "name": "High Five O'Spells",
+    "consumable_desc": "[HandPotionConsumable_Goblin2]",
+    "guid": "VQSgL2pTLkWx4B3kwYG7UA",
+    "family": "HandPotion",
+    "family_label": "Hand Potion"
+  },
+  {
+    "slug": "consumable-handpotionconsumable-dracula1",
+    "name": "High Five O'Whip",
+    "consumable_desc": "[HandPotionConsumable_Dracula1]",
+    "guid": "lag2tZyB90W04lQ7ol4vMw",
+    "family": "HandPotion",
+    "family_label": "Hand Potion"
+  },
+  {
+    "slug": "consumable-foodconsumable-87flavorcake",
+    "name": "87 Flavor Cake",
+    "consumable_desc": "[FoodConsumable_87FlavorCake]",
+    "guid": "xwQWBB_fekmTqRc2LB92cg",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-donut-assorted",
+    "name": "Assorted Donuts",
+    "consumable_desc": "[FoodConsumable_Donut_Assorted]",
+    "guid": "ZuvkidodzkuOfGLDnTOFyg",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-bubbletea",
+    "name": "Bubble Tea",
+    "consumable_desc": "[FoodConsumable_BubbleTea]",
+    "guid": "JxAl1wVJ1UGAjoT3m3ilug",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-bubbly",
+    "name": "Bubbly",
+    "consumable_desc": "[FoodConsumable_Bubbly]",
+    "guid": "iiGTvhOCHkOTNJhb16Zbyw",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-cakepops",
+    "name": "Cake Pops",
+    "consumable_desc": "[FoodConsumable_CakePops]",
+    "guid": "Efd3_dy4ZEqWr7i6j5x0aA",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-candyapple",
+    "name": "Candy Apples",
+    "consumable_desc": "[FoodConsumable_CandyApple]",
+    "guid": "EmPvh3I6L0uK_1i8Wy_ylQ",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-yellowcake",
+    "name": "Celebration Cake",
+    "consumable_desc": "[FoodConsumable_YellowCake]",
+    "guid": "Sk_1sm88ZU2zpWn01Lv7hw",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-cheesepizza",
+    "name": "Cheese Pizza",
+    "consumable_desc": "[FoodConsumable_CheesePizza]",
+    "guid": "5hIAZ9wg5EyG1cILf4FS2A",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-chocolatecake",
+    "name": "Chocolate Cake",
+    "consumable_desc": "[FoodConsumable_ChocolateCake]",
+    "guid": "BbJb1_0g4EGJP_CeNrjpew",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-donut-frosted",
+    "name": "Chocolate Frosted Donuts",
+    "consumable_desc": "[FoodConsumable_Donut_Frosted]",
+    "guid": "mMCGPgK3tki5S_15q2Z81A",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-popcorn-chocolate",
+    "name": "Chocolate Popcorn",
+    "consumable_desc": "[FoodConsumable_Popcorn_Chocolate]",
+    "guid": "lWN_g4OcN0S0C4n6cSZq4g",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-chocolatevariety",
+    "name": "Chocolate Variety Box",
+    "consumable_desc": "[FoodConsumable_ChocolateVariety]",
+    "guid": "K9RbXo-4U0q6NbGu8VL1Sw",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-popcorn-flaming",
+    "name": "Flaming Popcorn",
+    "consumable_desc": "[FoodConsumable_Popcorn_Flaming]",
+    "guid": "uswFSANaZES0EJMLfOgNSw",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-donut-glazed",
+    "name": "Glazed Donuts",
+    "consumable_desc": "[FoodConsumable_Donut_Glazed]",
+    "guid": "7OZ5AE3uuUyqa0P-2W1ptg",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-hawaiianpizza",
+    "name": "Hawaiian Pizza",
+    "consumable_desc": "[FoodConsumable_HawaiianPizza]",
+    "guid": "_jnjYGBcyEWY5Ub4OezXcA",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-donut-invasion",
+    "name": "Invasion Donuts",
+    "consumable_desc": "(FoodConsumable_Donut_Invasion)",
+    "guid": "-_VNAj3P10aWCCJZoVTF4Q",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-latte",
+    "name": "Latte",
+    "consumable_desc": "[FoodConsumable_Latte]",
+    "guid": "P15H1ONBhk-5DYYjid1ttg",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-pepperonipizza",
+    "name": "Pepperoni Pizza",
+    "consumable_desc": "[FoodConsumable_PepperoniPizza]",
+    "guid": "mq23W-RSP0G8iGNLdrcpUw",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-popcorn-butter",
+    "name": "Popcorn",
+    "consumable_desc": "[FoodConsumable_Popcorn_Butter]",
+    "guid": "QRx0aSTT9keMFdAJMQHdTg",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-redapples",
+    "name": "Red Apples",
+    "consumable_desc": "[FoodConsumable_RedApples]",
+    "guid": "uMHrUPLYFk2rJOW_uop5Aw",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-redvelvetcake",
+    "name": "Red Velvet Cake",
+    "consumable_desc": "[FoodConsumable_RedVelvetCake]",
+    "guid": "LwaotjVEBUir0-w8126n_g",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-rootbeer",
+    "name": "Root Beer",
+    "consumable_desc": "[FoodConsumable_RootBeer]",
+    "guid": "JfnVXFmilU6ysv-VbTAe3A",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-pretzel-salted",
+    "name": "Salted Pretzels",
+    "consumable_desc": "[FoodConsumable_Pretzel_Salted]",
+    "guid": "InQ25wQMGkG_bvuD5rf2Ag",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-donut-snowman",
+    "name": "Snowman Donuts",
+    "consumable_desc": "(FoodConsumable_Donut_Snowman)",
+    "guid": "jdrRJ7deWk2P9aRRrPy3zw",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-supremepizza",
+    "name": "Supreme Pizza",
+    "consumable_desc": "[FoodConsumable_SupremePizza]",
+    "guid": "wUCIKdJSvEmiQHYMyx4X4w",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-sushi",
+    "name": "Sushi",
+    "consumable_desc": "[FoodConsumable_Sushi]",
+    "guid": "4My42w1D1Uu3-98pXB-x_Q",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-foodconsumable-vrcola",
+    "name": "VR Cola",
+    "consumable_desc": "[FoodConsumable_VRCola]",
+    "guid": "YpL6eN6sKEquOYIYnbhvew",
+    "family": "Food",
+    "family_label": "Food"
+  },
+  {
+    "slug": "consumable-koconsumable-bearclaw",
+    "name": "KO - Bear Claw",
+    "consumable_desc": "[KOConsumable_BearClaw]",
+    "guid": "ZtZnYBpKkECJlhHmkj4MiA",
+    "family": "KO",
+    "family_label": "KO Effect"
+  },
+  {
+    "slug": "consumable-koconsumable-bees",
+    "name": "KO - Bees",
+    "consumable_desc": "[KOConsumable_Bees]",
+    "guid": "g3kxdlJv5kO8PuBXveM48w",
+    "family": "KO",
+    "family_label": "KO Effect"
+  },
+  {
+    "slug": "consumable-koconsumable-cola",
+    "name": "KO - Cola",
+    "consumable_desc": "[KOConsumable_Cola]",
+    "guid": "wx--2TPTdEuGAqLCjs9Qag",
+    "family": "KO",
+    "family_label": "KO Effect"
+  },
+  {
+    "slug": "consumable-koconsumable-fangs",
+    "name": "KO - Fangs",
+    "consumable_desc": "[KOConsumable_Fangs]",
+    "guid": "XOZcxx-Klkyhe-MDbTqiwA",
+    "family": "KO",
+    "family_label": "KO Effect"
+  },
+  {
+    "slug": "consumable-koconsumable-fryingpan",
+    "name": "KO - FryingPan",
+    "consumable_desc": "[KOConsumable_FryingPan]",
+    "guid": "uGVFydNSokCXFAmXu3aceQ",
+    "family": "KO",
+    "family_label": "KO Effect"
+  },
+  {
+    "slug": "consumable-koconsumable-grenade",
+    "name": "KO - Grenade",
+    "consumable_desc": "[KOConsumable_Grenade]",
+    "guid": "EAhk3ZZdXEmH5wRAXXT24Q",
+    "family": "KO",
+    "family_label": "KO Effect"
+  },
+  {
+    "slug": "consumable-koconsumable-ranger",
+    "name": "KO - Ranger",
+    "consumable_desc": "[KOConsumable_Ranger]",
+    "guid": "Av-wvjXvvkmNVSz7ZZnTiA",
+    "family": "KO",
+    "family_label": "KO Effect"
+  },
+  {
+    "slug": "consumable-koconsumable-shield",
+    "name": "KO - Shield",
+    "consumable_desc": "[KOConsumable_Shield]",
+    "guid": "5AJin8T2iEG7BzOPOgx2HA",
+    "family": "KO",
+    "family_label": "KO Effect"
+  },
+  {
+    "slug": "consumable-koconsumable-skullwings",
+    "name": "KO - Skull Wings",
+    "consumable_desc": "[KOConsumable_SkullWings]",
+    "guid": "U38Qe6rhEk6mFvArHfYjng",
+    "family": "KO",
+    "family_label": "KO Effect"
+  },
+  {
+    "slug": "consumable-koconsumable-starpower",
+    "name": "KO - Star Power",
+    "consumable_desc": "[KOConsumable_StarPower]",
+    "guid": "yvqSbK2czkS2sUCRdrGaEw",
+    "family": "KO",
+    "family_label": "KO Effect"
+  },
+  {
+    "slug": "consumable-koconsumable-tiretrack",
+    "name": "KO - Tire Track",
+    "consumable_desc": "[KOConsumable_TireTrack]",
+    "guid": "J1WqFNUWo0OBi4LGKPDHWw",
+    "family": "KO",
+    "family_label": "KO Effect"
+  },
+  {
+    "slug": "consumable-vfxconsumable-sparklerbox",
+    "name": "Sparklers",
+    "consumable_desc": "[VFXConsumable_SparklerBox]",
+    "guid": "hRdK6NGfAkGBmYSs_xGzXg",
+    "family": "VFX",
+    "family_label": "VFX"
+  },
+  {
+    "slug": "consumable-headpotionconsumable-dkmode",
+    "name": "Ego Potion",
+    "consumable_desc": "[HeadPotionConsumable_DKMode]",
+    "guid": "Tpxqe_lycUelySRHM8B0Vw",
+    "family": "HeadPotion",
+    "family_label": "Potion"
+  }
+]
