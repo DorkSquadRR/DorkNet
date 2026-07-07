@@ -272,7 +272,87 @@ public class StoreService(DorkNetDbContext db, LevelService level, IConfiguratio
             added = true;
         }
 
+        // Food / KO / camera-film / potion consumables from the client's
+        // baked ConsumableCollectionRuntimeConfig (data/consumables.json).
+        // These populate the watch Shop's Consumables tab; each carries the
+        // client's literal ConsumableItemDesc ("[FoodConsumable_RootBeer]")
+        // so the tile binds to the right baked consumable prefab.
+        foreach (var c in ConsumableCatalog.Values)
+        {
+            if (existingSlugs.Contains(c.slug)) continue;
+            db.StoreItems.Add(new StoreItemEntity
+            {
+                Slug = c.slug,
+                DisplayName = c.name,
+                Description = $"{c.family_label} consumable.",
+                Category = "consumable",
+                Price = StoreItemPrice,
+                CurrencyType = 2,
+                ImageName = string.Empty,
+                Storefront = "main",
+                IsActive = true,
+                IsLimitedTime = false,
+            });
+            existingSlugs.Add(c.slug);
+            added = true;
+        }
+
         if (added) await db.SaveChangesAsync();
+    }
+
+    // ── Consumables (food / potions / KO / camera film) ────────────────
+    // Source: data/consumables.json, extracted offline from the client's
+    // ConsumableCollectionRuntimeConfig MonoBehaviour (resources.assets).
+    // The <c>consumable_desc</c> is the client's literal item key, fed
+    // verbatim into the gift-drop's ConsumableItemDesc so the Shop tile
+    // resolves to the baked consumable — same mechanism as hair dyes.
+    public sealed class ConsumableEntry
+    {
+        public string slug { get; set; } = string.Empty;
+        public string name { get; set; } = string.Empty;
+        public string consumable_desc { get; set; } = string.Empty;
+        public string guid { get; set; } = string.Empty;
+        public string family { get; set; } = string.Empty;
+        public string family_label { get; set; } = "Consumable";
+    }
+
+    private static readonly Lazy<Dictionary<string, ConsumableEntry>> _consumableCatalog =
+        new(LoadConsumableCatalog);
+
+    public static IReadOnlyDictionary<string, ConsumableEntry> ConsumableCatalog =>
+        _consumableCatalog.Value;
+
+    private static Dictionary<string, ConsumableEntry> LoadConsumableCatalog()
+    {
+        var candidates = new[]
+        {
+            Path.Combine(AppContext.BaseDirectory, "data", "consumables.json"),
+            Path.Combine(AppContext.BaseDirectory, "Data", "consumables.json"),
+            Path.Combine(Directory.GetCurrentDirectory(), "data", "consumables.json"),
+            Path.Combine(Directory.GetCurrentDirectory(), "DorkNet.Server", "Data", "consumables.json"),
+        };
+        var path = candidates.FirstOrDefault(File.Exists);
+        if (path is null) return new();
+
+        try
+        {
+            using var fs = File.OpenRead(path);
+            var rows = System.Text.Json.JsonSerializer.Deserialize<List<ConsumableEntry>>(fs,
+                new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                ?? new List<ConsumableEntry>();
+            var bySlug = new Dictionary<string, ConsumableEntry>(StringComparer.OrdinalIgnoreCase);
+            foreach (var row in rows)
+            {
+                if (string.IsNullOrWhiteSpace(row.slug) || string.IsNullOrWhiteSpace(row.consumable_desc))
+                    continue;
+                bySlug[row.slug] = row;
+            }
+            return bySlug;
+        }
+        catch
+        {
+            return new();
+        }
     }
 
     // ── Equipment skins ────────────────────────────────────────────
@@ -1090,6 +1170,15 @@ public class StoreService(DorkNetDbContext db, LevelService level, IConfiguratio
         if (string.IsNullOrWhiteSpace(slug)) return false;
 
         if (TryGetHairDyePayload(slug, out consumableItemDesc, out _)) return true;
+
+        // Food / KO / camera / potion consumables — the wire desc is the
+        // client's literal item key from data/consumables.json.
+        if (ConsumableCatalog.TryGetValue(slug, out var entry)
+            && !string.IsNullOrWhiteSpace(entry.consumable_desc))
+        {
+            consumableItemDesc = entry.consumable_desc;
+            return true;
+        }
 
         return false;
     }
