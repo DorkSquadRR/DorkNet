@@ -162,9 +162,14 @@ since 2020:
    ConsumableItemDesc (string), AvatarItemDesc (string descriptor),
    AvatarItemType (int?), EquipmentPrefabName, EquipmentModificationGuid,
    IsQuery, Unique, SubscribersOnly, Rarity (0/10/20/30/50 enum
-   BGDEDNBFOCH), AvatarItemId, CurrencyType, Currency (enum EAFDEJBEFJB,
+   BGDEDNBFOCH), AvatarItemId (**Int32** — putting the descriptor
+   string here makes the strict reader throw
+   `expected:'Number Token'` → "Malformed Response" for the whole
+   storefront payload; the descriptor string belongs in
+   AvatarItemDesc), CurrencyType, Currency (enum EAFDEJBEFJB,
    RecCenterTokens=2), Context (GiftContext enum IFKEEPDDNBC),
-   ItemSetId (int?), ItemSetFriendlyName`.
+   ItemSetId (int?), ItemSetFriendlyName`. AvatarItemType is the
+   nullable enum ONHCNMLCFMN (Outfit=0, HairDye=1, CustomOutfit=2).
 
 2. `GET api/storefronts/v1/toptoday` → a **bare `List<int>` of
    PurchasableItemIds** (client DCFKEFHJAGC.IDCIMNLBINC), resolved
