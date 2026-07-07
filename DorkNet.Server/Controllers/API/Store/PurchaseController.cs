@@ -40,6 +40,7 @@ public class PurchaseController(StoreService store, ILogger<PurchaseController> 
     [HttpPost("api/purchase/v1/initiatepurchase")]
     [HttpPost("api/purchase/v2/initiatepurchase")]
     [HttpPost("api/purchase/v3/initiatepurchase")]
+    [HttpPost("purchase/v1/initiatepurchase")]
     public async Task<IActionResult> Initiate([FromForm] PurchaseRequest body)
     {
         var item = await ResolveItemAsync(body);
@@ -65,6 +66,7 @@ public class PurchaseController(StoreService store, ILogger<PurchaseController> 
     [HttpPost("api/purchase/v1/processpurchase")]
     [HttpPost("api/purchase/v2/processpurchase")]
     [HttpPost("api/purchase/v3/processpurchase")]
+    [HttpPost("purchase/v1/processpurchase")]
     public async Task<IActionResult> Process([FromForm] PurchaseRequest body)
     {
         var pid = this.RequireCurrentPlayerId();
@@ -91,6 +93,7 @@ public class PurchaseController(StoreService store, ILogger<PurchaseController> 
     [HttpPost("api/purchase/v1/completepurchase")]
     [HttpPost("api/purchase/v2/completepurchase")]
     [HttpPost("api/purchase/v3/completepurchase")]
+    [HttpPost("purchase/v1/completepurchase")]
     public IActionResult Complete() =>
         Ok(new { success = true, error = "" });
 
@@ -100,6 +103,8 @@ public class PurchaseController(StoreService store, ILogger<PurchaseController> 
     [HttpPost("api/purchase/v1/cancelpurchase")]
     [HttpPost("api/purchase/v2/cancelpurchase")]
     [HttpPost("api/purchase/v3/cancelpurchase")]
+    [HttpPost("purchase/v1/cancelpurchase")]
+    [AllowAnonymous]
     public IActionResult Cancel() =>
         Ok(new { success = true, error = "" });
 
@@ -110,8 +115,29 @@ public class PurchaseController(StoreService store, ILogger<PurchaseController> 
     [HttpPost("api/purchase/v1/cleanuppending")]
     [HttpPost("api/purchase/v2/cleanuppending")]
     [HttpPost("api/purchase/v3/cleanuppending")]
+    [HttpPost("purchase/v1/cleanuppending")]
+    [AllowAnonymous]
     public IActionResult CleanupPending() =>
         Ok(new { success = true, error = "" });
+
+    /// <summary>GET/POST <c>purchase/v1/hasspentmoney</c> — the 2023
+    /// client's startup probe gating first-purchase promo UI. Bare
+    /// boolean body; a private server has no real-money store, so the
+    /// honest answer is always false.</summary>
+    [HttpGet("purchase/v1/hasspentmoney")]
+    [HttpPost("purchase/v1/hasspentmoney")]
+    [HttpGet("api/purchase/v1/hasspentmoney")]
+    [AllowAnonymous]
+    public IActionResult HasSpentMoney() => Content("false", "application/json");
+
+    /// <summary>GET <c>reminder/currentTokenBundles/v2</c> — rotating
+    /// real-money token-bundle offers shown on the 2023 client's token
+    /// wallet page. No IAP on a private server, so the offer list is
+    /// genuinely empty.</summary>
+    [HttpGet("reminder/currentTokenBundles/v2")]
+    [HttpGet("reminder/currentTokenBundles")]
+    [AllowAnonymous]
+    public IActionResult CurrentTokenBundles() => Ok(Array.Empty<object>());
 
     /// <summary>POST <c>subscription/v1/*</c> — Rec Room+. The private
     /// server has no real billing integration, so buying RR+ is a yes/ack
