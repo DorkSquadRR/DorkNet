@@ -1,0 +1,4 @@
+{
+  "_comment": "Per-quest reward chest contents. Keyed by the RRO room id the player is in when they open the end-of-quest gift box (the gifts/generate request carries no quest id, so the server keys off the player's current room via presence). Each entry lists the store-item slugs that quest can award; the server picks one at random from the list. Slugs use the same scheme as the store: wardrobe-{guid} for outfits, consumable-{name} for consumables, equipment-{prefab}:{guid} for equipment. Populate `rooms` with real roomId -> item-slug lists.",
+  "rooms": {}
+}

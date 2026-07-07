@@ -68,27 +68,25 @@ public sealed class WatchShop2023Tests : IClassFixture<DorkNetServerFactory>
         var storefront = await GetJsonAsync(client, "/api/storefronts/v3/giftdropstore/3");
         var rows = storefront.GetProperty("StoreItems");
 
-        // Every consumable tile carries a bracketed ConsumableItemDesc (the
-        // client's literal item key) and no avatar item — that's what routes
-        // it to the Shop's Consumables tab and binds the baked prefab.
-        var consumables = new List<string>();
+        // Food / KO / camera consumables surface with the client's literal
+        // ConsumableItemDesc and no avatar item — that's what routes them to
+        // the Shop's Consumables tab and binds the baked prefab. (Hair dyes
+        // are a hybrid: they also carry an AvatarItemDesc colour guid, so
+        // they're excluded from the no-avatar-item check.)
+        var byDesc = new Dictionary<string, JsonElement>();
         foreach (var row in rows.EnumerateArray())
         {
             var gd = row.GetProperty("GiftDrop");
             var desc = gd.GetProperty("ConsumableItemDesc").GetString() ?? "";
-            if (desc.StartsWith("[") || desc.StartsWith("("))
-            {
-                consumables.Add(desc);
-                // Consumables are not avatar items: AvatarItemDesc empty and
-                // AvatarItemType null (a non-null enum here would tab it as
-                // clothing).
-                Assert.Equal("", gd.GetProperty("AvatarItemDesc").GetString());
-                Assert.Equal(JsonValueKind.Null, gd.GetProperty("AvatarItemType").ValueKind);
-            }
+            if (desc.Length > 0) byDesc[desc] = gd;
         }
 
-        Assert.Contains("[FoodConsumable_RootBeer]", consumables);
-        Assert.Contains("[KOConsumable_Cola]", consumables);
+        foreach (var key in new[] { "[FoodConsumable_RootBeer]", "[KOConsumable_Cola]" })
+        {
+            Assert.True(byDesc.TryGetValue(key, out var gd), $"missing consumable {key}");
+            Assert.Equal("", gd.GetProperty("AvatarItemDesc").GetString());
+            Assert.Equal(JsonValueKind.Null, gd.GetProperty("AvatarItemType").ValueKind);
+        }
     }
 
     private HttpClient ApiClient()

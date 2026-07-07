@@ -34,6 +34,31 @@ on 2026-07-07. Diagnosed while fixing "Failed to save room" /
    `CurrentDataBlobName` (and the dorm-state row for dorms).
    `RoomData.Filename` is the FileType=6 metadata blob.
 
+   **Response contract** (deserializer `NEOPBOMGIOG`, mapper
+   `KMBHAKAHNGH`): legacy `{success, value, error}` envelope where
+   `value` MUST contain BOTH keys, non-null:
+
+   ```json
+   {
+     "success": true,
+     "value": {
+       "Room":            { …same DTO as GET rooms/{id} (BuildRoomServerDetails)… },
+       "SubRoomDataSave": { "SubRoomDataSaveId": 0, "SubRoomId": 0,
+                            "UnityAssetId": "", "DataBlob": "<blob>.dat",
+                            "SavedByAccountId": 1, "SavedOnPlatform": 7,
+                            "SavedOnDeviceClass": 2, "CreatedAt": "…", … }
+     },
+     "error": ""
+   }
+   ```
+
+   The client's post-parse validator NREs if `Room` or
+   `SubRoomDataSave` is missing — the save persists server-side but the
+   watch shows "Failed to save room". `SubRoomDataSave` keys per the
+   `JKIFFPPAJNK` mapper (`PELEHJLMKJO`): SubRoomDataSaveId, SubRoomId,
+   UnityAssetId, DataBlob, DataBlobHash, SavedByAccountId,
+   SavedOnPlatform, SavedOnDeviceClass, Description, CreatedAt.
+
 Server handling: `StorageController.Upload` (FileType 6 →
 `UploadGenericAsync("roommeta")`, CDN-servable) and
 `RoomsController.SubRoomData` → `ReadSaveRoomSceneRequestAsync` (nested
@@ -45,6 +70,7 @@ Server handling: `StorageController.Upload` (FileType 6 →
 |---|---|
 | `NDIKGKCFOCG: An error occurred` at `UploadRoomDataBlobAndSyncReload`, upload frame (`KPLOPGMJOLE`) in stack | `storage.<apex>` host not routed at the edge (Traefik `404 page not found`) — the save dies before reaching DorkNet. Probe `https://storage.<apex>/healthz`. |
 | `NDIKGKCFOCG: Failed to save room`, no upload frame in stack | Commit POST rejected — historically 400 `missing_room_data_filename` because the server parsed only the flat 2020 body and missed `SubRoomData.Filename`. |
+| `NDIKGKCFOCG: Failed to save room` preceded by a `NullReferenceException` at `NEOPBOMGIOG.FKDDCNLJOLF` | Commit returned 200 but `value` wasn't `{Room, SubRoomDataSave}` — the save actually persisted; only the response parse failed. |
 
 ## Related 2023 quirks fixed alongside
 

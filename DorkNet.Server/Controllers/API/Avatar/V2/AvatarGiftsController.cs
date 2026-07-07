@@ -32,7 +32,9 @@ namespace DorkNet.Server.Controllers.API.Avatar.V2;
 public class AvatarGiftsController(
     DorkNetDbContext db,
     NotificationService notifications,
-    LevelService level) : ControllerBase
+    LevelService level,
+    QuestRewardService questRewards,
+    PlayerPresenceService presence) : ControllerBase
 {
     [HttpGet("api/avatar/v2/gifts")]
     [HttpGet("api/avatar/v3/gifts")]

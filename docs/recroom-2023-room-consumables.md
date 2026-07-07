@@ -180,6 +180,30 @@ since 2020:
 
 Coverage: `DorkNet.Server.Tests/WatchShop2023Tests.cs`.
 
+## Shop Consumables tab (food / potions / KO / camera film)
+
+The Shop's Consumables tab is fed by the same `giftdropstore` rows as
+Clothing; a row is a consumable when its `GiftDrop.ConsumableItemDesc`
+is set (bracketed literal item key, e.g. `[FoodConsumable_RootBeer]`)
+and it carries no avatar item (`AvatarItemDesc` empty, `AvatarItemType`
+null). Hair dyes are a hybrid — they set BOTH `ConsumableItemDesc` and
+an `AvatarItemDesc` colour guid.
+
+The catalog of literal item keys lives in the client's baked
+`ConsumableCollectionRuntimeConfig` MonoBehaviour (in `resources.assets`,
+path_id 234695 for 2023.03.21). Each record is
+`[ desc "[Family_Name]" ][ guid 22ch ][ display name ][ int family ]
+[ tool desc ]`; families: CameraFilter, Food, KO, HandPotion,
+HeadPotion, VFX, HairDye, Coupon. Extracted (minus hair dyes, coupons,
+and promo-only bubbly variants) to `DorkNet.Server/Data/consumables.json`
+and seeded as `Category="consumable"` store rows;
+`StoreService.TryGetConsumableItemDesc` resolves a seeded slug to its
+literal desc so it flows through the gift-drop builder like a hair dye.
+
+The exact per-item render gate (`INJHHPOOMKB.EEJKFKPAPAH`) dispatches
+through a runtime service and could not be resolved statically — confirm
+the tab actually populates in-game after seeding.
+
 ## Related: unprefixed 2023 commerce probes
 
 The 2023 client also calls these commerce paths **without** the `api/`

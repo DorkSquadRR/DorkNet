@@ -9,11 +9,30 @@ using DorkNet.Server.Services;
 
 namespace DorkNet.Server.Controllers.API.GameRewards;
 
+/// <summary>
+/// api.rec.net/api/gamerewards/v1/* — the post-activity "choose 1 of 3"
+/// item reward the client's <c>RewardManager</c> shows after a Stunt
+/// Runner run (RewardType <c>PostGameActivity=2</c>) or an RRO quest
+/// (<c>PostQuestActivity=3</c>). The client POSTs <c>/request</c> with a
+/// rewardType + giftContext (no score/rank on the wire — the rank scales
+/// the separate <b>currency</b> reward, which arrives via
+/// <c>storefronts/v2/balance</c> as a rank-derived multiplier that
+/// <see cref="Store.StorefrontsController.ModifyBalance"/> honours), then
+/// polls <c>/pending</c> and picks one via <c>/select</c>.
+///
+/// Each of GiftDrop1/2/3 is a real store item built through
+/// <see cref="StoreService.BuildGiftDrop"/> — the SAME wire-verified
+/// EFFIEFEFHHB shape the storefront uses (notably AvatarItemId is an
+/// Int32), so the strict 2023 reader doesn't reject the selection. On
+/// <c>/select</c> the chosen item is granted to inventory for free.
+/// </summary>
 [ApiController]
 [Authorize]
-public class GameRewardsController(DorkNetDbContext db, LevelService level) : ControllerBase
+public class GameRewardsController(DorkNetDbContext db, LevelService level, StoreService store) : ControllerBase
 {
     private long Me => this.RequireCurrentPlayerId();
+
+    private const int OfferCount = 3;
 
     [HttpGet("api/gamerewards/v1/pending")]
     public async Task<IActionResult> Pending()
@@ -24,7 +43,8 @@ public class GameRewardsController(DorkNetDbContext db, LevelService level) : Co
             .OrderBy(r => r.CreatedAt)
             .Take(20)
             .ToListAsync();
-        return Ok(rows.Select(ToWire));
+        var items = await LoadOfferedItemsAsync(rows);
+        return Ok(rows.Select(r => ToWire(r, items)));
     }
 
     [HttpPost("api/gamerewards/v1/request")]
@@ -32,14 +52,26 @@ public class GameRewardsController(DorkNetDbContext db, LevelService level) : Co
     public async Task<IActionResult> RequestReward()
     {
         var req = await ReadRewardRequestAsync();
+        var pid = Me;
         var row = new GameRewardSelectionEntity
         {
-            PlayerId = Me,
+            PlayerId = pid,
             RewardType = req.RewardType,
             GiftContext = req.GiftContext,
-            Message = string.IsNullOrWhiteSpace(req.Message) ? "Choose a reward" : req.Message[..Math.Min(req.Message.Length, 256)],
+            Message = string.IsNullOrWhiteSpace(req.Message)
+                ? "Choose a reward"
+                : req.Message[..Math.Min(req.Message.Length, 256)],
         };
         db.GameRewardSelections.Add(row);
+        await db.SaveChangesAsync();
+
+        // Pick the three offered items now that the row has an id (used as
+        // the deterministic seed) and persist them so /pending is stable
+        // and /select grants exactly what was shown.
+        var offered = await store.PickRewardItemsAsync(OfferCount, unchecked((int)row.Id));
+        if (offered.Count > 0) row.Offer1ItemId = offered[0].Id;
+        if (offered.Count > 1) row.Offer2ItemId = offered[1].Id;
+        if (offered.Count > 2) row.Offer3ItemId = offered[2].Id;
         await db.SaveChangesAsync();
         return Ok(new { Success = true, Error = string.Empty });
     }
@@ -54,46 +86,61 @@ public class GameRewardsController(DorkNetDbContext db, LevelService level) : Co
             .FirstOrDefaultAsync(r => r.Id == req.RewardSelectionId && r.PlayerId == pid && r.SelectedAt == null);
         if (row is null) return Ok(new { Success = false, Error = "reward_not_found" });
 
+        // Map the client's chosen GiftDropId back to one of the offered
+        // store items. The GiftDropId is the item's PurchasableItemId.
+        var offeredIds = new[] { row.Offer1ItemId, row.Offer2ItemId, row.Offer3ItemId }
+            .Where(id => id > 0)
+            .ToList();
+        var items = await db.StoreItems.Where(i => offeredIds.Contains(i.Id)).ToListAsync();
+        var chosen = items.FirstOrDefault(i => StoreService.PurchasableItemIdFor(i) == req.GiftDropId)
+                     ?? items.FirstOrDefault();
+
         row.SelectedAt = DateTime.UtcNow;
         row.SelectedGiftDropId = req.GiftDropId;
+        if (chosen is not null)
+        {
+            await store.GrantItemAsync(pid, chosen.Id);
+            row.GrantedItemId = chosen.Id;
+        }
+        // Small token + XP kicker on top of the item, matching the
+        // post-activity "you also banked a little" feel.
         await level.GrantCurrencyAsync(pid, 2, 25, $"gameReward:{row.Id}");
         await level.AwardXpAsync(pid, 25, $"gameReward:{row.Id}");
         await db.SaveChangesAsync();
         return Ok(new { Success = true, Error = string.Empty });
     }
 
-    private static object ToWire(GameRewardSelectionEntity row) => new
+    private async Task<Dictionary<long, StoreItemEntity>> LoadOfferedItemsAsync(
+        IEnumerable<GameRewardSelectionEntity> rows)
+    {
+        var ids = rows
+            .SelectMany(r => new[] { r.Offer1ItemId, r.Offer2ItemId, r.Offer3ItemId })
+            .Where(id => id > 0)
+            .Distinct()
+            .ToList();
+        if (ids.Count == 0) return new();
+        return await db.StoreItems
+            .Where(i => ids.Contains(i.Id))
+            .ToDictionaryAsync(i => i.Id);
+    }
+
+    private static object ToWire(GameRewardSelectionEntity row, IReadOnlyDictionary<long, StoreItemEntity> items) => new
     {
         RewardSelectionId = row.Id,
         row.Message,
         row.GiftContext,
         row.RewardType,
-        GiftDrop1 = GiftDrop(row.Id * 10 + 1, "Tokens", currency: 25),
-        GiftDrop2 = GiftDrop(row.Id * 10 + 2, "XP", currency: 0),
-        GiftDrop3 = GiftDrop(row.Id * 10 + 3, "Bonus Tokens", currency: 25),
+        GiftDrop1 = OfferDrop(row.Offer1ItemId, items),
+        GiftDrop2 = OfferDrop(row.Offer2ItemId, items),
+        GiftDrop3 = OfferDrop(row.Offer3ItemId, items),
         row.CreatedAt,
     };
 
-    private static object GiftDrop(long id, string name, int currency) => new
+    private static object? OfferDrop(long itemId, IReadOnlyDictionary<long, StoreItemEntity> items)
     {
-        GiftDropId = id,
-        FriendlyName = name,
-        Tooltip = string.Empty,
-        ConsumableItemDesc = string.Empty,
-        AvatarItemDesc = string.Empty,
-        AvatarItemType = 0,
-        EquipmentPrefabName = string.Empty,
-        EquipmentModificationGuid = string.Empty,
-        IsQuery = false,
-        Unique = false,
-        SubscribersOnly = false,
-        Rarity = 0,
-        CurrencyType = 2,
-        Currency = currency,
-        Context = 0,
-        ItemSetId = 0,
-        ItemSetFriendlyName = string.Empty,
-    };
+        if (itemId <= 0 || !items.TryGetValue(itemId, out var item)) return null;
+        return StoreService.BuildGiftDrop(item, StoreService.PurchasableItemIdFor(item));
+    }
 
     private async Task<RewardRequest> ReadRewardRequestAsync()
     {
