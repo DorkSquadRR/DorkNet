@@ -3,13 +3,17 @@
   <!--
     DorkNet.DebugMod — the opt-in debugging companion to DorkNet.ClientMod.
 
-    The shipping ClientMod installs ONLY the patches needed to connect and
-    survive anti-cheat; all of its verbose diagnostic patches (HTTP header
-    tracing, join/quit/studio traces, the deep RegisterDiagnostics path) are
-    gated OFF by default. Dropping THIS dll into the Mods folder next to
-    DorkNet.ClientMod.dll flips Cfg.EnableDiagnostics on (the ClientMod
-    detects this dll's presence at startup), turning all of that tracing
-    back on. Remove it to ship a quiet, minimal client.
+    The shipping ClientMod carries ONLY the patches needed to connect and
+    survive anti-cheat. ALL of the verbose diagnostic/tracing code (HTTP
+    tracing, join/quit/studio/room-load traces, the process-exception sink,
+    auth-token tracing, the registration-dialog trace, the in-game
+    DebugConsole enable path) lives in THIS mod. Drop this dll into the
+    Mods folder next to DorkNet.ClientMod.dll to debug; remove it to ship a
+    quiet, minimal client.
+
+    Fully self-contained: its own Harmony instance + its own copy of the
+    reflection/patch helpers, so it never couples to ClientMod at load time.
+    Debug knobs are read from the same UserData\dorknet-clientmod.json.
 
     Build:  dotnet build DorkNet.DebugMod/DorkNet.DebugMod.csproj -c Release
   -->
@@ -33,6 +37,18 @@
   <ItemGroup>
     <Reference Include="MelonLoader">
       <HintPath>$(MelonLoaderDir)\MelonLoader.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="0Harmony">
+      <HintPath>$(MelonLoaderDir)\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Runtime">
+      <HintPath>$(MelonLoaderDir)\Il2CppInterop.Runtime.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Il2CppInterop.Common">
+      <HintPath>$(MelonLoaderDir)\Il2CppInterop.Common.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>

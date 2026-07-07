@@ -83,6 +83,8 @@ public class DorkNetDbContext(DbContextOptions<DorkNetDbContext> options) : DbCo
     public DbSet<RoomCurrencyBalanceEntity> RoomCurrencyBalances => Set<RoomCurrencyBalanceEntity>();
     public DbSet<RoomCurrencyPurchaseOfferEntity> RoomCurrencyPurchaseOffers => Set<RoomCurrencyPurchaseOfferEntity>();
     public DbSet<UgcPurchasableEntity> UgcPurchasables => Set<UgcPurchasableEntity>();
+    public DbSet<RoomConsumableEntity> RoomConsumables => Set<RoomConsumableEntity>();
+    public DbSet<RoomConsumableOwnershipEntity> RoomConsumableOwnership => Set<RoomConsumableOwnershipEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -746,6 +748,21 @@ public class DorkNetDbContext(DbContextOptions<DorkNetDbContext> options) : DbCo
             e.HasIndex(p => p.PublicId).IsUnique();
             e.HasIndex(p => p.RoomId);
             e.HasIndex(p => p.CreatorPlayerId);
+        });
+
+        modelBuilder.Entity<RoomConsumableEntity>(e =>
+        {
+            e.HasKey(c => c.Id);
+            e.HasIndex(c => c.PublicId).IsUnique();
+            e.HasIndex(c => c.RoomId);
+            e.HasIndex(c => c.CreatorPlayerId);
+        });
+
+        modelBuilder.Entity<RoomConsumableOwnershipEntity>(e =>
+        {
+            e.HasKey(o => o.Id);
+            e.HasIndex(o => new { o.PlayerId, o.RoomConsumableId }).IsUnique();
+            e.HasIndex(o => o.RoomConsumableId);
         });
     }
 }

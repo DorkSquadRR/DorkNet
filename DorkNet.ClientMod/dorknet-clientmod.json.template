@@ -1,6 +1,9 @@
 {
   "ServerHost": "{HOST}",
   "EnableTlsTrustBypass": {ENABLE_TLS_TRUST_BYPASS},
+  "EnableDebugConsole": false,
+  "DebugConsoleToggleKey": "BackQuote",
+  "DevCommands": [],
   "QuestMaxTeamSize": 0,
   "QuestMaxTeamSizeRooms": [
     "CrimsonCauldron",
