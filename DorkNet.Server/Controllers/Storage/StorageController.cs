@@ -44,15 +44,23 @@ public class StorageController(
     /// FileType enum values from the client's <c>RecNet.Storage+FileType</c>
     /// (dump.cs:586846). Kept as a private enum so callers can pattern-
     /// match without leaking client-side numbering elsewhere.
+    ///
+    /// <c>RoomMetadata = 6</c> is new in the 2023 client: the room-save
+    /// flow (<c>OGPDOMCNIFM.UploadRoomDataBlobAndSyncReload</c>, logs
+    /// "Uploading room metadata {0}/{1}") uploads a small metadata blob
+    /// with FileType=6 alongside the FileType=1 scene save, then posts
+    /// both returned filenames to <c>rooms/{id}/subrooms/{id}/data</c>
+    /// as <c>{RoomData:{Filename},SubRoomData:{Filename}}</c>.
     /// </summary>
     private enum FileType
     {
-        Unknown   = 0,
-        RoomSave  = 1,
-        Holotar   = 2,
-        Image     = 3,
-        Video     = 4,
-        Invention = 5,
+        Unknown      = 0,
+        RoomSave     = 1,
+        Holotar      = 2,
+        Image        = 3,
+        Video        = 4,
+        Invention    = 5,
+        RoomMetadata = 6,
     }
 
     [HttpPost("/upload", Order = -2000)]
@@ -103,6 +111,7 @@ public class StorageController(
             FileType.Image => await UploadImageAsync(playerId, bytes),
             FileType.Holotar => await UploadGenericAsync(playerId, bytes, "holotar"),
             FileType.Video => await UploadGenericAsync(playerId, bytes, "video"),
+            FileType.RoomMetadata => await UploadGenericAsync(playerId, bytes, "roommeta"),
             _ => Ok(new
             {
                 filename = $"stub_{Guid.NewGuid():N}.{Extension(fileType)}",

@@ -1093,8 +1093,26 @@ public class RoomsController(
         public long RequestPlayerId { get; set; }
         public int SaveRequestPlayerId { get; set; }
 
+        // 2023 client shape. rooms/{id}/subrooms/{id}/data arrives as JSON:
+        //   { "UnityAssetId": null,
+        //     "RoomData":    { "Filename": "roommeta_….bin", "Hash": …, "OwnershipProof": … },
+        //     "SubRoomData": { "Filename": "dorm_p…_vN.dat", "Hash": …, "OwnershipProof": … } }
+        // SubRoomData.Filename is the scene save blob (the FileType=1
+        // /upload result) — that's what must become DataBlobName.
+        // RoomData.Filename is the FileType=6 room-metadata blob.
+        public long? UnityAssetId { get; set; }
+        public BlobRefDto? RoomData { get; set; }
+        public BlobRefDto? SubRoomData { get; set; }
+
         public string EffectiveRoomDataFilename =>
-            RoomDataFilename ?? Filename ?? string.Empty;
+            RoomDataFilename ?? Filename ?? SubRoomData?.Filename ?? string.Empty;
+    }
+
+    public class BlobRefDto
+    {
+        public string? Filename { get; set; }
+        public string? Hash { get; set; }
+        public string? OwnershipProof { get; set; }
     }
 
     public class CreatorActionContextDto
@@ -3411,9 +3429,14 @@ public class RoomsController(
     /// commit the blob returned by <c>storage/upload</c> as the current
     /// scene save. The 2020 watch posts this as form-urlencoded
     /// (<c>filename</c>, <c>inventionUsage</c>, <c>savedByAccountId</c>),
-    /// while some tooling uses JSON. Both variants delegate to the
-    /// existing saveData path so room, scene, dorm-state, presence, and
-    /// subscription fanout stay consistent.</summary>
+    /// while some tooling uses JSON. The 2023 client posts JSON with
+    /// nested blob refs — <c>{UnityAssetId, RoomData:{Filename,Hash,
+    /// OwnershipProof}, SubRoomData:{Filename,…}}</c> — where
+    /// <c>SubRoomData.Filename</c> is the scene save (FileType=1 upload)
+    /// and <c>RoomData.Filename</c> the FileType=6 room-metadata blob.
+    /// All variants delegate to the existing saveData path so room,
+    /// scene, dorm-state, presence, and subscription fanout stay
+    /// consistent.</summary>
     [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/data")]
     [HttpPost("rooms/{roomId:long}/subrooms/{subRoomId:long}/data")]
     [Authorize]
