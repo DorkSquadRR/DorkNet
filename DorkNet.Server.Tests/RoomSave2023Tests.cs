@@ -78,13 +78,20 @@ public sealed class RoomSave2023Tests : IClassFixture<DorkNetServerFactory>
 
         // 2023 commit-response contract (NEOPBOMGIOG): value must carry
         // BOTH a Room and a SubRoomDataSave or the client's post-parse
-        // validator NREs and the watch shows "Failed to save room".
+        // Dispose walk NREs and the watch shows "Failed to save room".
         var value = json.RootElement.GetProperty("value");
-        Assert.Equal(JsonValueKind.Object, value.GetProperty("Room").ValueKind);
+        var roomDto = value.GetProperty("Room");
+        Assert.Equal(JsonValueKind.Object, roomDto.ValueKind);
+        // Keys the FGCPNAACHIK mapper reads and its Dispose walk derefs.
+        foreach (var key in new[] { "RoomId", "DataBlob", "MaxPlayers", "ToxmodEnabled", "RankingContext", "SubRooms", "Roles", "Tags", "Stats" })
+            Assert.True(roomDto.TryGetProperty(key, out _), $"Room missing '{key}': {responseText}");
+        Assert.Equal(JsonValueKind.Object, roomDto.GetProperty("RankingContext").ValueKind);
+
         var save = value.GetProperty("SubRoomDataSave");
         Assert.Equal(blobName, save.GetProperty("DataBlob").GetString());
-        Assert.True(save.TryGetProperty("SubRoomDataSaveId", out _), responseText);
-        Assert.True(save.TryGetProperty("CreatedAt", out _), responseText);
+        // Keys the JKIFFPPAJNK save mapper reads.
+        foreach (var key in new[] { "SubRoomDataSaveId", "SubRoomId", "UnityAssetId", "DataBlobHash", "SavedByAccountId", "Description", "CreatedAt" })
+            Assert.True(save.TryGetProperty(key, out _), $"SubRoomDataSave missing '{key}': {responseText}");
 
         await using (var scope = _factory.Services.CreateAsyncScope())
         {

@@ -700,6 +700,12 @@ public class RoomsController(
             ReferencedUnityAssetIds = Array.Empty<string>(),
             DataBlob = dataBlob,
             DataBlobName = dataBlob,
+            // DataBlobHash + Description are read by the save mapper
+            // (JKIFFPPAJNK / PELEHJLMKJO) that the SaveRoom commit
+            // response deserializes; omitting them leaves nulls the
+            // response Dispose walk trips on.
+            DataBlobHash = (string?)null,
+            Description = string.Empty,
             PersistenceVersion = 41,
             OMVersion = 0,
             SavedByAccountId = room.CreatorPlayerId,
@@ -1978,6 +1984,26 @@ public class RoomsController(
             },
             PublishState = 0,
             MaxPlayerCalculationMode = room.MaxPlayerCalculationMode,
+            // 2023's room-details mapper (FGCPNAACHIK / GLEGPFFPDBE) reads
+            // these top-level keys and its Dispose walk (NEOPBOMGIOG.
+            // FKDDCNLJOLF, reached via the SaveRoom commit response)
+            // dereferences them — a missing RankingContext object or the
+            // DataBlob/MaxPlayers/ToxmodEnabled scalars leaves a null the
+            // walk NREs on ("Failed to save room" toast despite a
+            // persisted save). Emit them so the room DTO round-trips
+            // through the strict save-response path, not just the
+            // include-masked GET rooms/{id} path.
+            DataBlob = dataBlobName,
+            DataBlobHash = (string?)null,
+            MaxPlayers = sceneRows is { Count: > 0 } ? sceneRows[0].MaxPlayers : room.MaxCapacity,
+            ToxmodEnabled = false,
+            RankingContext = new
+            {
+                RoomId = room.Id,
+                Score = 0.0,
+                Rank = 0,
+                RankingType = 0,
+            },
             SubRooms = subRooms,
             Roles = wireRoles,
             LoadScreens = JsonArrayOrEmpty(room.LoadScreensJson),
