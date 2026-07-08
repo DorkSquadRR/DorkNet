@@ -113,7 +113,10 @@ export interface RoomRoleGrant {
 // else lowest-pid). The matching participant has isMaster=true so the
 // UI can tag a row without recomputing.
 export interface RoomInstance {
-  roomInstanceId: number;
+  // String, not number: instance ids are int64s past JS's 2^53 safe
+  // range, so the server sends them as strings to survive JSON.parse.
+  // Used verbatim in pull/close URLs — never coerce to Number.
+  roomInstanceId: string;
   roomId: number;
   subRoomId: number;
   roomName: string;
@@ -229,7 +232,7 @@ export interface Stats {
         roomId: number;
         name: string;
         subRoomId: number;
-        roomInstanceId: number;
+        roomInstanceId: string;
         photonRoomId: string;
         photonRegionId: string;
         isPrivate: boolean;
@@ -287,7 +290,9 @@ export interface StorefrontDefinition {
 }
 
 export interface Instance {
-  roomInstanceId: number;
+  // String, not number — int64 past JS's 2^53 safe range (server sends
+  // it as a string so JSON.parse doesn't round it).
+  roomInstanceId: string;
   roomId: number;
   subRoomId: number;
   roomName: string;
