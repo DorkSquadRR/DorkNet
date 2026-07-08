@@ -1285,7 +1285,13 @@ public class AdminController(
                 master = i.pids.OrderBy(p => p).FirstOrDefault();
             return new
             {
-                roomInstanceId = i.roomInstanceId,
+                // Instance ids are int64 values well past JS's safe-integer
+                // range (2^53); if emitted as a JSON number the admin SPA's
+                // JSON.parse rounds them to the nearest double and the pull /
+                // close URLs then target a non-existent instance
+                // ("instance_not_active"). Emit as a STRING so the browser
+                // round-trips the exact digits.
+                roomInstanceId = i.roomInstanceId.ToString(),
                 roomId = i.roomId,
                 subRoomId = i.subRoomId,
                 roomName = i.roomName,
@@ -1341,7 +1347,7 @@ public class AdminController(
             sample);
         await LogAsync("instance_pull", "instance", instanceId, $"player={body.PlayerId} room={id}");
         await db.SaveChangesAsync();
-        return Ok(new { ok = true, instanceId, roomInstanceId = sample.RoomInstanceId });
+        return Ok(new { ok = true, instanceId = instanceId.ToString(), roomInstanceId = sample.RoomInstanceId.ToString() });
     }
 
     /// <summary>POST <c>api/admin/v1/rooms/{id}/instances/{instanceId}/close</c>
@@ -2042,7 +2048,9 @@ public class AdminController(
                     room.RoomId,
                     Name = roomName ?? room.Name,
                     room.SubRoomId,
-                    room.RoomInstanceId,
+                    // String — int64 past JS's 2^53 safe range (see the
+                    // /instances comment).
+                    RoomInstanceId = room.RoomInstanceId.ToString(),
                     room.PhotonRoomId,
                     room.PhotonRegionId,
                     room.IsPrivate,
@@ -2887,7 +2895,7 @@ public class AdminController(
             {
                 g = new InstanceGroup
                 {
-                    RoomInstanceId = room.RoomInstanceId,
+                    RoomInstanceId = room.RoomInstanceId.ToString(),
                     RoomId = room.RoomId,
                     SubRoomId = room.SubRoomId,
                     RoomName = roomNameMap.GetValueOrDefault(room.RoomId, $"#{room.RoomId}"),
@@ -2916,7 +2924,10 @@ public class AdminController(
 
     private sealed class InstanceGroup
     {
-        public long RoomInstanceId { get; set; }
+        /// <summary>String, not long — see the /instances comment: the
+        /// JS admin SPA mangles int64s above 2^53 unless they're
+        /// serialized as strings.</summary>
+        public string RoomInstanceId { get; set; } = "";
         public long RoomId { get; set; }
         public long SubRoomId { get; set; }
         public string RoomName { get; set; } = "";
@@ -2948,7 +2959,11 @@ public class AdminController(
     public sealed record ForceJoinRequest(
         long RoomId,
         long? SubRoomId,
-        long? RoomInstanceId,
+        // String, not long?: the "send into this instance" flow echoes the
+        // roomInstanceId the admin SPA received (now a string, to survive
+        // JSON.parse of >2^53 ids). Parsed to long below; blank/omitted =
+        // mint a fresh default instance.
+        string? RoomInstanceId,
         string? PhotonRoomId,
         string? PhotonRegionId);
 
@@ -2988,8 +3003,9 @@ public class AdminController(
         var photonRoomId = !string.IsNullOrEmpty(body.PhotonRoomId)
             ? body.PhotonRoomId
             : $"^{room.Name.ToLowerInvariant()}_{room.Id}";
-        var roomInstanceId = body.RoomInstanceId
-            ?? (room.Id * 100_000L + subRoomId);
+        var roomInstanceId = long.TryParse(body.RoomInstanceId, out var parsedInstanceId)
+            ? parsedInstanceId
+            : (room.Id * 100_000L + subRoomId);
         var photonRegionId = !string.IsNullOrEmpty(body.PhotonRegionId)
             ? body.PhotonRegionId
             : "us";
@@ -3036,7 +3052,7 @@ public class AdminController(
             id,
             roomId = body.RoomId,
             subRoomId,
-            roomInstanceId,
+            roomInstanceId = roomInstanceId.ToString(),
             photonRoomId,
         });
     }
