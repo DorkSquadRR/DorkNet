@@ -52,12 +52,20 @@ on 2026-07-07. Diagnosed while fixing "Failed to save room" /
    }
    ```
 
-   The client's post-parse validator NREs if `Room` or
-   `SubRoomDataSave` is missing — the save persists server-side but the
-   watch shows "Failed to save room". `SubRoomDataSave` keys per the
-   `JKIFFPPAJNK` mapper (`PELEHJLMKJO`): SubRoomDataSaveId, SubRoomId,
-   UnityAssetId, DataBlob, DataBlobHash, SavedByAccountId,
-   SavedOnPlatform, SavedOnDeviceClass, Description, CreatedAt.
+   The client parses each field then runs a **Dispose walk**
+   (`NEOPBOMGIOG.FKDDCNLJOLF`, reached from the SaveRoom commit
+   continuation) that dereferences the mapped children — a missing
+   nested object or scalar leaves a null it NREs on, and the save
+   persists server-side but the watch shows "Failed to save room". So
+   the `Room` DTO must carry every key the `FGCPNAACHIK` mapper
+   (`GLEGPFFPDBE`) reads, including the ones the include-masked
+   `GET rooms/{id}` path gets away without: **DataBlob**,
+   **DataBlobHash**, **MaxPlayers**, **ToxmodEnabled**, and a non-null
+   **RankingContext** object, plus SubRooms/Roles/Tags/Stats.
+   `SubRoomDataSave` keys per the `JKIFFPPAJNK` mapper (`PELEHJLMKJO`):
+   SubRoomDataSaveId, SubRoomId, UnityAssetId, DataBlob, **DataBlobHash**,
+   SavedByAccountId, SavedOnPlatform, SavedOnDeviceClass, **Description**,
+   CreatedAt.
 
 Server handling: `StorageController.Upload` (FileType 6 →
 `UploadGenericAsync("roommeta")`, CDN-servable) and
