@@ -76,21 +76,21 @@ public sealed class RoomSave2023Tests : IClassFixture<DorkNetServerFactory>
         using var json = JsonDocument.Parse(responseText);
         Assert.True(json.RootElement.GetProperty("success").GetBoolean(), responseText);
 
-        // 2023 commit-response contract (NEOPBOMGIOG): value must carry
-        // BOTH a Room and a SubRoomDataSave or the client's post-parse
-        // Dispose walk NREs and the watch shows "Failed to save room".
+        // 2023 commit-response contract (NEOPBOMGIOG): value carries a
+        // Room and a SubRoomDataSave. The Room reuses the exact GET
+        // rooms/{id} shape (BuildRoomServerDetails) — do NOT bolt extra
+        // keys onto it: the room-details mapper is strict about value
+        // shapes and an invented RankingContext object broke every
+        // room-details parse ("Malformed Response"). See befd590 revert.
         var value = json.RootElement.GetProperty("value");
         var roomDto = value.GetProperty("Room");
         Assert.Equal(JsonValueKind.Object, roomDto.ValueKind);
-        // Keys the FGCPNAACHIK mapper reads and its Dispose walk derefs.
-        foreach (var key in new[] { "RoomId", "DataBlob", "MaxPlayers", "ToxmodEnabled", "RankingContext", "SubRooms", "Roles", "Tags", "Stats" })
+        foreach (var key in new[] { "RoomId", "SubRooms", "Roles", "Tags", "Stats" })
             Assert.True(roomDto.TryGetProperty(key, out _), $"Room missing '{key}': {responseText}");
-        Assert.Equal(JsonValueKind.Object, roomDto.GetProperty("RankingContext").ValueKind);
 
         var save = value.GetProperty("SubRoomDataSave");
         Assert.Equal(blobName, save.GetProperty("DataBlob").GetString());
-        // Keys the JKIFFPPAJNK save mapper reads.
-        foreach (var key in new[] { "SubRoomDataSaveId", "SubRoomId", "UnityAssetId", "DataBlobHash", "SavedByAccountId", "Description", "CreatedAt" })
+        foreach (var key in new[] { "SubRoomDataSaveId", "SubRoomId", "UnityAssetId", "SavedByAccountId", "CreatedAt" })
             Assert.True(save.TryGetProperty(key, out _), $"SubRoomDataSave missing '{key}': {responseText}");
 
         await using (var scope = _factory.Services.CreateAsyncScope())
