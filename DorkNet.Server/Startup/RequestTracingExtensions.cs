@@ -107,7 +107,7 @@ public static class RequestTracingExtensions
                     try
                     {
                         capture.Seek(0, SeekOrigin.Begin);
-                        if (ShouldReadResponseBody(ctx.Response.ContentType, status))
+                        if (ShouldReadResponseBody(ctx.Response.ContentType, status, path))
                             responseBody = await new StreamReader(capture, leaveOpen: true).ReadToEndAsync();
                         capture.Seek(0, SeekOrigin.Begin);
                         await capture.CopyToAsync(originalBody);
@@ -132,6 +132,19 @@ public static class RequestTracingExtensions
                 var level = thrown is not null || status >= 500 ? LogLevel.Error
                           : status >= 400 ? LogLevel.Warning
                           : LogLevel.Information;
+
+                // TEMP diagnostic (presence "others online show offline"): the
+                // normal [req] line truncates to 300 chars and never reads 2xx
+                // bodies, so we can't see the /player roster the watch renders
+                // from. Dump the FULL redacted body for /player on any status.
+                // Remove once the presence-offline bug is localized.
+                if (path.Equals("/player", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(safeResponse))
+                {
+                    reqLogger.LogInformation(
+                        "[presence-debug] {Method} {Host}{Path}{Query} status={Status} body={Body}",
+                        ctx.Request.Method, ctx.Request.Host, ctx.Request.Path,
+                        ctx.Request.QueryString.Value ?? "", status, safeResponse);
+                }
 
                 reqLogger.Log(level, thrown,
                     "[req] {Status} {Method} {Host}{Path}{Query} {ElapsedMs}ms auth={AuthPresence} contentType={ContentType} contentLength={ContentLength} req={ReqBody} resp={RespBody}",
@@ -228,9 +241,12 @@ public static class RequestTracingExtensions
             || ext.Equals(".log", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool ShouldReadResponseBody(string? contentType, int status)
+    private static bool ShouldReadResponseBody(string? contentType, int status, string path)
     {
-        if (status < 400) return false;
+        // TEMP diagnostic: always read the /player roster body (even 200s) so
+        // [presence-debug] can dump the exact online payload the watch renders.
+        var isPresence = path.Equals("/player", StringComparison.OrdinalIgnoreCase);
+        if (status < 400 && !isPresence) return false;
         if (string.IsNullOrWhiteSpace(contentType)) return true;
         return contentType.StartsWith("application/json", StringComparison.OrdinalIgnoreCase)
             || contentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase);

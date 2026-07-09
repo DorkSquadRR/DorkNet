@@ -68,6 +68,26 @@ public class ServerSettingsService(DorkNetDbContext db)
         return existing;
     }
 
+    /// <summary>When true, every account is treated as owning every avatar
+    /// item in the master catalog (synthesized at read time — no inventory
+    /// rows are written). See <see cref="ServerSettingsEntity.AllAvatarItemsOwned"/>
+    /// and <see cref="Controllers.API.Avatar.V4.AvatarItemsController"/>.</summary>
+    public async Task<bool> IsAllAvatarItemsOwnedEnabledAsync()
+    {
+        var row = await db.ServerSettings.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == RowId);
+        return row?.AllAvatarItemsOwned ?? false;
+    }
+
+    public async Task<ServerSettingsEntity> SetAllAvatarItemsOwnedEnabledAsync(bool enabled)
+    {
+        var existing = await GetTrackedRowAsync();
+        existing.AllAvatarItemsOwned = enabled;
+        existing.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return existing;
+    }
+
     public async Task<WeeklyChallengeSettings> GetWeeklyChallengesAsync()
     {
         var row = await GetAsync();
