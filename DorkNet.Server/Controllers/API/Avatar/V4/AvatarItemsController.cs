@@ -173,10 +173,13 @@ public class AvatarItemsController(
                 {
                     AvatarItemType = item.AvatarItemType,
                     AvatarItemDesc = ToWatchDesc(entry.FullDesc),
+                    AvatarItemId = item.AvatarItemId,
                     PlatformMask = item.PlatformMask,
                     FriendlyName = item.FriendlyName,
                     Tooltip = item.Tooltip,
                     Rarity = item.Rarity,
+                    TagList = item.TagList,
+                    IsBaseAvatarItem = item.IsBaseAvatarItem,
                 });
             if (result.Count >= maxItems) break;
         }
@@ -190,10 +193,13 @@ public class AvatarItemsController(
             {
                 AvatarItemType = AvatarItemType.HairDye,
                 AvatarItemDesc = hairColorGuid,
+                AvatarItemId = StableAvatarItemId(hairColorGuid),
                 PlatformMask = unchecked((int)0xFFFFFFFF),
                 FriendlyName = friendlyName,
                 Tooltip = string.Empty,
                 Rarity = 0,
+                TagList = string.Empty,
+                IsBaseAvatarItem = false,
             });
         }
         return Ok(result);
@@ -223,10 +229,13 @@ public class AvatarItemsController(
             {
                 AvatarItemType = AvatarItemType.HairDye,
                 AvatarItemDesc = hairColorGuid,
+                AvatarItemId = StableAvatarItemId(hairColorGuid),
                 PlatformMask = unchecked((int)0xFFFFFFFF),
                 FriendlyName = friendlyName,
                 Tooltip = string.Empty,
                 Rarity = 0,
+                TagList = string.Empty,
+                IsBaseAvatarItem = false,
             });
         }
         return result;
@@ -506,10 +515,13 @@ public class AvatarItemsController(
                 // GUID as a color GUID and log "Can not find hair dye color".
                 AvatarItemType = AvatarItemType.Outfit,
                 AvatarItemDesc = row.Guid + ",,,",
+                AvatarItemId = StableAvatarItemId(row.Guid),
                 PlatformMask = unchecked((int)0xFFFFFFFF),
                 FriendlyName = pretty,
                 Tooltip = string.Empty,
                 Rarity = 0,
+                TagList = string.Empty,
+                IsBaseAvatarItem = false,
             };
             if (!bySlot.TryGetValue(row.OutfitType, out var lst))
                 bySlot[row.OutfitType] = lst = new List<string>();
@@ -518,6 +530,21 @@ public class AvatarItemsController(
         }
 
         return new CatalogData(items, safe, bySlot, slotByGuid);
+    }
+
+    /// <summary>Stable, deterministic, non-zero 31-bit id for an owned
+    /// avatar item, derived from its base GUID (FNV-1a). The 2023 client
+    /// keys the wardrobe by <c>AvatarItemId</c>, so it must be unique per
+    /// item and stable across restarts. Colored variants reuse their base
+    /// item's id (a player owns the base OR a variant, never both in the
+    /// list), so no collision.</summary>
+    public static int StableAvatarItemId(string? avatarItemDescOrGuid)
+    {
+        var guid = (avatarItemDescOrGuid ?? string.Empty).Split(',')[0];
+        uint h = 2166136261u;
+        foreach (var c in guid) h = (h ^ c) * 16777619u;
+        var id = (int)(h & 0x7FFFFFFF);
+        return id == 0 ? 1 : id;
     }
 
     private static string PrettyName(string raw)
@@ -618,6 +645,16 @@ public class UnlockedAvatarItemDto
     [JsonPropertyName("AvatarItemDesc")]
     public string AvatarItemDesc { get; set; } = string.Empty;
 
+    /// <summary>The 2023 client's owned-item DTO (RecNet IFNGBPJGINL) reads
+    /// <c>AvatarItemId</c> as an <b>Int32</b>. Omitting it left every owned
+    /// item at id 0; the client keys its wardrobe by AvatarItemId, so a
+    /// second item collided and the whole unlocked-items list failed to
+    /// build — the wardrobe showed nothing owned and buying (which refetches
+    /// this list) NRE'd in OutfitManager.UnlockAvatarItemAndMarkNew. Emit a
+    /// stable, unique, non-zero id.</summary>
+    [JsonPropertyName("AvatarItemId")]
+    public int AvatarItemId { get; set; }
+
     [JsonPropertyName("PlatformMask")]
     public int PlatformMask { get; set; }
 
@@ -629,4 +666,15 @@ public class UnlockedAvatarItemDto
 
     [JsonPropertyName("Rarity")]
     public int Rarity { get; set; }
+
+    /// <summary>CSV tag string (IFNGBPJGINL.TagList). Empty is fine —
+    /// AvatarItemMetadata.ParseTagList tolerates it — but the key must be
+    /// present and a string, never null.</summary>
+    [JsonPropertyName("TagList")]
+    public string TagList { get; set; } = string.Empty;
+
+    /// <summary>Whether this is a default base-body item vs a cosmetic
+    /// (IFNGBPJGINL.IsBaseAvatarItem). False for wardrobe/catalog items.</summary>
+    [JsonPropertyName("IsBaseAvatarItem")]
+    public bool IsBaseAvatarItem { get; set; }
 }
