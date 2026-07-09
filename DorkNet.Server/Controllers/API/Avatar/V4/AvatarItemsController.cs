@@ -62,7 +62,10 @@ namespace DorkNet.Server.Controllers.API.Avatar.V4;
 /// Anonymous calls return [].
 /// </summary>
 [ApiController]
-public class AvatarItemsController(DorkNetDbContext db, IConfiguration config) : ControllerBase
+public class AvatarItemsController(
+    DorkNetDbContext db,
+    IConfiguration config,
+    ServerSettingsService serverSettings) : ControllerBase
 {
     /// <summary>Master catalog keyed by GUID. Loaded once on first
     /// request from <c>data/avatar_item_lookup.json</c>. Same
@@ -96,6 +99,15 @@ public class AvatarItemsController(DorkNetDbContext db, IConfiguration config) :
         // operator dial it back down for a watch build.
         var maxItems = Math.Clamp(config.GetValue("Avatar:MaxUnlockedItems", 4000), 1, 8000);
         var maxPerSlot = Math.Clamp(config.GetValue("Avatar:MaxUnlockedItemsPerSlot", 1000), 1, 2000);
+
+        // "Everyone owns all avatar items" admin toggle (mirrors the
+        // "everyone is friends" one): report the ENTIRE master catalog plus
+        // all permanent hair dyes as owned, for every caller, without reading
+        // or writing any inventory row. Flipping the toggle off instantly
+        // reverts to the real per-player wardrobe below. Bounded by the same
+        // maxItems ceiling so a future watch build can't be over-fed.
+        if (await serverSettings.IsAllAvatarItemsOwnedEnabledAsync())
+            return Ok(BuildEntireCatalogOwned(maxItems));
 
         var pid = this.CurrentPlayerId();
         if (pid is not long me) return Ok(new List<UnlockedAvatarItemDto>());
@@ -187,6 +199,39 @@ public class AvatarItemsController(DorkNetDbContext db, IConfiguration config) :
         return Ok(result);
     }
 
+    /// <summary>The full owned set when the "everyone owns all avatar
+    /// items" toggle is on: every catalog item (already carrying the
+    /// "{guid},,," desc) plus every permanent hair dye, capped at
+    /// <paramref name="maxItems"/>. Hair dyes are emitted in the same
+    /// shape the per-player path uses (AvatarItemType.HairDye, desc =
+    /// hair-color GUID) so the wardrobe renders them identically.</summary>
+    private static List<UnlockedAvatarItemDto> BuildEntireCatalogOwned(int maxItems)
+    {
+        var catalog = _catalog.Value;
+        var result = new List<UnlockedAvatarItemDto>(Math.Min(maxItems, catalog.Items.Count + 32));
+        foreach (var item in catalog.Items.Values)
+        {
+            if (result.Count >= maxItems) return result;
+            result.Add(item);
+        }
+        foreach (var slug in StoreService.AllHairDyeSlugs)
+        {
+            if (result.Count >= maxItems) break;
+            if (!StoreService.TryGetHairDyePayload(slug, out var hairColorGuid)) continue;
+            StoreService.TryGetHairDyeName(slug, out var friendlyName);
+            result.Add(new UnlockedAvatarItemDto
+            {
+                AvatarItemType = AvatarItemType.HairDye,
+                AvatarItemDesc = hairColorGuid,
+                PlatformMask = unchecked((int)0xFFFFFFFF),
+                FriendlyName = friendlyName,
+                Tooltip = string.Empty,
+                Rarity = 0,
+            });
+        }
+        return result;
+    }
+
     [HttpGet("api/avatar/v1/defaultbaseavataritems")]
     [AllowAnonymous]
     public IActionResult DefaultBaseAvatarItems()
@@ -229,6 +274,12 @@ public class AvatarItemsController(DorkNetDbContext db, IConfiguration config) :
     {
         var requested = RequestedAvatarItemGuids().ToList();
         if (requested.Count == 0) return Ok(Array.Empty<object>());
+
+        // When everyone owns everything, nothing is "locked" — the store's
+        // owned/locked diff must see an empty locked set so every tile reads
+        // as owned, consistent with the full wardrobe returned by Get().
+        if (await serverSettings.IsAllAvatarItemsOwnedEnabledAsync())
+            return Ok(Array.Empty<object>());
 
         var owned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var pid = this.CurrentPlayerId();

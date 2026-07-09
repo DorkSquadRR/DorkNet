@@ -32,6 +32,16 @@ public class ServerSettingsEntity
     /// and the system/coach account (Id=1) is excluded.</summary>
     public bool GlobalFriendsEnabled { get; set; }
 
+    /// <summary>When true, every account is reported as owning every
+    /// avatar item in the master catalog (plus all permanent hair dyes) —
+    /// the wardrobe/store "unlocked items" endpoints return the full
+    /// catalog for every player regardless of their real inventory. Like
+    /// <see cref="GlobalFriendsEnabled"/>, nothing is written to the
+    /// inventory tables: it's synthesized at read time, so flipping it off
+    /// instantly reverts to each player's actually-owned items. Color
+    /// variants and player-made custom (UGC) items are out of scope.</summary>
+    public bool AllAvatarItemsOwned { get; set; }
+
     /// <summary>When true, the challenge map tells the 2020 watch that
     /// weekly challenge completion is required for the weekly reward flow.
     /// Individual player challenge rows still default to incomplete until

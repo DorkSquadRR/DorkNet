@@ -1498,6 +1498,7 @@ public class AdminController(
             row.GlobalFriendsEnabled,
             row.WeeklyChallengesCompletedRequired,
             row.ProfanityFilterDisabled,
+            row.AllAvatarItemsOwned,
             row.UpdatedAt,
         });
     }
@@ -1505,6 +1506,7 @@ public class AdminController(
     public sealed record SignupsToggleRequest(bool Disabled);
     public sealed record GlobalFriendsToggleRequest(bool Enabled);
     public sealed record ProfanityFilterToggleRequest(bool Disabled);
+    public sealed record AllAvatarItemsToggleRequest(bool Enabled);
 
     /// <summary>POST <c>api/admin/v1/settings/profanity</c> — flip the
     /// server-side profanity filter. While disabled, every
@@ -1523,6 +1525,33 @@ public class AdminController(
             row.GlobalFriendsEnabled,
             row.WeeklyChallengesCompletedRequired,
             row.ProfanityFilterDisabled,
+            row.AllAvatarItemsOwned,
+            row.UpdatedAt,
+        });
+    }
+
+    /// <summary>POST <c>api/admin/v1/settings/all-avatar-items</c> — flip the
+    /// "everyone owns all avatar items" toggle. When on, the wardrobe/store
+    /// "unlocked items" endpoints report the full master catalog (plus all
+    /// permanent hair dyes) as owned for every account. Nothing is written to
+    /// the inventory tables — it's synthesized at read time (see
+    /// <see cref="Controllers.API.Avatar.V4.AvatarItemsController"/>), so
+    /// flipping it off instantly reverts to each player's real wardrobe.
+    /// Players see the change the next time the watch pulls its unlocked
+    /// items (avatar menu open / next boot).</summary>
+    [HttpPost("settings/all-avatar-items")]
+    public async Task<ActionResult> SetAllAvatarItemsOwned([FromBody] AllAvatarItemsToggleRequest body)
+    {
+        var row = await serverSettings.SetAllAvatarItemsOwnedEnabledAsync(body.Enabled);
+        await LogAsync(body.Enabled ? "all_avatar_items_enabled" : "all_avatar_items_disabled", "system", 0, "");
+        await db.SaveChangesAsync();
+        return Ok(new
+        {
+            row.SignupsDisabled,
+            row.GlobalFriendsEnabled,
+            row.WeeklyChallengesCompletedRequired,
+            row.ProfanityFilterDisabled,
+            row.AllAvatarItemsOwned,
             row.UpdatedAt,
         });
     }
@@ -1636,6 +1665,8 @@ public class AdminController(
             row.SignupsDisabled,
             row.GlobalFriendsEnabled,
             row.WeeklyChallengesCompletedRequired,
+            row.ProfanityFilterDisabled,
+            row.AllAvatarItemsOwned,
             row.UpdatedAt,
         });
     }
@@ -1657,6 +1688,8 @@ public class AdminController(
             row.SignupsDisabled,
             row.GlobalFriendsEnabled,
             row.WeeklyChallengesCompletedRequired,
+            row.ProfanityFilterDisabled,
+            row.AllAvatarItemsOwned,
             row.UpdatedAt,
         });
     }

@@ -9,6 +9,7 @@ interface ServerSettings {
   globalFriendsEnabled: boolean;
   weeklyChallengesCompletedRequired: boolean;
   profanityFilterDisabled: boolean;
+  allAvatarItemsOwned: boolean;
   updatedAt: string;
 }
 
@@ -209,6 +210,29 @@ export function Settings({ embedded }: { embedded?: boolean } = {}) {
       });
       setSettings(updated);
       toast.push(next ? 'Everyone is now friends — players refreshing live.' : 'All-friends turned off.', 'success');
+    } catch (e) {
+      toast.push((e as Error).message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleAllAvatarItems = async () => {
+    if (!settings) return;
+    const next = !settings.allAvatarItemsOwned;
+    if (!confirm(
+      next
+        ? 'Give every account every avatar item? The whole wardrobe catalog (plus all hair dyes) shows as owned for everyone. Nothing is written to inventories — it\'s synthesized live, and reverts instantly when you toggle it off. Players see it next time the avatar menu opens.'
+        : 'Turn off all-items? Players revert to only the avatar items they actually own.',
+    )) return;
+    setBusy(true);
+    try {
+      const updated = await api<ServerSettings>('/settings/all-avatar-items', {
+        method: 'POST',
+        body: { Enabled: next },
+      });
+      setSettings(updated);
+      toast.push(next ? 'Everyone now owns all avatar items.' : 'All-items turned off.', 'success');
     } catch (e) {
       toast.push((e as Error).message, 'error');
     } finally {
@@ -506,6 +530,39 @@ export function Settings({ embedded }: { embedded?: boolean } = {}) {
             {settings.globalFriendsEnabled
               ? <span className="badge-online">Everyone is friends</span>
               : <span className="badge-neutral">Normal friend lists</span>}
+          </div>
+        </div>
+      )}
+
+      {settings && (
+        <div className="card !p-5 max-w-2xl mt-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm font-semibold text-ink-50">Everyone owns all avatar items</h2>
+              <p className="mt-1 text-xs text-ink-400">
+                When on, every account is reported as owning the entire avatar wardrobe catalog
+                (plus all permanent hair dyes), so the store shows everything as "owned" and every
+                item is equippable. Nothing is written to inventories — it's synthesized live, and
+                turning it off instantly reverts each player to the items they actually own. Players
+                pick up the change the next time the watch loads unlocked items (avatar menu open or
+                next boot). Color variants and player-made custom items aren't included.
+              </p>
+              <p className="mt-2 text-[11px] text-ink-500">
+                Last changed {new Date(settings.updatedAt).toLocaleString()}.
+              </p>
+            </div>
+            <button
+              onClick={toggleAllAvatarItems}
+              disabled={busy}
+              className={(settings.allAvatarItemsOwned ? 'btn-danger' : 'btn-primary') + ' text-xs shrink-0'}
+            >
+              {busy ? 'Working…' : settings.allAvatarItemsOwned ? 'Turn off' : 'Give everyone all items'}
+            </button>
+          </div>
+          <div className="mt-4 text-xs">
+            {settings.allAvatarItemsOwned
+              ? <span className="badge-online">Everyone owns everything</span>
+              : <span className="badge-neutral">Normal wardrobes</span>}
           </div>
         </div>
       )}
