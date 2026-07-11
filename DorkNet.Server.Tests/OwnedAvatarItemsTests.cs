@@ -1,6 +1,8 @@
 using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace DorkNet.Server.Tests;
 
@@ -129,6 +131,88 @@ public sealed class OwnedAvatarItemsTests : IClassFixture<DorkNetServerFactory>
         var occurrences = after.EnumerateArray()
             .Count(x => x.GetProperty("AvatarItemDesc").GetString()!.Split(',')[0] == baseGuid);
         Assert.Equal(1, occurrences);
+    }
+
+    [Fact]
+    public async Task Legacy_bare_desc_gift_is_served_as_4part_matching_v4items()
+    {
+        using var setup = ApiClient();
+        var player = await GameClientSessionFactory.CreateAsync(setup, _factory.ApexDomain);
+
+        // Simulate a gift persisted BEFORE the fix: a bare-guid outfit desc
+        // (no ",,," suffix) — the class of row that made the post-consume
+        // UnlockAvatarItemAndMarkNew Find() miss and NRE.
+        string bareGuid;
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<Data.DorkNetDbContext>();
+            var item = await db.StoreItems.FirstAsync(i => i.IsActive && i.Slug.StartsWith("wardrobe-"));
+            bareGuid = item.Slug["wardrobe-".Length..];
+            db.GiftPackages.Add(new Data.Entities.GiftPackageEntity
+            {
+                RecipientPlayerId = player.PlayerId,
+                AvatarItemType = 0,               // outfit
+                AvatarItemDescOrHairDyeDesc = bareGuid,   // BARE — the legacy bug
+                IsValid = true,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        using var client = ApiClient(player);
+        var gifts = await GetJsonAsync(client, "/api/avatar/v2/gifts");
+        var gift = gifts.EnumerateArray()
+            .First(g => g.GetProperty("AvatarItemDesc").GetString()!.StartsWith(bareGuid));
+
+        // Both desc keys are served as the 4-part form regardless of how the
+        // row was stored, so the client's exact-match unlock succeeds. (A
+        // real buy also grants the item, so v4/items contains it — covered by
+        // Purchased_item_appears_owned / Buy_gift_desc_matches_v4items.)
+        var giftDesc = gift.GetProperty("AvatarItemDesc").GetString()!;
+        Assert.True(giftDesc.Count(c => c == ',') >= 3, $"legacy gift not normalized: {giftDesc}");
+        Assert.Equal(giftDesc, gift.GetProperty("AvatarItemDescOrHairDyeDesc").GetString());
+    }
+
+    [Fact]
+    public async Task Toggle_on_wardrobe_includes_color_variants_with_unique_ids()
+    {
+        using var setup = ApiClient();
+        var player = await GameClientSessionFactory.CreateAsync(setup, _factory.ApexDomain);
+
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var settings = scope.ServiceProvider
+                .GetRequiredService<DorkNet.Server.Services.ServerSettingsService>();
+            await settings.SetAllAvatarItemsOwnedEnabledAsync(true);
+        }
+
+        try
+        {
+            using var client = ApiClient(player);
+            var items = await GetJsonAsync(client, "/api/avatar/v4/items");
+
+            // Variant descs ("{guid},{combo},{mask},") — the colorways — are
+            // present, not just base "{guid},,," rows; and every id is unique
+            // (base + variants share a base guid, so a base-guid hash would
+            // collide → wardrobe dict crash).
+            var descs = items.EnumerateArray().Select(x => x.GetProperty("AvatarItemDesc").GetString()!).ToList();
+            var hasVariant = descs.Any(d =>
+            {
+                var p = d.Split(',');
+                return p.Length >= 2 && p[1].Length > 0;
+            });
+            Assert.True(hasVariant, "toggle-on wardrobe has no colored variants");
+
+            var ids = items.EnumerateArray().Select(x => x.GetProperty("AvatarItemId").GetInt32()).ToList();
+            Assert.DoesNotContain(0, ids);
+            Assert.Equal(ids.Count, ids.Distinct().Count());
+        }
+        finally
+        {
+            await using var scope = _factory.Services.CreateAsyncScope();
+            await scope.ServiceProvider
+                .GetRequiredService<DorkNet.Server.Services.ServerSettingsService>()
+                .SetAllAvatarItemsOwnedEnabledAsync(false);
+        }
     }
 
     private HttpClient ApiClient(GameClientSession? session = null)

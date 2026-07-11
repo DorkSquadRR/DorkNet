@@ -367,14 +367,35 @@ public class AvatarGiftsController(
     // GiftRarity, GiftContext. Missing any one → KeyNotFoundException
     // surfaces as "Failed to download gifts: Malformed Response" from
     // BootSequence and BLOCKS LOGIN.
-    public static object ToWire(GiftPackageEntity g) => new
+    /// <summary>The desc the client matches against api/avatar/v4/items in
+    /// OutfitManager.UnlockAvatarItemAndMarkNew after the gift box is
+    /// consumed. That endpoint emits outfit items as the 4-part "{guid},,,"
+    /// form (a bare guid crashes the client's AvatarItem parser), and the
+    /// match is an EXACT string compare — so an outfit gift whose desc has
+    /// fewer than 4 comma-parts (legacy rows stored the bare guid) makes
+    /// Find() miss and NRE, which strips the item on consume. Pad outfit
+    /// descs to 4 parts here so BOTH new and already-persisted gifts match.
+    /// Hair dyes (AvatarItemType 1) match by bare colour guid — leave them;
+    /// currency-only gifts have an empty desc.</summary>
+    private static string NormalizeAvatarWireDesc(GiftPackageEntity g)
     {
+        var d = g.AvatarItemDescOrHairDyeDesc ?? string.Empty;
+        if (d.Length == 0 || g.AvatarItemType == 1) return d;
+        var parts = d.Split(',').Length;
+        return parts >= 4 ? d : d + new string(',', 4 - parts);
+    }
+
+    public static object ToWire(GiftPackageEntity g)
+    {
+        var avatarDesc = NormalizeAvatarWireDesc(g);
+        return new
+        {
         g.Id,
         g.FromPlayerId,
         g.ConsumableItemDesc,
         g.AvatarItemType,
-        AvatarItemDesc = g.AvatarItemDescOrHairDyeDesc,
-        g.AvatarItemDescOrHairDyeDesc,
+        AvatarItemDesc = avatarDesc,
+        AvatarItemDescOrHairDyeDesc = avatarDesc,
         g.EquipmentPrefabName,
         g.EquipmentModificationGuid,
         g.CurrencyType,
@@ -409,5 +430,6 @@ public class AvatarGiftsController(
         g.ErrorMessage,
         g.SupportsCurrentPlatform,
         g.IsGifted,
-    };
+        };
+    }
 }
