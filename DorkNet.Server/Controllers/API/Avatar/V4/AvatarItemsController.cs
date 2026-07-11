@@ -220,6 +220,32 @@ public class AvatarItemsController(
             if (result.Count >= maxItems) return result;
             result.Add(item);
         }
+        // Colored variants aren't in the base avatar_item_lookup catalog, so
+        // without this the "everyone owns everything" wardrobe was missing all
+        // ~1.8k colorways — the player didn't own them AND buying one gifted a
+        // variant desc ("{guid},{combo},{mask},") that wasn't in this list, so
+        // the client's post-consume UnlockAvatarItemAndMarkNew Find() missed
+        // and NRE'd (the item vanished on buy). Emit each variant with its
+        // verbatim equip descriptor and a UNIQUE id hashed from the FULL
+        // descriptor (the base-guid hash would collide with the base item and
+        // every sibling colorway).
+        foreach (var v in StoreService.ColorVariantCatalog.Values)
+        {
+            if (result.Count >= maxItems) return result;
+            if (string.IsNullOrWhiteSpace(v.descriptor)) continue;
+            result.Add(new UnlockedAvatarItemDto
+            {
+                AvatarItemType = AvatarItemType.Outfit,
+                AvatarItemDesc = v.descriptor,
+                AvatarItemId = StableAvatarItemIdFull(v.descriptor),
+                PlatformMask = unchecked((int)0xFFFFFFFF),
+                FriendlyName = v.item_name ?? string.Empty,
+                Tooltip = string.Empty,
+                Rarity = 0,
+                TagList = string.Empty,
+                IsBaseAvatarItem = false,
+            });
+        }
         foreach (var slug in StoreService.AllHairDyeSlugs)
         {
             if (result.Count >= maxItems) break;
@@ -543,6 +569,18 @@ public class AvatarItemsController(
         var guid = (avatarItemDescOrGuid ?? string.Empty).Split(',')[0];
         uint h = 2166136261u;
         foreach (var c in guid) h = (h ^ c) * 16777619u;
+        var id = (int)(h & 0x7FFFFFFF);
+        return id == 0 ? 1 : id;
+    }
+
+    /// <summary>Stable id from the FULL descriptor string (not just the base
+    /// guid). Colored variants share a base guid but are distinct wardrobe
+    /// entries, so they must hash the whole "{guid},{combo},{mask}," string
+    /// to get ids distinct from the base item and each other.</summary>
+    public static int StableAvatarItemIdFull(string? descriptor)
+    {
+        uint h = 2166136261u;
+        foreach (var c in descriptor ?? string.Empty) h = (h ^ c) * 16777619u;
         var id = (int)(h & 0x7FFFFFFF);
         return id == 0 ? 1 : id;
     }
