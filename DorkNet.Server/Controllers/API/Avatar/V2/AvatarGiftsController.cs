@@ -247,6 +247,12 @@ public class AvatarGiftsController(
         // empty list rather than 500.
         if (!string.IsNullOrEmpty(gift.AvatarItemDescOrHairDyeDesc))
         {
+            // Inventory stores the BARE guid ("guid"), but a gift now carries
+            // the 4-part wire desc ("guid,,,") so its post-consume unlock
+            // matches api/avatar/v4/items. Normalise to the inventory form
+            // here or we'd store "guid,,," alongside the bare "guid" a direct
+            // purchase already added → a duplicate wardrobe row.
+            var invDesc = StoreService.InventoryAvatarItemDesc(gift.AvatarItemDescOrHairDyeDesc);
             var avatar = await db.Avatars.FirstOrDefaultAsync(a => a.PlayerId == pid);
             if (avatar is null)
             {
@@ -257,17 +263,16 @@ public class AvatarGiftsController(
             {
                 var list = System.Text.Json.JsonSerializer
                     .Deserialize<List<string>>(avatar.InventoryJson) ?? new();
-                if (!list.Contains(gift.AvatarItemDescOrHairDyeDesc))
+                if (!list.Contains(invDesc))
                 {
-                    list.Add(gift.AvatarItemDescOrHairDyeDesc);
+                    list.Add(invDesc);
                     avatar.InventoryJson = System.Text.Json.JsonSerializer.Serialize(list);
                     avatar.UpdatedAt = DateTime.UtcNow;
                 }
             }
             catch
             {
-                avatar.InventoryJson = System.Text.Json.JsonSerializer.Serialize(
-                    new[] { gift.AvatarItemDescOrHairDyeDesc });
+                avatar.InventoryJson = System.Text.Json.JsonSerializer.Serialize(new[] { invDesc });
                 avatar.UpdatedAt = DateTime.UtcNow;
             }
         }

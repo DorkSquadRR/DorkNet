@@ -83,6 +83,54 @@ public sealed class OwnedAvatarItemsTests : IClassFixture<DorkNetServerFactory>
         Assert.Equal(ids.Count, ids.Distinct().Count());
     }
 
+    [Fact]
+    public async Task Buy_gift_desc_matches_v4items_and_consume_grants_once()
+    {
+        using var setup = ApiClient();
+        var player = await GameClientSessionFactory.CreateAsync(setup, _factory.ApexDomain);
+        using var client = ApiClient(player);
+
+        // Buy an avatar-backed item — the server queues a post-purchase gift box.
+        var storefront = await GetJsonAsync(client, "/api/storefronts/v3/giftdropstore/3");
+        var purchasableId = storefront.GetProperty("StoreItems").EnumerateArray()
+            .First(r => !string.IsNullOrEmpty(r.GetProperty("GiftDrop").GetProperty("AvatarItemDesc").GetString()))
+            .GetProperty("PurchasableItemId").GetInt32();
+        using var buy = await client.PostAsync("/api/storefronts/v2/buyItem",
+            new StringContent(JsonSerializer.Serialize(new
+            {
+                StorefrontType = 3, PurchasableItemId = purchasableId,
+                CurrencyType = 2, RequestedPrice = 1, Gift = (object?)null,
+            }), Encoding.UTF8, "application/json"));
+        buy.EnsureSuccessStatusCode();
+
+        var gifts = await GetJsonAsync(client, "/api/avatar/v2/gifts");
+        Assert.True(gifts.GetArrayLength() > 0, "buy did not queue a gift box");
+        var gift = gifts[0];
+        var giftDesc = gift.GetProperty("AvatarItemDesc").GetString()!;
+
+        // The gift's desc MUST be the same 4-part "{guid},,," form v4/items
+        // emits — the client matches on it verbatim in
+        // OutfitManager.UnlockAvatarItemAndMarkNew after the box is consumed;
+        // a bare guid missed and NRE'd ("items removed on every buy").
+        Assert.True(giftDesc.Count(c => c == ',') >= 3, $"gift desc not 4-part: {giftDesc}");
+        var items = await GetJsonAsync(client, "/api/avatar/v4/items");
+        var descs = items.EnumerateArray().Select(x => x.GetProperty("AvatarItemDesc").GetString()).ToHashSet();
+        Assert.Contains(giftDesc, descs);
+
+        // Consuming the box must not add a SECOND wardrobe row for the item
+        // the direct purchase already granted as a bare guid.
+        using var consume = await client.PostAsync(
+            $"/api/avatar/v2/gifts/consume/{gift.GetProperty("Id").GetInt64()}",
+            new StringContent("{}", Encoding.UTF8, "application/json"));
+        consume.EnsureSuccessStatusCode();
+
+        var after = await GetJsonAsync(client, "/api/avatar/v4/items");
+        var baseGuid = giftDesc.Split(',')[0];
+        var occurrences = after.EnumerateArray()
+            .Count(x => x.GetProperty("AvatarItemDesc").GetString()!.Split(',')[0] == baseGuid);
+        Assert.Equal(1, occurrences);
+    }
+
     private HttpClient ApiClient(GameClientSession? session = null)
     {
         var client = _factory.CreateClient(new() { AllowAutoRedirect = false });

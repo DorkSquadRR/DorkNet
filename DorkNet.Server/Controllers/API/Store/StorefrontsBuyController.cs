@@ -110,12 +110,21 @@ public class StorefrontsBuyController(
             inventoryAvatarDesc = hairDyeColorGuid;
             consumableItemDesc = hairDyeConsumableDesc;
         }
+        // The client matches this gift's item against api/avatar/v4/items by
+        // EXACT AvatarItemDesc string in OutfitManager.UnlockAvatarItemAndMarkNew
+        // (fired after the buyer consumes the post-purchase gift box). v4/items
+        // emits outfit items as the 4-part "{guid},,," desc (the bare guid
+        // crashes the client's AvatarItem parser), so the gift must carry the
+        // SAME 4-part desc — sending the stripped bare guid made Find() miss and
+        // NRE, which surfaced as items vanishing on every buy. Hair dyes match
+        // by their bare colour guid (inventoryAvatarDesc), unchanged.
+        var giftWireDesc = string.IsNullOrEmpty(avatarItemDesc) ? inventoryAvatarDesc : avatarItemDesc;
         var gift = new GiftPackageEntity
         {
             RecipientPlayerId           = recipient,
             FromPlayerId                = isGift && !giftTarget!.Anonymous ? (int?)pid : null,
-            AvatarItemType              = string.IsNullOrEmpty(inventoryAvatarDesc) ? null : avatarItemType,
-            AvatarItemDescOrHairDyeDesc = inventoryAvatarDesc,
+            AvatarItemType              = string.IsNullOrEmpty(giftWireDesc) ? null : avatarItemType,
+            AvatarItemDescOrHairDyeDesc = giftWireDesc,
             ConsumableItemDesc          = consumableItemDesc,
             EquipmentPrefabName         = equipmentPrefabName,
             EquipmentModificationGuid   = equipmentModificationGuid,
