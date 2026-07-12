@@ -105,6 +105,19 @@ public class ClubsController(ClubService clubs) : ControllerBase
         });
     }
 
+    /// <summary>GET <c>/club/mostactivetoday</c> — the Clubs discover tab's
+    /// "most active today" carousel. Client contract is a bare
+    /// <c>IReadOnlyList&lt;Club&gt;</c> (not the search envelope), so this
+    /// returns a flat array of the canonical <see cref="ToWireClub"/> shape,
+    /// ordered by the club service's default activity sort.</summary>
+    [HttpGet("/club/mostactivetoday")]
+    public async Task<IActionResult> MostActiveToday([FromQuery] int? count)
+    {
+        var result = await clubs.SearchAsync(null, null, sort: 0, count: Math.Clamp(count ?? 30, 1, 100));
+        var counts = await clubs.MemberCountsAsync(result.Clubs.Select(r => r.Id));
+        return Ok(result.Clubs.Select(c => ToWireClub(c, counts.GetValueOrDefault(c.Id))).ToList());
+    }
+
     /// <summary>GET <c>/club?name=Foo</c> — direct name lookup used by
     /// the client when resolving a club by display name. Returns the
     /// single <c>PLILLKHMNDA</c> Club wire shape.</summary>
@@ -708,27 +721,12 @@ public class ClubsController(ClubService clubs) : ControllerBase
         }));
     }
 
-    public sealed class ClubReportRequest
-    {
-        public long? ClubId { get; set; }
-        public int? Category { get; set; }
-        public string? Details { get; set; }
-    }
-
-    /// <summary>POST <c>/api/clubreporting/v1/report</c> — file a
-    /// moderation report against a club. Persists to the same
-    /// <see cref="DorkNet.Server.Data.Entities.ReportEntity"/> table
-    /// the admin queue reads from; the controller prefixes the message
-    /// with "[club {id}]" so admins can tell club reports apart from
-    /// player reports without a schema change.</summary>
-    [HttpPost("/api/clubreporting/v1/report")]
-    [Authorize]
-    public async Task<IActionResult> ClubReport([FromBody] ClubReportRequest req)
-    {
-        if (req.ClubId is not long cid) return BadRequest(new { error = "missing_club_id" });
-        await clubs.AddClubReportAsync(cid, Me, req.Category ?? 0, req.Details ?? string.Empty);
-        return Ok();
-    }
+    // NOTE: POST /api/clubreporting/v1/report is served by
+    // CompatibilityFeatureController.ClubReport, which persists the same
+    // ReportEntity AND returns the { Success, Message } object the 2023
+    // client requires. A second handler used to live here; having both bind
+    // the identical verb+template made every club report 500 with
+    // AmbiguousMatchException, so this duplicate was removed.
 
     // ── Announcements (per-club feed + per-announcement) ─────────────
 

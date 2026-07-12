@@ -117,6 +117,27 @@ public class ConfigController(ConfigService configService) : ControllerBase
         });
     }
 
+    /// <summary>GET <c>/voice/requiresModeration</c> — bare Boolean the
+    /// client reads to decide whether voice needs moderation. ToxMod is
+    /// disabled server-side, so no moderation is required.</summary>
+    [HttpGet("/voice/requiresModeration")]
+    [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+    public IActionResult VoiceRequiresModeration() => Content("false", "application/json");
+
+    /// <summary>GET <c>/emojiConfig/whitelistedEmojis</c> — the allow-list of
+    /// emoji permitted in text chat (RRUI.EmojiPicker, IReadOnlyList&lt;string&gt;).
+    /// Returns a broad default set so the picker is populated.</summary>
+    [HttpGet("/emojiConfig/whitelistedEmojis")]
+    [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+    public IActionResult WhitelistedEmojis() => Ok(new[]
+    {
+        "😀", "😁", "😂", "🤣", "😊", "😇", "🙂", "😉", "😍", "😘",
+        "😜", "🤪", "😎", "🤩", "🥳", "😏", "😢", "😭", "😡", "🤯",
+        "😱", "😴", "🤔", "🤗", "🙄", "😬", "👍", "👎", "👏", "🙌",
+        "🙏", "💪", "✌️", "🤞", "👋", "🤝", "❤️", "🔥", "⭐", "✨",
+        "🎉", "🎊", "💯", "😈", "👻", "🤖", "🎮", "🏆",
+    });
+
     /// <summary>GET <c>api/config/v1/freegiftbutton</c> — the
     /// 2020.12 client deserializes this endpoint as a raw Boolean.
     /// This server does not run the timed free-gift campaign, so the

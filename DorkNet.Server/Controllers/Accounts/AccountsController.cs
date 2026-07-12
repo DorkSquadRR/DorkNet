@@ -301,14 +301,31 @@ public class AccountsController(
         return Ok(accounts);
     }
 
-    // Accounts.GetNameGenerationOptions  → NameGenDTO {Nouns, Adjectives}
+    // Accounts.GetNameGenerationOptions → NameGenDTO {Nouns, Adjectives}
+    // (two List<string>). The 2023 client also calls the newer root path
+    // `namegen/options` (RecNet.Runtime EAHBKJEMHEM, two List<string>);
+    // route it here too. Keys are duplicated in lower-case as a safety net
+    // because the 2023 DTO's obfuscated members give no literal key names —
+    // LitJson ignores keys it doesn't recognise, so extras are harmless.
     [HttpGet("/account/v1/namegen")]
     [HttpGet("/account/v1/namegeneration")]
-    public IActionResult NameGen() => Ok(new
+    [HttpGet("/namegen/options")]
+    public IActionResult NameGen()
     {
-        Nouns = new[] { "Player", "Hero", "Star", "Fox", "Wolf" },
-        Adjectives = new[] { "Brave", "Swift", "Clever", "Bold", "Bright" },
-    });
+        var nouns = new[]
+        {
+            "Player", "Hero", "Star", "Fox", "Wolf", "Comet", "Tiger", "Falcon",
+            "Panda", "Dragon", "Ninja", "Robot", "Ghost", "Rocket", "Shark", "Raven",
+        };
+        var adjectives = new[]
+        {
+            "Brave", "Swift", "Clever", "Bold", "Bright", "Cosmic", "Silent", "Mighty",
+            "Turbo", "Lucky", "Sneaky", "Epic", "Fuzzy", "Wild", "Golden", "Neon",
+        };
+        // Anonymous objects serialize with the server's camelCase policy, so
+        // these become {"nouns":[…],"adjectives":[…]} on the wire.
+        return Ok(new { Nouns = nouns, Adjectives = adjectives });
+    }
 
     // Phone-confirm is the one mutation we don't persist — there's no
     // SMS provider in the loop. Acknowledge silently.
@@ -670,27 +687,102 @@ public class AccountsController(
     [HttpGet("/accountprivacysettings/{accountId:long}")]
     [HttpGet("/account/v1/privacysettings/{accountId:long}")]
     [HttpGet("/account/{accountId:long}/privacysettings")]
-    public IActionResult GetAccountPrivacySettings(long accountId) => Ok(new
+    public async Task<IActionResult> GetAccountPrivacySettings(long accountId)
     {
-        AccountId = (int)accountId,
-        IsProfileVisible = true,
-        IsOnlineStatusVisible = true,
-        IsActivityVisible = true,
-        ShowOnlineStatus = true,
-        ShowActivity = true,
-        ShowCurrentRoom = true,
-        ReceiveFriendRequests = true,
-        ReceiveInvites = true,
-        ReceiveMessages = true,
-        WhoCanSeeOnlineStatus = 0,
-        WhoCanSeeActivity = 0,
-        WhoCanSeeCurrentRoom = 0,
-        WhoCanSendFriendRequests = 0,
-        WhoCanInviteMe = 0,
-        WhoCanMessageMe = 0,
-        VoicePrivacy = 0,
-        TextChatPrivacy = 0,
-    });
+        // Recent-history visibility is the one privacy bit the watch can
+        // actually toggle (setter below); read it back so the client's
+        // GetRecentHistoryVisibility reader sees the persisted value.
+        var recentHistoryVisible = await GetRecentHistoryVisibleAsync(accountId);
+        return Ok(new
+        {
+            AccountId = (int)accountId,
+            IsProfileVisible = true,
+            IsOnlineStatusVisible = true,
+            IsActivityVisible = true,
+            ShowOnlineStatus = true,
+            ShowActivity = true,
+            ShowCurrentRoom = true,
+            ReceiveFriendRequests = true,
+            ReceiveInvites = true,
+            ReceiveMessages = true,
+            IsRecentHistoryVisible = recentHistoryVisible,
+            WhoCanSeeOnlineStatus = 0,
+            WhoCanSeeActivity = 0,
+            WhoCanSeeCurrentRoom = 0,
+            WhoCanSendFriendRequests = 0,
+            WhoCanInviteMe = 0,
+            WhoCanMessageMe = 0,
+            VoicePrivacy = 0,
+            TextChatPrivacy = 0,
+        });
+    }
+
+    private const string RecentHistoryVisibleKey = "privacy:recenthistoryvisible";
+
+    private async Task<bool> GetRecentHistoryVisibleAsync(long accountId)
+    {
+        var row = await db.PlayerSettings
+            .FirstOrDefaultAsync(s => s.PlayerId == accountId && s.Key == RecentHistoryVisibleKey);
+        // Default: visible (true) when never toggled.
+        return row is null || !string.Equals(row.Value, "false", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>POST/PUT <c>/accountprivacysettings/recenthistoryvisibility</c>
+    /// — the watch's <c>ChangeRecentHistoryVisibility(bool)</c>. Body carries
+    /// <c>isRecentHistoryVisible</c> (accepts the PascalCase variant and a
+    /// raw bool body too). The client's return type is the fire-and-forget
+    /// response handle (body ignored), but we echo the persisted object so a
+    /// GET-style consumer is also satisfied. The existing
+    /// <c>/accountprivacysettings/{accountId:long}</c> route can never match
+    /// this literal segment (the <c>:long</c> constraint rejects it), so
+    /// without this handler the toggle 404'd ("Failed to modify …").</summary>
+    [HttpPost("/accountprivacysettings/recenthistoryvisibility")]
+    [HttpPut("/accountprivacysettings/recenthistoryvisibility")]
+    [Microsoft.AspNetCore.Authorization.Authorize]
+    [Consumes("application/json", "application/x-www-form-urlencoded", "multipart/form-data")]
+    public async Task<IActionResult> SetRecentHistoryVisibility()
+    {
+        var me = this.RequireCurrentPlayerId();
+        var visible = await ReadRecentHistoryVisibleBodyAsync();
+        await SetPlayerSettingAsync(me, RecentHistoryVisibleKey, visible ? "true" : "false");
+        return Ok(new
+        {
+            AccountId = (int)me,
+            IsRecentHistoryVisible = visible,
+        });
+    }
+
+    private async Task<bool> ReadRecentHistoryVisibleBodyAsync()
+    {
+        // Form body (isRecentHistoryVisible / IsRecentHistoryVisible).
+        if (Request.HasFormContentType)
+        {
+            foreach (var k in new[] { "isRecentHistoryVisible", "IsRecentHistoryVisible" })
+                if (bool.TryParse(Request.Form[k], out var fv)) return fv;
+        }
+        // JSON body: { "isRecentHistoryVisible": true } or a bare `true`.
+        try
+        {
+            Request.EnableBuffering();
+            Request.Body.Position = 0;
+            using var doc = await System.Text.Json.JsonDocument.ParseAsync(Request.Body);
+            var root = doc.RootElement;
+            if (root.ValueKind == System.Text.Json.JsonValueKind.True) return true;
+            if (root.ValueKind == System.Text.Json.JsonValueKind.False) return false;
+            if (root.ValueKind == System.Text.Json.JsonValueKind.Object)
+            {
+                foreach (var k in new[] { "isRecentHistoryVisible", "IsRecentHistoryVisible" })
+                    if (root.TryGetProperty(k, out var v) &&
+                        (v.ValueKind == System.Text.Json.JsonValueKind.True ||
+                         v.ValueKind == System.Text.Json.JsonValueKind.False))
+                        return v.GetBoolean();
+            }
+        }
+        catch { /* non-JSON / empty body */ }
+        // Query fallback.
+        if (bool.TryParse(Request.Query["isRecentHistoryVisible"], out var qv)) return qv;
+        return true;
+    }
 
     // Previously had a /{*path} catch-all that returned [] / {}. Removed —
     // unknown accounts URLs now 404 so we notice them in logs and wire

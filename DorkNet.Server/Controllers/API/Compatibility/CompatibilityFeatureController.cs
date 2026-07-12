@@ -108,7 +108,9 @@ public class CompatibilityFeatureController(DorkNetDbContext db) : ControllerBas
             : null;
         if (club is null) return Ok(new { Success = false, Message = "club_not_found" });
 
-        var message = $"Club report: {req.Message ?? string.Empty}".Trim();
+        // Prefix with "[club {id}]" so admins can tell club reports apart
+        // from player reports in the shared ReportEntity queue.
+        var message = $"[club {club.Id}] {req.Message ?? string.Empty}".Trim();
         if (message.Length > 1000) message = message[..1000];
         db.Reports.Add(new ReportEntity
         {
