@@ -20,7 +20,7 @@ namespace DorkNet.Server.Controllers.API.PlayerCheer;
 [Authorize]
 public class PlayerCheerController(
     DorkNetDbContext db,
-    NotificationService notifications,
+    SystemNotificationService systemNotifications,
     LevelService level) : ControllerBase
 {
     private long Me => this.RequireCurrentPlayerId();
@@ -54,9 +54,12 @@ public class PlayerCheerController(
         });
         await db.SaveChangesAsync();
         await level.AwardXpAsync(target, LevelService.CheerReceivedXp, $"cheer_from:{Me}");
-        await notifications.NotifyAsync(target,
-            PushNotificationId.SubscriptionUpdateProfile,
-            new { Reason = "CheerReceived", From = Me, Type = type });
+        // Real notification: a PlayerCheer message the client renders as
+        // "X cheered you" (resolved from FromPlayerId), persisted to the
+        // recipient's notification feed. Replaces the old blank-account
+        // SubscriptionUpdateProfile misuse.
+        await systemNotifications.SendAsync(target,
+            SystemNotificationService.MessageType.PlayerCheer, fromPlayerId: Me);
         return Ok(new { success = true, error = "" });
     }
 

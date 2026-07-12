@@ -28,7 +28,6 @@ namespace DorkNet.Server.Controllers.API.Photos;
 public class PhotosController(
     DorkNetDbContext db,
     PlayerPresenceService presence,
-    NotificationService notifications,
     LevelService level,
     DomainConfig domain) : ControllerBase
 {
@@ -83,12 +82,11 @@ public class PhotosController(
         // Posting a photo gives a small XP bump — encourages camera use.
         await level.AwardXpAsync(me, LevelService.InventionSavedXp, $"photo_posted:{photo.Id}");
 
-        // Push to tagged players so their "Photos of me" feed refreshes.
-        foreach (var taggedId in ParseTagged(photo.TaggedPlayerIdsCsv))
-            await notifications.NotifyAsync(taggedId,
-                PushNotificationId.SubscriptionUpdateProfile,
-                new { Reason = "TaggedInPhoto", PhotoId = photo.Id, From = me });
-
+        // No real-time push for photo tags: there is no matching client
+        // message type, and the old SubscriptionUpdateProfile
+        // {Reason:"TaggedInPhoto"} blob decoded to a blank account
+        // ("Orphan player account (0)") without refreshing anything. The
+        // "Photos of me" feed refreshes on the tagged player's next fetch.
         return Ok(ToDto(photo));
     }
 
@@ -217,9 +215,9 @@ public class PhotosController(
         {
             await level.AwardXpAsync(photo.UploaderPlayerId,
                 LevelService.CheerReceivedXp, $"photo_cheer:{id}");
-            await notifications.NotifyAsync(photo.UploaderPlayerId,
-                PushNotificationId.SubscriptionUpdateProfile,
-                new { Reason = "PhotoCheer", PhotoId = id, From = me });
+            // No real-time push: no client message type for photo cheers, and
+            // the old SubscriptionUpdateProfile blob only spawned a blank
+            // "Orphan player account (0)". Count refreshes on next fetch.
         }
         return Ok(new { cheered = true, count = photo.CheerCount });
     }
