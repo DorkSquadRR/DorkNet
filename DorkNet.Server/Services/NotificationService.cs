@@ -298,10 +298,14 @@ public class NotificationService(
                 },
             // 2020.12 PlayerPresence.Deserialize requires these.
             ["isOnline"]         = redacted is not null,
-            // 2023.03.21 client build version ("20230317"); must match the
-            // joining client's own version or it reports a version mismatch.
-            // Stale 2020 value (20201210) carried over from the December branch.
-            ["appVersion"]       = 20230317,
+            // 2023.03.21 client build version; must match the joining
+            // client's own version or it reports a version mismatch. MUST be
+            // a STRING ("20230317"): the client's presence DTO reads
+            // appVersion with a string reader, so an int crashes the whole
+            // SignalR message with "expected:'String Begin Token',
+            // actual:'20230317'" — which aborts the presence/room update
+            // (e.g. surfaced as "failed to create a new room").
+            ["appVersion"]       = "20230317",
         };
 
         var envelope = new System.Text.Json.Nodes.JsonObject

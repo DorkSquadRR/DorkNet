@@ -332,17 +332,13 @@ public class AvatarGiftsController(
         gift.ConsumedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
-        // Profile-update push so the watch's wallet readout refreshes
-        // without waiting for the next /balance poll. Mirrors what
-        // /api/admin/v1/players/{id}/gift does after the inbox push so
-        // the toast number animates up the moment the box closes.
-        if (gift.CurrencyType > 0 || gift.Xp > 0 || gift.Level > 0)
-        {
-            await notifications.NotifyAsync(pid,
-                PushNotificationId.SubscriptionUpdateProfile,
-                new { Reason = "GiftConsumed", gift.CurrencyType, gift.Currency, gift.Xp, gift.Level });
-        }
-
+        // The wallet readout refreshes off the StorefrontBalanceUpdate that
+        // GrantCurrencyAsync (above) already pushes for currency gifts. Do
+        // NOT also push SubscriptionUpdateProfile ("AccountUpdate") with a
+        // {Reason,Currency,…} blob: the 2023 client deserialises that channel
+        // as its Account DTO, so a non-account payload decodes to a blank
+        // account (accountId 0) → "Orphan player account (0) found" spam
+        // (audited 2026-07-12).
         return Ok(ToWire(gift));
     }
 

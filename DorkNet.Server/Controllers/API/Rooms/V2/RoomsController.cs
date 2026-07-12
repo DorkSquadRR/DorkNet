@@ -1054,11 +1054,12 @@ public class RoomsController(
                     EncryptVoiceChat = currentPresence.EncryptVoiceChat,
                 },
                 isOnline = true,
-                // 2023.03.21 client build version (baked "20230317"). MUST match
-                // the joining client's own version or it reports a version
-                // mismatch and refuses to join. Was a stale December-2020 value
-                // (20201210) carried over when this branch forked.
-                appVersion = 20230317,
+                // 2023.03.21 client build version. MUST be the STRING
+                // "20230317" — the client's presence DTO reads appVersion
+                // with a string reader, so an int crashes the SignalR
+                // message ("expected:'String Begin Token'") and aborts the
+                // update. Must also match the joining client's version.
+                appVersion = "20230317",
             };
             await notifications.NotifyAsync(playerId, PushNotificationId.SubscriptionUpdatePresence, presencePayload);
         }
