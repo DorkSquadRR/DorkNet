@@ -1014,7 +1014,17 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
             State = 0,
             Accessibility = source.Accessibility,
             SupportsLevelVoting = source.SupportsLevelVoting,
-            IsAGRoom = false,
+            // Inherit IsAGRoom from the source. This is REQUIRED for cloning a
+            // baked RRO room (RecCenter, the games): the client uses IsRRO to
+            // decide how to load the scene — RRO rooms load baked geometry from
+            // the client's own assets, non-RRO rooms load from a data blob. A
+            // non-RRO clone pointing at a baked RRO scene can't load ("Room
+            // Load faulted" → "Failed to copy room"). Marking the clone AG lets
+            // it load the same baked scene, and the RRO MakerPen overlay makes
+            // it editable. Safe for admin: the purge gate and "RR Original"
+            // badge both key on CreatorPlayerId == SystemAccountId, so a
+            // user-owned clone is still shown as Custom and stays purgeable.
+            IsAGRoom = source.IsAGRoom,
             IsDormRoom = false,
             CloningAllowed = source.CloningAllowed,
             SupportsVRLow = source.SupportsVRLow,
