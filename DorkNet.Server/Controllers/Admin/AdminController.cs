@@ -2214,12 +2214,10 @@ public class AdminController(
         await LogAsync("reset_avatar", "player", id, "");
         await db.SaveChangesAsync();
 
-        // Push a profile update so the affected watch re-fetches its
-        // avatar without waiting for the next scene load.
-        await notifications.NotifyAsync(id,
-            PushNotificationId.SubscriptionUpdateProfile,
-            new { Reason = "AdminAvatarReset" });
-
+        // No push: the affected client refetches its avatar on the next
+        // scene load. The old SubscriptionUpdateProfile {Reason:"…"} blob
+        // couldn't force an avatar refetch (wrong channel) and only decoded
+        // to a blank account ("Orphan player account (0)").
         return Ok(new
         {
             avatar.PlayerId,
@@ -2251,10 +2249,9 @@ public class AdminController(
         await LogAsync("set_avatar", "player", id, body.OutfitSelections ?? "");
         await db.SaveChangesAsync();
 
-        await notifications.NotifyAsync(id,
-            PushNotificationId.SubscriptionUpdateProfile,
-            new { Reason = "AdminAvatarUpdate" });
-
+        // No push: avatar changes propagate to other players in-room via
+        // Photon, and the affected client refetches on next scene load. The
+        // old SubscriptionUpdateProfile blob only spawned a blank account.
         return Ok(new { avatar.PlayerId, avatar.OutfitSelections, avatar.HairColor, avatar.SkinColor });
     }
 
@@ -2291,10 +2288,9 @@ public class AdminController(
         await LogAsync("grant_item", "player", id, $"{body.ItemId} x{qty}");
         await db.SaveChangesAsync();
 
-        await notifications.NotifyAsync(id,
-            PushNotificationId.SubscriptionUpdateProfile,
-            new { Reason = "InventoryGrant", body.ItemId, Quantity = qty });
-
+        // No push: the client shows the granted item on its next avatar
+        // fetch. The old SubscriptionUpdateProfile blob only spawned a
+        // blank account ("Orphan player account (0)").
         return Ok(new { granted = body.ItemId, quantity = qty });
     }
 
@@ -2353,10 +2349,9 @@ public class AdminController(
             $"cosmetics+{addedCosmetics} (catalog={catalog.Count}) slugs+{addedSlugs}");
         await db.SaveChangesAsync();
 
-        await notifications.NotifyAsync(id,
-            PushNotificationId.SubscriptionUpdateProfile,
-            new { Reason = "AdminUnlockAll" });
-
+        // No push: the client shows the unlocked items on its next avatar
+        // fetch. The old SubscriptionUpdateProfile blob only spawned a
+        // blank account ("Orphan player account (0)").
         return Ok(new
         {
             id,
@@ -2447,10 +2442,10 @@ public class AdminController(
 
         await LogAsync("set_level", "player", id, $"{previous} -> {newLevel}");
         await db.SaveChangesAsync();
+        // AccountChanged sends the correct full account. The old extra
+        // SubscriptionUpdateProfile {Reason:"AdminLevelSet",…} blob was a
+        // redundant blank-account push ("Orphan player account (0)").
         await notifications.AccountChanged(p);
-        await notifications.NotifyAsync(id,
-            PushNotificationId.SubscriptionUpdateProfile,
-            new { Reason = "AdminLevelSet", Level = p.Level, XP = p.XP, PreviousLevel = previous });
 
         return Ok(new { p.Id, p.Level, p.XP });
     }
@@ -2497,12 +2492,9 @@ public class AdminController(
             $"inserted={missing.Count} types=[{string.Join(",", missing)}]");
         await db.SaveChangesAsync();
 
-        // Nudge the watch to re-fetch its cheer list so the pinned-cheer
-        // picker shows the newly-unlocked badges without a relog.
-        await notifications.NotifyAsync(id,
-            PushNotificationId.SubscriptionUpdateProfile,
-            new { Reason = "AdminCheerUnlock", Inserted = missing.Count });
-
+        // No push: the pinned-cheer picker refetches the cheer list on next
+        // open. The old SubscriptionUpdateProfile blob only spawned a blank
+        // account ("Orphan player account (0)").
         return Ok(new { id, inserted = missing.Count, types = missing });
     }
 
