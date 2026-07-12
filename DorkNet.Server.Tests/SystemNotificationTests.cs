@@ -29,11 +29,16 @@ public sealed class SystemNotificationTests : IClassFixture<DorkNetServerFactory
         var target = await GameClientSessionFactory.CreateAsync(setup, _factory.ApexDomain);
 
         using var client = ApiClient(cheerer);
+        // Real client field names (RecNet.Runtime KFJKDMGHKHE.EMKBFCLIOGN):
+        // PlayerIdTo + CheerCategory (+ RoomId, Anonymous). The old test used
+        // TargetAccountId/Type, which matched the buggy handler binding but
+        // NOT the game client — so it passed while cheers were broken live.
         using var resp = await client.PostAsync("/api/PlayerCheer/v1/create",
             new FormUrlEncodedContent(new Dictionary<string, string>
             {
-                ["TargetAccountId"] = target.PlayerId.ToString(),
-                ["Type"] = "0",
+                ["PlayerIdTo"] = target.PlayerId.ToString(),
+                ["CheerCategory"] = "0",
+                ["Anonymous"] = "false",
             }));
         resp.EnsureSuccessStatusCode();
 

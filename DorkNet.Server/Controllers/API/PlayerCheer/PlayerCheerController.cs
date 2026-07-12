@@ -25,43 +25,77 @@ public class PlayerCheerController(
 {
     private long Me => this.RequireCurrentPlayerId();
 
-    /// <summary>POST <c>api/PlayerCheer/v1/create</c> — caller cheers
-    /// the target player. <c>Type</c> matches the same enum as
-    /// <c>CheerEntity.Type</c>. Idempotent on (caller, target, type)
-    /// to match <c>PlayerStateController.CheerPlayer</c>, so the same
-    /// category click doesn't inflate the count.</summary>
+    /// <summary>POST <c>api/PlayerCheer/v1/create</c> — caller cheers the
+    /// target player. Request fields (verified from RecNet.Runtime
+    /// KFJKDMGHKHE.EMKBFCLIOGN, KFJKDMGHKHE.txt:696-743, all posted via
+    /// BestHTTP AddField → form): <c>PlayerIdTo</c> (target account id),
+    /// <c>CheerCategory</c> (the cheer enum), <c>RoomId</c> (optional room
+    /// context), <c>Anonymous</c> (bool). The OLD binding read
+    /// <c>TargetAccountId</c>/<c>Type</c>, which never matched — the target
+    /// bound to null, the handler reported failure, and the watch surfaced
+    /// "Failed to cheer player — Something went wrong". The client parses the
+    /// response into PHMHCPEMABG { bool, string } and gates on the bool, so
+    /// the body must report success. Idempotent on (caller, target, room,
+    /// category).</summary>
     [HttpPost("api/PlayerCheer/v1/create")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
     public async Task<IActionResult> Create(
-        [FromForm(Name = "TargetAccountId")] long? targetAccountId,
-        [FromForm(Name = "Type")] int type = 0)
+        [FromForm(Name = "PlayerIdTo")] long? playerIdTo,
+        [FromForm(Name = "CheerCategory")] int cheerCategory = 0,
+        [FromForm(Name = "RoomId")] long? roomId = null,
+        [FromForm(Name = "Anonymous")] bool anonymous = false)
     {
-        if (targetAccountId is not long target || target <= 0)
-            return Ok(new { success = false, error = "missing_target" });
+        if (playerIdTo is not long target || target <= 0)
+            return CheerResult(false, "Invalid cheer target.");
         if (Me == target)
-            return Ok(new { success = false, error = "cannot_cheer_self" });
+            return CheerResult(false, "You can't cheer yourself.");
 
+        var targetRoomId = roomId ?? 0;
         var existing = await db.Cheers.FirstOrDefaultAsync(c =>
             c.FromPlayerId == Me && c.TargetPlayerId == target &&
-            c.TargetRoomId == 0 && c.Type == type);
-        if (existing is not null) return Ok(new { success = true, already_cheered = true });
+            c.TargetRoomId == targetRoomId && c.Type == cheerCategory);
+        if (existing is not null)
+            // Already cheered — still a success from the client's POV (the
+            // string carries the client's own "very recently" phrasing).
+            return CheerResult(true, "You have already cheered this player very recently.");
 
         db.Cheers.Add(new CheerEntity
         {
             FromPlayerId   = Me,
             TargetPlayerId = target,
-            Type           = type,
+            TargetRoomId   = targetRoomId,
+            Type           = cheerCategory,
         });
         await db.SaveChangesAsync();
         await level.AwardXpAsync(target, LevelService.CheerReceivedXp, $"cheer_from:{Me}");
-        // Real notification: a PlayerCheer message the client renders as
-        // "X cheered you" (resolved from FromPlayerId), persisted to the
-        // recipient's notification feed. Replaces the old blank-account
-        // SubscriptionUpdateProfile misuse.
+        // Real notification: a PlayerCheer message the recipient renders as
+        // "X cheered you". Anonymous cheers use the anonymous message type and
+        // don't reveal the cheerer.
         await systemNotifications.SendAsync(target,
-            SystemNotificationService.MessageType.PlayerCheer, fromPlayerId: Me);
-        return Ok(new { success = true, error = "" });
+            anonymous
+                ? SystemNotificationService.MessageType.PlayerCheerAnonymous
+                : SystemNotificationService.MessageType.PlayerCheer,
+            fromPlayerId: anonymous ? 0 : Me);
+        return CheerResult(true, "");
     }
+
+    /// <summary>The create response deserializes into PHMHCPEMABG
+    /// { bool GJLFIFEJDEH, string ABGLLJPIMIO } (KFJKDMGHKHE.txt maps the raw
+    /// body via Func&lt;PHMHCPEMABG, LDGADANDBIO&gt;). The JSON keys are
+    /// obfuscated with no literals in the dump, so emit the success bool and
+    /// message under the common key spellings via a Dictionary (literal keys
+    /// bypass the camelCase policy; LitJson ignores the ones it doesn't
+    /// read).</summary>
+    private IActionResult CheerResult(bool success, string message) =>
+        Ok(new Dictionary<string, object?>
+        {
+            ["Success"] = success,
+            ["success"] = success,
+            ["Message"] = message,
+            ["message"] = message,
+            ["Error"] = success ? string.Empty : message,
+            ["error"] = success ? string.Empty : message,
+        });
 
     /// <summary>POST <c>api/PlayerCheer/v1/SetSelectedCheer</c> — pin
     /// a cheer category as the caller's selected badge. Stored on the

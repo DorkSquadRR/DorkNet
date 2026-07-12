@@ -78,6 +78,8 @@ public class AvatarV2Controller(DorkNetDbContext db, ILogger<AvatarV2Controller>
         string? hairColor = null;
         string? skinColor = null;
         string? faceFeatures = null;
+        string? outfitSelectionsV2 = null;
+        string? customAvatarItems = null;
 
         if (!string.IsNullOrWhiteSpace(raw))
         {
@@ -91,6 +93,11 @@ public class AvatarV2Controller(DorkNetDbContext db, ILogger<AvatarV2Controller>
                     hairColor        = ReadStringField(root, "HairColor");
                     skinColor        = ReadStringField(root, "SkinColor");
                     faceFeatures     = ReadStringField(root, "FaceFeatures");
+                    // 2023 client (HHDLNAPEMGP writer EKHJKDNHOPB) also
+                    // uploads OutfitSelectionsV2 + CustomAvatarItems —
+                    // persist them so remote-player fetches round-trip.
+                    outfitSelectionsV2 = ReadStringField(root, "OutfitSelectionsV2");
+                    customAvatarItems  = ReadStringField(root, "CustomAvatarItems");
                 }
             }
             catch (JsonException ex)
@@ -116,6 +123,16 @@ public class AvatarV2Controller(DorkNetDbContext db, ILogger<AvatarV2Controller>
         if (hairColor        is not null) a.HairColor        = hairColor;
         if (skinColor        is not null) a.SkinColor        = skinColor;
         if (faceFeatures     is not null) a.FaceFeatures     = faceFeatures;
+        if (outfitSelectionsV2 is not null) a.OutfitSelectionsV2 = outfitSelectionsV2;
+        if (customAvatarItems is not null)
+        {
+            // CustomAvatarItems arrives as a JSON ARRAY of
+            // {"CustomAvatarItemId":guid,"BodyPart":byte}; ReadStringField
+            // re-encodes arrays as raw JSON. Guard against non-array junk.
+            a.CustomAvatarItemsJson = customAvatarItems.TrimStart().StartsWith('[')
+                ? customAvatarItems
+                : "[]";
+        }
         a.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
         return Ok(ToDto(a));
@@ -138,6 +155,25 @@ public class AvatarV2Controller(DorkNetDbContext db, ILogger<AvatarV2Controller>
             JsonValueKind.True or JsonValueKind.False => v.GetRawText(),
             _                              => null,
         };
+    }
+
+    /// <summary>GET <c>api/avatar/v2/{accountId}</c> — the 2023 client's
+    /// remote-player avatar settings fetch. Decompile evidence
+    /// (2023.03.21 ISIL, RecNet.Runtime FFFIMAGLKEG.txt:4845-5006,
+    /// method KAFJNMDBKDB): URL is String.Format("{0}v2/{1}",
+    /// "api/avatar/", accountId) — the account id is a bare path segment
+    /// directly under v2 (NOT under /equipped/). The response is parsed
+    /// as object HHDLNAPEMGP whose reader (EKHJKDNHOPB.txt:471-766)
+    /// registers OutfitSelections / OutfitSelectionsV2 / FaceFeatures /
+    /// SkinColor / HairColor / CustomAvatarItems. Without this route the
+    /// request 404'd with an empty body → "Failed to load Rec Room
+    /// remote player avatar settings" (Player.log:2597).</summary>
+    [HttpGet("api/avatar/v2/{playerId:long}")]
+    [AllowAnonymous]
+    public async Task<ActionResult<AvatarV2Dto>> GetSettingsFor(long playerId)
+    {
+        var a = await db.Avatars.FirstOrDefaultAsync(x => x.PlayerId == playerId);
+        return Ok(ToDto(a));
     }
 
     /// <summary>Public lookup of another player's equipped avatar — the
@@ -174,7 +210,27 @@ public class AvatarV2Controller(DorkNetDbContext db, ILogger<AvatarV2Controller>
         FaceFeatures = a?.FaceFeatures ?? string.Empty,
         HairColor = a?.HairColor ?? string.Empty,
         SkinColor = a?.SkinColor ?? string.Empty,
+        OutfitSelectionsV2 = a?.OutfitSelectionsV2 ?? string.Empty,
+        CustomAvatarItems = ParseCustomAvatarItems(a?.CustomAvatarItemsJson),
     };
+
+    /// <summary>Re-hydrate the stored CustomAvatarItems JSON into typed
+    /// wire items so the response always carries a well-formed array
+    /// (never a raw string). Bad/legacy blobs degrade to [].</summary>
+    private static List<CustomAvatarItemRefDto> ParseCustomAvatarItems(string? json)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return new();
+        try
+        {
+            return JsonSerializer.Deserialize<List<CustomAvatarItemRefDto>>(
+                json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }) ?? new();
+        }
+        catch (JsonException)
+        {
+            return new();
+        }
+    }
 }
 
 public class AvatarV2Dto
@@ -190,4 +246,28 @@ public class AvatarV2Dto
 
     [JsonPropertyName("FaceFeatures")]
     public string FaceFeatures { get; set; } = string.Empty;
+
+    /// <summary>2023 client field — HHDLNAPEMGP reader key
+    /// "OutfitSelectionsV2" (EKHJKDNHOPB.txt:498-514). Extra keys are
+    /// skipped by the 2020 reader, so this is safe cross-version.</summary>
+    [JsonPropertyName("OutfitSelectionsV2")]
+    public string OutfitSelectionsV2 { get; set; } = string.Empty;
+
+    /// <summary>2023 client field — HHDLNAPEMGP reader key
+    /// "CustomAvatarItems" (EKHJKDNHOPB.txt:594-610), a list of
+    /// BGNNOMBFMLH items.</summary>
+    [JsonPropertyName("CustomAvatarItems")]
+    public List<CustomAvatarItemRefDto> CustomAvatarItems { get; set; } = new();
+}
+
+/// <summary>BGNNOMBFMLH — { Guid CustomAvatarItemId, Byte BodyPart }
+/// (property types BGNNOMBFMLH.txt:3-39; JSON keys registered by reader
+/// MKAIABAJIAJ.txt:215-258).</summary>
+public class CustomAvatarItemRefDto
+{
+    [JsonPropertyName("CustomAvatarItemId")]
+    public Guid CustomAvatarItemId { get; set; }
+
+    [JsonPropertyName("BodyPart")]
+    public byte BodyPart { get; set; }
 }
