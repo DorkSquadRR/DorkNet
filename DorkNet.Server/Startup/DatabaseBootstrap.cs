@@ -111,6 +111,7 @@ public static class DatabaseBootstrap
         await EnsureInventionColumnsAsync(db);
         await EnsureGameRewardColumnsAsync(db);
         await EnsureGiftPackageColumnsAsync(db);
+        await EnsureAvatarColumnsAsync(db);
         await EnsureMarch2023TablesAsync(db);
 
         // Coach system account at Player.Id=1. The RR-Original room seeder
@@ -377,6 +378,38 @@ public static class DatabaseBootstrap
         {
             await db.Database.ExecuteSqlRawAsync(
                 @"ALTER TABLE ""Rooms"" ADD COLUMN ""PromoExternalContentJson"" TEXT NOT NULL DEFAULT '';");
+        }
+        catch { }
+    }
+
+    /// <summary>Add the 2023-client avatar columns (OutfitSelectionsV2 +
+    /// CustomAvatarItemsJson on Avatars) — post-Initial, so existing DBs
+    /// need an idempotent ALTER on both providers.</summary>
+    private static async Task EnsureAvatarColumnsAsync(DorkNetDbContext db)
+    {
+        var provider = db.Database.ProviderName ?? string.Empty;
+        if (provider.Contains("Npgsql", StringComparison.OrdinalIgnoreCase))
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""Avatars"" ADD COLUMN IF NOT EXISTS ""OutfitSelectionsV2"" character varying(8192) NOT NULL DEFAULT '';");
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""Avatars"" ADD COLUMN IF NOT EXISTS ""CustomAvatarItemsJson"" text NOT NULL DEFAULT '[]';");
+            return;
+        }
+
+        try
+        {
+            // SQLite has no ADD COLUMN IF NOT EXISTS; ignore the duplicate-
+            // column error when it already exists.
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""Avatars"" ADD COLUMN ""OutfitSelectionsV2"" TEXT NOT NULL DEFAULT '';");
+        }
+        catch { }
+
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""Avatars"" ADD COLUMN ""CustomAvatarItemsJson"" TEXT NOT NULL DEFAULT '[]';");
         }
         catch { }
     }

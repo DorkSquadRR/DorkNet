@@ -34,6 +34,17 @@ public class AvatarEntity
     [MaxLength(2048)]
     public string OutfitSelections { get; set; } = string.Empty;
 
+    /// <summary>2023 client's OutfitSelectionsV2 blob (HHDLNAPEMGP key
+    /// "OutfitSelectionsV2", reader EKHJKDNHOPB.txt:498-514 in the
+    /// 2023.03.21 ISIL dump). Opaque — round-tripped verbatim.</summary>
+    [MaxLength(8192)]
+    public string OutfitSelectionsV2 { get; set; } = string.Empty;
+
+    /// <summary>2023 client's equipped custom avatar items — JSON array
+    /// of {"CustomAvatarItemId":guid,"BodyPart":byte} (BGNNOMBFMLH,
+    /// reader MKAIABAJIAJ.txt:215-258). Stored as raw JSON.</summary>
+    public string CustomAvatarItemsJson { get; set; } = "[]";
+
     /// <summary>v2 face features — opaque JSON written by the face
     /// editor; we never parse it server-side, just round-trip.</summary>
     [MaxLength(8192)]

@@ -1,134 +1,130 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.Text.Json;
+using System.Security.Cryptography;
 using DorkNet.Server.Auth;
 using DorkNet.Server.Data;
 using DorkNet.Server.Data.Entities;
 
 namespace DorkNet.Server.Controllers.API.ItemWishlists;
 
+/// <summary>
+/// api.rec.net/api/itemWishlists — consumable/gift-drop wishlist
+/// (RecNet.Runtime BPAIBFBKKCN). Wire contract verified against the
+/// 2023.03.21 ISIL decompile:
+///
+///   GET  api/itemWishlists/v1/wishlist/{accountId|me}
+///     - BPAIBFBKKCN.txt:700-763 (ELPBIBPOBJF) — URL is
+///       String.Concat("api/itemWishlists/v1/wishlist/", idOrMe) where
+///       idOrMe is "me" for the local account, else the numeric account
+///       id as a PATH SEGMENT (not a query param). Missing this route
+///       404s with an empty body → CHGIJBGGJAG "Response was empty" →
+///       "Failed to get wishlist for player" (Player.log:2832-2872).
+///     - Return type FGLDKEJLAKB&lt;List&lt;BFJNGMGONED&gt;&gt; with no converter
+///       Func → the body is a BARE ARRAY of BFJNGMGONED.
+///     - BFJNGMGONED = { Guid WishlistItemId, Int32 AccountId,
+///       Int32 PurchasableItemId, DateTime CreatedAt }
+///       (property types BFJNGMGONED.txt:3-97; JSON keys registered by
+///       reader MCDADMNCDEI.txt:343-434, Pascal/camel/lower probes).
+///
+///   PUT  api/itemWishlists/v1/wishlist/me/{purchasableItemId}
+///     - BPAIBFBKKCN.txt:161-215 (OOPPFFPOAFH) — format string
+///       "{0}/v1/wishlist/me/{1}", verb field = 3 = PUT
+///       (verb table HNLCIDLIIBO.txt:878-903). Response is parsed as the
+///       AECMPGPHAII&lt;BFJNGMGONED&gt; envelope {"Value","Success","Error"}
+///       (envelope reader keys LEEAJGDIOHI.txt:243-286).
+///
+///   DELETE api/itemWishlists/v1/wishlist/me/{purchasableItemId}
+///     - BPAIBFBKKCN.txt:375-419 (IBLKDCAIODF) — same URL, verb 4 =
+///       DELETE, fire-and-forget (LDGADANDBIO) — body ignored.
+///
+/// Storage: rows live in ItemWishlists with the purchasable item id
+/// serialized into the existing ItemKey column (no schema change);
+/// WishlistItemId is derived deterministically from the row id.
+/// </summary>
 [ApiController]
-[Route("api/itemWishlists")]
 [Authorize]
 public class ItemWishlistsController(DorkNetDbContext db) : ControllerBase
 {
     private long Me => this.RequireCurrentPlayerId();
 
-    [HttpGet]
-    [HttpGet("v1/wishlist/me")]
-    public async Task<IActionResult> Mine()
+    [HttpGet("api/itemWishlists/v1/wishlist/me")]
+    public async Task<IActionResult> Mine() => await ForPlayer(Me);
+
+    [HttpGet("api/itemWishlists/v1/wishlist/{accountId:long}")]
+    public async Task<IActionResult> ForPlayer(long accountId)
     {
         var rows = await db.ItemWishlists
-            .Where(w => w.PlayerId == Me)
+            .Where(w => w.PlayerId == accountId)
             .OrderByDescending(w => w.CreatedAt)
             .ToListAsync();
-        return Ok(rows.Select(ToWire));
+        return Ok(rows.Select(ToWire).Where(w => w is not null).ToArray());
     }
 
-    [HttpGet("v1/wishlist")]
-    public async Task<IActionResult> ForPlayer([FromQuery] long? playerId)
+    [HttpPut("api/itemWishlists/v1/wishlist/me/{purchasableItemId:int}")]
+    [HttpPost("api/itemWishlists/v1/wishlist/me/{purchasableItemId:int}")]
+    public async Task<IActionResult> Add(int purchasableItemId)
     {
-        var pid = playerId is > 0 ? playerId.Value : Me;
-        var rows = await db.ItemWishlists
-            .Where(w => w.PlayerId == pid)
-            .OrderByDescending(w => w.CreatedAt)
-            .ToListAsync();
-        return Ok(rows.Select(ToWire));
-    }
-
-    [HttpPost]
-    [HttpPost("v1/wishlist")]
-    public async Task<IActionResult> Add()
-    {
-        var req = await ReadRequestAsync();
-        var key = (req.ItemKey ?? req.ItemId ?? string.Empty).Trim();
-        if (key.Length == 0) return BadRequest(new { error = "missing_item" });
-        if (key.Length > 128) key = key[..128];
-        var itemType = req.ItemType ?? 0;
-
-        var exists = await db.ItemWishlists.AnyAsync(w =>
-            w.PlayerId == Me && w.ItemKey == key && w.ItemType == itemType);
-        if (!exists)
+        var key = purchasableItemId.ToString();
+        var row = await db.ItemWishlists.FirstOrDefaultAsync(w =>
+            w.PlayerId == Me && w.ItemKey == key);
+        if (row is null)
         {
-            db.ItemWishlists.Add(new ItemWishlistEntity
+            row = new ItemWishlistEntity
             {
                 PlayerId = Me,
                 ItemKey = key,
-                ItemType = itemType,
-            });
+                ItemType = 0,
+            };
+            db.ItemWishlists.Add(row);
             await db.SaveChangesAsync();
         }
 
-        return await Mine();
+        // AECMPGPHAII<BFJNGMGONED> envelope: {"Value","Success","Error"}
+        // (LEEAJGDIOHI.txt:243-286).
+        return Ok(new
+        {
+            Value = ToWire(row),
+            Success = true,
+            Error = (string?)null,
+        });
     }
 
-    [HttpDelete("v1/wishlist")]
-    [HttpPost("v1/wishlist/remove")]
-    public async Task<IActionResult> Remove()
+    [HttpDelete("api/itemWishlists/v1/wishlist/me/{purchasableItemId:int}")]
+    public async Task<IActionResult> Remove(int purchasableItemId)
     {
-        var req = await ReadRequestAsync();
-        var key = (req.ItemKey ?? req.ItemId ?? string.Empty).Trim();
-        if (key.Length == 0) return BadRequest(new { error = "missing_item" });
-        var itemType = req.ItemType ?? 0;
+        var key = purchasableItemId.ToString();
         await db.ItemWishlists
-            .Where(w => w.PlayerId == Me && w.ItemKey == key && w.ItemType == itemType)
+            .Where(w => w.PlayerId == Me && w.ItemKey == key)
             .ExecuteDeleteAsync();
-        return await Mine();
+        // Fire-and-forget on the client (LDGADANDBIO) — body ignored.
+        return Ok(new { Success = true });
     }
 
-    private async Task<WishlistRequest> ReadRequestAsync()
+    /// <summary>BFJNGMGONED wire item. Rows whose ItemKey isn't a
+    /// purchasable-item integer (legacy free-form keys) are skipped.</summary>
+    private static object? ToWire(ItemWishlistEntity row)
     {
-        if (Request.HasFormContentType)
+        if (!int.TryParse(row.ItemKey, out var purchasableItemId)) return null;
+        return new
         {
-            var form = await Request.ReadFormAsync();
-            return new WishlistRequest
-            {
-                ItemKey = form["itemKey"].FirstOrDefault() ?? form["ItemKey"].FirstOrDefault(),
-                ItemId = form["itemId"].FirstOrDefault() ?? form["ItemId"].FirstOrDefault(),
-                ItemType = int.TryParse(form["itemType"].FirstOrDefault() ?? form["ItemType"].FirstOrDefault(), out var type) ? type : null,
-            };
-        }
-
-        var queryKey = Request.Query["itemKey"].FirstOrDefault() ?? Request.Query["ItemKey"].FirstOrDefault();
-        var queryId = Request.Query["itemId"].FirstOrDefault() ?? Request.Query["ItemId"].FirstOrDefault();
-        if (!string.IsNullOrWhiteSpace(queryKey) || !string.IsNullOrWhiteSpace(queryId))
-        {
-            return new WishlistRequest
-            {
-                ItemKey = queryKey,
-                ItemId = queryId,
-                ItemType = int.TryParse(Request.Query["itemType"].FirstOrDefault() ?? Request.Query["ItemType"].FirstOrDefault(), out var type) ? type : null,
-            };
-        }
-
-        try
-        {
-            return await JsonSerializer.DeserializeAsync<WishlistRequest>(
-                Request.Body,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
-                   ?? new WishlistRequest();
-        }
-        catch (JsonException)
-        {
-            return new WishlistRequest();
-        }
+            WishlistItemId = StableGuid(row.Id, row.PlayerId),
+            AccountId = (int)row.PlayerId,
+            PurchasableItemId = purchasableItemId,
+            row.CreatedAt,
+        };
     }
 
-    private static object ToWire(ItemWishlistEntity row) => new
+    /// <summary>Deterministic per-row Guid — the client only uses
+    /// WishlistItemId as an opaque identity, but it must stay stable
+    /// across requests.</summary>
+    private static Guid StableGuid(long rowId, long playerId)
     {
-        row.Id,
-        row.PlayerId,
-        row.ItemKey,
-        ItemId = row.ItemKey,
-        row.ItemType,
-        row.CreatedAt,
-    };
-
-    public sealed class WishlistRequest
-    {
-        public string? ItemKey { get; set; }
-        public string? ItemId { get; set; }
-        public int? ItemType { get; set; }
+        Span<byte> input = stackalloc byte[16];
+        BitConverter.TryWriteBytes(input, rowId);
+        BitConverter.TryWriteBytes(input[8..], playerId);
+        Span<byte> hash = stackalloc byte[32];
+        SHA256.HashData(input, hash);
+        return new Guid(hash[..16]);
     }
 }
