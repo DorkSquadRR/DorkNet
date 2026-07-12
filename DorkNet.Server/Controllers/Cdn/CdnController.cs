@@ -551,25 +551,29 @@ public class CdnController(
     {
         if (string.IsNullOrWhiteSpace(fileName)) return false;
 
+        // MakerPen across ALL Rec Room Originals: overlay the permissive
+        // room-role data (which grants CanUseMakerPen etc.) onto any AG/RRO
+        // room's data blob. This used to also require an accepted RoomRole,
+        // which limited MakerPen to hand-role-granted rooms (Stunt Runner,
+        // Rec Center). Dropping that requirement gives every RRO editing
+        // rights. Chips are preserved because the overlay only REPLACES the
+        // blob's RoomRoleData field (RoomDataBlobService.OverlayRroEditable-
+        // RoleData) — the game-rule circuit data and GameRoleData are left
+        // intact — so quest rooms keep working, exactly as Stunt Runner does.
         if (await db.Rooms.AsNoTracking().AnyAsync(r =>
-                r.IsAGRoom &&
-                r.CurrentDataBlobName == fileName &&
-                db.RoomRoles.Any(rr => rr.RoomId == r.Id && rr.Accepted)))
+                r.IsAGRoom && r.CurrentDataBlobName == fileName))
             return true;
 
         if (fileName.StartsWith("room_", StringComparison.OrdinalIgnoreCase) &&
             fileName.EndsWith("_v1.dat", StringComparison.OrdinalIgnoreCase) &&
             long.TryParse(fileName[5..^7], out var roomId) &&
-            await db.Rooms.AsNoTracking().AnyAsync(r => r.Id == roomId && r.IsAGRoom) &&
-            await db.RoomRoles.AsNoTracking().AnyAsync(r => r.RoomId == roomId && r.Accepted))
+            await db.Rooms.AsNoTracking().AnyAsync(r => r.Id == roomId && r.IsAGRoom))
             return true;
 
         return await (
             from scene in db.RoomScenes.AsNoTracking()
             join room in db.Rooms.AsNoTracking() on scene.RoomId equals room.Id
-            where room.IsAGRoom &&
-                  scene.DataBlobName == fileName &&
-                  db.RoomRoles.Any(rr => rr.RoomId == room.Id && rr.Accepted)
+            where room.IsAGRoom && scene.DataBlobName == fileName
             select scene.Id
         ).AnyAsync();
     }

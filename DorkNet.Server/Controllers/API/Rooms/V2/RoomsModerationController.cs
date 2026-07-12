@@ -1020,7 +1020,42 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
         };
         db.Rooms.Add(clone);
         await db.SaveChangesAsync();
-        return Ok(Services.RoomService.ToWireRoom(clone));
+
+        // Copy the source's scenes (subrooms) so the clone is structurally
+        // complete. Without this the clone has zero subrooms and the client's
+        // room reader rejects it. Shallow copy — scenes point at the same data
+        // blobs (copy-on-write happens when the clone is later saved).
+        var sourceScenes = await db.RoomScenes
+            .Where(s => s.RoomId == source.Id)
+            .OrderBy(s => s.OrderIndex)
+            .ToListAsync();
+        var clonedScenes = sourceScenes.Select(s => new RoomSceneEntity
+        {
+            RoomId = clone.Id,
+            OrderIndex = s.OrderIndex,
+            Name = s.Name,
+            RoomSceneLocationId = s.RoomSceneLocationId,
+            DataBlobName = s.DataBlobName,
+            StudioSubRoomDataSaveId = s.StudioSubRoomDataSaveId,
+            StudioUnityAssetId = s.StudioUnityAssetId,
+            StudioAssetBundleNamesCsv = s.StudioAssetBundleNamesCsv,
+            MaxPlayers = s.MaxPlayers,
+            IsSandbox = s.IsSandbox,
+            CanMatchmakeInto = s.CanMatchmakeInto,
+            DataModifiedAt = DateTime.UtcNow,
+        }).ToList();
+        if (clonedScenes.Count > 0)
+        {
+            db.RoomScenes.AddRange(clonedScenes);
+            await db.SaveChangesAsync();
+        }
+
+        // The 2023 client's clone (RecNet.Runtime NLDBPDCNNCF.GDHIIAHCBMN)
+        // deserializes the response as the FULL room-details object
+        // (FGCPNAACHIK — the same type get-by-id / rename return), NOT the
+        // slim list-room shape. Returning ToWireRoom here made the strict
+        // reader fail → "Failed to copy room: Failed to clone room".
+        return Ok(RoomsController.BuildRoomDetails(clone, clonedScenes));
     }
     public sealed class CloneBareRequest { public string? Name { get; set; } }
 
