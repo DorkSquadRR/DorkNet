@@ -43,19 +43,17 @@ public class LevelService(DorkNetDbContext db, NotificationService notifications
 
         if (player.Level > oldLevel)
         {
-            // Level-up grants a small currency reward and a push so
-            // the watch can play its level-up animation.
+            // Level-up grants a small currency reward. The wallet UI
+            // refreshes off the StorefrontBalanceUpdate that
+            // GrantCurrencyAsync already pushes — do NOT also push
+            // SubscriptionUpdateProfile ("AccountUpdate") with a
+            // {Reason,Level} blob: the 2023 client deserialises that
+            // channel as its Account DTO, so a non-account payload
+            // decodes to a blank account (accountId 0) and logs
+            // "Orphan player account (0) found" (audited 2026-07-12).
             await GrantCurrencyAsync(playerId, currencyType: 2,
                 amount: 100 * (player.Level - oldLevel),
                 reason: $"levelup:{oldLevel}->{player.Level}");
-            await notifications.NotifyAsync(playerId,
-                PushNotificationId.SubscriptionUpdateProfile,
-                new
-                {
-                    Reason = "LevelUp",
-                    Level = player.Level,
-                    PreviousLevel = oldLevel,
-                });
         }
 
         return (player.Level, player.XP);
