@@ -59,7 +59,11 @@ public class AvatarGiftsController(
     /// that room has no pool — or for non-game free-gift tiles — it falls
     /// back to a random wardrobe item. The rolled item is stamped as a
     /// gift package; opening the box (<c>gifts/consume</c>) grants it.</summary>
+    // The 2023 client posts the gift-chest generate to v3 (GET gifts is
+    // already fanned across v2/v3/v4, but generate only routed v2 — the v3
+    // POST 404'd, breaking reward chests on that path). Same request body.
     [HttpPost("api/avatar/v2/gifts/generate")]
+    [HttpPost("api/avatar/v3/gifts/generate")]
     [Consumes("application/json", "application/x-www-form-urlencoded", "multipart/form-data")]
     public async Task<IActionResult> Generate([FromBody] GenerateGiftRequest? req)
     {

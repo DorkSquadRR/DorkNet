@@ -253,12 +253,36 @@ public class RoomsController(
     /// </summary>
     [HttpGet("api/rooms/v1/search")]
     [HttpGet("api/rooms/v2/search")]
-    [HttpGet("rooms/search")]
     public async Task<IActionResult> Search(
         [FromQuery(Name = "query")] string? query,
         [FromQuery(Name = "value")] string? value)
         => Ok((await rooms.SearchAsync(query ?? value ?? string.Empty))
             .Select(RoomService.ToWireRoom).ToList());
+
+    /// <summary>GET <c>rooms/search</c> — the room-server search route.
+    /// Unlike the <c>api/rooms/v*</c> variants (flat <c>List&lt;Room&gt;</c>),
+    /// this one's client contract is a PAGED wrapper object
+    /// <c>{ Results, TotalResults }</c> (IDLBPALJJDJ : PagedResult&lt;Room&gt;);
+    /// returning a bare array crashes the watch's key-based reader.</summary>
+    [HttpGet("rooms/search")]
+    public async Task<IActionResult> SearchRoomServer(
+        [FromQuery(Name = "query")] string? query,
+        [FromQuery(Name = "value")] string? value,
+        [FromQuery] int skip = 0,
+        [FromQuery] int take = 100)
+    {
+        var all = (await rooms.SearchAsync(query ?? value ?? string.Empty)).ToList();
+        var page = all
+            .Skip(Math.Max(skip, 0))
+            .Take(Math.Clamp(take, 1, 100))
+            .Select(RoomService.ToWireRoom)
+            .ToList();
+        return Ok(new
+        {
+            Results = page,
+            TotalResults = all.Count,
+        });
+    }
 
     /// <summary>GET <c>api/rooms/v2/live</c> — currently-active rooms
     /// (rooms with at least one player presence). Same shape as Hot

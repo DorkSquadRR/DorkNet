@@ -303,17 +303,23 @@ public class ImagesController(
         return Ok(rows.Select(p => BuildImageInfo(p, p.UploaderPlayerId)));
     }
 
+    /// <summary>GET <c>api/images/v6?name={blobName}</c> — single-image
+    /// lookup by name. Client contract (RecNet.Runtime
+    /// <c>KLJOGJHBONK.INHMKKAJJKO(string)</c>) returns ONE
+    /// <c>ICOFKEGOGOD</c> ImageDTO, not a list; a bare array crashes its
+    /// reader. Not found (or private + not the owner) → 404 so the promise
+    /// rejects cleanly rather than delivering a wrong-shaped body.</summary>
     [HttpGet("api/images/v6")]
     [AllowAnonymous]
-    public async Task<IActionResult> ImagesV6([FromQuery] int take = 50)
+    public async Task<IActionResult> ImagesV6([FromQuery] string? name)
     {
-        take = Math.Clamp(take, 1, 100);
-        var rows = await db.Photos
-            .Where(p => p.IsPublic && p.DeletedAt == null)
-            .OrderByDescending(p => p.CreatedAt)
-            .Take(take)
-            .ToListAsync();
-        return Ok(rows.Select(p => BuildImageInfo(p, p.UploaderPlayerId)));
+        if (string.IsNullOrWhiteSpace(name)) return NotFound();
+        var pid = this.CurrentPlayerId();
+        var photo = await db.Photos.FirstOrDefaultAsync(p =>
+            p.BlobName == name && p.DeletedAt == null &&
+            (p.IsPublic || (pid != null && p.UploaderPlayerId == pid.Value)));
+        if (photo is null) return NotFound();
+        return Ok(BuildImageInfo(photo, photo.UploaderPlayerId));
     }
 
     /// <summary>GET <c>api/images/v2/named</c> — the watch's

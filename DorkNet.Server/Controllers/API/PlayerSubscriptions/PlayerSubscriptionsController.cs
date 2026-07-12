@@ -44,6 +44,51 @@ public class PlayerSubscriptionsController(
         return Ok(subs);
     }
 
+    /// <summary>GET <c>/subscription/top/creators/today</c> — the
+    /// subscriptions tab's "top creators" carousel. Client contract
+    /// (RecNet.Runtime <c>JDBPOMCAIIG()</c>) is a bare
+    /// <c>List&lt;creator&gt;</c> of <c>{ accountId:int, subscriberCount:long,
+    /// … }</c>. Ranks creators by total subscriber count. The leading "/"
+    /// makes this route absolute, bypassing the class's
+    /// <c>api/[controller]/v1</c> prefix.</summary>
+    [HttpGet("/subscription/top/creators/today")]
+    [AllowAnonymous]
+    public async Task<ActionResult> TopCreatorsToday([FromQuery] int? take)
+    {
+        var limit = Math.Clamp(take ?? 20, 1, 100);
+        var top = await db.Subscriptions
+            .GroupBy(s => s.TargetPlayerId)
+            .Select(g => new { AccountId = g.Key, SubscriberCount = (long)g.Count() })
+            .OrderByDescending(x => x.SubscriberCount)
+            .Take(limit)
+            .ToListAsync();
+
+        // A day-window boundary for "today"'s new-subscriber tallies.
+        var since = DateTime.UtcNow.Date;
+        var todayByTarget = await db.Subscriptions
+            .Where(s => s.CreatedAt >= since)
+            .GroupBy(s => s.TargetPlayerId)
+            .Select(g => new { g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.Key, x => x.Count);
+
+        // Dictionaries preserve literal key casing (anonymous objects would be
+        // forced to camelCase by the server policy); the creator DTO's keys
+        // are obfuscated in the dump, so emit both cases to be safe.
+        return Ok(top.Select(c =>
+        {
+            var newToday = todayByTarget.GetValueOrDefault(c.AccountId);
+            return new Dictionary<string, object?>
+            {
+                ["AccountId"] = (int)c.AccountId,
+                ["accountId"] = (int)c.AccountId,
+                ["SubscriberCount"] = c.SubscriberCount,
+                ["subscriberCount"] = c.SubscriberCount,
+                ["NewSubscribersToday"] = newToday,
+                ["newSubscribersToday"] = newToday,
+            };
+        }).ToList());
+    }
+
     [HttpPost("subscribe/{targetId:long}")]
     public async Task<ActionResult> Subscribe(long targetId)
     {

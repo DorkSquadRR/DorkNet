@@ -334,6 +334,39 @@ public class InventionsController(
         return Ok(ToWire(i));
     }
 
+    /// <summary>POST <c>api/storefronts/v1/trialInvention?inventionId={id}</c>
+    /// — start a free trial of a store invention. Client
+    /// (RecNet.Runtime <c>DCFKEFHJAGC.PPCLLFMHJLD(long)</c>) expects a SINGLE
+    /// Invention DTO back (same <see cref="ToWire"/> shape it uses for
+    /// search), which it spawns for the trial window (length from
+    /// <c>trialInvention/duration</c>). Hosted here — not in
+    /// StorefrontsController — so it can reuse the invention wire builder.
+    /// We record the trial start so it's an auditable action.</summary>
+    [HttpPost("api/storefronts/v1/trialInvention")]
+    [Authorize]
+    public async Task<ActionResult> TrialInvention([FromQuery] long inventionId)
+    {
+        var i = await db.Inventions.FirstOrDefaultAsync(x => x.Id == inventionId && !x.IsDeleted);
+        if (i is null) return NotFound();
+        if (!i.IsPublished && i.CreatorPlayerId != CurrentPlayerIdOrNull)
+            return Forbid();
+
+        if (CurrentPlayerIdOrNull is long me)
+        {
+            var key = $"invention:trial:{inventionId}";
+            var row = await db.PlayerSettings.FirstOrDefaultAsync(s => s.PlayerId == me && s.Key == key);
+            if (row is null)
+                db.PlayerSettings.Add(new Data.Entities.PlayerSettingEntity
+                {
+                    PlayerId = me, Key = key, Value = DateTime.UtcNow.ToString("O"),
+                });
+            else
+                row.Value = DateTime.UtcNow.ToString("O");
+            await db.SaveChangesAsync();
+        }
+        return Ok(ToWire(i));
+    }
+
     [HttpGet("api/inventions/v1/details")]
     public async Task<ActionResult> Details([FromQuery] long inventionId)
     {

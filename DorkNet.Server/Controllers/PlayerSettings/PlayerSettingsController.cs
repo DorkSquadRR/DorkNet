@@ -43,6 +43,46 @@ public class PlayerSettingsController(DorkNetDbContext db, ILogger<PlayerSetting
         return Ok(new SettingDto { Key = key, Value = value });
     }
 
+    private const string PartyInviteKey = "settings:partyinvite";
+
+    /// <summary>GET <c>/settings/partyinvite</c> — the caller's party-invite
+    /// privacy setting. Client contract (RecNet.Runtime <c>BMGICFICCPN()</c>)
+    /// is a BARE Int32 (e.g. 0 = everyone, 1 = friends, 2 = nobody), not an
+    /// object. Default 0 when never set.</summary>
+    [HttpGet("/settings/partyinvite")]
+    public async Task<IActionResult> GetPartyInvite()
+    {
+        var row = await db.PlayerSettings
+            .FirstOrDefaultAsync(s => s.PlayerId == CurrentPlayerId && s.Key == PartyInviteKey);
+        var value = row is not null && int.TryParse(row.Value, out var v) ? v : 0;
+        return Content(value.ToString(), "application/json");
+    }
+
+    /// <summary>POST/PUT <c>/settings/partyinvite</c> — set the party-invite
+    /// privacy value (raw int body, <c>?value=</c> query, or form field).</summary>
+    [HttpPost("/settings/partyinvite")]
+    [HttpPut("/settings/partyinvite")]
+    public async Task<IActionResult> SetPartyInvite()
+    {
+        int value = 0;
+        if (Request.HasFormContentType && int.TryParse(Request.Form["value"], out var fv)) value = fv;
+        else if (int.TryParse(Request.Query["value"], out var qv)) value = qv;
+        else
+        {
+            try
+            {
+                Request.EnableBuffering();
+                Request.Body.Position = 0;
+                using var doc = await JsonDocument.ParseAsync(Request.Body);
+                if (doc.RootElement.ValueKind == JsonValueKind.Number &&
+                    doc.RootElement.TryGetInt32(out var bv)) value = bv;
+            }
+            catch { /* non-numeric body */ }
+        }
+        await UpsertSettingAsync(CurrentPlayerId, PartyInviteKey, value.ToString());
+        return Content(value.ToString(), "application/json");
+    }
+
     [HttpGet("/settings/v1/{accountId:long}")]
     public async Task<ActionResult<Dictionary<string, string>>> Get(long accountId)
     {
