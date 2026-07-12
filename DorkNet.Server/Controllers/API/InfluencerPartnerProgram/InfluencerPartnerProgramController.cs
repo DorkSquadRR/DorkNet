@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using DorkNet.Models.Auth;
 using DorkNet.Server.Auth;
 using DorkNet.Server.Data;
 using DorkNet.Server.Data.Entities;
@@ -11,6 +10,14 @@ namespace DorkNet.Server.Controllers.API.InfluencerPartnerProgram;
 [ApiController]
 public class InfluencerPartnerProgramController(DorkNetDbContext db) : ControllerBase
 {
+    // The 2023 client's influencer API (RecNet.Runtime IBEEFFGHGND) reads
+    // BARE scalars, NOT wrapped account objects:
+    //   influencers   → List<Int32>       (account ids)
+    //   influencer    → Nullable<Int32>   (the account id, or null)
+    //   myinfluencer  → Nullable<Int32>   (supported influencer's id, or null)
+    // Returning an object here crashes the strict reader
+    // ("expected:'Number Token', actual:'{'"), which is what broke the
+    // profile view (and the cheer flow that opens it).
     [HttpGet("api/influencerpartnerprogram/influencers")]
     [AllowAnonymous]
     public async Task<IActionResult> Influencers([FromQuery] int take = 50)
@@ -22,29 +29,17 @@ public class InfluencerPartnerProgramController(DorkNetDbContext db) : Controlle
             .Distinct()
             .Take(take)
             .ToListAsync();
-        var players = await db.Players
-            .Where(p => creatorIds.Contains(p.Id))
-            .OrderBy(p => p.Username)
-            .ToListAsync();
-        var influencers = players.Select(ToInfluencerWire).ToList();
-        return Ok(new Dictionary<string, object>
-        {
-            ["Influencers"] = influencers,
-            ["influencers"] = influencers,
-            ["Accounts"] = influencers,
-            ["accounts"] = influencers,
-        });
+        return Ok(creatorIds.Select(id => (int)id).ToArray());
     }
 
     [HttpGet("api/influencerpartnerprogram/influencer")]
     [AllowAnonymous]
     public async Task<IActionResult> Influencer([FromQuery] long? accountId = null, [FromQuery] string? username = null)
     {
-        var player = accountId is long id
-            ? await db.Players.FirstOrDefaultAsync(p => p.Id == id)
-            : await db.Players.FirstOrDefaultAsync(p => p.Username == username);
-        if (player is null) return NotFound();
-        return Ok(ToInfluencerWire(player));
+        var playerId = accountId is long id
+            ? await db.Players.Where(p => p.Id == id).Select(p => (long?)p.Id).FirstOrDefaultAsync()
+            : await db.Players.Where(p => p.Username == username).Select(p => (long?)p.Id).FirstOrDefaultAsync();
+        return Content(playerId is long pid ? ((int)pid).ToString() : "null", "application/json");
     }
 
     [HttpGet("api/influencerpartnerprogram/myinfluencer")]
@@ -54,10 +49,11 @@ public class InfluencerPartnerProgramController(DorkNetDbContext db) : Controlle
         var me = this.RequireCurrentPlayerId();
         var setting = await db.PlayerSettings
             .FirstOrDefaultAsync(s => s.PlayerId == me && s.Key == "influencer:supported");
-        if (setting is null || !long.TryParse(setting.Value, out var influencerId))
-            return Ok(new { Influencer = (object?)null });
-        var player = await db.Players.FirstOrDefaultAsync(p => p.Id == influencerId);
-        return Ok(new { Influencer = player is null ? null : ToInfluencerWire(player) });
+        return Content(
+            setting is not null && long.TryParse(setting.Value, out var influencerId)
+                ? ((int)influencerId).ToString()
+                : "null",
+            "application/json");
     }
 
     [HttpPost("api/influencerpartnerprogram/support")]
@@ -86,7 +82,10 @@ public class InfluencerPartnerProgramController(DorkNetDbContext db) : Controlle
             setting.Value = influencer.Id.ToString();
         }
         await db.SaveChangesAsync();
-        return Ok(new { Success = true, Influencer = ToInfluencerWire(influencer) });
+        // Client return type is LDGADANDBIO (the fire-and-forget POST response
+        // handle, same as PlayerCheer create) — it only checks success and
+        // ignores the body, so no typed shape is required here.
+        return Ok(new { Success = true, Influencer = (int)influencer.Id });
     }
 
     [HttpPost("api/influencerpartnerprogram/remove")]
@@ -99,17 +98,4 @@ public class InfluencerPartnerProgramController(DorkNetDbContext db) : Controlle
             .ExecuteDeleteAsync();
         return Ok(new { Success = true });
     }
-
-    private static RecNetAccount ToInfluencerWire(PlayerEntity player) => new()
-    {
-        AccountId = (int)player.Id,
-        RawUsername = player.Username,
-        Username = player.Username,
-        DisplayName = player.DisplayName ?? player.Username,
-        ProfileImage = player.ProfileImageName ?? string.Empty,
-        TreatAsJunior = false,
-        HasBirthday = true,
-        Platforms = 1,
-        CreatedAt = player.CreatedAt == default ? DateTime.UtcNow : player.CreatedAt,
-    };
 }
