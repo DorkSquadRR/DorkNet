@@ -972,7 +972,11 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
         var newName = await ReadCloneNameAsync();
         var source = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
         if (source is null) return NotFound();
-        if (!source.CloningAllowed && source.CreatorPlayerId != Me)
+        // RRO/AG rooms are first-party templates meant to be cloned — the
+        // room-creation "base room" picker starts a new build by cloning one
+        // (RecCenter, MakerRoom, …). Their seed rows have CloningAllowed=false,
+        // so without the IsAGRoom exception every base-room create 403s.
+        if (!source.CloningAllowed && !source.IsAGRoom && source.CreatorPlayerId != Me)
             return Forbid();
 
         if (string.IsNullOrWhiteSpace(newName))

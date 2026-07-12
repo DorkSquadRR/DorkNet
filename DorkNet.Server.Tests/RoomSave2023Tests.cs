@@ -158,9 +158,12 @@ public sealed class RoomSave2023Tests : IClassFixture<DorkNetServerFactory>
                     CreatorPlayerId = owner.PlayerId,
                     ImageName = RoomService.DefaultRoomImageName,
                     Accessibility = 1,
-                    IsAGRoom = false,
+                    // An RRO/AG base room (RecCenter-like): CloningAllowed is
+                    // false and it's owned by the system, yet the base-room
+                    // picker must still be able to clone it.
+                    IsAGRoom = true,
                     IsDormRoom = false,
-                    CloningAllowed = true,
+                    CloningAllowed = false,
                     CurrentDataBlobName = $"room_{roomId}_v1.dat",
                 });
                 db.RoomScenes.Add(new RoomSceneEntity
