@@ -564,11 +564,23 @@ public class CdnController(
                 r.IsAGRoom && r.CurrentDataBlobName == fileName))
             return true;
 
-        if (fileName.StartsWith("room_", StringComparison.OrdinalIgnoreCase) &&
-            fileName.EndsWith("_v1.dat", StringComparison.OrdinalIgnoreCase) &&
-            long.TryParse(fileName[5..^7], out var roomId) &&
-            await db.Rooms.AsNoTracking().AnyAsync(r => r.Id == roomId && r.IsAGRoom))
-            return true;
+        // Synthetic/default room-data blob names for rooms with no saved blob:
+        // the CURRENT form is room_{id}_dorknet_v8.dat
+        // (RoomService.SyntheticDefaultRoomDataBlobName) and the legacy form is
+        // room_{id}_v1.dat. Baked RRO rooms (empty CurrentDataBlobName) load
+        // their permissions from this synthetic blob, so it MUST overlay too —
+        // otherwise MakerPen only appears in RRO rooms that happen to have a
+        // real saved blob (which is why it worked for Rec Center / Stunt Runner
+        // but not the rest). Parse the id from any room_{id}_* form.
+        if (fileName.StartsWith("room_", StringComparison.OrdinalIgnoreCase))
+        {
+            var rest = fileName["room_".Length..];
+            var underscore = rest.IndexOf('_');
+            if (underscore > 0 &&
+                long.TryParse(rest[..underscore], out var roomId) &&
+                await db.Rooms.AsNoTracking().AnyAsync(r => r.Id == roomId && r.IsAGRoom))
+                return true;
+        }
 
         return await (
             from scene in db.RoomScenes.AsNoTracking()
