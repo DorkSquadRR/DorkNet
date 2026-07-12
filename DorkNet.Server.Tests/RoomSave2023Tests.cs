@@ -186,9 +186,12 @@ public sealed class RoomSave2023Tests : IClassFixture<DorkNetServerFactory>
 
     private static async Task<long> CloneAndAssertAsync(HttpClient client, long sourceId, string name)
     {
+        // The real 2023 client posts the name as x-www-form-urlencoded
+        // (`name=...`), NOT JSON — testing with JSON would miss the 415 that
+        // a [FromBody] handler returns for a form POST.
         using var resp = await client.PostAsync(
             $"/rooms/{sourceId}/clone",
-            new StringContent(JsonSerializer.Serialize(new { name }), Encoding.UTF8, "application/json"));
+            new FormUrlEncodedContent(new Dictionary<string, string> { ["name"] = name }));
         var text = await resp.Content.ReadAsStringAsync();
         Assert.True(resp.IsSuccessStatusCode, $"clone of {sourceId} -> {(int)resp.StatusCode}: {text}");
 

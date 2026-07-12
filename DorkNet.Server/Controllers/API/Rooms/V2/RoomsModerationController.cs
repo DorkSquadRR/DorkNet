@@ -959,12 +959,17 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
     /// <see cref="DorkNet.Server.Controllers.API.Rooms.V2.RoomsController"/>;
     /// this handler proxies via the service so we don't duplicate the
     /// substantial clone-rooms logic.</summary>
+    // The 2023 client posts the new name as an x-www-form-urlencoded field
+    // (`name=...`), NOT JSON. A `[FromBody]` parameter demands a JSON
+    // content-type and makes ASP.NET reject the form POST with 415 BEFORE the
+    // handler runs → the client reports "Failed to clone room" and boots the
+    // player to their dorm. Accept all three content types and read the name
+    // manually from form / JSON body / query.
     [HttpPost("rooms/{roomId:long}/clone")]
-    public async Task<IActionResult> BareClone(long roomId,
-        [FromBody] CloneBareRequest? body,
-        [FromForm(Name = "Name")] string? formName)
+    [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    public async Task<IActionResult> BareClone(long roomId)
     {
-        var newName = body?.Name ?? formName ?? string.Empty;
+        var newName = await ReadCloneNameAsync();
         var source = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
         if (source is null) return NotFound();
         if (!source.CloningAllowed && source.CreatorPlayerId != Me)
@@ -1084,7 +1089,34 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
         // room".
         return Ok(RoomsController.BuildRoomServerDetails(clone, clonedScenes));
     }
-    public sealed class CloneBareRequest { public string? Name { get; set; } }
+    private async Task<string> ReadCloneNameAsync()
+    {
+        // Form: name=... (what the 2023 client sends).
+        if (Request.HasFormContentType)
+        {
+            foreach (var k in new[] { "name", "Name" })
+            {
+                var v = Request.Form[k].ToString();
+                if (!string.IsNullOrWhiteSpace(v)) return v;
+            }
+        }
+        else
+        {
+            // JSON body: { "name": "..." }.
+            try
+            {
+                Request.EnableBuffering();
+                Request.Body.Position = 0;
+                using var doc = await JsonDocument.ParseAsync(Request.Body);
+                if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                    foreach (var k in new[] { "name", "Name" })
+                        if (doc.RootElement.TryGetProperty(k, out var v) && v.ValueKind == JsonValueKind.String)
+                            return v.GetString() ?? string.Empty;
+            }
+            catch { /* non-JSON / empty body */ }
+        }
+        return Request.Query["name"].ToString();
+    }
 
     // ── Bare-path bans aliases ─────────────────────────────────────────
 
