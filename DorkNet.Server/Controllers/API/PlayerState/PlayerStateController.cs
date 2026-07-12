@@ -29,7 +29,7 @@ namespace DorkNet.Server.Controllers.API.PlayerState;
 [ApiController]
 public class PlayerStateController(
     DorkNetDbContext db,
-    NotificationService notifications,
+    SystemNotificationService systemNotifications,
     LevelService level) : ControllerBase
 {
     // RecNet.Progressions.GetProgressionById / GetMyProgression — real
@@ -150,9 +150,10 @@ public class PlayerStateController(
         // Reward the cheered player with a small XP bump.
         await level.AwardXpAsync(playerId, LevelService.CheerReceivedXp, $"cheer_from:{me}");
 
-        await notifications.NotifyAsync(playerId,
-            PushNotificationId.SubscriptionUpdateProfile,
-            new { Reason = "CheerReceived", From = me, Type = type });
+        // Real PlayerCheer notification (persisted + pushed as a Message),
+        // replacing the old blank-account SubscriptionUpdateProfile misuse.
+        await systemNotifications.SendAsync(playerId,
+            SystemNotificationService.MessageType.PlayerCheer, fromPlayerId: me);
         return Ok();
     }
 

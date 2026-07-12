@@ -20,8 +20,7 @@ namespace DorkNet.Server.Controllers.API.PlayerSubscriptions;
 [Route("api/[controller]/v1")]
 [Authorize]
 public class PlayerSubscriptionsController(
-    DorkNetDbContext db,
-    NotificationService notifications) : ControllerBase
+    DorkNetDbContext db) : ControllerBase
 {
     private long Me => this.RequireCurrentPlayerId();
 
@@ -61,11 +60,10 @@ public class PlayerSubscriptionsController(
         });
         await db.SaveChangesAsync();
 
-        // Tell the target their subscriber count changed so the watch
-        // refreshes their profile page if open.
-        await notifications.NotifyAsync(targetId,
-            PushNotificationId.SubscriptionUpdateProfile,
-            new { Reason = "NewSubscriber", From = Me });
+        // No real-time push: no client message type for new subscribers, and
+        // the old SubscriptionUpdateProfile {Reason:"NewSubscriber"} blob
+        // decoded to a blank account ("Orphan player account (0)") without
+        // refreshing anything. The subscriber count refreshes on next fetch.
         return Ok();
     }
 
