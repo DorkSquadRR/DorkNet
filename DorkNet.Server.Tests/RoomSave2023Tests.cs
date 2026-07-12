@@ -130,6 +130,76 @@ public sealed class RoomSave2023Tests : IClassFixture<DorkNetServerFactory>
             $"expected a RoomDataBlobs row for {filename}");
     }
 
+    /// <summary>
+    /// Regression: cloning a room — and then cloning the CLONE — must both
+    /// succeed and return the full room-details shape (FGCPNAACHIK). Previously
+    /// the handler relied on DB auto-increment for the room id AND the copied
+    /// scene ids, which collide with the seeded id range once the identity
+    /// sequence lags → the clone POST 500s and the client boots the player to
+    /// their dorm ("Failed to copy room: Failed to clone room").
+    /// </summary>
+    [Fact]
+    public async Task Cloning_a_room_and_then_the_clone_both_succeed()
+    {
+        using var setupClient = ApiClient();
+        var owner = await GameClientSessionFactory.CreateAsync(setupClient, _factory.ApexDomain);
+
+        var roomId = 9_300_777L;
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<DorkNetDbContext>();
+            if (!await db.Rooms.AnyAsync(r => r.Id == roomId))
+            {
+                db.Rooms.Add(new RoomEntity
+                {
+                    Id = roomId,
+                    Name = $"CloneSrc_{Guid.NewGuid():N}"[..20],
+                    Description = "clone source",
+                    CreatorPlayerId = owner.PlayerId,
+                    ImageName = RoomService.DefaultRoomImageName,
+                    Accessibility = 1,
+                    IsAGRoom = false,
+                    IsDormRoom = false,
+                    CloningAllowed = true,
+                    CurrentDataBlobName = $"room_{roomId}_v1.dat",
+                });
+                db.RoomScenes.Add(new RoomSceneEntity
+                {
+                    RoomId = roomId,
+                    OrderIndex = 0,
+                    Name = "Main",
+                    DataBlobName = $"room_{roomId}_v1.dat",
+                });
+                await db.SaveChangesAsync();
+            }
+        }
+
+        using var roomsClient = ApiClient(owner, subdomain: "rooms");
+
+        var firstCloneId = await CloneAndAssertAsync(roomsClient, roomId, "FirstClone");
+        Assert.NotEqual(roomId, firstCloneId);
+
+        // The regression: cloning the clone.
+        var secondCloneId = await CloneAndAssertAsync(roomsClient, firstCloneId, "SecondClone");
+        Assert.NotEqual(firstCloneId, secondCloneId);
+    }
+
+    private static async Task<long> CloneAndAssertAsync(HttpClient client, long sourceId, string name)
+    {
+        using var resp = await client.PostAsync(
+            $"/rooms/{sourceId}/clone",
+            new StringContent(JsonSerializer.Serialize(new { name }), Encoding.UTF8, "application/json"));
+        var text = await resp.Content.ReadAsStringAsync();
+        Assert.True(resp.IsSuccessStatusCode, $"clone of {sourceId} -> {(int)resp.StatusCode}: {text}");
+
+        using var json = JsonDocument.Parse(text);
+        var root = json.RootElement;
+        // Full room-details shape (FGCPNAACHIK), not a status wrapper.
+        foreach (var key in new[] { "RoomId", "SubRooms", "Roles" })
+            Assert.True(root.TryGetProperty(key, out _), $"clone response missing '{key}': {text}");
+        return root.GetProperty("RoomId").GetInt64();
+    }
+
     private HttpClient ApiClient(GameClientSession? session = null, string subdomain = "api")
     {
         var client = _factory.CreateClient(new() { AllowAutoRedirect = false });

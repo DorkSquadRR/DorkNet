@@ -1046,8 +1046,14 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
             .Where(s => s.RoomId == source.Id)
             .OrderBy(s => s.OrderIndex)
             .ToListAsync();
+        // Scene ids need to be explicit for the same reason room ids do —
+        // RoomSceneEntity.Id is an auto/identity column whose Postgres sequence
+        // lags behind the manually-seeded rows, so relying on DB generation
+        // collides and the whole clone SaveChanges 500s.
+        var nextSceneId = await db.RoomScenes.MaxAsync(s => (long?)s.Id) ?? 0L;
         var clonedScenes = sourceScenes.Select(s => new RoomSceneEntity
         {
+            Id = ++nextSceneId,
             RoomId = clone.Id,
             OrderIndex = s.OrderIndex,
             Name = s.Name,
@@ -1069,10 +1075,14 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
 
         // The 2023 client's clone (RecNet.Runtime NLDBPDCNNCF.GDHIIAHCBMN)
         // deserializes the response as the FULL room-details object
-        // (FGCPNAACHIK — the same type get-by-id / rename return), NOT the
-        // slim list-room shape. Returning ToWireRoom here made the strict
-        // reader fail → "Failed to copy room: Failed to clone room".
-        return Ok(RoomsController.BuildRoomDetails(clone, clonedScenes));
+        // (FGCPNAACHIK — the same type get-by-id / rename return on the
+        // roomserver host), NOT the slim list-room shape. This is the
+        // roomserver-family path (rooms/{id}/clone), so use
+        // BuildRoomServerDetails — the exact shape GET rooms/{id} returns for
+        // the 2023 client. Returning ToWireRoom (or the wrong details variant)
+        // made the strict reader fail → "Failed to copy room: Failed to clone
+        // room".
+        return Ok(RoomsController.BuildRoomServerDetails(clone, clonedScenes));
     }
     public sealed class CloneBareRequest { public string? Name { get; set; } }
 
