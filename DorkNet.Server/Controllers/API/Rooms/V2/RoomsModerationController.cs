@@ -984,8 +984,20 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
             newName = $"{baseName}{suffix}";
         }
 
+        // Assign an explicit user-room id (> 1000), the same way
+        // RoomService.CloneAsync does. Relying on DB auto-increment is unsafe:
+        // seeded rooms were inserted with manual ids (100..1000) without
+        // advancing the Postgres identity sequence, so auto-increment collides
+        // with a seeded id → PK violation → the clone POST 500s → the client
+        // reports "Failed to clone room" and boots the player to their dorm.
+        // (SQLite in tests tracks max(id), which is why the probe passed.)
+        var nextId = await db.Rooms
+            .Where(r => r.Id > 1000)
+            .MaxAsync(r => (long?)r.Id) ?? 1000L;
+
         var clone = new RoomEntity
         {
+            Id = nextId + 1,
             Name = newName,
             Description = source.Description,
             CreatorPlayerId = Me,
@@ -1015,7 +1027,12 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
             IsStudioRoom = source.IsStudioRoom,
             IsRoomLinkedToRecRoomStudio = source.IsRoomLinkedToRecRoomStudio,
             StudioSessionId = source.StudioSessionId,
-            TagsCsv = source.TagsCsv,
+            // A user clone is community content — NOT an RRO. Copying the
+            // source's tags verbatim would keep "recroomoriginal,quest,…" on
+            // the clone, making the client treat it as a quest room (wrong
+            // badge, and quest-instance logic can boot the player). Match
+            // RoomService.CloneAsync and tag it "community".
+            TagsCsv = "community",
             CurrentDataBlobName = source.CurrentDataBlobName,
         };
         db.Rooms.Add(clone);

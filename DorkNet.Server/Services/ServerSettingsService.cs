@@ -106,6 +106,64 @@ public class ServerSettingsService(DorkNetDbContext db)
         return ToRecCenterDoors(row);
     }
 
+    /// <summary>Built-in default base-room picker (used when an admin hasn't
+    /// customised the list). RRO originals minus #quest rooms, MakerRoom
+    /// first as the canonical blank canvas.</summary>
+    public static readonly IReadOnlyList<string> DefaultBaseRoomNames = new[]
+    {
+        "MakerRoom", "RecCenter", "3DCharades", "Dodgeball",
+        "DiscGolfLake", "DiscGolfPropulsion", "Paddleball",
+        "Paintball", "Soccer", "LaserTag", "RecRoyaleSquads",
+        "RecRoyaleSolos", "Park", "BowlingAlley", "RecRally",
+    };
+
+    public async Task<IReadOnlyList<string>> GetBaseRoomNamesAsync()
+    {
+        var row = await GetAsync();
+        return ToBaseRoomNames(row);
+    }
+
+    public async Task<IReadOnlyList<string>> SetBaseRoomNamesAsync(IReadOnlyList<string> names)
+    {
+        var normalized = NormalizeBaseRoomNames(names);
+        var existing = await GetTrackedRowAsync();
+        existing.BaseRoomNamesJson = JsonSerializer.Serialize(normalized, JsonOptions);
+        existing.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return normalized;
+    }
+
+    private static IReadOnlyList<string> ToBaseRoomNames(ServerSettingsEntity row)
+    {
+        if (!string.IsNullOrWhiteSpace(row.BaseRoomNamesJson))
+        {
+            try
+            {
+                var parsed = JsonSerializer.Deserialize<List<string>>(row.BaseRoomNamesJson, JsonOptions);
+                if (parsed is { Count: > 0 })
+                    return NormalizeBaseRoomNames(parsed);
+            }
+            catch
+            {
+                // Bad settings must not break room creation; admins can
+                // overwrite from the SPA.
+            }
+        }
+        return DefaultBaseRoomNames.ToList();
+    }
+
+    private static IReadOnlyList<string> NormalizeBaseRoomNames(IReadOnlyList<string> names)
+    {
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var result = new List<string>();
+        foreach (var n in names)
+        {
+            var t = (n ?? string.Empty).Trim();
+            if (t.Length > 0 && seen.Add(t)) result.Add(t);
+        }
+        return result.Count > 0 ? result : DefaultBaseRoomNames.ToList();
+    }
+
     public async Task<DiscoveredGameConfigSettings> GetDiscoveredGameConfigsAsync()
     {
         var row = await GetAsync();

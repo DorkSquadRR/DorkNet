@@ -293,14 +293,30 @@ public class RoomsController(
         => Ok((await rooms.HotAsync(null)).Select(RoomService.ToWireRoom).ToList());
 
     /// <summary>
-    /// `Rooms.GetBaseRooms` — list of "base" rooms used by Rec Room Originals
-    /// to seed the room creation UI. Returns the same set as #recroomoriginal.
+    /// `Rooms.GetBaseRooms` — the room-creation "base room" picker. A fixed,
+    /// admin-curated list of room NAMES (server setting
+    /// <c>BaseRoomNamesJson</c>, default <see
+    /// cref="ServerSettingsService.DefaultBaseRoomNames"/>), resolved to rooms
+    /// in the configured order. Names are looked up via
+    /// <see cref="RoomService.GetByNameAsync"/>, which also finds
+    /// HiddenFromBrowse rooms like MakerRoom. Edit the list from the admin SPA
+    /// (<c>api/admin/v1/settings/base-rooms</c>).
     /// </summary>
     [HttpGet("api/rooms/v2/baserooms")]
     [HttpGet("api/rooms/v3/baserooms")]
     [HttpGet("rooms/base")]
     public async Task<IActionResult> BaseRooms()
-        => Ok((await rooms.HotAsync("#recroomoriginal")).Select(RoomService.ToWireRoom).ToList());
+    {
+        var names = await serverSettings.GetBaseRoomNamesAsync();
+        var result = new List<object>();
+        foreach (var name in names)
+        {
+            var room = await rooms.GetByNameAsync(name);
+            if (room is not null)
+                result.Add(RoomService.ToWireRoom(room));
+        }
+        return Ok(result);
+    }
 
     /// <summary>
     /// `Rooms.GetFilters` — pinned/popular tag chips shown above the room
