@@ -28,6 +28,17 @@ interface RecCenterDoorSettings {
   updatedAt: string;
 }
 
+interface BaseRoomOption {
+  name: string;
+  imageName: string;
+  tagsCsv: string;
+}
+
+interface BaseRoomsResponse {
+  names: string[];
+  available: BaseRoomOption[];
+}
+
 export function Rooms() {
   const { data, loading, error, refresh } = useApi<Room[]>('/rooms');
   const {
@@ -42,6 +53,12 @@ export function Rooms() {
     error: doorsError,
     refresh: refreshRecCenterDoors,
   } = useApi<RecCenterDoorSettings>('/settings/rec-center-doors');
+  const {
+    data: baseRooms,
+    loading: baseRoomsLoading,
+    error: baseRoomsError,
+    refresh: refreshBaseRooms,
+  } = useApi<BaseRoomsResponse>('/settings/base-rooms');
   const [filter, setFilter] = useState('');
   const [filterKind, setFilterKind] = useState<'all' | 'original' | 'custom' | 'dorm'>('all');
   const [pendingDelete, setPendingDelete] = useState<Room | null>(null);
@@ -116,6 +133,13 @@ export function Rooms() {
         loading={doorsLoading}
         error={doorsError}
         onSaved={refreshRecCenterDoors}
+      />
+
+      <BaseRoomsPanel
+        data={baseRooms}
+        loading={baseRoomsLoading}
+        error={baseRoomsError}
+        onSaved={refreshBaseRooms}
       />
 
       <div className="card overflow-hidden">
@@ -479,6 +503,132 @@ function RecCenterDoorsPanel({
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BaseRoomsPanel({
+  data,
+  loading,
+  error,
+  onSaved,
+}: {
+  data: BaseRoomsResponse | null;
+  loading: boolean;
+  error: string | null;
+  onSaved: () => void;
+}) {
+  const [names, setNames] = useState<string[]>([]);
+  const [toAdd, setToAdd] = useState('');
+  const [busy, setBusy] = useState(false);
+  const toast = useToast();
+
+  useEffect(() => {
+    if (!data) return;
+    setNames(data.names);
+  }, [data]);
+
+  const available = data?.available ?? [];
+  const notAdded = available.filter(a => !names.some(n => n.toLowerCase() === a.name.toLowerCase()));
+
+  const move = (i: number, dir: -1 | 1) => {
+    setNames(cur => {
+      const j = i + dir;
+      if (j < 0 || j >= cur.length) return cur;
+      const next = [...cur];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  };
+  const remove = (i: number) => setNames(cur => cur.filter((_, idx) => idx !== i));
+  const add = (name: string) => {
+    if (!name) return;
+    setNames(cur => (cur.some(n => n.toLowerCase() === name.toLowerCase()) ? cur : [...cur, name]));
+    setToAdd('');
+  };
+
+  const save = async (reset = false) => {
+    setBusy(true);
+    try {
+      await api<{ names: string[] }>('/settings/base-rooms', {
+        method: 'POST',
+        body: reset ? { Names: [] } : { Names: names },
+      });
+      toast.push(reset ? 'Base rooms reset to defaults.' : 'Base rooms saved.', 'success');
+      onSaved();
+    } catch (e) {
+      toast.push((e as Error).message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card !p-4 mb-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold text-ink-50">Base rooms</h2>
+          <p className="mt-1 text-xs text-ink-400">
+            Ordered rooms shown in the room-creation "base room" picker (<code className="font-mono text-[11px]">rooms/base</code>).
+            MakerRoom is the blank canvas; quests are excluded by default.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={() => save(true)} disabled={busy || loading} className="btn-secondary text-xs">
+            Defaults
+          </button>
+          <button onClick={() => save(false)} disabled={busy || loading} className="btn-primary text-xs">
+            {busy ? 'Saving...' : 'Save base rooms'}
+          </button>
+        </div>
+      </div>
+
+      {error && <div className="mt-3 text-sm text-danger">{error}</div>}
+      {loading && !data && <div className="mt-3 text-xs text-ink-400">Loading base rooms...</div>}
+      {data && (
+        <div className="mt-4 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={toAdd}
+              onChange={e => setToAdd(e.target.value)}
+              className="input max-w-xs text-xs"
+            >
+              <option value="">Add a room…</option>
+              {notAdded.map(a => (
+                <option key={a.name} value={a.name}>{a.name}</option>
+              ))}
+            </select>
+            <button onClick={() => add(toAdd)} disabled={!toAdd} className="btn-secondary text-xs">
+              <Plus /> Add
+            </button>
+            <span className="ml-auto text-[11px] text-ink-500">{names.length} rooms</span>
+          </div>
+
+          <ol className="space-y-1">
+            {names.map((name, i) => {
+              const missing = !available.some(a => a.name.toLowerCase() === name.toLowerCase());
+              return (
+                <li
+                  key={`${name}-${i}`}
+                  className="flex items-center gap-2 rounded-md border border-ink-800 bg-ink-950/30 px-2 py-1.5"
+                >
+                  <span className="w-6 text-right text-[11px] tabular-nums text-ink-500">{i + 1}</span>
+                  <span className={`font-mono text-xs ${missing ? 'text-danger' : 'text-ink-100'}`}>{name}</span>
+                  {missing && <span className="badge-neutral text-[10px]">not found</span>}
+                  <div className="ml-auto flex items-center gap-1">
+                    <button onClick={() => move(i, -1)} disabled={i === 0} className="btn-ghost text-xs" title="Move up">↑</button>
+                    <button onClick={() => move(i, 1)} disabled={i === names.length - 1} className="btn-ghost text-xs" title="Move down">↓</button>
+                    <button onClick={() => remove(i)} className="btn-ghost text-xs text-danger" title="Remove"><Trash /></button>
+                  </div>
+                </li>
+              );
+            })}
+            {names.length === 0 && (
+              <li className="text-xs text-ink-500">No base rooms set. Defaults will be used on save.</li>
+            )}
+          </ol>
         </div>
       )}
     </div>

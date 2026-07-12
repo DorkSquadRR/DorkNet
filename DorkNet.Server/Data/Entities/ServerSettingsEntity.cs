@@ -92,5 +92,11 @@ public class ServerSettingsEntity
     /// redeploy.</summary>
     public string CharadesSlotBindingsJson { get; set; } = string.Empty;
 
+    /// <summary>Ordered list of room NAMES shown in the room-creation "base
+    /// room" picker (<c>rooms/base</c> / <c>api/rooms/v*/baserooms</c>), as a
+    /// JSON string array. Empty falls back to the built-in default set. Lets
+    /// admins curate the base-room list from the SPA without a redeploy.</summary>
+    public string BaseRoomNamesJson { get; set; } = string.Empty;
+
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

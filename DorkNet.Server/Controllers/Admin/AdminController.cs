@@ -1810,6 +1810,32 @@ public class AdminController(
         return Ok(doors);
     }
 
+    /// <summary>GET <c>api/admin/v1/settings/base-rooms</c> — the curated
+    /// room-creation base-room list (ordered room names) plus the catalogue of
+    /// Rec Room Original rooms the SPA can offer as pickable candidates.</summary>
+    [HttpGet("settings/base-rooms")]
+    public async Task<ActionResult> GetBaseRooms()
+    {
+        var names = await serverSettings.GetBaseRoomNamesAsync();
+        var available = await db.Rooms
+            .Where(r => EF.Functions.Like(r.TagsCsv, "%recroomoriginal%"))
+            .OrderBy(r => r.Name)
+            .Select(r => new { r.Name, r.ImageName, r.TagsCsv })
+            .ToListAsync();
+        return Ok(new { Names = names, Available = available });
+    }
+
+    public sealed record BaseRoomsRequest(List<string>? Names);
+
+    [HttpPost("settings/base-rooms")]
+    public async Task<ActionResult> SetBaseRooms([FromBody] BaseRoomsRequest body)
+    {
+        var names = await serverSettings.SetBaseRoomNamesAsync(body.Names ?? []);
+        await LogAsync("base_rooms_updated", "system", 0, string.Join(",", names));
+        await db.SaveChangesAsync();
+        return Ok(new { Names = names });
+    }
+
     [HttpGet("settings/gameconfigs")]
     public async Task<ActionResult> GetDiscoveredGameConfigs()
         => Ok(await serverSettings.GetDiscoveredGameConfigsAsync());
