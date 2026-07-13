@@ -429,6 +429,9 @@ public class GoToController(
 
         var resp = await BuildResponseAsync(
             string.IsNullOrWhiteSpace(roomName) ? "DormRoom" : roomName);
+        // joinMode 0 is a no-op for public rooms; it only funnels private
+        // rooms into their single per-subroom instance.
+        await ApplyNewInstanceAsync(resp, subRoomId: 0, createPrivateInstance: false, joinMode: 0);
         await RecordResponseAsync(resp);
         return Ok(resp);
     }
@@ -463,6 +466,8 @@ public class GoToController(
 
         var resp = await BuildResponseAsync(roomName);
         resp.RoomInstance!.ClubId = club.Id;
+        // Funnel private clubhouse rooms into their single instance.
+        await ApplyNewInstanceAsync(resp, subRoomId: 0, createPrivateInstance: false, joinMode: 0);
         await RecordResponseAsync(resp);
         return Ok(resp);
     }
@@ -528,6 +533,8 @@ public class GoToController(
         }
 
         var resp = await BuildResponseAsync(roomName);
+        // Funnel private rooms into their single per-subroom instance.
+        await ApplyNewInstanceAsync(resp, subRoomId: 0, createPrivateInstance: false, joinMode: 0);
         await RecordResponseAsync(resp);
         return Ok(resp);
     }
@@ -708,6 +715,9 @@ public class GoToController(
                     "[goto-invite] public-room invite {InviteId} → routing caller {Caller} to {RoomName} (RoomId={RoomId})",
                     inviteId, callerId, roomName, publicRoomId);
                 resp = await BuildResponseAsync(roomName);
+                // Private rooms pin to their single per-subroom instance so
+                // the invitee lands with the inviter, not in a parallel copy.
+                await ApplyNewInstanceAsync(resp, subRoomId: 0, createPrivateInstance: false, joinMode: 0);
             }
         }
         else
@@ -1131,6 +1141,69 @@ public class GoToController(
     private async Task ApplyNewInstanceAsync(
         MatchmakingResponseDto resp, long subRoomId, bool createPrivateInstance, int joinMode)
     {
+        // Private ROOMS (Accessibility=0) allow exactly ONE instance per
+        // sub-room: whatever the watch asked for (plain matchmake, "new
+        // instance", "private instance"), everyone funnels into the same
+        // deterministic invite-gated match. Without this, JoinMode=1/2
+        // nonce-forks fragment the owner's private room into parallel
+        // instances that can never see each other. Dorms are already
+        // stamped with their own deterministic private instance in
+        // BuildResponseAsync — leave them untouched.
+        var room = await db.Rooms.AsNoTracking()
+            .Where(r => r.Id == resp.RoomInstance.RoomId)
+            .Select(r => new { r.Accessibility, r.IsDormRoom, r.CreatorPlayerId })
+            .FirstOrDefaultAsync();
+        if (room is { Accessibility: 0, IsDormRoom: false })
+        {
+            // Owner of the instance = the ROOM's creator (not the caller):
+            // invite authority and rejoin rights belong to the room owner
+            // even when an invitee's join is what materialised the row.
+            var inst = await privateInstances.EnsureForPrivateRoomAsync(
+                ownerPlayerId: room.CreatorPlayerId,
+                roomId: resp.RoomInstance.RoomId,
+                subRoomId: subRoomId,
+                baseName: resp.RoomInstance.Name.ToLowerInvariant(),
+                location: resp.RoomInstance.Location,
+                dataBlob: resp.RoomInstance.DataBlob,
+                photonRegion: resp.RoomInstance.PhotonRegionId,
+                maxCapacity: resp.RoomInstance.MaxCapacity,
+                photonRoomId: resp.RoomInstance.PhotonRoomId);
+
+            // With everyone sharing ONE instance, access control matters
+            // more than it did when strangers forked into parallel copies:
+            // an uninvited join would land IN the owner's session. Allow
+            // the creator, accepted role holders (co-owner/mod/host), and
+            // instance invitees; everyone else gets the same "room not
+            // found" the browse filters imply (private rooms are invisible,
+            // so admitting the room exists would leak more than a 4 does).
+            var caller = this.CurrentPlayerId();
+            var allowed = caller is long callerPid
+                && (callerPid == room.CreatorPlayerId
+                    || await privateInstances.CanJoinAsync(inst.InstanceId, callerPid)
+                    || await db.RoomRoles.AsNoTracking().AnyAsync(rr =>
+                        rr.RoomId == resp.RoomInstance.RoomId
+                        && rr.PlayerId == callerPid
+                        && rr.Accepted));
+            if (!allowed)
+            {
+                logger.LogWarning(
+                    "[goto-privateroom] denied player={Player} room={Room} sub={Sub} — not creator/role/invitee",
+                    caller, resp.RoomInstance.RoomId, subRoomId);
+                resp.ErrorCode = 4; // RoomDoesNotExist — don't leak private rooms
+                resp.RoomInstance = null;
+                return;
+            }
+
+            resp.RoomInstance.RoomInstanceId = inst.InstanceId;
+            resp.RoomInstance.PhotonRoomId = inst.PhotonRoomId;
+            resp.RoomInstance.IsPrivate = true;
+            logger.LogInformation(
+                "[goto-privateroom] room={Room} sub={Sub} owner={Owner} joinMode={Mode} → single instance instId={Id} photon={Photon}",
+                resp.RoomInstance.RoomId, subRoomId, room.CreatorPlayerId,
+                joinMode, inst.InstanceId, inst.PhotonRoomId);
+            return;
+        }
+
         if (createPrivateInstance || joinMode == 2 /* PrivateNewInstance */)
         {
             await ApplyPrivateInstanceAsync(resp, subRoomId);

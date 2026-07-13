@@ -103,6 +103,23 @@ Blob semantics on clone (`RoomsModerationController.BareClone`):
 - **User-owned source** (including AG-flagged clones of RROs): blobs
   are copied so "copy room" carries the player's MakerPen edits.
 
+Clones are created **private** (`Accessibility=0`) regardless of the
+source's visibility; the owner publishes via
+`rooms/{id}/accessibility` when ready.
+
+### Private rooms: one instance per sub-room
+
+Private rooms (`Accessibility=0`) allow exactly ONE instance per
+sub-room. `GoToController.ApplyNewInstanceAsync` funnels every join
+mode (plain matchmake, JoinMode=1 new-public, JoinMode=2 new-private)
+into the same deterministic invite-gated instance
+(`PrivateInstanceService.EnsureForPrivateRoomAsync`, id marker
+`0xEE0000`, keyed on room+subroom — dorms keep their own `0xDD0000`
+flow). Joins by players who are neither the creator, an accepted
+role-holder (co-owner/mod/host), nor an instance invitee return
+`errorCode=4` (RoomDoesNotExist) so private rooms don't leak their
+existence. Tests: `PrivateRoomInstanceTests.cs`.
+
 ## Related 2023 quirks fixed alongside
 
 - **Play-menu search** (`IBEOONPEELF.SearchRooms`): calls

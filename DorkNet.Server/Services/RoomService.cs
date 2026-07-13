@@ -1029,7 +1029,9 @@ public class RoomService(DorkNetDbContext db)
             CreatorPlayerId = playerId,
             ImageName = "",
             State = 0,
-            Accessibility = source.Accessibility,
+            // Clones start private — same rule as BareClone; the owner
+            // publishes explicitly when ready.
+            Accessibility = 0,
             SupportsLevelVoting = source.SupportsLevelVoting,
             // User-cloned rooms are NOT AG-managed: the AG flag means
             // "owned by the Against Gravity seed account, baked into
