@@ -1020,7 +1020,11 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
             CreatorPlayerId = Me,
             ImageName = source.ImageName,
             State = 0,
-            Accessibility = source.Accessibility,
+            // Clones start PRIVATE regardless of the source's visibility —
+            // a fresh copy is the owner's workbench, not something the
+            // public should matchmake into until they flip it public
+            // themselves (rooms/{id}/accessibility).
+            Accessibility = 0,
             SupportsLevelVoting = source.SupportsLevelVoting,
             // Inherit IsAGRoom from the source. This is REQUIRED for cloning a
             // baked RRO room (RecCenter, the games): the client uses IsRRO to

@@ -125,6 +125,30 @@ public class ProtoDumper : MelonMod
                     catch (Exception e) { _log?.Warning($"ProtoDumper: patch {name} failed: {e.Message}"); }
                 }
             }
+
+            // STRONGEST hook: DescriptorPool.AddSymbol(IDescriptor). Called once
+            // per message/enum/service symbol while a descriptor is built. Unlike
+            // the tiny BuildFrom/FromGeneratedCode/ctor helpers, AddSymbol does
+            // real work (name validation + dictionary insert + duplicate-throw),
+            // so the AOT compiler does NOT inline it away — the managed patch
+            // actually fires. From the symbol we walk `.File` to the owning
+            // FileDescriptor and collect its serialized bytes. We also stash the
+            // pool so ScanPools() can later enumerate everything it holds.
+            Type? pool = ResolveType("Google.Protobuf.Reflection.DescriptorPool");
+            if (pool != null)
+            {
+                var symPostfix = new HarmonyMethod(
+                    typeof(ProtoDumper).GetMethod(nameof(AddSymbol_Postfix),
+                        BindingFlags.Public | BindingFlags.Static));
+                foreach (MethodInfo m in pool.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+                {
+                    if (m.Name != "AddSymbol" && m.Name != "AddPackage") continue;
+                    try { HarmonyInstance.Patch(m, postfix: symPostfix); patched++; _log?.Msg($"ProtoDumper: hooked DescriptorPool.{m.Name}({m.GetParameters().Length} args)"); }
+                    catch (Exception e) { _log?.Warning($"ProtoDumper: patch DescriptorPool.{m.Name} failed: {e.Message}"); }
+                }
+            }
+            else _log?.Warning("ProtoDumper: DescriptorPool type not found — AddSymbol hook skipped.");
+
             _log?.Msg($"ProtoDumper: installed {patched} descriptor hooks. Play through your content; descriptors are captured as they load. Watch for 'FIRST DESCRIPTOR CAPTURED'.");
         }
         catch (Exception e) { _log?.Error($"ProtoDumper hook install error: {e}"); }
@@ -172,6 +196,34 @@ public class ProtoDumper : MelonMod
         Fired();
         if (__instance == null) return;
         try { CollectFile(__instance); }
+        catch { /* never let our hook disturb the game */ }
+    }
+
+    // Live DescriptorPool references seen via AddSymbol, kept so ScanPools() can
+    // enumerate every descriptor a pool holds (already-built → no force-build).
+    private static readonly List<object> Pools = new();
+
+    // Postfix on DescriptorPool.AddSymbol / AddPackage. __instance is the pool,
+    // __0 is the IDescriptor symbol being registered. Walk symbol.File to the
+    // owning FileDescriptor and collect it.
+    public static void AddSymbol_Postfix(object? __instance, object? __0)
+    {
+        Fired();
+        try
+        {
+            if (__instance != null)
+            {
+                lock (Gate)
+                {
+                    bool known = false;
+                    foreach (var p in Pools) if (ReferenceEquals(p, __instance)) { known = true; break; }
+                    if (!known) Pools.Add(__instance);
+                }
+            }
+            if (__0 == null) return;
+            object? file = GetProp(__0, "File");
+            if (file != null) CollectFile(file);
+        }
         catch { /* never let our hook disturb the game */ }
     }
 

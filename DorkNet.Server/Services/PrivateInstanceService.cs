@@ -169,6 +169,81 @@ public class PrivateInstanceService(DorkNetDbContext db)
         return ToRecord(entity);
     }
 
+    /// <summary>
+    /// Idempotent registration of THE single instance of a private room's
+    /// sub-room. Private rooms (Accessibility=0) allow exactly ONE instance
+    /// per sub-room: every join — plain matchmake, "new instance", "private
+    /// instance" — funnels into the same deterministic match, so the owner
+    /// and their invitees always end up together instead of fragmenting
+    /// across nonce-forked instances.
+    ///
+    /// Same upsert pattern as <see cref="EnsureForDormAsync"/> but keyed on
+    /// (roomId, subRoomId) ONLY — the instance belongs to the room, not to
+    /// whoever happened to join first. Marker 0xEE0000 keeps the id space
+    /// disjoint from dorms (0xDD0000) and nonce-based RegisterAsync ids.
+    /// OwnerPlayerId tracks the room's CURRENT creator so ownership
+    /// transfers (rooms/{id}/creator) move invite authority with the room.
+    /// </summary>
+    public async Task<PrivateInstance> EnsureForPrivateRoomAsync(
+        long ownerPlayerId, long roomId, long subRoomId,
+        string baseName, string location, string dataBlob,
+        string photonRegion, int maxCapacity, string photonRoomId)
+    {
+        var instanceId = (long)(
+            0xEE0000ul
+            ^ ((ulong)(uint)roomId << 24)
+            ^ ((ulong)(uint)subRoomId << 40));
+        if (instanceId < 0) instanceId = -instanceId;
+
+        var existing = await db.PrivateInstances
+            .FirstOrDefaultAsync(p => p.Id == instanceId);
+        if (existing is not null)
+        {
+            // Keep the row current — same staleness rules as dorms (the
+            // Photon region / blob must follow the latest join or invitees
+            // get parked in a parallel Photon room).
+            var changed = false;
+            if (existing.PhotonRoomId != photonRoomId)   { existing.PhotonRoomId = photonRoomId;   changed = true; }
+            if (existing.DataBlob != dataBlob)           { existing.DataBlob = dataBlob;           changed = true; }
+            if (existing.Location != location)           { existing.Location = location;           changed = true; }
+            if (existing.PhotonRegion != photonRegion)   { existing.PhotonRegion = photonRegion;   changed = true; }
+            if (existing.Name != baseName)               { existing.Name = baseName;               changed = true; }
+            if (existing.OwnerPlayerId != ownerPlayerId) { existing.OwnerPlayerId = ownerPlayerId; changed = true; }
+            if (changed) await db.SaveChangesAsync();
+            return ToRecord(existing);
+        }
+
+        var entity = new PrivateInstanceEntity
+        {
+            Id = instanceId,
+            RoomId = roomId,
+            SubRoomId = subRoomId,
+            OwnerPlayerId = ownerPlayerId,
+            PhotonRoomId = photonRoomId,
+            Location = location,
+            DataBlob = dataBlob,
+            PhotonRegion = photonRegion,
+            MaxCapacity = maxCapacity,
+            Name = baseName,
+            CreatedAt = DateTime.UtcNow,
+        };
+        db.PrivateInstances.Add(entity);
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // Concurrent join raced us to the same deterministic id —
+            // re-fetch the winning row.
+            db.Entry(entity).State = EntityState.Detached;
+            var raced = await db.PrivateInstances.AsNoTracking()
+                .FirstAsync(p => p.Id == instanceId);
+            return ToRecord(raced);
+        }
+        return ToRecord(entity);
+    }
+
     public async Task RemoveAsync(long instanceId)
     {
         // Cascade-delete invitees first so we don't leave orphan rows
