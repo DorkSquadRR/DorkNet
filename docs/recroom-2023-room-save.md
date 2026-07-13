@@ -80,6 +80,29 @@ Server handling: `StorageController.Upload` (FileType 6 →
 | `NDIKGKCFOCG: Failed to save room`, no upload frame in stack | Commit POST rejected — historically 400 `missing_room_data_filename` because the server parsed only the flat 2020 body and missed `SubRoomData.Filename`. |
 | `NDIKGKCFOCG: Failed to save room` preceded by a `NullReferenceException` at `NEOPBOMGIOG.FKDDCNLJOLF` | Commit returned 200 but `value` wasn't `{Room, SubRoomDataSave}` — the save actually persisted; only the response parse failed. |
 
+## Room clone (2023)
+
+The in-room "copy room" flow (`RoomModel.CopyRoom` →
+`RecNet.Runtime NLDBPDCNNCF.GDHIIAHCBMN`) POSTs
+`roomserver/rooms/{id}/clone` with an x-www-form-urlencoded `name=…`
+body — the same `roomserver/` prefix as every other room mutation from
+that client. A bare-only `rooms/{id}/clone` route 404s with an empty
+body, which the client's promise layer surfaces as a message-less
+`Failed to copy room: Exception of type 'CEMNLBKJABA' was thrown`.
+The response must be the FULL room-details object (`FGCPNAACHIK`,
+same shape as `GET roomserver/rooms/{id}`), not a status wrapper.
+
+Blob semantics on clone (`RoomsModerationController.BareClone`):
+
+- **First-party template source** (IsAGRoom + system-owned, e.g. the
+  RecCenter seed): the clone keeps the copied scenes but gets a
+  **fresh empty blob** (`CurrentDataBlobName`/scene `DataBlobName`
+  cleared). Any blob on the template row is a MakerPen overlay against
+  the shared baked scene and must not leak into clones; AG room
+  details also require an empty `DataBlobName` on the wire.
+- **User-owned source** (including AG-flagged clones of RROs): blobs
+  are copied so "copy room" carries the player's MakerPen edits.
+
 ## Related 2023 quirks fixed alongside
 
 - **Play-menu search** (`IBEOONPEELF.SearchRooms`): calls
