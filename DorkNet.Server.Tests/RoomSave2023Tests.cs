@@ -137,6 +137,18 @@ public sealed class RoomSave2023Tests : IClassFixture<DorkNetServerFactory>
     /// scene ids, which collide with the seeded id range once the identity
     /// sequence lags → the clone POST 500s and the client boots the player to
     /// their dorm ("Failed to copy room: Failed to clone room").
+    ///
+    /// The first clone goes through the <c>roomserver/</c>-prefixed route:
+    /// the 2023 in-room "copy room" flow (RecNet.Runtime NLDBPDCNNCF) sends
+    /// that prefix like every other room mutation, and the bare-only route
+    /// 404'd with an empty body ("Failed to copy room: Exception of type
+    /// '…' was thrown").
+    ///
+    /// Blob rules: cloning a FIRST-PARTY template (AG + system-owned) must
+    /// give the clone a FRESH empty blob — the template's blob is a MakerPen
+    /// overlay against the shared baked scene, not the clone's content.
+    /// Cloning a USER-owned room (even AG-flagged) must carry its blob so
+    /// "copy room" keeps the player's edits.
     /// </summary>
     [Fact]
     public async Task Cloning_a_room_and_then_the_clone_both_succeed()
@@ -145,6 +157,7 @@ public sealed class RoomSave2023Tests : IClassFixture<DorkNetServerFactory>
         var owner = await GameClientSessionFactory.CreateAsync(setupClient, _factory.ApexDomain);
 
         var roomId = 9_300_777L;
+        var templateBlob = $"room_{roomId}_v1.dat";
         await using (var scope = _factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<DorkNetDbContext>();
@@ -155,23 +168,24 @@ public sealed class RoomSave2023Tests : IClassFixture<DorkNetServerFactory>
                     Id = roomId,
                     Name = $"CloneSrc_{Guid.NewGuid():N}"[..20],
                     Description = "clone source",
-                    CreatorPlayerId = owner.PlayerId,
+                    // A first-party RRO/AG base room (RecCenter-like):
+                    // system-owned, CloningAllowed=false, yet the base-room
+                    // picker must still be able to clone it. Its blob is a
+                    // MakerPen overlay that must NOT leak into clones.
+                    CreatorPlayerId = PlayerService.SystemAccountId,
                     ImageName = RoomService.DefaultRoomImageName,
                     Accessibility = 1,
-                    // An RRO/AG base room (RecCenter-like): CloningAllowed is
-                    // false and it's owned by the system, yet the base-room
-                    // picker must still be able to clone it.
                     IsAGRoom = true,
                     IsDormRoom = false,
                     CloningAllowed = false,
-                    CurrentDataBlobName = $"room_{roomId}_v1.dat",
+                    CurrentDataBlobName = templateBlob,
                 });
                 db.RoomScenes.Add(new RoomSceneEntity
                 {
                     RoomId = roomId,
                     OrderIndex = 0,
                     Name = "Main",
-                    DataBlobName = $"room_{roomId}_v1.dat",
+                    DataBlobName = templateBlob,
                 });
                 await db.SaveChangesAsync();
             }
@@ -179,21 +193,61 @@ public sealed class RoomSave2023Tests : IClassFixture<DorkNetServerFactory>
 
         using var roomsClient = ApiClient(owner, subdomain: "rooms");
 
-        var firstCloneId = await CloneAndAssertAsync(roomsClient, roomId, "FirstClone");
+        // First clone: template → player copy, via the roomserver/ prefix the
+        // real client uses.
+        var firstCloneId = await CloneAndAssertAsync(
+            roomsClient, roomId, "FirstClone", pathPrefix: "/roomserver");
         Assert.NotEqual(roomId, firstCloneId);
+        await AssertBlobsAsync(firstCloneId, expectEmpty: true,
+            "first-party template blob must not be copied onto the clone");
 
-        // The regression: cloning the clone.
+        // Simulate the player saving MakerPen edits into their clone.
+        var editedBlob = $"room_{firstCloneId}_edit_{Guid.NewGuid():N}.dat";
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<DorkNetDbContext>();
+            var room = await db.Rooms.SingleAsync(r => r.Id == firstCloneId);
+            room.CurrentDataBlobName = editedBlob;
+            var scene = await db.RoomScenes.SingleAsync(s => s.RoomId == firstCloneId);
+            scene.DataBlobName = editedBlob;
+            await db.SaveChangesAsync();
+        }
+
+        // The regression: cloning the clone (bare path still works too).
+        // The source is user-owned — even though it inherited IsAGRoom, the
+        // player's edits must carry over.
         var secondCloneId = await CloneAndAssertAsync(roomsClient, firstCloneId, "SecondClone");
         Assert.NotEqual(firstCloneId, secondCloneId);
+        await AssertBlobsAsync(secondCloneId, expectEmpty: false,
+            "copying a user-owned room must keep its blob (player edits)");
     }
 
-    private static async Task<long> CloneAndAssertAsync(HttpClient client, long sourceId, string name)
+    private async Task AssertBlobsAsync(long roomId, bool expectEmpty, string why)
+    {
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<DorkNetDbContext>();
+        var room = await db.Rooms.SingleAsync(r => r.Id == roomId);
+        var scene = await db.RoomScenes.SingleAsync(s => s.RoomId == roomId);
+        if (expectEmpty)
+        {
+            Assert.True(string.IsNullOrEmpty(room.CurrentDataBlobName), $"{why}: room blob was '{room.CurrentDataBlobName}'");
+            Assert.True(string.IsNullOrEmpty(scene.DataBlobName), $"{why}: scene blob was '{scene.DataBlobName}'");
+        }
+        else
+        {
+            Assert.False(string.IsNullOrEmpty(room.CurrentDataBlobName), $"{why}: room blob was empty");
+            Assert.False(string.IsNullOrEmpty(scene.DataBlobName), $"{why}: scene blob was empty");
+        }
+    }
+
+    private static async Task<long> CloneAndAssertAsync(
+        HttpClient client, long sourceId, string name, string pathPrefix = "")
     {
         // The real 2023 client posts the name as x-www-form-urlencoded
         // (`name=...`), NOT JSON — testing with JSON would miss the 415 that
         // a [FromBody] handler returns for a form POST.
         using var resp = await client.PostAsync(
-            $"/rooms/{sourceId}/clone",
+            $"{pathPrefix}/rooms/{sourceId}/clone",
             new FormUrlEncodedContent(new Dictionary<string, string> { ["name"] = name }));
         var text = await resp.Content.ReadAsStringAsync();
         Assert.True(resp.IsSuccessStatusCode, $"clone of {sourceId} -> {(int)resp.StatusCode}: {text}");

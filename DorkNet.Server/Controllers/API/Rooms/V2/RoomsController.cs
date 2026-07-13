@@ -3449,6 +3449,7 @@ public class RoomsController(
     /// a scene (DataBlobName + location pointer). New scene goes at the
     /// end with " Copy" suffix; per-room name uniqueness preserved.</summary>
     [HttpPost("rooms/{roomId:long}/subrooms/{subRoomId:long}/clone")]
+    [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/clone")]
     [Authorize]
     public async Task<IActionResult> CloneSubRoom(long roomId, long subRoomId)
     {

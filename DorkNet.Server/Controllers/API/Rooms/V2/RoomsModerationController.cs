@@ -5,6 +5,7 @@ using System.Text.Json;
 using DorkNet.Server.Auth;
 using DorkNet.Server.Data;
 using DorkNet.Server.Data.Entities;
+using DorkNet.Server.Services;
 
 namespace DorkNet.Server.Controllers.API.Rooms.V2;
 
@@ -965,7 +966,14 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
     // handler runs → the client reports "Failed to clone room" and boots the
     // player to their dorm. Accept all three content types and read the name
     // manually from form / JSON body / query.
+    // The 2023 in-room "copy room" flow (RecNet.Runtime NLDBPDCNNCF, the
+    // roomserver client that also sends the subrooms/... mutations) POSTs
+    // this with the roomserver/ prefix — bare-only routing 404s with an
+    // empty body, which the client's promise layer surfaces as a
+    // message-less exception ("Failed to copy room: Exception of type
+    // '...' was thrown"). Same fix as maxplayers/modify/name.
     [HttpPost("rooms/{roomId:long}/clone")]
+    [HttpPost("roomserver/rooms/{roomId:long}/clone")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
     public async Task<IActionResult> BareClone(long roomId)
     {
@@ -1052,7 +1060,15 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
             // badge, and quest-instance logic can boot the player). Match
             // RoomService.CloneAsync and tag it "community".
             TagsCsv = "community",
-            CurrentDataBlobName = source.CurrentDataBlobName,
+            // First-party RRO templates (AG rooms owned by the system
+            // account — RecCenter and friends) keep their content in baked
+            // client geometry; any blob on the row is a MakerPen OVERLAY
+            // save made against the shared template. A clone must start
+            // from the pristine baked scene with a fresh (empty) blob, not
+            // inherit that overlay. Scoped to system-owned templates so
+            // copying a USER's RRO-derived room (IsAGRoom inherited) still
+            // carries their MakerPen edits along.
+            CurrentDataBlobName = IsFirstPartyTemplate(source) ? string.Empty : source.CurrentDataBlobName,
         };
         db.Rooms.Add(clone);
         await db.SaveChangesAsync();
@@ -1077,7 +1093,9 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
             OrderIndex = s.OrderIndex,
             Name = s.Name,
             RoomSceneLocationId = s.RoomSceneLocationId,
-            DataBlobName = s.DataBlobName,
+            // Fresh blob when cloning a first-party template — see
+            // CurrentDataBlobName above.
+            DataBlobName = IsFirstPartyTemplate(source) ? string.Empty : s.DataBlobName,
             StudioSubRoomDataSaveId = s.StudioSubRoomDataSaveId,
             StudioUnityAssetId = s.StudioUnityAssetId,
             StudioAssetBundleNamesCsv = s.StudioAssetBundleNamesCsv,
@@ -1103,6 +1121,12 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
         // room".
         return Ok(RoomsController.BuildRoomServerDetails(clone, clonedScenes));
     }
+    /// <summary>A seeded first-party RRO template (RecCenter, the games):
+    /// AG-flagged AND owned by the system account. User clones inherit the
+    /// AG flag but are owned by the player, so they don't match.</summary>
+    private static bool IsFirstPartyTemplate(RoomEntity room)
+        => room.IsAGRoom && room.CreatorPlayerId == PlayerService.SystemAccountId;
+
     private async Task<string> ReadCloneNameAsync()
     {
         // Form: name=... (what the 2023 client sends).

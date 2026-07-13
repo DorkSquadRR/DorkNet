@@ -51,6 +51,12 @@ public class ProtoDumper : MelonMod
     private static volatile bool _dirty;
     private int _frame;
 
+    // Interception heartbeat: how many times any hooked method actually ran.
+    // Lets us distinguish "hook never fires (inlined/wrong target)" from
+    // "content that builds protos hasn't loaded yet".
+    private static long _fireCount;
+    private static bool _firstFireLogged;
+
     public override void OnInitializeMelon()
     {
         _log = LoggerInstance;
@@ -84,21 +90,42 @@ public class ProtoDumper : MelonMod
             var postfix = new HarmonyMethod(
                 typeof(ProtoDumper).GetMethod(nameof(Captured_Postfix),
                     BindingFlags.Public | BindingFlags.Static));
+            var ctorPostfix = new HarmonyMethod(
+                typeof(ProtoDumper).GetMethod(nameof(Ctor_Postfix),
+                    BindingFlags.Public | BindingFlags.Static));
 
             int patched = 0;
-            // BuildFrom is the lower-level builder every descriptor passes
-            // through; FromGeneratedCode is the generated-code entry point.
-            // Patch both (deduped downstream) so nothing is missed.
+
+            // PRIMARY hook: the 6-arg instance constructor. Every FileDescriptor
+            // is built via `newobj` through this ctor, which is NOT an inlining
+            // candidate the way the small static BuildFrom/FromGeneratedCode
+            // helpers are (those get AOT-inlined into each generated cctor, so a
+            // Harmony patch on the managed wrapper never fires — the real work
+            // runs as inlined native code). The ctor stores SerializedData /
+            // Proto / Name before it returns, so __instance carries the full
+            // descriptor bytes.
+            foreach (ConstructorInfo c in fd.GetConstructors(
+                         BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
+            {
+                var ps = c.GetParameters();
+                // Skip the Il2CppInterop IntPtr wrapper ctor (single IntPtr arg).
+                if (ps.Length == 1 && ps[0].ParameterType == typeof(IntPtr)) continue;
+                try { HarmonyInstance.Patch(c, postfix: ctorPostfix); patched++; _log?.Msg($"ProtoDumper: hooked .ctor({ps.Length} args)"); }
+                catch (Exception e) { _log?.Warning($"ProtoDumper: patch .ctor({ps.Length}) failed: {e.Message}"); }
+            }
+
+            // SECONDARY hooks (kept as a belt-and-braces net in case the ctor is
+            // itself inlined on some build): BuildFrom / FromGeneratedCode.
             foreach (string name in new[] { "BuildFrom", "FromGeneratedCode" })
             {
-                foreach (MethodInfo m in fd.GetMethods(BindingFlags.Public | BindingFlags.Static))
+                foreach (MethodInfo m in fd.GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static))
                 {
                     if (m.Name != name) continue;
-                    try { HarmonyInstance.Patch(m, postfix: postfix); patched++; }
+                    try { HarmonyInstance.Patch(m, postfix: postfix); patched++; _log?.Msg($"ProtoDumper: hooked {name}({m.GetParameters().Length} args)"); }
                     catch (Exception e) { _log?.Warning($"ProtoDumper: patch {name} failed: {e.Message}"); }
                 }
             }
-            _log?.Msg($"ProtoDumper: installed {patched} descriptor-build hooks. Play through your content; descriptors are captured as they load.");
+            _log?.Msg($"ProtoDumper: installed {patched} descriptor hooks. Play through your content; descriptors are captured as they load. Watch for 'FIRST DESCRIPTOR CAPTURED'.");
         }
         catch (Exception e) { _log?.Error($"ProtoDumper hook install error: {e}"); }
     }
@@ -132,9 +159,33 @@ public class ProtoDumper : MelonMod
     // object — same pattern the ClientMod uses for il2cpp reference returns).
     public static void Captured_Postfix(object? __result)
     {
+        Fired();
         if (__result == null) return;
         try { CollectFile(__result); }
         catch { /* never let our hook disturb the game */ }
+    }
+
+    // Postfix on the FileDescriptor instance ctor — __instance is the freshly
+    // constructed descriptor (SerializedData/Proto/Name already set).
+    public static void Ctor_Postfix(object? __instance)
+    {
+        Fired();
+        if (__instance == null) return;
+        try { CollectFile(__instance); }
+        catch { /* never let our hook disturb the game */ }
+    }
+
+    // Interception heartbeat — proves a hooked method actually ran. Logged once
+    // on first fire, so "no output" can be diagnosed as inlining (never fires)
+    // vs. content-not-loaded (fires but no proto-building content yet).
+    private static void Fired()
+    {
+        long n = System.Threading.Interlocked.Increment(ref _fireCount);
+        if (!_firstFireLogged)
+        {
+            _firstFireLogged = true;
+            _log?.Msg("ProtoDumper: FIRST DESCRIPTOR CAPTURED — interception is live.");
+        }
     }
 
     private static void CollectFile(object file)
@@ -213,11 +264,27 @@ public class ProtoDumper : MelonMod
         return p?.GetValue(obj);
     }
 
+    private long _lastReportedFire = -1;
+
     public override void OnUpdate()
     {
         // Flush to disk shortly after new descriptors are captured (every ~1s).
         if (++_frame % 60 == 0 && _dirty)
             Flush();
+
+        // Every ~5s, if the hooks fired since last report, log the running
+        // fire/capture counts — surfaces "fired but 0 files" (empty base64)
+        // separately from "never fired".
+        if (_frame % 300 == 0)
+        {
+            long f = System.Threading.Interlocked.Read(ref _fireCount);
+            if (f != _lastReportedFire)
+            {
+                _lastReportedFire = f;
+                int files; lock (Gate) files = Files.Count;
+                _log?.Msg($"ProtoDumper heartbeat: hook-fires={f}, unique-descriptors={files}");
+            }
+        }
     }
 
     public override void OnApplicationQuit() => Flush();
