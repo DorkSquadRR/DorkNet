@@ -601,11 +601,30 @@ public class RoomsController(
     /// list of saves for a subroom
     /// (<c>String.Format("rooms/{0}/subrooms/{1}/saves", roomId, subRoomId)</c>).
     /// Returns the current save plus any historical blobs recorded for the
-    /// subroom, newest first, each in the <c>SubRoomDataSave</c> shape.</summary>
+    /// subroom, newest first, each in the <c>SubRoomDataSave</c> shape.
+    ///
+    /// <para><b>Wire shape is a PAGED OBJECT, not a bare list.</b> The 2023
+    /// client's <c>GetSubRoomDataSaves</c> (RecNet.Runtime
+    /// NLDBPDCNNCF.LDLMCGBIJFH, state machine IOAKBKKDFEE, sends
+    /// <c>skip</c>/<c>take</c>) deserializes
+    /// <c>PagedResultsDTO&lt;SubRoomDataSaveDTO&gt;</c> —
+    /// <c>{"Results":[…],"TotalResults":N}</c> per the Studio decompile
+    /// (RRStudio-decomp <c>PagedResultsDTO.cs</c>, plain .NET names). A
+    /// bare array throws <c>expected:'{', actual:'['</c> in the strict
+    /// reader, which kills the whole calling flow: room clone dies with
+    /// the message-less "Failed to copy room" and the private-instance
+    /// button silently does nothing.</para></summary>
     [HttpGet("rooms/{roomId:long}/subrooms/{subRoomId:long}/saves")]
     [HttpGet("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/saves")]
+    // Studio editor asks for the same page without the heavy Unity-asset
+    // payload (CLAJDMOFFOS.PGGIWOJWHOM). Our rows never carry inline asset
+    // bytes, so the same handler serves both.
+    [HttpGet("rooms/{roomId:long}/subrooms/{subRoomId:long}/saves/no_unity_assets")]
+    [HttpGet("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/saves/no_unity_assets")]
     [Authorize]
-    public async Task<IActionResult> SubRoomSaves(long roomId, long subRoomId)
+    public async Task<IActionResult> SubRoomSaves(
+        long roomId, long subRoomId,
+        [FromQuery] int skip = 0, [FromQuery] int take = 50)
     {
         var room = await rooms.GetByIdAsync(roomId);
         if (room is null) return NotFound(new { error = "room_not_found", roomId });
@@ -650,12 +669,25 @@ public class RoomsController(
                 SavedByAccountId = h.UploadedByPlayerId,
                 SavedOnPlatform = 7,
                 SavedOnDeviceClass = 2,
-                SavedAt = (h.UploadedAt == default ? DateTime.UtcNow : h.UploadedAt)
+                // Match BuildStudioSaveWire's key set — the strict readers
+                // key on CreatedAt/CreatedByAccountId (SavedAt was our own
+                // invention and no reader consumes it).
+                CreatedAt = (h.UploadedAt == default ? DateTime.UtcNow : h.UploadedAt)
                     .ToString("yyyy-MM-ddTHH:mm:ssZ"),
+                CreatedByAccountId = h.UploadedByPlayerId,
             });
         }
 
-        return Ok(saves);
+        var total = saves.Count;
+        var page = saves
+            .Skip(Math.Max(0, skip))
+            .Take(take > 0 ? take : 50)
+            .ToList();
+        return Ok(new
+        {
+            Results = page,
+            TotalResults = total,
+        });
     }
 
     /// <summary>Build one subroom entry in the wire shape the watch's

@@ -260,6 +260,65 @@ public sealed class RoomSave2023Tests : IClassFixture<DorkNetServerFactory>
         return root.GetProperty("RoomId").GetInt64();
     }
 
+    /// <summary>
+    /// Regression: <c>GET rooms/{id}/subrooms/{sub}/saves</c> must return the
+    /// paged wrapper <c>{"Results":[…],"TotalResults":N}</c>
+    /// (PagedResultsDTO&lt;SubRoomDataSaveDTO&gt;), NOT a bare array. The 2023
+    /// client's GetSubRoomDataSaves strict reader throws
+    /// <c>expected:'{', actual:'['</c> on an array, which aborts the whole
+    /// calling flow — room clone fails with the message-less "Failed to copy
+    /// room" and the private-instance button silently does nothing.
+    /// </summary>
+    [Fact]
+    public async Task SubRoom_saves_returns_paged_object_not_bare_array()
+    {
+        using var setupClient = ApiClient();
+        var owner = await GameClientSessionFactory.CreateAsync(setupClient, _factory.ApexDomain);
+
+        var roomId = 9_300_888L;
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<DorkNetDbContext>();
+            if (!await db.Rooms.AnyAsync(r => r.Id == roomId))
+            {
+                db.Rooms.Add(new RoomEntity
+                {
+                    Id = roomId,
+                    Name = $"SavesShape_{Guid.NewGuid():N}"[..20],
+                    CreatorPlayerId = owner.PlayerId,
+                    ImageName = RoomService.DefaultRoomImageName,
+                    Accessibility = 1,
+                    CurrentDataBlobName = $"room_{roomId}_v1.dat",
+                });
+                db.RoomScenes.Add(new RoomSceneEntity
+                {
+                    RoomId = roomId,
+                    OrderIndex = 0,
+                    Name = "Home",
+                    DataBlobName = $"room_{roomId}_v1.dat",
+                });
+                await db.SaveChangesAsync();
+            }
+        }
+
+        using var roomsClient = ApiClient(owner, subdomain: "rooms");
+        foreach (var path in new[]
+        {
+            $"/roomserver/rooms/{roomId}/subrooms/0/saves?skip=0&take=10",
+            $"/rooms/{roomId}/subrooms/0/saves",
+            $"/roomserver/rooms/{roomId}/subrooms/0/saves/no_unity_assets?skip=0&take=10",
+        })
+        {
+            using var resp = await roomsClient.GetAsync(path);
+            var text = await resp.Content.ReadAsStringAsync();
+            Assert.True(resp.IsSuccessStatusCode, $"{path} -> {(int)resp.StatusCode}: {text}");
+            using var json = JsonDocument.Parse(text);
+            Assert.Equal(JsonValueKind.Object, json.RootElement.ValueKind);
+            Assert.Equal(JsonValueKind.Array, json.RootElement.GetProperty("Results").ValueKind);
+            Assert.True(json.RootElement.GetProperty("TotalResults").GetInt64() >= 1, $"TotalResults missing/zero: {text}");
+        }
+    }
+
     private HttpClient ApiClient(GameClientSession? session = null, string subdomain = "api")
     {
         var client = _factory.CreateClient(new() { AllowAutoRedirect = false });

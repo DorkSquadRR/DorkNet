@@ -107,6 +107,18 @@ Clones are created **private** (`Accessibility=0`) regardless of the
 source's visibility; the owner publishes via
 `rooms/{id}/accessibility` when ready.
 
+### Sub-room saves list is a PAGED OBJECT
+
+`GET rooms/{id}/subrooms/{sub}/saves` (and `…/saves/no_unity_assets`)
+must return `{"Results":[…],"TotalResults":N}` —
+`PagedResultsDTO<SubRoomDataSaveDTO>` per the Studio decompile
+(`RRStudio-decomp/...RecNet/PagedResultsDTO.cs`); the 2023 client's
+`GetSubRoomDataSaves` sends `skip`/`take` and its strict reader throws
+`expected:'{', actual:'['` on a bare array. Because callers run inside
+larger flows, the bare-array bug surfaced as "Failed to copy room:
+Exception of type '…' was thrown" (clone) and a dead private-instance
+button — not as a saves error.
+
 ### Private rooms: one instance per sub-room
 
 Private rooms (`Accessibility=0`) allow exactly ONE instance per
