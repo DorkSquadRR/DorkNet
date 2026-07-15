@@ -1,27 +1,28 @@
 // Raise RRO quest party size past the baked 4 — precisely, only for the
 // allowlisted quests (Cfg.QuestMaxTeamSizeRooms).
 //
-// HOW THE CAP IS REALLY BUILT (cracked from the December dump/ISIL):
+// HOW THE CAP IS REALLY BUILT (cracked from the December dump/ISIL; names
+// re-verified against the March-2023 dump — 2023 obfuscated names below):
 //   GameConfigurationTool.Awake()
-//     → reads its baked `defaultGameConfiguration` (GameConfigurationAsset, the
-//       Unity ScriptableObject @0x58)
-//     → calls GameConfigurationAsset.GDECPANDBHJ()  ← builds the runtime
-//       protobuf GameConfigurationData (PJPAPHKPKGM) FROM the asset
-//     → stores it @0x88 and applies it (OAHJOLJOKGI) to the team manager.
-//   Inside GDECPANDBHJ the build loop reads asset.TeamConfigurations[i]
-//   .MaxTeamSize (a typed int struct-array: [arr+0x20 + i*4]) and writes each
-//   straight into a new GameTeamConfigurationData.TeamSize (HFBCEJLLDLI @0x10).
+//     → reads its baked `defaultGameConfiguration` (GameConfigurationAsset,
+//       a Unity ScriptableObject)
+//     → calls GameConfigurationAsset.FIFOMGAOOHH()  ← builds the runtime
+//       protobuf GameConfigurationData (GPIGCAJICEF) FROM the asset
+//     → stores and applies it to the team manager.
+//   Inside FIFOMGAOOHH the build loop reads asset.TeamConfigurations[i]
+//   .MaxTeamSize (a typed int struct-array) and writes each straight into a
+//   new GameTeamConfigurationData.TeamSize.
 //
 // So the runtime cap originates from the asset's `TeamConfiguration[]` — a
 // READABLE, typed struct array — NOT from anything that needs the obfuscated
 // protobuf. Earlier attempts failed because:
-//   • bumping the asset on a 2s poll happened AFTER GDECPANDBHJ already built &
+//   • bumping the asset on a 2s poll happened AFTER the builder already built &
 //     cached the protobuf (timing, not the wrong field);
-//   • patching the protobuf getters (get_FNJLAGHPMFL / get_FBOCAPLIIDH) is
-//     impossible — Il2CppInterop doesn't emit the generic RepeatedField<T>
-//     getter, and the simple int getter wasn't emitted either.
+//   • patching the protobuf getters is impossible — Il2CppInterop doesn't emit
+//     the generic RepeatedField<T> getter, and the simple int getter wasn't
+//     emitted either.
 //
-// THE FIX: Harmony-PREFIX GameConfigurationAsset.GDECPANDBHJ() and bump the
+// THE FIX: Harmony-PREFIX GameConfigurationAsset.FIFOMGAOOHH() and bump the
 // asset's TeamConfigurations[i].MaxTeamSize to the target IN PLACE, right
 // before it builds the protobuf. The built config then carries the new cap and
 // the team manager / pre-game roster / open-slots all honour it. Scoped by
@@ -42,77 +43,18 @@ internal static class QuestTeamSize
 {
     private const BindingFlags BF = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance;
 
+    // 2023 spawn path (verified in the March-2023 ISIL): the spawn driver
+    // HCPLAILIHEL reads the team-player index from the roster entry
+    // (GameTeamManager/BNBIBPFPJPJ.JPIHHGBLLNG()) and passes it straight into
+    // the KMPAOJGOOCH spawn-point filter. December's intermediate helpers are
+    // gone from this path — the out-param resolver is inlined (zero call
+    // sites), and GetTeamPlayerIndex is only called by Charades/RecRally, so
+    // normalizing it would touch non-quest games. The KMPAOJGOOCH index
+    // argument is the single choke point: normalize it in a prefix and keep
+    // the empty-filter relax postfix as the backstop.
     public static bool TryPatchSpawnIndexNormalizers(HarmonyLib.Harmony harmony)
     {
-        var ok = true;
-        ok &= TryPatchTeamIndexNormalizer(harmony);
-        ok &= TryPatchSpawnModeDataNormalizer(harmony);
-        ok &= TryPatchRequiredSpawnIndexNormalizer(harmony);
-        return ok;
-    }
-
-    private static bool TryPatchTeamIndexNormalizer(HarmonyLib.Harmony harmony)
-    {
-        try
-        {
-            var managerType = Mod.ResolveType("GameTeamManager");
-            var indexType = Mod.ResolveType("CCMLKDOHKJE");
-            if (managerType is null || indexType is null)
-            {
-                Mod.Log.Warning("[patch-miss] GameTeamManager.GetTeamPlayerIndex: type not found");
-                return false;
-            }
-
-            var target = AccessTools.Method(managerType, "GetTeamPlayerIndex");
-            if (target is null)
-            {
-                Mod.Log.Warning("[patch-miss] GameTeamManager.GetTeamPlayerIndex");
-                return false;
-            }
-
-            var patch = typeof(QuestTeamSize)
-                .GetMethod(nameof(NormalizeTeamPlayerIndex_Postfix), BindingFlags.Public | BindingFlags.Static)!
-                .MakeGenericMethod(indexType);
-            harmony.Patch(target, postfix: new HarmonyMethod(patch));
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Mod.Log.Error($"[patch-fail] GameTeamManager.GetTeamPlayerIndex: {ex.Message}");
-            return false;
-        }
-    }
-
-    private static bool TryPatchSpawnModeDataNormalizer(HarmonyLib.Harmony harmony)
-    {
-        try
-        {
-            var spawnType = Mod.ResolveType("GameSpawnManager");
-            var indexType = Mod.ResolveType("CCMLKDOHKJE");
-            if (spawnType is null || indexType is null)
-            {
-                Mod.Log.Warning("[patch-miss] GameSpawnManager.ALCADGJKKHJ: type not found");
-                return false;
-            }
-
-            var target = AccessTools.Method(spawnType, "ALCADGJKKHJ");
-            if (target is null)
-            {
-                Mod.Log.Warning("[patch-miss] GameSpawnManager.ALCADGJKKHJ");
-                return false;
-            }
-
-            var patch = typeof(QuestTeamSize)
-                .GetMethod(nameof(NormalizeSpawnModeData_Postfix), BindingFlags.Public | BindingFlags.Static)!
-                .MakeGenericMethod(indexType);
-            harmony.Patch(target, postfix: new HarmonyMethod(patch));
-            return true;
-        }
-        catch (Exception ex)
-        {
-            Mod.Log.Error($"[patch-fail] GameSpawnManager.ALCADGJKKHJ: {ex.Message}");
-            return false;
-        }
+        return TryPatchRequiredSpawnIndexNormalizer(harmony);
     }
 
     private static bool TryPatchRequiredSpawnIndexNormalizer(HarmonyLib.Harmony harmony)
@@ -120,17 +62,17 @@ internal static class QuestTeamSize
         try
         {
             var spawnType = Mod.ResolveType("GameSpawnManager");
-            var indexType = Mod.ResolveType("CCMLKDOHKJE");
+            var indexType = Mod.ResolveType("NBCOFGIKKHM");
             if (spawnType is null || indexType is null)
             {
-                Mod.Log.Warning("[patch-miss] GameSpawnManager.FKEICBPCMPJ index normalizer: type not found");
+                Mod.Log.Warning("[patch-miss] GameSpawnManager.KMPAOJGOOCH index normalizer: type not found");
                 return false;
             }
 
-            var target = AccessTools.Method(spawnType, "FKEICBPCMPJ");
+            var target = AccessTools.Method(spawnType, "KMPAOJGOOCH");
             if (target is null)
             {
-                Mod.Log.Warning("[patch-miss] GameSpawnManager.FKEICBPCMPJ index normalizer");
+                Mod.Log.Warning("[patch-miss] GameSpawnManager.KMPAOJGOOCH index normalizer");
                 return false;
             }
 
@@ -142,55 +84,17 @@ internal static class QuestTeamSize
         }
         catch (Exception ex)
         {
-            Mod.Log.Error($"[patch-fail] GameSpawnManager.FKEICBPCMPJ index normalizer: {ex.Message}");
+            Mod.Log.Error($"[patch-fail] GameSpawnManager.KMPAOJGOOCH index normalizer: {ex.Message}");
             return false;
         }
     }
 
-    // POSTFIX on GameTeamManager.GetTeamPlayerIndex(Player). The RRO quest
-    // scenes only have spawn points for indexes 0-3. After raising the quest
-    // team cap, players 5+ legitimately receive INDEX_4+, but those values
-    // cannot match any baked quest spawn point. Normalize just the enum result
-    // that spawn code asks for; the actual team roster/cap remains raised.
-    public static void NormalizeTeamPlayerIndex_Postfix<T>(ref T __result) where T : struct
-    {
-        try
-        {
-            if (Mod.Cfg.QuestMaxTeamSize <= 4) return;
-
-            var value = Convert.ToInt32(__result);
-            if (!TryNormalizeIndex(value, out var normalized)) return;
-
-            __result = (T)Enum.ToObject(typeof(T), normalized);
-        }
-        catch (Exception ex)
-        {
-            Mod.Log.Warning($"[questsize] team-player index normalize failed: {ex.Message}");
-        }
-    }
-
-    // POSTFIX on GameSpawnManager.ALCADGJKKHJ(..., out CCMLKDOHKJE index, ...).
-    // FPBFJMMKPPJ calls this private helper immediately before FKEICBPCMPJ, so
-    // this is the exact spawn-path value seen in the "TeamIndex INDEX_4" log.
-    public static void NormalizeSpawnModeData_Postfix<T>(ref T __3) where T : struct
-    {
-        try
-        {
-            if (Mod.Cfg.QuestMaxTeamSize <= 4) return;
-
-            var value = Convert.ToInt32(__3);
-            if (!TryNormalizeIndex(value, out var normalized)) return;
-
-            __3 = (T)Enum.ToObject(typeof(T), normalized);
-        }
-        catch (Exception ex)
-        {
-            Mod.Log.Warning($"[questsize] spawn-mode index normalize failed: {ex.Message}");
-        }
-    }
-
-    // PREFIX on GameSpawnManager.FKEICBPCMPJ(..., CCMLKDOHKJE requiredIndex, ...).
-    // This is the last guard before the spawn point field compare at +0x88.
+    // PREFIX on GameSpawnManager.KMPAOJGOOCH(..., NBCOFGIKKHM index, ...).
+    // The RRO quest scenes only have spawn points for indexes 0-3. After
+    // raising the quest team cap, players 5+ legitimately receive INDEX_4+,
+    // but those values cannot match any baked quest spawn point. Normalize
+    // just the index the spawn-point filter compares against; the actual team
+    // roster/cap remains raised.
     public static void NormalizeRequiredSpawnIndex_Prefix<T>(ref T __2) where T : struct
     {
         try
@@ -214,7 +118,7 @@ internal static class QuestTeamSize
         return value >= 4;
     }
 
-    // PREFIX on GameConfigurationAsset.GDECPANDBHJ()  (asset → protobuf builder).
+    // PREFIX on GameConfigurationAsset.FIFOMGAOOHH()  (asset → protobuf builder).
     public static void Build_Prefix(object __instance)
     {
         try
@@ -244,14 +148,14 @@ internal static class QuestTeamSize
         catch (Exception ex) { Mod.Log.Warning($"[questsize] build prefix failed: {ex.Message}"); }
     }
 
-    // POSTFIX on GameSpawnManager.FKEICBPCMPJ(..., outputList). That method
+    // POSTFIX on GameSpawnManager.KMPAOJGOOCH(..., outputList). That method
     // filters spawn points by state/game-mode/spectator/team/team-player-index/
     // custom-tag before the spawn selector runs. The RRO quest prefabs only
     // have indexed start points for players 0-3; once we raise the team size,
     // player index 4+ can filter every point out before the built-in overlap
     // fallback has a chance to help.
     //
-    // December decompile: FPBFJMMKPPJ calls this filter, then if output.Count
+    // The caller (2023: HCPLAILIHEL) runs this filter, then if output.Count
     // is still 0 it logs "due to spawn point requirement tests" and falls back
     // to the unfiltered source list as an arbitrary spawn set. Filling the
     // output list here keeps the normal overlap pass and spawn-selection mode
