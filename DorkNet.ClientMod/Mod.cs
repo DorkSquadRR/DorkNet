@@ -164,17 +164,17 @@ public class Mod : MelonMod
         if (Cfg.QuestMaxTeamSize > 0)
         {
             // The runtime team cap is built from the baked GameConfigurationAsset
-            // (a readable ScriptableObject) by GameConfigurationAsset.GDECPANDBHJ()
+            // (a readable ScriptableObject) by GameConfigurationAsset.FIFOMGAOOHH()
             // — it reads asset.TeamConfigurations[i].MaxTeamSize (a typed int
             // struct-array) into the protobuf TeamSize. Prefix that builder and
             // bump the source array IN PLACE before it converts, scoped by
             // asset.Name. This avoids the obfuscated protobuf entirely (its
             // generic RepeatedField getter isn't emitted by Il2CppInterop).
             // Host-authoritative: the quest host must run the mod. See QuestTeamSize.
-            TryPatchByName("RecRoom.Core.GameManagement.GameConfigurationAsset", "GDECPANDBHJ",
+            TryPatchByName("RecRoom.Core.GameManagement.GameConfigurationAsset", "FIFOMGAOOHH",
                            prefix: nameof(QuestTeamSize.Build_Prefix));
             QuestTeamSize.TryPatchSpawnIndexNormalizers(HarmonyInstance);
-            TryPatchByName("GameSpawnManager", "FKEICBPCMPJ",
+            TryPatchByName("GameSpawnManager", "KMPAOJGOOCH",
                            postfix: nameof(QuestTeamSize.RelaxEmptySpawnFilter_Postfix));
         }
 
