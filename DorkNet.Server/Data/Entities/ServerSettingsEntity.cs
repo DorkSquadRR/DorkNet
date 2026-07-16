@@ -92,6 +92,16 @@ public class ServerSettingsEntity
     /// redeploy.</summary>
     public string CharadesSlotBindingsJson { get; set; } = string.Empty;
 
+    /// <summary>When true, the CDN serve path stops clamping the two
+    /// top-level PersistedRoomData version varints down to the March-2023
+    /// client's maxima (DEPRECATED_RoomPersistenceVersion 38 /
+    /// PersistedRoomVersion 19). Modern RecNet exports stamp far higher
+    /// values and the client rejects the room with its "update Rec Room to
+    /// visit this room" gate — so the clamp is ON by default and this
+    /// toggle exists as an escape hatch if a particular blob misbehaves.
+    /// See <see cref="Services.RoomDataBlobService.ClampVersionsFor2023"/>.</summary>
+    public bool RoomBlobVersionClampDisabled { get; set; }
+
     /// <summary>Ordered list of room NAMES shown in the room-creation "base
     /// room" picker (<c>rooms/base</c> / <c>api/rooms/v*/baserooms</c>), as a
     /// JSON string array. Empty falls back to the built-in default set. Lets

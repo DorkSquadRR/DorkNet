@@ -1499,6 +1499,7 @@ public class AdminController(
             row.WeeklyChallengesCompletedRequired,
             row.ProfanityFilterDisabled,
             row.AllAvatarItemsOwned,
+            row.RoomBlobVersionClampDisabled,
             row.UpdatedAt,
         });
     }
@@ -1526,6 +1527,7 @@ public class AdminController(
             row.WeeklyChallengesCompletedRequired,
             row.ProfanityFilterDisabled,
             row.AllAvatarItemsOwned,
+            row.RoomBlobVersionClampDisabled,
             row.UpdatedAt,
         });
     }
@@ -1552,6 +1554,35 @@ public class AdminController(
             row.WeeklyChallengesCompletedRequired,
             row.ProfanityFilterDisabled,
             row.AllAvatarItemsOwned,
+            row.RoomBlobVersionClampDisabled,
+            row.UpdatedAt,
+        });
+    }
+
+    public sealed record RoomBlobVersionClampToggleRequest(bool Disabled);
+
+    /// <summary>POST <c>api/admin/v1/settings/room-blob-version-clamp</c> —
+    /// flip the CDN's PersistedRoomData version clamp. While active (the
+    /// default), room-data blobs are served with their two top-level version
+    /// varints clamped down to the March-2023 client's maxima so rooms
+    /// imported from modern RecNet exports don't trip the client's
+    /// "update Rec Room to visit this room" gate. Disabling serves every
+    /// blob byte-for-byte as stored. Takes effect on the next blob download
+    /// (plus up to a minute of edge cache).</summary>
+    [HttpPost("settings/room-blob-version-clamp")]
+    public async Task<ActionResult> SetRoomBlobVersionClampDisabled([FromBody] RoomBlobVersionClampToggleRequest body)
+    {
+        var row = await serverSettings.SetRoomBlobVersionClampDisabledAsync(body.Disabled);
+        await LogAsync(body.Disabled ? "room_blob_version_clamp_disabled" : "room_blob_version_clamp_enabled", "system", 0, "");
+        await db.SaveChangesAsync();
+        return Ok(new
+        {
+            row.SignupsDisabled,
+            row.GlobalFriendsEnabled,
+            row.WeeklyChallengesCompletedRequired,
+            row.ProfanityFilterDisabled,
+            row.AllAvatarItemsOwned,
+            row.RoomBlobVersionClampDisabled,
             row.UpdatedAt,
         });
     }
@@ -1667,6 +1698,7 @@ public class AdminController(
             row.WeeklyChallengesCompletedRequired,
             row.ProfanityFilterDisabled,
             row.AllAvatarItemsOwned,
+            row.RoomBlobVersionClampDisabled,
             row.UpdatedAt,
         });
     }
@@ -1690,6 +1722,7 @@ public class AdminController(
             row.WeeklyChallengesCompletedRequired,
             row.ProfanityFilterDisabled,
             row.AllAvatarItemsOwned,
+            row.RoomBlobVersionClampDisabled,
             row.UpdatedAt,
         });
     }

@@ -247,6 +247,26 @@ public class ServerSettingsService(DorkNetDbContext db)
         return existing;
     }
 
+    /// <summary>Whether the CDN's PersistedRoomData version clamp for the
+    /// March-2023 client is bypassed. Off by default (clamp active) — see
+    /// <see cref="ServerSettingsEntity.RoomBlobVersionClampDisabled"/> and
+    /// <see cref="RoomDataBlobService.ClampVersionsFor2023"/>.</summary>
+    public async Task<bool> IsRoomBlobVersionClampDisabledAsync()
+    {
+        var row = await db.ServerSettings.AsNoTracking()
+            .FirstOrDefaultAsync(s => s.Id == RowId);
+        return row?.RoomBlobVersionClampDisabled ?? false;
+    }
+
+    public async Task<ServerSettingsEntity> SetRoomBlobVersionClampDisabledAsync(bool disabled)
+    {
+        var existing = await GetTrackedRowAsync();
+        existing.RoomBlobVersionClampDisabled = disabled;
+        existing.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return existing;
+    }
+
     /// <summary>Live charades slot→list bindings. Empty/unparseable JSON
     /// resolves to <see cref="CharadesSlotBindings.Empty"/> (every slot
     /// falls back to its built-in seed list).</summary>
