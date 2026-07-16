@@ -42,6 +42,7 @@ public class CdnController(
     IObjectStorage storage,
     ImageSignatureService signatures,
     DorkNetDbContext db,
+    ServerSettingsService serverSettings,
     ILogger<CdnController> logger) : ControllerBase
 {
     /// <summary>1x1 transparent PNG used for missing image files.
@@ -494,12 +495,38 @@ public class CdnController(
                 }
             }
 
+            // Modern-authored saves (RecNet zip exports, 2024+ clients)
+            // stamp PersistedRoomVersion values past what the March-2023
+            // client knows, and it rejects the whole room with the
+            // "update Rec Room to visit this room" gate before spawning
+            // anything. Clamp the two top-level version varints down to
+            // the 2023 maxima on the way out; blobs already at or below
+            // them pass through byte-identical. Admins can bypass the
+            // clamp from the SPA's server-settings page.
+            var clampedRoomVersions = false;
+            if (IsRoomDataName(fileName) &&
+                !await serverSettings.IsRoomBlobVersionClampDisabledAsync())
+            {
+                var (clamped, clampChanged) = RoomDataBlobService.ClampVersionsFor2023(s3Bytes);
+                if (clampChanged)
+                {
+                    logger.LogInformation(
+                        "[cdn] clamped persisted-room versions to 2023 maxima host={Host} file={File} bytes={Bytes}",
+                        Request.Host.Host, fileName, clamped.Length);
+                    s3Bytes = clamped;
+                    clampedRoomVersions = true;
+                }
+            }
+
             logger.LogInformation("[cdn] s3 hit host={Host} file={File} bytes={Bytes}",
                 Request.Host.Host, fileName, s3Bytes.Length);
             // Allow CF edge to cache for an hour. RoomDataBlobs are
             // content-addressed by hash so the same BlobName never
             // serves different bytes — safe to cache aggressively.
-            Response.Headers.CacheControl = overlaidRoomRoleData
+            // Overlaid/clamped responses depend on runtime settings, so
+            // keep their edge TTL short enough that admin toggles land
+            // within a minute.
+            Response.Headers.CacheControl = overlaidRoomRoleData || clampedRoomVersions
                 ? "public, max-age=60"
                 : "public, max-age=3600";
             signatures.AddContentSignature(Response, s3Bytes);
@@ -652,6 +679,15 @@ public class CdnController(
             ".assetbundle" => "application/octet-stream",
             _ => "application/octet-stream",
         };
+    }
+
+    /// <summary>Blob names that carry PersistedRoomData: subroom scene
+    /// saves (<c>.room</c>), room-level role/meta blobs (<c>.meta</c>)
+    /// and our synthetic <c>room_&lt;id&gt;_*.dat</c> defaults.</summary>
+    private static bool IsRoomDataName(string name)
+    {
+        var ext = Path.GetExtension(name).ToLowerInvariant();
+        return ext is ".room" or ".meta" or ".dat";
     }
 
     private static bool IsImageName(string name)

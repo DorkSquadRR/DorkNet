@@ -58,7 +58,7 @@ that outer check.
 | Moderation | `/players` | Player directory, bans, reports, per-player ban/grant/gift/password/avatar/account actions |
 | Activity | `/activity` | Admin audit log and per-player request logs |
 | Content | `/rooms`, `/rooms/:id`, `/import-room`, `/content` | Room list/detail, room import, instances, leaderboards, community board, loading tips, 3D Charades word lists |
-| Operations | `/broadcast`, `/settings` | Server broadcast, server toggles (signups, everyone-is-friends, profanity filter), signup codes, weekly challenges, Play menu tags, Rec Center doors, game config values |
+| Operations | `/broadcast`, `/settings` | Server broadcast, server toggles (signups, everyone-is-friends, profanity filter, imported-room version clamp), signup codes, weekly challenges, Play menu tags, Rec Center doors, game config values |
 
 Several older admin URLs are kept as redirects:
 
@@ -108,6 +108,27 @@ survive restarts.
 unchanged and treats all text as clean, so room/invention names and chat
 are never censored. Off by default; checked per request so it takes effect
 immediately.
+
+## Imported-room version clamp (`/settings`)
+
+`ServerSettingsEntity.RoomBlobVersionClampDisabled` gates the CDN's
+`PersistedRoomData` version clamp
+(`RoomDataBlobService.ClampVersionsFor2023`). Rooms imported from modern
+RecNet zip exports carry room-data blobs whose top-level version varints
+(field 1 `DEPRECATED_RoomPersistenceVersion`, field 30
+`PersistedRoomVersion`) are far past what the March-2023 client knows —
+a Sep-2025 save stamps `version=131` against the client's maximum of 19
+(`V19February23BetaRelease`) — and the client rejects the whole room with
+its "update Rec Room to visit this room" gate before spawning anything.
+
+While the clamp is active (the default), the CDN serve path rewrites the
+two varints down to the 2023 maxima on the way out for `.room` / `.meta` /
+`.dat` blobs. The rewrite is wire-surgical: every other byte is preserved,
+already-compatible blobs pass through byte-identical, and nothing stored
+in S3 is modified. Toggle endpoint:
+`POST api/admin/v1/settings/room-blob-version-clamp` with
+`{"Disabled": bool}`. Clamped responses are served with a 60s edge TTL so
+flipping the toggle lands within a minute.
 
 ## Build And Deploy
 

@@ -10,6 +10,7 @@ interface ServerSettings {
   weeklyChallengesCompletedRequired: boolean;
   profanityFilterDisabled: boolean;
   allAvatarItemsOwned: boolean;
+  roomBlobVersionClampDisabled: boolean;
   updatedAt: string;
 }
 
@@ -233,6 +234,29 @@ export function Settings({ embedded }: { embedded?: boolean } = {}) {
       });
       setSettings(updated);
       toast.push(next ? 'Everyone now owns all avatar items.' : 'All-items turned off.', 'success');
+    } catch (e) {
+      toast.push((e as Error).message, 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggleRoomBlobVersionClamp = async () => {
+    if (!settings) return;
+    const next = !settings.roomBlobVersionClampDisabled;
+    if (!confirm(
+      next
+        ? 'Turn off the room version clamp? Rooms imported from modern RecNet exports will be served with their original version stamps, and the client will refuse them with "update Rec Room to visit this room". Only turn this off if a specific room misbehaves with the clamp on.'
+        : 'Turn the room version clamp back on? Imported modern rooms become joinable again on the next blob download.',
+    )) return;
+    setBusy(true);
+    try {
+      const updated = await api<ServerSettings>('/settings/room-blob-version-clamp', {
+        method: 'POST',
+        body: { Disabled: next },
+      });
+      setSettings(updated);
+      toast.push(next ? 'Room version clamp disabled.' : 'Room version clamp enabled.', 'success');
     } catch (e) {
       toast.push((e as Error).message, 'error');
     } finally {
@@ -594,6 +618,39 @@ export function Settings({ embedded }: { embedded?: boolean } = {}) {
             {settings.profanityFilterDisabled
               ? <span className="badge-banned">Filter off — nothing censored</span>
               : <span className="badge-online">Filter active</span>}
+          </div>
+        </div>
+      )}
+
+      {settings && (
+        <div className="card !p-5 max-w-2xl mt-5">
+          <div className="flex items-start justify-between gap-4">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-sm font-semibold text-ink-50">Imported-room version clamp</h2>
+              <p className="mt-1 text-xs text-ink-400">
+                Rooms imported from modern RecNet exports carry room-data version stamps far newer
+                than the 2023 client understands, so it refuses to load them with "update Rec Room
+                to visit this room". While the clamp is on, the CDN serves those blobs with their
+                version stamps lowered to the client's maximum — nothing stored is modified, and
+                already-compatible blobs pass through byte-for-byte. Leave it on unless a specific
+                room misbehaves with the clamp active.
+              </p>
+              <p className="mt-2 text-[11px] text-ink-500">
+                Last changed {new Date(settings.updatedAt).toLocaleString()}.
+              </p>
+            </div>
+            <button
+              onClick={toggleRoomBlobVersionClamp}
+              disabled={busy}
+              className={(settings.roomBlobVersionClampDisabled ? 'btn-primary' : 'btn-danger') + ' text-xs shrink-0'}
+            >
+              {busy ? 'Working…' : settings.roomBlobVersionClampDisabled ? 'Enable clamp' : 'Disable clamp'}
+            </button>
+          </div>
+          <div className="mt-4 text-xs">
+            {settings.roomBlobVersionClampDisabled
+              ? <span className="badge-banned">Clamp off — modern imports will demand an update</span>
+              : <span className="badge-online">Clamp active — modern imports joinable</span>}
           </div>
         </div>
       )}

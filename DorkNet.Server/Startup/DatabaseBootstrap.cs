@@ -533,6 +533,8 @@ public static class DatabaseBootstrap
                 @"ALTER TABLE ""ServerSettings"" ADD COLUMN IF NOT EXISTS ""AllAvatarItemsOwned"" boolean NOT NULL DEFAULT false;");
             await db.Database.ExecuteSqlRawAsync(
                 @"ALTER TABLE ""ServerSettings"" ADD COLUMN IF NOT EXISTS ""BaseRoomNamesJson"" text NOT NULL DEFAULT '';");
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""ServerSettings"" ADD COLUMN IF NOT EXISTS ""RoomBlobVersionClampDisabled"" boolean NOT NULL DEFAULT false;");
             return;
         }
 
@@ -624,6 +626,18 @@ public static class DatabaseBootstrap
         {
             await db.Database.ExecuteSqlRawAsync(
                 @"ALTER TABLE ""ServerSettings"" ADD COLUMN ""BaseRoomNamesJson"" TEXT NOT NULL DEFAULT '';");
+        }
+        catch
+        {
+            // SQLite has no ADD COLUMN IF NOT EXISTS. If it already exists,
+            // ignore the duplicate-column error; any other schema problem
+            // will surface when EF reads ServerSettings.
+        }
+
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync(
+                @"ALTER TABLE ""ServerSettings"" ADD COLUMN ""RoomBlobVersionClampDisabled"" INTEGER NOT NULL DEFAULT 0;");
         }
         catch
         {

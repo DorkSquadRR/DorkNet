@@ -109,7 +109,12 @@ public class RoomDataBlobService
                 pos += 8;
                 break;
             case 2:
-                pos += checked((int)ReadVarint(input, ref pos));
+                // NOTE: read the length into a local first. `pos += ReadVarint(ref pos)`
+                // adds the payload length to the PRE-length-varint position (C# evaluates
+                // the left operand of += before the right), landing the skip short by
+                // the size of the length varint and desyncing the whole walk.
+                var length = checked((int)ReadVarint(input, ref pos));
+                pos += length;
                 break;
             case 5:
                 pos += 4;
@@ -119,6 +124,69 @@ public class RoomDataBlobService
         }
 
         if (pos > input.Length) throw new EndOfStreamException("Unexpected end of protobuf field.");
+    }
+
+    /// <summary>Clamp the two top-level version varints of a
+    /// <c>PersistedRoomData</c> blob to the newest values the March-2023
+    /// client knows: field 1 (<c>DEPRECATED_RoomPersistenceVersion</c>,
+    /// max 38) and field 30 (<c>PersistedRoomVersion</c>, max 19 =
+    /// V19February23BetaRelease). Modern RecNet exports stamp much higher
+    /// values (a Sep-2025 save carries version=131) and the client refuses
+    /// the whole room with its "update Rec Room to visit this room" gate.
+    /// Pure wire-format rewrite — every other byte is preserved verbatim,
+    /// so blobs already at or below the 2023 versions round-trip
+    /// unchanged. On malformed input the original bytes are returned.</summary>
+    public static (byte[] Bytes, bool Changed) ClampVersionsFor2023(byte[] input)
+    {
+        try
+        {
+            using var output = new MemoryStream(input.Length);
+            var pos = 0;
+            var changed = false;
+            while (pos < input.Length)
+            {
+                var fieldStart = pos;
+                var tag = ReadVarint(input, ref pos);
+                var fieldNumber = (int)(tag >> 3);
+                var wireType = (int)(tag & 0x07);
+                if (wireType == 0 && fieldNumber is 1 or 30)
+                {
+                    var value = ReadVarint(input, ref pos);
+                    var max = fieldNumber == 1
+                        ? (ulong)LatestDeprecatedPersistenceVersion
+                        : (ulong)LatestPersistenceVersion;
+                    if (value > max)
+                    {
+                        value = max;
+                        changed = true;
+                    }
+                    WriteVarint(output, tag);
+                    WriteVarint(output, value);
+                }
+                else
+                {
+                    SkipField(input, ref pos, wireType);
+                    output.Write(input, fieldStart, pos - fieldStart);
+                }
+            }
+            return changed ? (output.ToArray(), true) : (input, false);
+        }
+        catch
+        {
+            // Not parseable as a protobuf message — serve the original
+            // bytes rather than dropping the download.
+            return (input, false);
+        }
+    }
+
+    private static void WriteVarint(Stream output, ulong value)
+    {
+        while (value >= 0x80)
+        {
+            output.WriteByte((byte)(value | 0x80));
+            value >>= 7;
+        }
+        output.WriteByte((byte)value);
     }
 
     public byte[] OverlayAllPermsRoleData(byte[] existingBlob)
