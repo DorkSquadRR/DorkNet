@@ -117,9 +117,18 @@ immediately.
 RecNet zip exports carry room-data blobs whose top-level version varints
 (field 1 `DEPRECATED_RoomPersistenceVersion`, field 30
 `PersistedRoomVersion`) are far past what the March-2023 client knows —
-a Sep-2025 save stamps `version=131` against the client's maximum of 19
-(`V19February23BetaRelease`) — and the client rejects the whole room with
-its "update Rec Room to visit this room" gate before spawning anything.
+a Sep-2025 save stamps `version=131` against the client's maximum of 16
+(`RoomDataBlobService.Client2023MaxPersistedRoomVersion`; the proto's
+`LatestVersion=19` came from a newer build's dump and this client rejects
+it) — and the client rejects the whole room with its "update Rec Room to
+visit this room" gate before spawning anything.
+
+This clamp only addresses the room-**header** version gate. A room whose
+CircuitsV2 chip graph (`circuit_data`, field 18) was saved in a newer Rec
+Room is rejected by a separate CircuitsV2 version gate regardless — check
+the client's `Player.log`, where the stack frame under "Booting player to
+dorm" names the failing subsystem (`CircuitsV2Manager` = the circuit
+graph, not the header). That case is not fixable by this clamp.
 
 While the clamp is active (the default), the CDN serve path rewrites the
 two varints down to the 2023 maxima on the way out for `.room` / `.meta` /
