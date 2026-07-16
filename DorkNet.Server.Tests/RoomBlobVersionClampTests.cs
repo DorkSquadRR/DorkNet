@@ -49,7 +49,7 @@ public sealed class RoomBlobVersionClampTests
 
         Assert.True(changed);
         var msg = PersistedRoomData.Parser.ParseFrom(bytes);
-        Assert.Equal(PersistedRoomVersion.LatestVersion, msg.Version);
+        Assert.Equal(RoomDataBlobService.Client2023MaxPersistedRoomVersion, (int)msg.Version);
         Assert.Equal(DEPRECATED_RoomPersistenceVersion.LatestRoomPersistenceVersion, msg.DEPRECATEDVersion);
     }
 
@@ -60,17 +60,21 @@ public sealed class RoomBlobVersionClampTests
 
         var (bytes, _) = RoomDataBlobService.ClampVersionsFor2023(input);
 
-        // version=131 is a two-byte varint, 19 is one byte — the output
+        // version=131 is a two-byte varint, 16 is one byte — the output
         // shrinks by exactly that and matches the input everywhere else.
         Assert.Equal(input.Length - 1, bytes.Length);
-        var expected = BuildModernBlob(deprecatedVersion: 38, version: 19);
+        var expected = BuildModernBlob(
+            deprecatedVersion: 38,
+            version: RoomDataBlobService.Client2023MaxPersistedRoomVersion);
         Assert.Equal(expected, bytes);
     }
 
     [Fact]
     public void Blob_already_at_2023_versions_passes_through_unchanged()
     {
-        var input = BuildModernBlob(deprecatedVersion: 38, version: 19);
+        var input = BuildModernBlob(
+            deprecatedVersion: 38,
+            version: RoomDataBlobService.Client2023MaxPersistedRoomVersion);
 
         var (bytes, changed) = RoomDataBlobService.ClampVersionsFor2023(input);
 

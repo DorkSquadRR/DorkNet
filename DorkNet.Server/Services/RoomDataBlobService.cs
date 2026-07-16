@@ -126,16 +126,28 @@ public class RoomDataBlobService
         if (pos > input.Length) throw new EndOfStreamException("Unexpected end of protobuf field.");
     }
 
+    /// <summary>Highest <c>PersistedRoomVersion</c> (field 30) the running
+    /// March-2023 client (build 2023-03-21) actually accepts. NOT the same
+    /// as our proto's <see cref="PersistedRoomVersion.LatestVersion"/> (19):
+    /// that enum came from a runtime dump of a NEWER build, and this client
+    /// rejects 19 — its real ceiling is 16 (observed on the .room blobs of
+    /// rooms this client loads without complaint). Clamp to this, not the
+    /// proto's Latest.</summary>
+    public const int Client2023MaxPersistedRoomVersion = 16;
+
     /// <summary>Clamp the two top-level version varints of a
     /// <c>PersistedRoomData</c> blob to the newest values the March-2023
     /// client knows: field 1 (<c>DEPRECATED_RoomPersistenceVersion</c>,
-    /// max 38) and field 30 (<c>PersistedRoomVersion</c>, max 19 =
-    /// V19February23BetaRelease). Modern RecNet exports stamp much higher
-    /// values (a Sep-2025 save carries version=131) and the client refuses
-    /// the whole room with its "update Rec Room to visit this room" gate.
-    /// Pure wire-format rewrite — every other byte is preserved verbatim,
-    /// so blobs already at or below the 2023 versions round-trip
-    /// unchanged. On malformed input the original bytes are returned.</summary>
+    /// max 38) and field 30 (<c>PersistedRoomVersion</c>, max
+    /// <see cref="Client2023MaxPersistedRoomVersion"/> = 16). Modern RecNet
+    /// exports stamp much higher values (a Sep-2025 save carries
+    /// version=131) and the client refuses the whole room with its
+    /// "update Rec Room to visit this room" gate. Pure wire-format rewrite —
+    /// every other byte is preserved verbatim, so blobs already at or below
+    /// the 2023 versions round-trip unchanged. On malformed input the
+    /// original bytes are returned. NOTE: this only addresses the room-HEADER
+    /// version gate; a room whose CircuitsV2 graph (field 18) is too new is
+    /// rejected regardless and this clamp cannot help it.</summary>
     public static (byte[] Bytes, bool Changed) ClampVersionsFor2023(byte[] input)
     {
         try
@@ -154,7 +166,7 @@ public class RoomDataBlobService
                     var value = ReadVarint(input, ref pos);
                     var max = fieldNumber == 1
                         ? (ulong)LatestDeprecatedPersistenceVersion
-                        : (ulong)LatestPersistenceVersion;
+                        : (ulong)Client2023MaxPersistedRoomVersion;
                     if (value > max)
                     {
                         value = max;
