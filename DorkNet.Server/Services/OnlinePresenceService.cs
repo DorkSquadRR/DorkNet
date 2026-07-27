@@ -45,7 +45,11 @@ public class OnlinePresenceService
 
     public OnlinePresenceService(IConnectionMultiplexer? redis = null) => _redis = redis;
 
-    public async Task AddConnectionAsync(long playerId, string connectionId)
+    /// <summary>Register one SignalR connection. Returns true when that was the
+    /// player's FIRST active connection, i.e. they just came online and friends
+    /// should be told. Mirrors <see cref="RemoveConnectionAsync"/>, which
+    /// reports the opposite transition.</summary>
+    public async Task<bool> AddConnectionAsync(long playerId, string connectionId)
     {
         if (_redis is { } mux)
         {
@@ -59,13 +63,21 @@ public class OnlinePresenceService
             if (added)
             {
                 var size = await db.SetLengthAsync(connsKey);
-                if (size == 1) await db.SetAddAsync(OnlineSetKey, playerId);
+                if (size == 1)
+                {
+                    await db.SetAddAsync(OnlineSetKey, playerId);
+                    return true;
+                }
             }
-            return;
+            return false;
         }
 
         var set = _localConns.GetOrAdd(playerId, _ => new HashSet<string>());
-        lock (set) set.Add(connectionId);
+        lock (set)
+        {
+            set.Add(connectionId);
+            return set.Count == 1;
+        }
     }
 
     /// <summary>Remove one SignalR connection. Returns true when that was
