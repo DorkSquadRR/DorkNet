@@ -53,14 +53,48 @@ public class RoomsController(
         [FromQuery] string? tags)
         => Ok((await rooms.HotAsync(tags)).Select(RoomService.ToWireRoom).ToList());
 
+    /// <summary>GET <c>rooms/hot</c> — the room-server "hot rooms" list.
+    /// Response is the PAGED wrapper: the 2023 client's issuing method
+    /// <c>NLDBPDCNNCF.FANOAMOPHBE</c> returns <c>Task&lt;FFCPFGBNLHN&gt;</c>
+    /// (NLDBPDCNNCF.txt:2865 + literal at :2983) and FFCPFGBNLHN's reader
+    /// requires <c>Results</c> + <c>TotalResults</c>
+    /// (PJPBJKLDMNA.txt ISIL 040/059).</summary>
+    // The roomserver/ twin is mandatory: FANOAMOPHBE lives on the same
+    // NLDBPDCNNCF client whose requests all arrive with the roomserver/
+    // prefix in this deployment (docs/recroom-2023-room-save.md:83-93), so
+    // the bare-only registration 404'd for the 2023 client.
     [HttpGet("rooms/hot")]
+    [HttpGet("roomserver/rooms/hot")]
     public async Task<IActionResult> HotRoomServer(
-        [FromQuery] string? tag,
-        [FromQuery] string? tags,
         [FromQuery] int skip = 0,
         [FromQuery] int take = 100)
     {
-        var all = await rooms.HotAsync(tag ?? tags, take: 200);
+        // The tag filter is a REPEATED query field (`tag=a&tag=b`) — the
+        // client's IFLHPHIPFNC closure adds one entry per selected chip —
+        // so a `[FromQuery] string? tag` binding silently dropped every tag
+        // past the first. Read the raw collection and union the per-tag hits.
+        var tagFilters = Request.Query["tag"]
+            .Concat(Request.Query["tags"])
+            .SelectMany(v => (v ?? string.Empty).Split(',',
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        List<RoomEntity> all;
+        if (tagFilters.Count == 0)
+        {
+            all = await rooms.HotAsync(null, take: 200);
+        }
+        else
+        {
+            var merged = new List<RoomEntity>();
+            var seen = new HashSet<long>();
+            foreach (var filter in tagFilters)
+                foreach (var room in await rooms.HotAsync(filter, take: 200))
+                    if (seen.Add(room.Id)) merged.Add(room);
+            all = merged.OrderByDescending(r => r.HotScore).ToList();
+        }
+
         var page = all
             .Skip(Math.Max(skip, 0))
             .Take(Math.Clamp(take, 1, 100))
@@ -151,16 +185,37 @@ public class RoomsController(
         return Ok(await BuildRoomServerListAsync(rows));
     }
 
+    /// <summary>GET <c>rooms/magic_door</c> — the Magic Door destination.
+    /// The response is a WRAPPER, not the bare room: the client's
+    /// <c>MOOCMPOIIGM</c> returns <c>Task&lt;GAPJAGDNFEO&gt;</c>
+    /// (NLDBPDCNNCF.txt:4503) and that reader requires the keys
+    /// <c>RefreshesAt</c>, <c>RefreshIntervalMinutes</c> and <c>Room</c>
+    /// (MIFGPMGEMEK.txt ISIL 046/073/097). Returning the room object
+    /// directly left <c>Room</c> null and MagicDoorManager with no
+    /// destination. The <c>partySize</c> query param is accepted and
+    /// ignored — we have no party-size-aware curation.</summary>
     [HttpGet("rooms/magic_door")]
     [HttpGet("roomserver/rooms/magic_door")]
-    public async Task<IActionResult> MagicDoor()
+    public async Task<IActionResult> MagicDoor([FromQuery] int? partySize)
     {
         var room = await PublicRoomQuery()
             .OrderByDescending(r => r.HotScore)
             .ThenBy(r => r.Id)
             .FirstOrDefaultAsync();
         if (room is null) return NotFound();
-        return Ok((await BuildRoomServerListAsync(new[] { room })).First());
+
+        // The door re-rolls its destination on the client every
+        // RefreshIntervalMinutes; RefreshesAt is when the current pick
+        // expires. Keep the two consistent so the client's local timer
+        // and its next fetch line up.
+        const int refreshIntervalMinutes = 10;
+        return Ok(new
+        {
+            Room = (await BuildRoomServerListAsync(new[] { room })).First(),
+            RefreshesAt = DateTime.UtcNow.AddMinutes(refreshIntervalMinutes)
+                .ToString("yyyy-MM-ddTHH:mm:ssZ"),
+            RefreshIntervalMinutes = refreshIntervalMinutes,
+        });
     }
 
     /// <summary>
@@ -263,8 +318,14 @@ public class RoomsController(
     /// Unlike the <c>api/rooms/v*</c> variants (flat <c>List&lt;Room&gt;</c>),
     /// this one's client contract is a PAGED wrapper object
     /// <c>{ Results, TotalResults }</c> (IDLBPALJJDJ : PagedResult&lt;Room&gt;);
-    /// returning a bare array crashes the watch's key-based reader.</summary>
+    /// returning a bare array crashes the watch's key-based reader.
+    /// Confirmed for 2023 too: <c>NLDBPDCNNCF.MOBJJDBNBMF</c> returns
+    /// <c>Task&lt;FFCPFGBNLHN&gt;</c> (NLDBPDCNNCF.txt:2733) whose reader
+    /// requires Results/TotalResults (PJPBJKLDMNA.txt ISIL 040/059).</summary>
+    // roomserver/ twin: the 2023 caller is on NLDBPDCNNCF, whose requests all
+    // carry the roomserver/ prefix (docs/recroom-2023-room-save.md:83-93).
     [HttpGet("rooms/search")]
+    [HttpGet("roomserver/rooms/search")]
     public async Task<IActionResult> SearchRoomServer(
         [FromQuery(Name = "query")] string? query,
         [FromQuery(Name = "value")] string? value,
@@ -412,6 +473,46 @@ public class RoomsController(
             roles: roles,
             unityAssetTarget: unityAssetTarget,
             unityAssetVersion: unityAssetVersion));
+    }
+
+    /// <summary>DELETE <c>rooms/{roomId}</c> — the owner's "delete room"
+    /// button. Client method <c>NLDBPDCNNCF.FPDBNHOHIAO</c> formats
+    /// <c>"rooms/{0}"</c> and moves verb ordinal 4 (= DELETE) into r8
+    /// (NLDBPDCNNCF.txt ISIL 021/030 around :4897); its return type is the
+    /// body-less promise <c>LDGADANDBIO</c> (CAOCJPMJMDB.txt:339), so the
+    /// response payload is never parsed.
+    ///
+    /// <para>The only DELETE for <c>rooms/{id}</c> in the codebase lived on
+    /// AdminController, which is rooted at <c>api/admin/v1</c> — the game
+    /// path therefore 405'd on the bare route and 404'd on the roomserver/
+    /// one, so owners could not delete their rooms at all.</para>
+    ///
+    /// <para>Soft-archive (<c>State = 1</c>) exactly like
+    /// <c>AdminController.DeleteRoom</c>: a hard delete would orphan the
+    /// room's saves, visits, bookmarks and role rows. Archived rooms drop
+    /// out of every browse/search query (all of which filter
+    /// <c>State == 0</c>).</para></summary>
+    [HttpDelete("rooms/{roomId:long}")]
+    [HttpDelete("roomserver/rooms/{roomId:long}")]
+    [Authorize]
+    public async Task<IActionResult> DeleteRoom(long roomId)
+    {
+        var me = this.RequireCurrentPlayerId();
+        var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
+        if (room is null) return NotFound();
+        if (room.CreatorPlayerId != me)
+        {
+            // Co-owners (Role 0) can delete too — same gate the rename path uses.
+            var coOwner = await db.RoomRoles.AnyAsync(rr =>
+                rr.RoomId == roomId && rr.PlayerId == me && rr.Accepted && rr.Role == 0);
+            if (!coOwner) return Forbid();
+        }
+
+        room.State = 1; // Archived
+        room.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        logger.LogInformation("[room-delete] room={Room} by={By}", roomId, me);
+        return Ok(new { Result = 0, room.Id, room.State });
     }
 
     // ── RoomDetails (the boot-critical one) ─────────────────────────────
@@ -2511,8 +2612,13 @@ public class RoomsController(
     /// <summary>GET <c>api/rooms/v1/agRoomIds</c> — list of every
     /// seeded AG / RR-Original room id. Used by the watch to bias the
     /// room browser toward official rooms first.</summary>
+    // Bare array of Int64 — the 2023 issuing method GBONEKLGFFK returns
+    // Task<List<Int64>> (NLDBPDCNNCF.txt:1886, literal at :1929). The
+    // roomserver/ twin is what that client actually requests (same prefix
+    // rule as rooms/base, docs/recroom-2023-room-save.md:83-93).
     [HttpGet("api/rooms/v1/agRoomIds")]
     [HttpGet("rooms/rro_ids")]
+    [HttpGet("roomserver/rooms/rro_ids")]
     public async Task<IActionResult> AgRoomIds() =>
         Ok(await rooms.AgRoomIdsAsync());
 
