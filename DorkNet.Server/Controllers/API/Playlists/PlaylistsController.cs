@@ -37,20 +37,30 @@ public class PlaylistsController(
 
     // ── Create / delete ──────────────────────────────────────────────
 
-    public sealed class CreatePlaylistRequest
-    {
-        public string? Name { get; set; }
-        public string? Description { get; set; }
-        public string? ImageName { get; set; }
-        public string? Tags { get; set; }
-    }
-
+    /// <summary>POST <c>/playlists</c> — create. The 2023-03-21 client posts a
+    /// form with a single field <c>name</c> (verb 2 at
+    /// <c>NLDBPDCNNCF.txt:11139-11140</c>, field literal in
+    /// <c>NLDBPDCNNCF_NestedType_NEECJOENHPI.txt</c> — its only
+    /// <c>Move rdx, "…"</c> is <c>"name"</c>). The old non-optional
+    /// <c>[FromBody]</c> parameter made <c>[ApiController]</c> reject the
+    /// form content type with 415 before the action ran, so creating a
+    /// playlist from the watch was impossible. Fields are read from form,
+    /// query or JSON body so JSON callers (admin UI) keep working.</summary>
     [HttpPost("/playlists")]
     [Authorize]
-    public async Task<IActionResult> Create([FromBody] CreatePlaylistRequest req)
+    public async Task<IActionResult> Create()
     {
-        if (string.IsNullOrWhiteSpace(req.Name)) return BadRequest(new { error = "missing_name" });
-        var created = await playlists.CreateAsync(Me, req.Name, req.Description, req.ImageName, req.Tags);
+        var name = await ReadFieldAsync("name", "Name");
+        if (string.IsNullOrWhiteSpace(name)) return BadRequest(new { error = "missing_name" });
+
+        var description = await ReadFieldAsync("description", "Description");
+        var imageName = await ReadFieldAsync("imageName", "ImageName");
+        var tags = await ReadFieldsAsync("tag", "Tag", "tags", "Tags");
+        var tagsCsv = tags.Count > 0
+            ? string.Join(',', tags.Distinct(StringComparer.OrdinalIgnoreCase))
+            : null;
+
+        var created = await playlists.CreateAsync(Me, name.Trim(), description, imageName, tagsCsv);
         return await BuildDetailsResponseAsync(created.Id);
     }
 
@@ -67,11 +77,6 @@ public class PlaylistsController(
     }
 
     // ── Per-field mutations (each returns BMFAGMFKODA) ───────────────
-
-    public sealed class StringFieldRequest { public string? Value { get; set; } }
-    public sealed class IntFieldRequest { public int? Value { get; set; } }
-    public sealed class BoolFieldRequest { public bool? Value { get; set; } }
-    public sealed class TagsRequest { public string? Tags { get; set; } public List<string>? TagsList { get; set; } }
 
     // The 2023-03-21 client sends these as form-urlencoded PUTs. A
     // non-optional [FromBody] parameter made [ApiController] demand JSON and
@@ -248,6 +253,32 @@ public class PlaylistsController(
         return found;
     }
 
+    /// <summary>KMKPEOGJDFK union entry with the per-playlist settings this
+    /// controller persists spliced back in.
+    /// <see cref="RoomsController.BuildPlaylistUnionEntry"/> still emits
+    /// hardcoded defaults for exactly the fields the client mutates here
+    /// (<c>Accessibility</c>=1, <c>WarningMask</c>=0,
+    /// <c>SupportsLevelVoting</c>=false, <c>Supports*</c>=true), so a creator
+    /// who published or restricted a playlist got the default echoed straight
+    /// back and the watch's toggle snapped to its old position. Key names are
+    /// the client's own setter fields —
+    /// <c>NLDBPDCNNCF_NestedType_{BHAHEJIEIMF,PJFBAKCHIHI,GNCDFBNCADM,AIDDFKACPLN}.txt</c>
+    /// — matched to the PascalCase read keys at
+    /// <c>MKAMHOIHOJK.txt:516-612</c>.</summary>
+    private static IDictionary<string, object> UnionEntry(PlaylistEntity p)
+    {
+        var entry = RoomsController.BuildPlaylistUnionEntry(p);
+        entry["Accessibility"] = p.Accessibility;
+        entry["WarningMask"] = p.WarningMask;
+        entry["CustomWarning"] = p.CustomWarning;
+        entry["SupportsLevelVoting"] = p.SupportsLevelVoting;
+        entry["SupportsJuniors"] = p.SupportsJuniors;
+        entry["SupportsScreens"] = p.SupportsScreens;
+        entry["SupportsTeleportVR"] = p.SupportsTeleportVR;
+        entry["SupportsWalkVR"] = p.SupportsWalkVR;
+        return entry;
+    }
+
     private async Task<IActionResult> ApplyMutation(long playlistId, Action<PlaylistEntity> mutator)
     {
         try
@@ -329,7 +360,7 @@ public class PlaylistsController(
     public async Task<IActionResult> CreatedByMe()
     {
         var rows = await playlists.CreatedByAsync(Me);
-        return Ok(rows.Select(RoomsController.BuildPlaylistUnionEntry).ToList());
+        return Ok(rows.Select(UnionEntry).ToList());
     }
 
     [HttpGet("/playlists/cheeredby/me")]
@@ -337,7 +368,7 @@ public class PlaylistsController(
     public async Task<IActionResult> CheeredByMe()
     {
         var rows = await playlists.CheeredByAsync(Me);
-        return Ok(rows.Select(RoomsController.BuildPlaylistUnionEntry).ToList());
+        return Ok(rows.Select(UnionEntry).ToList());
     }
 
     [HttpGet("/playlists/favoritedby/me")]
@@ -345,36 +376,122 @@ public class PlaylistsController(
     public async Task<IActionResult> FavoritedByMe()
     {
         var rows = await playlists.FavoritedByAsync(Me);
-        return Ok(rows.Select(RoomsController.BuildPlaylistUnionEntry).ToList());
+        return Ok(rows.Select(UnionEntry).ToList());
     }
 
-    /// <summary>GET <c>/playlists/visitedby/me</c> — we don't track
-    /// per-player playlist visits yet (visits are tracked at the Room
-    /// level via RoomVisitEntity). Return empty so the watch's
-    /// playlists tab renders cleanly; populated once we add a
-    /// PlaylistVisitEntity or derive from member-room visits.</summary>
+    /// <summary>GET <c>/playlists/visitedby/me</c> — bare
+    /// <c>List&lt;CNIPGJIIFJF&gt;</c> (return type at
+    /// <c>NLDBPDCNNCF.txt:4312</c>, URL at <c>:4355</c>).
+    ///
+    /// We have no PlaylistVisitEntity, but a playlist is nothing but an
+    /// ordered set of rooms, so "visited" is derivable exactly: the player
+    /// has visited a playlist iff they've visited any of its member rooms.
+    /// Ordered by the most recent member-room visit so the tab reads as a
+    /// history list. Previously hardcoded to an empty array, which left the
+    /// watch's recently-visited playlists tab permanently blank.
+    ///
+    /// Aggregation happens in memory rather than in SQL: a single player's
+    /// RoomVisits row set is small, and this keeps the query provider-neutral
+    /// (SQLite in dev, Postgres in prod).</summary>
     [HttpGet("/playlists/visitedby/me")]
     [Authorize]
-    public IActionResult VisitedByMe() => Ok(Array.Empty<object>());
+    public async Task<IActionResult> VisitedByMe()
+    {
+        var me = Me;
+
+        var visits = await db.RoomVisits
+            .Where(v => v.PlayerId == me)
+            .Select(v => new { v.RoomId, v.LastVisitAt })
+            .ToListAsync();
+        if (visits.Count == 0) return Ok(Array.Empty<object>());
+
+        var visitedRoomIds = visits.Select(v => v.RoomId).Distinct().ToList();
+        var links = await db.PlaylistRooms
+            .Where(l => visitedRoomIds.Contains(l.RoomId))
+            .Select(l => new { l.PlaylistId, l.RoomId })
+            .ToListAsync();
+        if (links.Count == 0) return Ok(Array.Empty<object>());
+
+        var lastVisitByRoom = visits
+            .GroupBy(v => v.RoomId)
+            .ToDictionary(g => g.Key, g => g.Max(v => v.LastVisitAt));
+
+        var orderedIds = links
+            .GroupBy(l => l.PlaylistId)
+            .Select(g => new { PlaylistId = g.Key, LastVisitAt = g.Max(l => lastVisitByRoom[l.RoomId]) })
+            .OrderByDescending(x => x.LastVisitAt)
+            .Select(x => x.PlaylistId)
+            .ToList();
+
+        // BulkAsync preserves caller order, so the recency sort survives.
+        var rows = await playlists.BulkAsync(orderedIds);
+        return Ok(rows.Select(UnionEntry).ToList());
+    }
 
     // ── Bulk lookup ──────────────────────────────────────────────────
 
-    /// <summary>GET <c>/playlists/bulk?id=A&amp;id=B</c> — bulk-by-id
-    /// lookup for the watch's playlist cache warmup. Bare list of
-    /// KMKPEOGJDFK entries, one per resolved id (missing ids
-    /// silently dropped).</summary>
+    /// <summary>
+    /// <c>playlists/bulk</c> — bulk hydration for the watch's playlist cache.
+    /// The client has TWO overloads on this one URL, and both pick their verb
+    /// at runtime:
+    /// <list type="bullet">
+    ///   <item>by id — <c>NLDBPDCNNCF.txt:3408-3597</c>; repeated field
+    ///   <c>id</c> (<c>NLDBPDCNNCF_NestedType_IOAECIJDKDD.txt:64</c>);
+    ///   <c>Move rsi, 2</c> then <c>cmovl esi,ecx</c> against 100 at
+    ///   <c>:3579-3581</c> — GET below 100 ids, POST at 100+.</item>
+    ///   <item>by name — <c>NLDBPDCNNCF.txt:3624-3813</c>; repeated field
+    ///   <c>name</c> (<c>NLDBPDCNNCF_NestedType_MOBALIODDDF.txt:64</c>); same
+    ///   cmov against 64 at <c>:3794-3797</c> — GET below 64 names, POST at
+    ///   64+.</item>
+    /// </list>
+    /// GET-only meant 405 on every large cache warmup, and query-id-only meant
+    /// the by-name overload silently resolved nothing. Both verbs and both key
+    /// sets are accepted here; the response is a bare
+    /// <c>List&lt;CNIPGJIIFJF&gt;</c> either way (return type at
+    /// <c>NLDBPDCNNCF.txt:3408</c>), missing entries silently dropped.
+    /// </summary>
     [HttpGet("/playlists/bulk")]
+    [HttpPost("/playlists/bulk")]
     public async Task<IActionResult> Bulk()
     {
-        var ids = Request.Query["id"].Concat(Request.Query["ids"])
-            .SelectMany(v => (v ?? string.Empty).Split(',',
+        var ids = (await ReadFieldsAsync("id", "ids", "Id", "Ids"))
+            .SelectMany(v => v.Split(',',
                 StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .Select(s => long.TryParse(s, out var n) ? n : 0)
             .Where(n => n != 0)
             .ToList();
-        if (ids.Count == 0) return Ok(Array.Empty<object>());
-        var rows = await playlists.BulkAsync(ids);
-        return Ok(rows.Select(RoomsController.BuildPlaylistUnionEntry).ToList());
+
+        // Names are NOT comma-split — the client repeats the field once per
+        // name, and playlist names may legally contain commas.
+        var names = (await ReadFieldsAsync("name", "names", "Name", "Names"))
+            .Select(v => v.Trim())
+            .Where(v => v.Length > 0)
+            .ToList();
+
+        if (ids.Count == 0 && names.Count == 0) return Ok(Array.Empty<object>());
+
+        var results = new List<PlaylistEntity>();
+        var seen = new HashSet<long>();
+
+        if (ids.Count > 0)
+            foreach (var p in await playlists.BulkAsync(ids))
+                if (seen.Add(p.Id)) results.Add(p);
+
+        if (names.Count > 0)
+        {
+            var lowered = names.Select(s => s.ToLowerInvariant()).Distinct().ToList();
+            var rows = await db.Playlists
+                .Where(e => lowered.Contains(e.Name.ToLower()))
+                .ToListAsync();
+
+            var byName = new Dictionary<string, PlaylistEntity>(StringComparer.OrdinalIgnoreCase);
+            foreach (var r in rows) byName.TryAdd(r.Name, r);
+
+            foreach (var wanted in names)
+                if (byName.TryGetValue(wanted, out var hit) && seen.Add(hit.Id)) results.Add(hit);
+        }
+
+        return Ok(results.Select(UnionEntry).ToList());
     }
 
     // ── Detail-response builder (BMFAGMFKODA shape) ─────────────────
@@ -420,7 +537,7 @@ public class PlaylistsController(
                 .Select(t => (object)new { Type = 0, Tag = t })
                 .ToList();
 
-        var result = RoomsController.BuildPlaylistUnionEntry(p);
+        var result = UnionEntry(p);
         result["Rooms"] = roomsWire;
         result["Tags"] = tagsWire;
         return Ok(result);

@@ -382,23 +382,49 @@ public class MatchController(
         [FromForm(Name = "roomCode")] string? roomCode,
         [FromForm(Name = "forceChange")] bool? forceChange)
     {
-        var requested = (roomCode ?? Request.Query["roomCode"].FirstOrDefault())?.Trim();
+        // Same normalisation the join path applies (GoToController.GoToCode →
+        // RoomCodeService.Normalize), so a code typed with dashes/lowercase on
+        // the watch still matches what we persist.
+        var normalized = RoomCodeService.Normalize(
+            roomCode ?? Request.Query["roomCode"].FirstOrDefault());
 
-        if (!string.IsNullOrEmpty(requested))
+        if (normalized.Length > 0)
         {
-            var normalized = requested.ToUpperInvariant();
-            var taken = await db.PrivateInstances
-                .AnyAsync(p => p.RoomCode == normalized && p.Id != instanceId);
-            if (taken && forceChange != true)
-                return Content(JsonSerializer.Serialize(RoomCodeService.Generate(instanceId)), "application/json");
+            var pid = this.RequireCurrentPlayerId();
+            var clash = await db.PrivateInstances
+                .Where(p => p.RoomCode == normalized && p.Id != instanceId)
+                .Select(p => new { p.Id, p.OwnerPlayerId })
+                .FirstOrDefaultAsync();
+
+            // forceChange only lets a host reclaim a code from one of their OWN
+            // instances; another player's code is never stolen. On refusal the
+            // client just re-reads whatever code we echo back, so we fall
+            // through to the read path instead of erroring.
+            var blocked = clash is not null
+                && (clash.OwnerPlayerId != pid || forceChange != true);
 
             var row = await db.PrivateInstances.FirstOrDefaultAsync(p => p.Id == instanceId);
-            if (row is not null)
+            if (!blocked && row is not null)
             {
+                if (clash is not null)
+                {
+                    // Release the caller's older claim first, as its own
+                    // statement, so the two rows never hold the code at once.
+                    await db.PrivateInstances
+                        .Where(p => p.Id == clash.Id)
+                        .ExecuteUpdateAsync(s => s.SetProperty(p => p.RoomCode, string.Empty));
+                }
                 row.RoomCode = normalized;
                 await db.SaveChangesAsync();
+                logger.LogInformation(
+                    "[roomcode] player={Player} instance={Instance} code={Code} force={Force}",
+                    pid, instanceId, normalized, forceChange == true);
                 return Content(JsonSerializer.Serialize(normalized), "application/json");
             }
+
+            logger.LogWarning(
+                "[roomcode] player={Player} instance={Instance} refused code={Code} taken={Taken} known={Known}",
+                pid, instanceId, normalized, clash is not null, row is not null);
         }
 
         var stored = await db.PrivateInstances

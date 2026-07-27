@@ -274,6 +274,14 @@ public class RoomKeysController(DorkNetDbContext db) : ControllerBase
         RoomKey = key is null ? null : ToWire(key),
     };
 
+    /// <summary>The 2023-03-21 room-key formatter reads nine members —
+    /// RoomKeyId, ReplicationId, RoomId, Name, Description, Price,
+    /// PurchaseCurrencyId, CreatedAt, ImageName
+    /// (RecNet.Runtime/ANHGLIFGACE.txt:627-814 name table, :829-993 reader).
+    /// CreatedAt was missing and silently defaulted to DateTime.MinValue in the
+    /// key ring. PurchaseCurrencyId (Nullable&lt;Guid&gt;) and ImageName have no
+    /// column on RoomKeyEntity yet, so they are still omitted rather than
+    /// emitted as permanent nulls — both are absent-tolerant on the client.</summary>
     public static object ToWire(RoomKeyEntity key) => new
     {
         RoomKeyId = key.Id,
@@ -284,6 +292,7 @@ public class RoomKeysController(DorkNetDbContext db) : ControllerBase
         key.Name,
         key.Description,
         key.Price,
+        key.CreatedAt,
     };
 
     private static RoomKeyStatus ValidateText(string? name, string? description, int price)
@@ -328,49 +337,81 @@ public class RoomKeysController(DorkNetDbContext db) : ControllerBase
         return ids.Distinct().Take(200).ToList();
     }
 
+    /// <summary>Read a room-key write request.
+    ///
+    /// The 2023-03-21 client puts every scalar of create/update in the QUERY
+    /// STRING, not in a body: <c>BNDIAONDFFF.AFGEDDANEKP</c> only appends to the
+    /// param dictionary at field +0x20 (BNDIAONDFFF.txt:492-506), and the send
+    /// path joins that dictionary with <c>"&amp;"</c> and glues it onto the URL
+    /// behind <c>"?"</c> (BNDIAONDFFF.txt:3196, 3238, 3248-3251). So
+    /// <c>POST api/roomkeys/v1/create</c> and
+    /// <c>PUT api/roomkeys/v1/update*</c> arrive with an EMPTY body — reading
+    /// form/JSON only left Name null and RoomId 0, i.e. every create answered
+    /// NameTooShort and every edit DoesNotExist.
+    ///
+    /// Query wins, form second, and a JSON body is only parsed when neither
+    /// carried anything (older clients and the admin UI still post JSON).</summary>
     private async Task<T> ReadBodyAsync<T>() where T : new()
     {
-        if (Request.HasFormContentType)
+        var form = Request.HasFormContentType ? await Request.ReadFormAsync() : null;
+
+        string? Field(params string[] names)
         {
-            var form = await Request.ReadFormAsync();
-            if (typeof(T) == typeof(NewRoomKeyRequest))
+            foreach (var name in names)
+            {
+                var q = Request.Query[name].FirstOrDefault();
+                if (!string.IsNullOrWhiteSpace(q)) return q;
+                if (form is not null)
+                {
+                    var f = form[name].FirstOrDefault();
+                    if (!string.IsNullOrWhiteSpace(f)) return f;
+                }
+            }
+            return null;
+        }
+
+        if (typeof(T) == typeof(NewRoomKeyRequest))
+        {
+            var roomId = Field("roomId", "RoomId");
+            var name = Field("name", "Name");
+            var description = Field("description", "Description");
+            var price = Field("price", "Price");
+            if (roomId is not null || name is not null || description is not null || price is not null)
             {
                 object req = new NewRoomKeyRequest
                 {
-                    RoomId = long.TryParse(form["roomId"].FirstOrDefault()
-                                           ?? form["RoomId"].FirstOrDefault(), out var roomId)
-                        ? roomId
-                        : 0,
-                    Name = form["name"].FirstOrDefault() ?? form["Name"].FirstOrDefault(),
-                    Description = form["description"].FirstOrDefault() ?? form["Description"].FirstOrDefault(),
-                    Price = int.TryParse(form["price"].FirstOrDefault()
-                                         ?? form["Price"].FirstOrDefault(), out var price)
-                        ? price
-                        : 0,
+                    RoomId = long.TryParse(roomId, out var parsedRoomId) ? parsedRoomId : 0,
+                    Name = name,
+                    Description = description,
+                    Price = int.TryParse(price, out var parsedPrice) ? parsedPrice : 0,
                 };
                 return (T)req;
             }
-
-            if (typeof(T) == typeof(UpdateRoomKeyRequest))
+        }
+        else if (typeof(T) == typeof(UpdateRoomKeyRequest))
+        {
+            // updateName sends only Name, updatePrice only Price, etc. — every
+            // field the client omitted stays null here and the handler keeps the
+            // stored value (AHMBBJNANBP.txt:1300-1345, 1550-1559, 1763-1772,
+            // 2018-2043).
+            var roomKeyId = Field("roomKeyId", "RoomKeyId");
+            var name = Field("name", "Name");
+            var description = Field("description", "Description");
+            var price = Field("price", "Price");
+            if (roomKeyId is not null || name is not null || description is not null || price is not null)
             {
                 object req = new UpdateRoomKeyRequest
                 {
-                    RoomKeyId = long.TryParse(form["roomKeyId"].FirstOrDefault()
-                                              ?? form["RoomKeyId"].FirstOrDefault(), out var roomKeyId)
-                        ? roomKeyId
-                        : 0,
-                    Name = form["name"].FirstOrDefault() ?? form["Name"].FirstOrDefault(),
-                    Description = form["description"].FirstOrDefault() ?? form["Description"].FirstOrDefault(),
-                    Price = int.TryParse(form["price"].FirstOrDefault()
-                                         ?? form["Price"].FirstOrDefault(), out var price)
-                        ? price
-                        : null,
+                    RoomKeyId = long.TryParse(roomKeyId, out var parsedKeyId) ? parsedKeyId : 0,
+                    Name = name,
+                    Description = description,
+                    Price = int.TryParse(price, out var parsedPrice) ? parsedPrice : null,
                 };
                 return (T)req;
             }
-
-            return new T();
         }
+
+        if (form is not null) return new T();
 
         try
         {

@@ -41,8 +41,6 @@ public class InventionsController(
     // ── Browse ───────────────────────────────────────────────────────────
 
     [HttpGet("api/inventions/v1/featured")]
-    [HttpGet("api/inventions/v1/featureddormskins")]
-    [HttpGet("api/inventions/v1/toptoday")]
     [HttpGet("api/inventions/v3/popular")]
     public async Task<ActionResult> Popular([FromQuery] int take = 50)
     {
@@ -54,6 +52,82 @@ public class InventionsController(
             .ToListAsync();
         return Ok(rows.Select(ToWire));
     }
+
+    /// <summary>GET <c>api/inventions/v1/toptoday</c> — the client fires
+    /// this as its own no-arg shelf query
+    /// (OEGFNFEAAGO_NestedType___c_NestedType___GetTopInventionsToday_b__43_0_d.txt:147,
+    /// verb 0) and shows it NEXT TO the featured shelf, so aliasing it onto
+    /// the all-time popular query rendered the same twelve tiles twice.
+    /// Ranked by cheers received in the last 24h, then backfilled with
+    /// all-time popular so a quiet day still fills the shelf.</summary>
+    [HttpGet("api/inventions/v1/toptoday")]
+    public async Task<ActionResult> TopToday([FromQuery] int take = 50)
+    {
+        take = Math.Clamp(take, 1, 100);
+        var since = DateTime.UtcNow.AddDays(-1);
+        var hot = await db.Cheers
+            .Where(c => c.TargetInventionId > 0 && c.CheeredAt >= since)
+            .GroupBy(c => c.TargetInventionId)
+            .Select(g => new { InventionId = g.Key, Score = g.Count() })
+            .OrderByDescending(x => x.Score)
+            .Take(take)
+            .ToListAsync();
+
+        var order = hot.Select(h => h.InventionId).ToList();
+        var hits = order.Count == 0
+            ? new List<InventionEntity>()
+            : await db.Inventions
+                .Where(i => !i.IsDeleted && i.IsPublished && order.Contains(i.Id))
+                .ToListAsync();
+
+        var ranked = order
+            .Select(id => hits.FirstOrDefault(r => r.Id == id))
+            .Where(r => r is not null)
+            .Select(r => r!)
+            .ToList();
+
+        if (ranked.Count < take)
+        {
+            var have = ranked.Select(r => r.Id).ToList();
+            var filler = await db.Inventions
+                .Where(i => !i.IsDeleted && i.IsPublished && !have.Contains(i.Id))
+                .OrderByDescending(i => i.CheerCount)
+                .Take(take - ranked.Count)
+                .ToListAsync();
+            ranked.AddRange(filler);
+        }
+        return Ok(ranked.Select(ToWire));
+    }
+
+    /// <summary>GET <c>api/inventions/v1/featureddormskins</c> — separate
+    /// shelf in the client
+    /// (OEGFNFEAAGO_NestedType___c_NestedType___GetFeaturedDormSkins_b__45_0_d.txt:147,
+    /// verb 0, no params) which previously returned generic popular
+    /// inventions. <see cref="InventionEntity"/> has no dorm-skin column, so
+    /// the marker lives in <see cref="InventionEntity.TagsCsv"/> — see
+    /// <see cref="IsDormSkinTags"/>. The filter runs in memory because
+    /// TagsCsv is a packed list no provider can split.</summary>
+    [HttpGet("api/inventions/v1/featureddormskins")]
+    public async Task<ActionResult> FeaturedDormSkins([FromQuery] int take = 50)
+    {
+        take = Math.Clamp(take, 1, 100);
+        var rows = await db.Inventions
+            .Where(i => !i.IsDeleted && i.IsPublished && i.TagsCsv != "")
+            .OrderByDescending(i => i.CheerCount)
+            .Take(500)
+            .ToListAsync();
+        return Ok(rows.Where(i => IsDormSkinTags(i.TagsCsv)).Take(take).Select(ToWire));
+    }
+
+    /// <summary>Dorm-skin marker. There is no IsDormSkin column on
+    /// <see cref="InventionEntity"/>, so a tag decides: any tag that reads
+    /// "dormskin" / "dorm skin" (case- and space-insensitive).</summary>
+    private static bool IsDormSkinTags(string? tagsCsv) =>
+        !string.IsNullOrEmpty(tagsCsv)
+        && tagsCsv
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(t => t.Replace(" ", string.Empty)
+                       .Equals("dormskin", StringComparison.OrdinalIgnoreCase));
 
     [HttpGet("api/inventions/v3/saved")]
     [Authorize]
@@ -80,10 +154,20 @@ public class InventionsController(
     [Authorize]
     public Task<ActionResult> Mine() => Saved(100);
 
+    /// <summary>The 2023 client sends value + skip + take on every store
+    /// search (OEGFNFEAAGO.txt:10805/10820/10832 — three AFGEDDANEKP pairs
+    /// on a verb-0 request). Ignoring skip/take pinned every page to the
+    /// first 50 rows, so scrolling the store re-showed the same tiles.</summary>
     [HttpGet("api/inventions/v1/search")]
     [HttpGet("api/inventions/v2/search")]
-    public async Task<ActionResult> Search([FromQuery] string value = "")
+    public async Task<ActionResult> Search(
+        [FromQuery] string value = "",
+        [FromQuery] int skip = 0,
+        [FromQuery] int take = 100)
     {
+        skip = Math.Max(0, skip);
+        take = Math.Clamp(take, 1, 200);
+
         if (string.IsNullOrWhiteSpace(value))
             return Ok(Array.Empty<object>());
 
@@ -112,7 +196,8 @@ public class InventionsController(
                 .Where(i => !i.IsDeleted && i.IsPublished
                             && creators.Contains(i.CreatorPlayerId))
                 .OrderByDescending(i => i.CheerCount)
-                .Take(50)
+                .Skip(skip)
+                .Take(take)
                 .ToListAsync();
             return Ok(byCreator.Select(ToWire));
         }
@@ -123,36 +208,135 @@ public class InventionsController(
                         && (i.Name.ToLower().Contains(v)
                             || i.TagsCsv.ToLower().Contains(v)))
             .OrderByDescending(i => i.CheerCount)
-            .Take(50)
+            .Skip(skip)
+            .Take(take)
             .ToListAsync();
         return Ok(rows.Select(ToWire));
     }
 
-    public sealed record InventionBatchRequest(List<long> InventionIds);
+    // ── Id-list endpoints (runtime GET/POST) ─────────────────────────────
+    //
+    // The 2023 client picks the verb at RUNTIME for every id-list route:
+    // ALHIJCJOLCB.JIECAFGCODK (IsilDump/RecNet.Runtime/ALHIJCJOLCB.txt:3198)
+    // is `count < limit ? GET : POST` with limit=100. On a non-GET the
+    // key/value pairs move out of the query string and into an
+    // HTTPUrlEncodedForm body — BNDIAONDFFF.txt:2971-3010 branches on the
+    // verb (GET → "?a=b&…", otherwise → HTTPUrlEncodedForm). So the POST
+    // actions must NOT declare a complex parameter, or [ApiController]
+    // infers [FromBody] and answers 415 before the handler runs; we read
+    // query + form by hand instead.
+    //
+    // Field names are literal:
+    //   "id"  → v2/batch      (OEGFNFEAAGO_NestedType_LANMKGKDNDC.txt:228)
+    //   "id"  → fromcreators  (…CDILMPCKMEO…GetInventionsByCreators_b__0_d.txt:330)
+    //   "ids" → dormskinsfromids (OEGFNFEAAGO.txt:5913)
 
-    [HttpPost("api/inventions/v1/batch")]
-    [HttpPost("api/inventions/v2/batch")]
-    [HttpPost("api/inventions/v1/dormskinsfromids")]
-    public async Task<ActionResult> Batch([FromBody] InventionBatchRequest req)
+    /// <summary>Body shape for non-2023 callers, which still send a JSON
+    /// <c>{"InventionIds":[…]}</c> envelope rather than repeated fields.</summary>
+    private sealed class InventionIdsBody
     {
-        return await BatchIdsAsync(req?.InventionIds ?? []);
+        public List<long>? InventionIds { get; set; }
+        public List<long>? Ids { get; set; }
+        public List<long>? Id { get; set; }
     }
+
+    private static readonly System.Text.Json.JsonSerializerOptions IdsJson =
+        new() { PropertyNameCaseInsensitive = true };
+
+    /// <summary>Gather ids from the query string, the url-encoded form and
+    /// (as a fallback) a JSON id envelope. See the block comment above for
+    /// why all three have to be accepted on one route.</summary>
+    private async Task<List<long>> CollectIdsAsync(params string[] keys)
+    {
+        var ids = new List<long>();
+
+        void Take(string? raw)
+        {
+            if (string.IsNullOrEmpty(raw)) return;
+            foreach (var part in raw.Split(
+                         ',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                if (long.TryParse(part, out var id) && id > 0) ids.Add(id);
+            }
+        }
+
+        var form = Request.HasFormContentType ? await Request.ReadFormAsync() : null;
+        foreach (var key in keys)
+        {
+            foreach (var v in Request.Query[key]) Take(v);
+            if (form is not null)
+                foreach (var v in form[key]) Take(v);
+        }
+
+        if (ids.Count == 0 && form is null
+            && (Request.ContentType?.Contains("json", StringComparison.OrdinalIgnoreCase) ?? false))
+        {
+            try
+            {
+                var body = await System.Text.Json.JsonSerializer
+                    .DeserializeAsync<InventionIdsBody>(Request.Body, IdsJson);
+                foreach (var list in new[] { body?.InventionIds, body?.Ids, body?.Id })
+                {
+                    if (list is not null) ids.AddRange(list.Where(id => id > 0));
+                }
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // Not an id envelope — treat as "no ids" rather than 400.
+            }
+        }
+
+        return ids.Distinct().Take(200).ToList();
+    }
+
+    /// <summary>Read one scalar field from the query string, falling back to
+    /// the url-encoded form body (POST variants — see the block comment
+    /// above).</summary>
+    private async Task<string?> ReadFieldAsync(string key)
+    {
+        var fromQuery = Request.Query[key].FirstOrDefault();
+        if (!string.IsNullOrEmpty(fromQuery)) return fromQuery;
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync();
+            var fromForm = form[key].FirstOrDefault();
+            if (!string.IsNullOrEmpty(fromForm)) return fromForm;
+        }
+        return null;
+    }
+
+    private async Task<int?> ReadIntFieldAsync(string key)
+        => int.TryParse(await ReadFieldAsync(key), out var v) ? v : null;
+
+    private async Task<long?> ReadLongFieldAsync(string key)
+        => long.TryParse(await ReadFieldAsync(key), out var v) ? v : null;
 
     [HttpGet("api/inventions/v1/batch")]
     [HttpGet("api/inventions/v2/batch")]
-    [HttpGet("api/inventions/v1/dormskinsfromids")]
-    public async Task<ActionResult> BatchFromQuery()
-    {
-        var ids = Request.Query
-            .SelectMany(q => q.Value)
-            .SelectMany(v => (v ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            .Select(v => long.TryParse(v, out var id) ? id : 0L)
-            .Where(id => id > 0)
-            .Distinct()
-            .Take(200)
-            .ToList();
+    [HttpPost("api/inventions/v1/batch")]
+    [HttpPost("api/inventions/v2/batch")]
+    public async Task<ActionResult> Batch()
+        => await BatchIdsAsync(await CollectIdsAsync("id", "ids", "InventionIds"));
 
-        return await BatchIdsAsync(ids);
+    /// <summary><c>api/inventions/v1/dormskinsfromids</c> — the client
+    /// deserialises a BARE <c>List&lt;Int64&gt;</c> here, not a list of
+    /// invention objects: the continuation at OEGFNFEAAGO.txt:5941 is typed
+    /// <c>FGLDKEJLAKB&lt;List`1&lt;Int64&gt;&gt;</c> and is then projected by a
+    /// <c>Func&lt;List&lt;Int64&gt;, List&lt;Int64&gt;&gt;</c> (:5966). The reply is the
+    /// SUBSET of the posted ids that are dorm skins; aliasing this onto the
+    /// generic batch handler fed objects to a number reader and killed
+    /// dorm-skin filtering outright.</summary>
+    [HttpGet("api/inventions/v1/dormskinsfromids")]
+    [HttpPost("api/inventions/v1/dormskinsfromids")]
+    public async Task<ActionResult> DormSkinsFromIds()
+    {
+        var ids = await CollectIdsAsync("ids", "id", "InventionIds");
+        if (ids.Count == 0) return Ok(Array.Empty<long>());
+        var rows = await db.Inventions
+            .Where(i => !i.IsDeleted && ids.Contains(i.Id))
+            .Select(i => new { i.Id, i.TagsCsv })
+            .ToListAsync();
+        return Ok(rows.Where(r => IsDormSkinTags(r.TagsCsv)).Select(r => r.Id).ToList());
     }
 
     private async Task<ActionResult> BatchIdsAsync(IReadOnlyCollection<long> requestedIds)
@@ -167,22 +351,24 @@ public class InventionsController(
     }
 
     [HttpGet("api/inventions/v1/fromcreators")]
+    [HttpPost("api/inventions/v1/fromcreators")]
     public async Task<ActionResult> FromCreators()
     {
-        var creatorIds = Request.Query
-            .SelectMany(q => q.Value)
-            .SelectMany(v => (v ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            .Select(v => long.TryParse(v, out var id) ? id : 0L)
-            .Where(id => id > 0)
-            .Distinct()
-            .Take(200)
-            .ToList();
-
+        // Only the literal "id" key carries creator ids. The previous
+        // SelectMany-over-every-query-field also swallowed the client's
+        // "skip"/"take" pairs, so take=100 quietly added player 100's
+        // inventions to the shelf.
+        var creatorIds = await CollectIdsAsync("id");
         if (creatorIds.Count == 0) return Ok(Array.Empty<object>());
+
+        var skip = Math.Max(0, await ReadIntFieldAsync("skip") ?? 0);
+        var take = Math.Clamp(await ReadIntFieldAsync("take") ?? 100, 1, 200);
+
         var rows = await db.Inventions
             .Where(i => !i.IsDeleted && i.IsPublished && creatorIds.Contains(i.CreatorPlayerId))
             .OrderByDescending(i => i.UpdatedAt)
-            .Take(200)
+            .Skip(skip)
+            .Take(take)
             .ToListAsync();
         return Ok(rows.Select(ToWire));
     }
