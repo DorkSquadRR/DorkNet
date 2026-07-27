@@ -224,6 +224,19 @@ See [docs/architecture.md](docs/architecture.md) for the full mental
 model (project layout, request lifecycle, watch-mirror controller
 pattern, where to start contributing).
 
+### Client API contracts
+
+Rec Room is shut down, so the clients can only be studied statically.
+[docs/recroom-2023-client-api-complete.md](docs/recroom-2023-client-api-complete.md)
+is the complete contract for the March-2023 client: every route it can
+call, the HTTP verb, the request and response shapes, and a per-subsystem
+diff against what this server currently implements. Read it before adding
+or changing any endpoint that build touches — it also documents how to
+recover verbs and response shapes from the disassembly yourself.
+
+The equivalent material for the December-2020 client is in the
+`recroom-2020-client-*` files alongside it.
+
 ### Microservices
 
 The production topology is the gateway-fronted compose stack.

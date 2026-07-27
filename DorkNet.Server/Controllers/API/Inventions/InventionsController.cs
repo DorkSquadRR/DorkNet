@@ -504,9 +504,25 @@ public class InventionsController(
         });
     }
 
+    /// <summary>The 2023-03-21 client names the blob field
+    /// <c>inventionDataFilename</c> and sends four extra cost fields plus the
+    /// creation room and referenced inventions. The record only had
+    /// <c>BlobName</c>, which the client never sends, so the required-parameter
+    /// check rejected every publish with 400 and no new invention version could
+    /// ever be saved.</summary>
     public sealed record AddVersionRequest(
-        long InventionId, string BlobName,
-        int? InstantiationCost, int? LightsCost);
+        long InventionId,
+        string? BlobName,
+        string? InventionDataFilename,
+        int? InstantiationCost, int? LightsCost,
+        int? ChipsCost, int? CloudVariablesCost, int? AiCost,
+        long? CreationRoomId,
+        List<long>? ReferencedInventions)
+    {
+        public string? Blob => !string.IsNullOrWhiteSpace(InventionDataFilename)
+            ? InventionDataFilename
+            : BlobName;
+    }
 
     [HttpPost("api/inventions/v3/addversion")]
     [HttpPost("api/inventions/v4/addversion")]
@@ -517,10 +533,11 @@ public class InventionsController(
         var inv = await db.Inventions.FirstOrDefaultAsync(x => x.Id == req.InventionId && !x.IsDeleted);
         if (inv is null) return NotFound();
         if (inv.CreatorPlayerId != pid) return Forbid();
-        if (string.IsNullOrWhiteSpace(req.BlobName)) return BadRequest("missing BlobName");
+        var blobName = req.Blob;
+        if (string.IsNullOrWhiteSpace(blobName)) return BadRequest("missing inventionDataFilename");
 
         var nextVer = inv.CurrentVersionNumber + 1;
-        inv.CurrentBlobName = req.BlobName;
+        inv.CurrentBlobName = blobName;
         inv.CurrentVersionNumber = nextVer;
         inv.UpdatedAt = DateTime.UtcNow;
 
@@ -529,7 +546,7 @@ public class InventionsController(
             InventionId = inv.Id,
             ReplicationId = Guid.NewGuid().ToString("D"),
             VersionNumber = nextVer,
-            BlobName = req.BlobName,
+            BlobName = blobName,
             InstantiationCost = req.InstantiationCost ?? 0,
             LightsCost = req.LightsCost ?? 0,
         });
@@ -664,7 +681,15 @@ public class InventionsController(
 
     // ── POST mutations ───────────────────────────────────────────────────
 
-    public sealed record SetTagsRequest(long InventionId, string? AutoTags, string? PlayerAddedTags);
+    /// <summary>The client sends <c>AutoTags</c> and <c>CustomTags</c> as JSON
+    /// ARRAYS of strings. Binding them to <c>string</c> made deserialization
+    /// throw, so every tag edit 400'd. <c>PlayerAddedTags</c> is kept as an
+    /// alias for older callers.</summary>
+    public sealed record SetTagsRequest(
+        long InventionId,
+        List<string>? AutoTags,
+        List<string>? CustomTags,
+        List<string>? PlayerAddedTags);
 
     [HttpPost("api/inventions/v1/settags")]
     [Authorize]
@@ -674,8 +699,12 @@ public class InventionsController(
         var inv = await db.Inventions.FirstOrDefaultAsync(x => x.Id == req.InventionId && !x.IsDeleted);
         if (inv is null) return NotFound();
         if (inv.CreatorPlayerId != pid) return Forbid();
-        var combined = string.Join(',', new[] { req.AutoTags, req.PlayerAddedTags }
-            .Where(s => !string.IsNullOrWhiteSpace(s))).Trim(',');
+        var combined = string.Join(',', new[] { req.AutoTags, req.CustomTags, req.PlayerAddedTags }
+            .Where(list => list is not null)
+            .SelectMany(list => list!)
+            .Select(t => t?.Trim())
+            .Where(t => !string.IsNullOrWhiteSpace(t))
+            .Distinct(StringComparer.OrdinalIgnoreCase));
         inv.TagsCsv = combined;
         inv.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();

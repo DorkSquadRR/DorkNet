@@ -12,6 +12,19 @@ namespace DorkNet.Server.Controllers.API.Compatibility;
 [ApiController]
 public class CompatibilityFeatureController(DorkNetDbContext db) : ControllerBase
 {
+    /// <summary>The 2023-03-21 client GETs this (verb register <c>rdx=0</c>
+    /// at RecNet.Runtime/FPIBGPIAOBI.txt:2984, immediately before the
+    /// <c>"api/banappeal/generateCode"</c> literal on :2980) and deserialises
+    /// the response as a bare <c>String</c> — the issuing method is
+    /// <c>FGLDKEJLAKB&lt;System.String&gt; HBEPHMAKCDN()</c> (:2759) and the
+    /// continuation is <c>Func&lt;IPCJLCNIBEG&lt;String&gt;,
+    /// FGLDKEJLAKB&lt;String&gt;&gt;</c> (:3019).
+    ///
+    /// It used to be POST-only returning <c>{value: code}</c>, so the client
+    /// got a 405 and, had it reached the handler, would have thrown parsing a
+    /// JSON object into a string. Ban-appeal code generation never worked.
+    /// The body is now the bare JSON string (<c>"BA-123456"</c>).</summary>
+    [HttpGet("api/banappeal/generateCode")]
     [HttpPost("api/banappeal/generateCode")]
     [Authorize]
     public async Task<IActionResult> GenerateBanAppealCode()
@@ -25,7 +38,7 @@ public class CompatibilityFeatureController(DorkNetDbContext db) : ControllerBas
             Value = code,
         });
         await db.SaveChangesAsync();
-        return Ok(new { value = code });
+        return Content(JsonSerializer.Serialize(code), "application/json");
     }
 
     [HttpPost("api/CampusCard/v1/UpdateAndGetSubscription")]
@@ -110,7 +123,7 @@ public class CompatibilityFeatureController(DorkNetDbContext db) : ControllerBas
 
         // Prefix with "[club {id}]" so admins can tell club reports apart
         // from player reports in the shared ReportEntity queue.
-        var message = $"[club {club.Id}] {req.Message ?? string.Empty}".Trim();
+        var message = $"[club {club.Id}] {req.Details ?? req.Message ?? string.Empty}".Trim();
         if (message.Length > 1000) message = message[..1000];
         db.Reports.Add(new ReportEntity
         {
@@ -155,7 +168,13 @@ public class CompatibilityFeatureController(DorkNetDbContext db) : ControllerBas
                                        ?? form["ClubId"].FirstOrDefault(), out var clubId) ? clubId : 0,
                 ReportCategory = int.TryParse(form["reportCategory"].FirstOrDefault()
                                               ?? form["ReportCategory"].FirstOrDefault(), out var cat) ? cat : 5,
-                Message = form["message"].FirstOrDefault() ?? form["Message"].FirstOrDefault(),
+                // The 2023 client names the free-text field "details"
+                // (IKMMOCKDKAF.txt:25303-25322), not "message" — reading only
+                // the latter stored every club report with an empty body.
+                Message = form["details"].FirstOrDefault()
+                          ?? form["Details"].FirstOrDefault()
+                          ?? form["message"].FirstOrDefault()
+                          ?? form["Message"].FirstOrDefault(),
             };
         }
         try
@@ -178,5 +197,7 @@ public class CompatibilityFeatureController(DorkNetDbContext db) : ControllerBas
         public long ClubId { get; set; }
         public int ReportCategory { get; set; } = 5;
         public string? Message { get; set; }
+        /// <summary>The client's spelling of <see cref="Message"/>.</summary>
+        public string? Details { get; set; }
     }
 }

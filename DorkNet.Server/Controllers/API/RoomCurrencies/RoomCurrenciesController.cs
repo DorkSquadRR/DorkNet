@@ -45,7 +45,7 @@ public class RoomCurrenciesController(DorkNetDbContext db, LevelService level) :
             Name = name,
             Description = Trim(ReadString(fields, "description", "Description"), 512),
             ImageName = Trim(ReadString(fields, "imageName", "ImageName"), 256),
-            DailyLimit = Math.Max(0, ReadInt(fields, "dailyLimit", "DailyLimit") ?? 0),
+            DailyLimit = Math.Max(0, ReadInt(fields, "limit", "Limit", "dailyLimit", "DailyLimit") ?? 0),
         };
         db.RoomCurrencies.Add(currency);
         await db.SaveChangesAsync();
@@ -65,7 +65,7 @@ public class RoomCurrenciesController(DorkNetDbContext db, LevelService level) :
         if (ReadString(fields, "name", "Name") is { } name) currency.Name = Trim(name, 64);
         if (ReadString(fields, "description", "Description") is { } description) currency.Description = Trim(description, 512);
         if (ReadString(fields, "imageName", "ImageName") is { } imageName) currency.ImageName = Trim(imageName, 256);
-        if (ReadInt(fields, "dailyLimit", "DailyLimit") is int dailyLimit) currency.DailyLimit = Math.Max(0, dailyLimit);
+        if (ReadInt(fields, "limit", "Limit", "dailyLimit", "DailyLimit") is int dailyLimit) currency.DailyLimit = Math.Max(0, dailyLimit);
         currency.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
         return Ok(ToWire(currency));
@@ -77,13 +77,20 @@ public class RoomCurrenciesController(DorkNetDbContext db, LevelService level) :
         var fields = await ReadFieldsAsync();
         var currency = await FindCurrencyAsync(fields);
         if (currency is null) return NotFound();
-        var playerId = ReadLong(fields, "playerId", "PlayerId") ?? Me;
+        // The client sends "accountId" and can ask about ANOTHER player
+        // (circuits read other players' balances); reading only playerId made
+        // every such query silently answer for the caller instead.
+        var playerId = ReadLong(fields, "accountId", "AccountId", "playerId", "PlayerId") ?? Me;
         var balance = await GetBalanceAsync(playerId, currency.Id);
         return Ok(new
         {
+            AccountId = (int)playerId,
+            CurrencyId = currency.PublicId,
+            Balance = balance,
+            ModifiedAt = DateTime.UtcNow,
+            // legacy aliases
             PlayerId = (int)playerId,
             RoomCurrencyId = currency.PublicId,
-            Balance = balance,
         });
     }
 
@@ -104,9 +111,13 @@ public class RoomCurrenciesController(DorkNetDbContext db, LevelService level) :
             .ToListAsync();
         return Ok(rows.Select(x => new
         {
+            AccountId = (int)playerId,
+            CurrencyId = x.c.PublicId,
+            x.b.Balance,
+            ModifiedAt = DateTime.SpecifyKind(x.b.UpdatedAt, DateTimeKind.Utc),
+            // legacy aliases
             PlayerId = (int)playerId,
             RoomCurrencyId = x.c.PublicId,
-            x.b.Balance,
         }));
     }
 
@@ -373,33 +384,62 @@ public class RoomCurrenciesController(DorkNetDbContext db, LevelService level) :
         return s.Length <= max ? s : s[..max];
     }
 
+    /// <summary>Room currency as the client READS it (formatter PEOAOMGOMGC):
+    /// <c>CurrencyId</c>, <c>RoomId</c>, <c>Name</c>, <c>Description</c>,
+    /// <c>CurrencyType</c>, <c>Limit</c>, <c>ImageName</c>, <c>CreatedAt</c>,
+    /// <c>ModifiedAt</c>.
+    ///
+    /// The previous names were server inventions (<c>RoomCurrencyId</c>,
+    /// <c>DailyLimit</c>, <c>UpdatedAt</c>) that shared almost no keys with
+    /// what the client reads, so every currency came back with an empty
+    /// CurrencyId and a zero limit — the room currency HUD could not match a
+    /// balance to a currency. The legacy aliases are kept alongside the correct
+    /// names because unknown members are ignored client-side and other DorkNet
+    /// surfaces (admin UI) still read them.</summary>
     private static object ToWire(RoomCurrencyEntity currency) => new
     {
+        CurrencyId = currency.PublicId,
+        currency.RoomId,
+        currency.Name,
+        currency.Description,
+        CurrencyType = 300,
+        Limit = (long)currency.DailyLimit,
+        currency.ImageName,
+        CreatedAt = DateTime.SpecifyKind(currency.CreatedAt, DateTimeKind.Utc),
+        ModifiedAt = DateTime.SpecifyKind(currency.UpdatedAt, DateTimeKind.Utc),
+
+        // legacy aliases
         RoomCurrencyId = currency.PublicId,
         Id = currency.PublicId,
         InternalId = currency.Id,
-        currency.RoomId,
         CreatorPlayerId = (int)currency.CreatorPlayerId,
-        currency.Name,
-        currency.Description,
-        currency.ImageName,
         currency.DailyLimit,
-        currency.CreatedAt,
         currency.UpdatedAt,
     };
 
+    /// <summary>Purchase offer as the client READS it (formatter AALDCAANEMM):
+    /// <c>CurrencyPurchaseOfferId</c>, <c>CurrencyId</c>, <c>Name</c>,
+    /// <c>CurrencyAmount</c>, <c>Price</c>, <c>CurrencyType</c>,
+    /// <c>CreatedAt</c>, <c>ModifiedAt</c>. Legacy aliases retained as in
+    /// <see cref="ToWire"/>.</summary>
     private static object ToOfferWire(RoomCurrencyPurchaseOfferEntity offer, RoomCurrencyEntity currency) => new
     {
+        CurrencyPurchaseOfferId = offer.PublicId,
+        CurrencyId = currency.PublicId,
+        offer.Name,
+        CurrencyAmount = offer.Amount,
+        offer.Price,
+        offer.CurrencyType,
+        CreatedAt = DateTime.SpecifyKind(offer.CreatedAt, DateTimeKind.Utc),
+        ModifiedAt = DateTime.SpecifyKind(offer.UpdatedAt, DateTimeKind.Utc),
+
+        // legacy aliases
         PurchaseOfferId = offer.PublicId,
         RoomCurrencyPackageId = offer.PublicId,
         Id = offer.PublicId,
         InternalId = offer.Id,
         RoomCurrencyId = currency.PublicId,
-        offer.Name,
         offer.Amount,
-        offer.Price,
-        offer.CurrencyType,
-        offer.CreatedAt,
         offer.UpdatedAt,
     };
 }

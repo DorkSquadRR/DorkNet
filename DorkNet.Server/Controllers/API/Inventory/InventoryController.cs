@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -78,8 +79,85 @@ public class InventoryController(
     /// <summary>POST <c>api/equipment/v1/update</c> — toggle the
     /// "favorited" flag on a piece of equipment (the watch lets the
     /// player pin commonly-used tools).</summary>
+    /// <remarks>The 2023-03-21 client sends a JSON <b>array</b> of equipment
+    /// updates here, not a single object (it serialises a
+    /// <c>List&lt;BCINJINBBHG&gt;</c>). Binding <c>[FromBody]</c> onto one
+    /// object failed model binding and returned an automatic 400, so equip and
+    /// favourite changes never persisted for that build. The body is now read
+    /// leniently and both shapes are applied through the same per-item path.
+    /// </remarks>
     [HttpPost("api/equipment/v1/update")]
-    public async Task<IActionResult> UpdateEquipment([FromBody] EquipmentUpdateRequest req)
+    [Consumes("application/json", "application/x-www-form-urlencoded", "multipart/form-data")]
+    public async Task<IActionResult> UpdateEquipment()
+    {
+        var requests = await ReadEquipmentUpdatesAsync();
+        if (requests.Count == 0) return BadRequest("missing prefab/mod identifier");
+
+        IActionResult last = Ok();
+        foreach (var req in requests)
+        {
+            last = await ApplyEquipmentUpdateAsync(req);
+            // Surface the first rejection rather than pretending the whole
+            // batch succeeded.
+            if (last is not OkObjectResult and not OkResult) return last;
+        }
+        return last;
+    }
+
+    /// <summary>Accepts a single object, an array of objects, or a form post.</summary>
+    private async Task<List<EquipmentUpdateRequest>> ReadEquipmentUpdatesAsync()
+    {
+        var opts = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+        var result = new List<EquipmentUpdateRequest>();
+
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync();
+            string? S(params string[] keys)
+            {
+                foreach (var k in keys)
+                    if (form.TryGetValue(k, out var v) && !string.IsNullOrEmpty(v)) return v.ToString();
+                return null;
+            }
+            bool? B(params string[] keys)
+                => bool.TryParse(S(keys), out var b) ? b : null;
+            result.Add(new EquipmentUpdateRequest
+            {
+                PrefabName = S("PrefabName", "prefabName"),
+                ModificationGuid = S("ModificationGuid", "modificationGuid"),
+                Favorited = B("Favorited", "favorited") ?? false,
+                Equipped = B("Equipped", "equipped"),
+                IsEquipped = B("IsEquipped", "isEquipped"),
+            });
+            return result;
+        }
+
+        try
+        {
+            Request.EnableBuffering();
+            Request.Body.Position = 0;
+            using var doc = await JsonDocument.ParseAsync(Request.Body);
+            Request.Body.Position = 0;
+            var root = doc.RootElement;
+            if (root.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var el in root.EnumerateArray())
+                {
+                    var one = el.Deserialize<EquipmentUpdateRequest>(opts);
+                    if (one is not null) result.Add(one);
+                }
+            }
+            else if (root.ValueKind == JsonValueKind.Object)
+            {
+                var one = root.Deserialize<EquipmentUpdateRequest>(opts);
+                if (one is not null) result.Add(one);
+            }
+        }
+        catch (JsonException) { /* unparseable body → treated as empty */ }
+        return result;
+    }
+
+    private async Task<IActionResult> ApplyEquipmentUpdateAsync(EquipmentUpdateRequest req)
     {
         var pid = Me;
         // Catalog-backed skins use a compound slug so we can round-trip
@@ -209,16 +287,28 @@ public class InventoryController(
         return Ok(new { row.Id, Count = row.Quantity });
     }
 
+    /// <remarks>The 2023-03-21 client serialises a <c>TransferConsumableRequest</c>
+    /// with <c>JsonUtility.ToJson</c> and posts it as a raw JSON body. With
+    /// <c>[ApiController]</c> plus <c>[FromForm]</c> parameters, an
+    /// <c>application/json</c> request bound nothing and the transfer was
+    /// rejected as invalid, so consumable gifting never worked on that build.
+    /// The JSON body is now read alongside the original form/query paths.</remarks>
     [HttpPost("api/consumables/v1/transfer")]
+    [Consumes("application/json", "application/x-www-form-urlencoded", "multipart/form-data")]
     public async Task<IActionResult> TransferConsumable(
         [FromForm] long? id,
         [FromForm] long? recipientPlayerId,
         [FromForm] int quantity = 1)
     {
         var pid = Me;
-        var inventoryId = id ?? (long.TryParse(Request.Query["id"], out var qId) ? qId : 0);
-        var recipient = recipientPlayerId ?? (long.TryParse(Request.Query["recipientPlayerId"], out var qRecipient) ? qRecipient : 0);
-        var amount = Math.Max(1, quantity);
+        var body = await ReadTransferBodyAsync();
+        var inventoryId = id
+                          ?? body.Id
+                          ?? (long.TryParse(Request.Query["id"], out var qId) ? qId : 0);
+        var recipient = recipientPlayerId
+                        ?? body.RecipientPlayerId
+                        ?? (long.TryParse(Request.Query["recipientPlayerId"], out var qRecipient) ? qRecipient : 0);
+        var amount = Math.Max(1, body.Quantity ?? quantity);
         if (inventoryId <= 0 || recipient <= 0 || recipient == pid)
             return BadRequest("invalid_transfer");
 
@@ -245,6 +335,69 @@ public class InventoryController(
             PushNotificationId.ConsumableMappingAdded,
             new { target.Id, target.ItemSlug, target.Quantity });
         return Ok(new { Success = true, SourceCount = Math.Max(0, source.Quantity), RecipientCount = target.Quantity });
+    }
+
+    private readonly record struct TransferBody(long? Id, long? RecipientPlayerId, int? Quantity);
+
+    /// <summary>Reads the 2023 client's raw JSON transfer body. JsonUtility
+    /// emits field names verbatim, and the exact casing of that DTO is not
+    /// recoverable from the ISIL, so both conventions are accepted.</summary>
+    private async Task<TransferBody> ReadTransferBodyAsync()
+    {
+        if (Request.HasFormContentType) return default;
+        try
+        {
+            Request.EnableBuffering();
+            Request.Body.Position = 0;
+            using var doc = await JsonDocument.ParseAsync(Request.Body);
+            Request.Body.Position = 0;
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return default;
+
+            long? L(params string[] keys)
+            {
+                foreach (var k in keys)
+                    if (doc.RootElement.TryGetProperty(k, out var e) &&
+                        e.ValueKind == JsonValueKind.Number && e.TryGetInt64(out var v)) return v;
+                return null;
+            }
+            int? I(params string[] keys)
+            {
+                foreach (var k in keys)
+                    if (doc.RootElement.TryGetProperty(k, out var e) &&
+                        e.ValueKind == JsonValueKind.Number && e.TryGetInt32(out var v)) return v;
+                return null;
+            }
+            return new TransferBody(
+                L("Id", "id", "InventoryId", "inventoryId"),
+                L("RecipientPlayerId", "recipientPlayerId"),
+                I("Quantity", "quantity", "Count", "count"));
+        }
+        catch (JsonException) { return default; }
+    }
+
+    /// <summary>GET <c>api/consumables/v1/getTransferable/{playerId}</c> — the
+    /// consumables the caller may gift to <c>playerId</c>. No handler existed,
+    /// so the transfer UI 404'd and could never list anything to send.
+    /// Returns the same grouped shape as <c>v2/getUnlocked</c>.</summary>
+    [HttpGet("api/consumables/v1/getTransferable/{playerId:long}")]
+    public async Task<IActionResult> GetTransferableConsumables(long playerId)
+    {
+        var pid = Me;
+        var rows = await db.PlayerInventory
+            .Where(p => p.PlayerId == pid && p.Quantity > 0)
+            .ToListAsync();
+
+        // Can't gift to yourself; everything else the caller holds is fair game.
+        var transferable = playerId == pid ? [] : rows;
+        return Ok(transferable
+            .GroupBy(r => r.ItemSlug)
+            .Select(g => new
+            {
+                Consumable = g.Key,
+                Count = g.Sum(r => r.Quantity),
+                Id = g.Min(r => r.Id),
+            })
+            .ToList());
     }
 
     public sealed class ActivateConsumableRequest

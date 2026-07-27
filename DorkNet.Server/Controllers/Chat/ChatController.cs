@@ -334,6 +334,9 @@ public class ChatController(
     /// inbox. DMs can't be left — there are only two participants and
     /// removing one effectively ends the conversation; the watch
     /// surfaces a "delete chat" option for DMs instead.</summary>
+    // The 2023-03-21 client POSTs this; DELETE-only returned 405 and leaving a
+    // group chat was impossible on that build.
+    [HttpPost("/thread/{chatThreadId}/leave")]
     [HttpDelete("/thread/{chatThreadId}/leave")]
     public async Task<IActionResult> Leave(string chatThreadId)
     {

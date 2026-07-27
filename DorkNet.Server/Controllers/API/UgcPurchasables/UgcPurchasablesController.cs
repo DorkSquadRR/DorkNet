@@ -11,9 +11,17 @@ namespace DorkNet.Server.Controllers.API.UgcPurchasables;
 [ApiController]
 public class UgcPurchasablesController(DorkNetDbContext db) : ControllerBase
 {
+    /// <summary>The 2023-03-21 client asks for a room's in-room store with the
+    /// path form <c>api/ugcPurchasables/v1/items/room/{roomId}</c>, not the
+    /// <c>?roomId=</c> query this handler was originally written for. Without
+    /// the path route it 404'd and the in-room UGC store never populated on
+    /// room join.</summary>
+    [HttpGet("api/ugcPurchasables/v1/items/room/{roomId:long}")]
     [HttpGet("api/ugcPurchasables")]
     [AllowAnonymous]
-    public async Task<IActionResult> List([FromQuery] long roomId = 0)
+    // No explicit binding source: roomId comes from the route on the path form
+    // above and from the query string on the bare route.
+    public async Task<IActionResult> List(long roomId = 0)
     {
         var rows = await db.UgcPurchasables
             .Where(i => !i.IsDeleted && (roomId <= 0 || i.RoomId == roomId))

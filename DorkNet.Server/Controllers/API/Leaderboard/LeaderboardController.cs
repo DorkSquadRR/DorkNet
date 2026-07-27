@@ -131,6 +131,106 @@ public class LeaderboardController(
         return Ok(new { success = true, error = "" });
     }
 
+    /// <summary>POST <c>/leaderboard/CheckAndSetStat</c> — the compare-and-set
+    /// form of <see cref="SetStat"/>, and the ONLY stat-write route the
+    /// 2023-03-21 client has: that build contains no <c>SetStat</c> literal at
+    /// all. Nothing registered this route, so every leaderboard score written
+    /// by a 2023 client fell through to the catch-all and was lost.
+    ///
+    /// The request is <c>RecNet.SetStatRequestDTO</c>, whose property names are
+    /// NOT obfuscated in the dump: <c>StatChannel</c> (Int32), <c>RoomId</c>
+    /// (Int64), <c>StatValue</c> (Int32) and the extra
+    /// <c>CurrentStatValue</c> (Int32?) that distinguishes this route from
+    /// plain SetStat.
+    ///
+    /// <c>CurrentStatValue</c> is the value the client believes is currently
+    /// stored. It is an optimistic-concurrency guard: the write applies only if
+    /// the server agrees, which stops a stale session from clobbering a newer
+    /// score. A null means "no expectation" and writes unconditionally, and a
+    /// mismatch is reported rather than silently dropped so the client can
+    /// re-read.
+    ///
+    /// As with SetStat, the client has already decided the new value should win
+    /// (it applies the per-channel higher/lower-is-better rule locally), so the
+    /// server does not second-guess the direction.</summary>
+    [HttpPost("/leaderboard/CheckAndSetStat")]
+    [HttpPost("/api/leaderboard/CheckAndSetStat")]
+    [Authorize]
+    public async Task<IActionResult> CheckAndSetStat([FromBody] CheckAndSetStatRequest req)
+    {
+        var pid = this.RequireCurrentPlayerId();
+        var roomId = ResolveRoomId(req.RoomId, pid);
+        var row = await db.LeaderboardStats.FirstOrDefaultAsync(s =>
+            s.RoomId == roomId && s.PlayerId == pid && s.StatChannel == req.StatChannel);
+
+        if (req.CurrentStatValue is int expected && row is not null && row.Value != expected)
+        {
+            return Ok(new
+            {
+                success = false,
+                error = "stat_value_mismatch",
+                StatValue = row.Value,
+                CurrentStatValue = row.Value,
+            });
+        }
+
+        if (row is null)
+        {
+            row = new LeaderboardStatEntity
+            {
+                PlayerId = pid,
+                RoomId = roomId,
+                StatChannel = req.StatChannel,
+                Value = req.StatValue,
+            };
+            db.LeaderboardStats.Add(row);
+        }
+        else
+        {
+            row.Value = req.StatValue;
+            row.UpdatedAt = DateTime.UtcNow;
+        }
+
+        await EnsureChannelMetaAsync(roomId, req.StatChannel);
+        await db.SaveChangesAsync();
+        return Ok(new
+        {
+            success = true,
+            error = "",
+            StatValue = row.Value,
+            CurrentStatValue = row.Value,
+        });
+    }
+
+    public sealed class CheckAndSetStatRequest
+    {
+        public int StatChannel { get; set; }
+        public long RoomId { get; set; }
+        public int StatValue { get; set; }
+
+        /// <summary>The value the client believes is stored. Null = write
+        /// unconditionally.</summary>
+        public int? CurrentStatValue { get; set; }
+    }
+
+    /// <summary>Stamp a placeholder channel-meta row the first time a channel
+    /// reports, so the admin SPA's per-room Leaderboards tab surfaces it.</summary>
+    private async Task EnsureChannelMetaAsync(long roomId, int statChannel)
+    {
+        if (roomId <= 0) return;
+        var meta = await db.LeaderboardChannelMeta
+            .FirstOrDefaultAsync(c => c.RoomId == roomId && c.Channel == statChannel);
+        if (meta is not null) return;
+        db.LeaderboardChannelMeta.Add(new LeaderboardChannelMetaEntity
+        {
+            Channel = statChannel,
+            RoomId = roomId,
+            Name = $"Channel {statChannel}",
+            LowerIsBetter = false,
+            ValueFormat = "count",
+        });
+    }
+
     public sealed class GetPlayerRankRequest
     {
         public int PlayerId { get; set; }

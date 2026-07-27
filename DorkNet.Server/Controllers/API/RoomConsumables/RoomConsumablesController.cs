@@ -227,6 +227,11 @@ public class RoomConsumablesController(DorkNetDbContext db, LevelService level) 
     /// — buy one stack unit with tokens. Response is
     /// <c>{ OperationResult, BalanceUpdateResult, TokenBalanceResponse:
     /// { CurrencyType, Balance, Platform } }</c>.</summary>
+    // The 2023-03-21 client PUTs this (verb literal 3 = PUT, at the route
+    // construction in RecNet.Runtime/DCFKEFHJAGC.txt instrs 097-108), so a
+    // POST-only mapping returned 405 and token-priced consumables were
+    // unbuyable. Both verbs are accepted now.
+    [HttpPut("api/roomconsumables/v1/roomconsumable/{publicId:guid}/purchase/tokens")]
     [HttpPost("api/roomconsumables/v1/roomconsumable/{publicId:guid}/purchase/tokens")]
     [Authorize]
     public async Task<IActionResult> PurchaseTokens(Guid publicId)
@@ -263,6 +268,9 @@ public class RoomConsumablesController(DorkNetDbContext db, LevelService level) 
     /// — buy with a room currency. Response is <c>{ OperationResult,
     /// BalanceUpdateResult, CurrencyBalanceResponse: { AccountId,
     /// CurrencyId, Balance, ModifiedAt } }</c>.</summary>
+    // PUT per the client (verb literal 3 at DCFKEFHJAGC.txt instrs 112-123);
+    // POST-only returned 405 and currency-priced consumables were unbuyable.
+    [HttpPut("api/roomconsumables/v1/roomconsumable/{publicId:guid}/purchase/currency")]
     [HttpPost("api/roomconsumables/v1/roomconsumable/{publicId:guid}/purchase/currency")]
     [Authorize]
     public async Task<IActionResult> PurchaseCurrency(Guid publicId)
@@ -304,6 +312,10 @@ public class RoomConsumablesController(DorkNetDbContext db, LevelService level) 
     /// NewConcurrencyCode }</c>; response <c>{ Status, InventoryItem }</c>.
     /// On a code mismatch the current row is returned so the client can
     /// resync.</summary>
+    // PUT per the client (route format "{0}/v1/roomConsumable/{1}/consume"
+    // with verb literal 3 at RecNet.Runtime/LPNHMEFDAAG.txt:1449-1460);
+    // POST-only returned 405, so no consumable could ever be consumed.
+    [HttpPut("api/roomconsumables/v1/roomConsumable/{publicId:guid}/consume")]
     [HttpPost("api/roomconsumables/v1/roomConsumable/{publicId:guid}/consume")]
     [Authorize]
     public async Task<IActionResult> Consume(Guid publicId)
@@ -404,6 +416,18 @@ public class RoomConsumablesController(DorkNetDbContext db, LevelService level) 
         },
     };
 
+    /// <summary>Consumable descriptor as the client READS it.
+    ///
+    /// The price is FLAT here — the client's response formatter FCIBLPCOODP
+    /// reads <c>Price</c>, <c>PurchaseCurrencyId</c> and <c>ModifiedAt</c>
+    /// directly off the descriptor (RecNet.Runtime/FCIBLPCOODP.txt:670-710).
+    /// Emitting a nested <c>PriceAndCurrency</c> object left every item in
+    /// every room shop reading back Price=0 with a null currency, so the whole
+    /// catalogue looked token-priced and free.
+    ///
+    /// Note the asymmetry: REQUEST bodies really do nest PriceAndCurrency, and
+    /// ReadBodyAsync below still flattens that on the way in. Only the response
+    /// shape changed.</summary>
     private static object ToDescWire(RoomConsumableEntity c) => new
     {
         RoomConsumableId = c.PublicId,
@@ -411,7 +435,9 @@ public class RoomConsumablesController(DorkNetDbContext db, LevelService level) 
         c.Name,
         c.Description,
         c.ImageName,
-        PriceAndCurrency = new { c.Price, c.CurrencyId },
+        c.Price,
+        PurchaseCurrencyId = c.CurrencyId,
+        ModifiedAt = DateTime.SpecifyKind(c.UpdatedAt, DateTimeKind.Utc),
     };
 
     private static object ToInventoryWire(RoomConsumableOwnershipEntity own, RoomConsumableEntity item) => new
