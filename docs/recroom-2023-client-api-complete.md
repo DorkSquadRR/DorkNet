@@ -235,6 +235,7 @@ verified against the binary before the change, and the full test suite passes.
 | `SignalR push `Id` (notify)` | enum NAME sent for most ids; client only registered numbers — pushes vanished | numeric by default, with the six string-keyed ids listed explicitly |
 | `SignalR SubscriptionUpdateRoom` | sent as `SubscriptionUpdateRoom`; client listens on `RoomUpdate` | sent as `RoomUpdate` |
 | `Room ban notification` | sent id 24, for which the client has no handler | sent as ModerationKick (22) with IsBan |
+| `Presence on SignalR reconnect` | disconnect pushed offline; nothing ever pushed back online, so a reconnect greyed the player out for the rest of the session | connect re-pushes presence when a room is already known |
 
 Everything else in the per-subsystem Defects sections below is still
 outstanding.
