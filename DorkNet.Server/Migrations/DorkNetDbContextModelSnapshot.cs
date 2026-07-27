@@ -64,6 +64,10 @@ namespace DorkNet.Server.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<string>("CustomAvatarItemsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("EquippedItemsJson")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -85,6 +89,11 @@ namespace DorkNet.Server.Migrations
                     b.Property<string>("OutfitSelections")
                         .IsRequired()
                         .HasMaxLength(2048)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("OutfitSelectionsV2")
+                        .IsRequired()
+                        .HasMaxLength(8192)
                         .HasColumnType("TEXT");
 
                     b.Property<long>("PlayerId")
@@ -212,6 +221,34 @@ namespace DorkNet.Server.Migrations
                     b.HasIndex("PlayerId");
 
                     b.ToTable("Cards");
+                });
+
+            modelBuilder.Entity("DorkNet.Server.Data.Entities.CharadesWordListEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsBuiltIn")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("WordsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CharadesWordLists");
                 });
 
             modelBuilder.Entity("DorkNet.Server.Data.Entities.ChatMessageEntity", b =>
@@ -732,6 +769,109 @@ namespace DorkNet.Server.Migrations
                     b.ToTable("CurrencyBalances");
                 });
 
+            modelBuilder.Entity("DorkNet.Server.Data.Entities.CustomAvatarItemEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("AssetName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("BaseAvatarItemId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("CheerCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatorPlayerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ImageName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsFeatured")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsPublic")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ItemType")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Price")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("PurchaseCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatorPlayerId");
+
+                    b.HasIndex("IsFeatured");
+
+                    b.HasIndex("IsPublic");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.ToTable("CustomAvatarItems");
+                });
+
+            modelBuilder.Entity("DorkNet.Server.Data.Entities.CustomAvatarItemOwnershipEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("AcquiredAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CustomAvatarItemId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("PlayerId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CustomAvatarItemId");
+
+                    b.HasIndex("PlayerId", "CustomAvatarItemId")
+                        .IsUnique();
+
+                    b.ToTable("CustomAvatarItemOwnership");
+                });
+
             modelBuilder.Entity("DorkNet.Server.Data.Entities.DormStateEntity", b =>
                 {
                     b.Property<long>("PlayerId")
@@ -766,10 +906,22 @@ namespace DorkNet.Server.Migrations
                     b.Property<int>("GiftContext")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long>("GrantedItemId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("Message")
                         .IsRequired()
                         .HasMaxLength(256)
                         .HasColumnType("TEXT");
+
+                    b.Property<long>("Offer1ItemId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Offer2ItemId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Offer3ItemId")
+                        .HasColumnType("INTEGER");
 
                     b.Property<long>("PlayerId")
                         .HasColumnType("INTEGER");
@@ -920,6 +1072,9 @@ namespace DorkNet.Server.Migrations
                     b.Property<long>("RecipientPlayerId")
                         .HasColumnType("INTEGER");
 
+                    b.Property<long>("SourceStoreItemId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("SupportsCurrentPlatform")
                         .HasColumnType("INTEGER");
 
@@ -996,6 +1151,9 @@ namespace DorkNet.Server.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("Permission")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Price")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("ReplicationId")
@@ -1094,8 +1252,85 @@ namespace DorkNet.Server.Migrations
                     b.ToTable("IpBans");
                 });
 
+            modelBuilder.Entity("DorkNet.Server.Data.Entities.ItemWishlistEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ItemKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("ItemType")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("PlayerId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlayerId", "ItemKey", "ItemType")
+                        .IsUnique();
+
+                    b.ToTable("ItemWishlists");
+                });
+
+            modelBuilder.Entity("DorkNet.Server.Data.Entities.KeepsakeEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("EarnedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("EventKey")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ImageName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("PlayerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PlayerId");
+
+                    b.HasIndex("PlayerId", "EventKey");
+
+                    b.ToTable("Keepsakes");
+                });
+
             modelBuilder.Entity("DorkNet.Server.Data.Entities.LeaderboardChannelMetaEntity", b =>
                 {
+                    b.Property<long>("RoomId")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("Channel")
                         .HasColumnType("INTEGER");
 
@@ -1108,9 +1343,6 @@ namespace DorkNet.Server.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");
-
-                    b.Property<long>("RoomId")
-                        .HasColumnType("INTEGER");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("TEXT");
@@ -1310,6 +1542,37 @@ namespace DorkNet.Server.Migrations
                         .IsUnique();
 
                     b.ToTable("ObjectiveProgress");
+                });
+
+            modelBuilder.Entity("DorkNet.Server.Data.Entities.PendingDeviceEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DeviceId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("FirstSeenAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastIp")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("LastSeenAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Platform")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PlatformId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("PendingDevices");
                 });
 
             modelBuilder.Entity("DorkNet.Server.Data.Entities.PhotoEntity", b =>
@@ -1718,6 +1981,9 @@ namespace DorkNet.Server.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
+                    b.Property<int>("Accessibility")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("CheerCount")
                         .HasColumnType("INTEGER");
 
@@ -1726,6 +1992,11 @@ namespace DorkNet.Server.Migrations
 
                     b.Property<long>("CreatorPlayerId")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("CustomWarning")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
 
                     b.Property<string>("Description")
                         .IsRequired()
@@ -1752,6 +2023,21 @@ namespace DorkNet.Server.Migrations
                     b.Property<int>("OrderIndex")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("SupportsJuniors")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("SupportsLevelVoting")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("SupportsScreens")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("SupportsTeleportVR")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("SupportsWalkVR")
+                        .HasColumnType("INTEGER");
+
                     b.Property<string>("TagsCsv")
                         .IsRequired()
                         .HasMaxLength(1024)
@@ -1764,6 +2050,9 @@ namespace DorkNet.Server.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("VisitorCount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("WarningMask")
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
@@ -1871,6 +2160,11 @@ namespace DorkNet.Server.Migrations
                     b.Property<string>("PhotonRoomId")
                         .IsRequired()
                         .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("RoomCode")
+                        .IsRequired()
+                        .HasMaxLength(16)
                         .HasColumnType("TEXT");
 
                     b.Property<long>("RoomId")
@@ -2105,6 +2399,221 @@ namespace DorkNet.Server.Migrations
                     b.ToTable("RoomBookmarks");
                 });
 
+            modelBuilder.Entity("DorkNet.Server.Data.Entities.RoomConsumableEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatorPlayerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid?>("CurrencyId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ImageName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("Price")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RoomId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatorPlayerId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("RoomId");
+
+                    b.ToTable("RoomConsumables");
+                });
+
+            modelBuilder.Entity("DorkNet.Server.Data.Entities.RoomConsumableOwnershipEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("ConcurrencyCode")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Count")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("ModifiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("PlayerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RoomConsumableId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoomConsumableId");
+
+                    b.HasIndex("PlayerId", "RoomConsumableId")
+                        .IsUnique();
+
+                    b.ToTable("RoomConsumableOwnership");
+                });
+
+            modelBuilder.Entity("DorkNet.Server.Data.Entities.RoomCurrencyBalanceEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("Balance")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("PlayerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RoomCurrencyId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoomCurrencyId");
+
+                    b.HasIndex("PlayerId", "RoomCurrencyId")
+                        .IsUnique();
+
+                    b.ToTable("RoomCurrencyBalances");
+                });
+
+            modelBuilder.Entity("DorkNet.Server.Data.Entities.RoomCurrencyEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatorPlayerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("DailyLimit")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ImageName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RoomId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatorPlayerId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("RoomId");
+
+                    b.ToTable("RoomCurrencies");
+                });
+
+            modelBuilder.Entity("DorkNet.Server.Data.Entities.RoomCurrencyPurchaseOfferEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Amount")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("CurrencyType")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Price")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RoomCurrencyId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("RoomCurrencyId");
+
+                    b.ToTable("RoomCurrencyPurchaseOffers");
+                });
+
             modelBuilder.Entity("DorkNet.Server.Data.Entities.RoomDataBlobEntity", b =>
                 {
                     b.Property<long>("Id")
@@ -2153,6 +2662,9 @@ namespace DorkNet.Server.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("Accessibility")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("AllowNewUsers")
                         .HasColumnType("INTEGER");
 
                     b.Property<bool>("AllowsJuniors")
@@ -2208,10 +2720,30 @@ namespace DorkNet.Server.Migrations
                     b.Property<bool>("IsDormRoom")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("IsRoomLinkedToRecRoomStudio")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsStudioRoom")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("LoadScreensJson")
+                        .IsRequired()
+                        .HasMaxLength(4096)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("LocationReplicationId")
                         .IsRequired()
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("MaxCapacity")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("MaxPlayerCalculationMode")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("MinLevel")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -2219,11 +2751,26 @@ namespace DorkNet.Server.Migrations
                         .HasColumnType("TEXT")
                         .UseCollation("NOCASE");
 
+                    b.Property<string>("PromoExternalContentJson")
+                        .IsRequired()
+                        .HasMaxLength(4096)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PromoImagesJson")
+                        .IsRequired()
+                        .HasMaxLength(4096)
+                        .HasColumnType("TEXT");
+
                     b.Property<int>("RoomWarningMask")
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("State")
                         .HasColumnType("INTEGER");
+
+                    b.Property<string>("StudioSessionId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
 
                     b.Property<bool>("SupportsLevelVoting")
                         .HasColumnType("INTEGER");
@@ -2421,6 +2968,19 @@ namespace DorkNet.Server.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("StudioAssetBundleNamesCsv")
+                        .IsRequired()
+                        .HasMaxLength(4096)
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("StudioSubRoomDataSaveId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("StudioUnityAssetId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("RoomId", "Name");
@@ -2585,6 +3145,44 @@ namespace DorkNet.Server.Migrations
                     b.Property<int>("Id")
                         .HasColumnType("INTEGER");
 
+                    b.Property<bool>("AllAvatarItemsOwned")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("BaseRoomNamesJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CharadesSlotBindingsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("DiscoveredGameConfigsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("");
+
+                    b.Property<bool>("GlobalFriendsEnabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("PlayMenuTagsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("");
+
+                    b.Property<bool>("ProfanityFilterDisabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("RecCenterDoorsJson")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasDefaultValue("");
+
+                    b.Property<bool>("RoomBlobVersionClampDisabled")
+                        .HasColumnType("INTEGER");
+
                     b.Property<bool>("SignupsDisabled")
                         .HasColumnType("INTEGER");
 
@@ -2611,6 +3209,43 @@ namespace DorkNet.Server.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("ServerSettings");
+                });
+
+            modelBuilder.Entity("DorkNet.Server.Data.Entities.SignupCodeEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatedByPlayerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Descriptor")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ExpiresAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("RedeemedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long?>("RedeemedByPlayerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Revoked")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("SignupCodes");
                 });
 
             modelBuilder.Entity("DorkNet.Server.Data.Entities.StoreItemEntity", b =>
@@ -2819,6 +3454,72 @@ namespace DorkNet.Server.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("TestPasses");
+                });
+
+            modelBuilder.Entity("DorkNet.Server.Data.Entities.UgcPurchasableEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("CreatorPlayerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CurrencyType")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasMaxLength(1024)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ImageName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsFeatured")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("ItemType")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Price")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<Guid>("PublicId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("RoomId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatorPlayerId");
+
+                    b.HasIndex("PublicId")
+                        .IsUnique();
+
+                    b.HasIndex("RoomId");
+
+                    b.ToTable("UgcPurchasables");
                 });
 
             modelBuilder.Entity("DorkNet.Server.Data.Entities.AvatarEntity", b =>

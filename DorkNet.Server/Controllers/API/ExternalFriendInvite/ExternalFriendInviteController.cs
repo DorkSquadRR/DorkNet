@@ -43,37 +43,43 @@ public class ExternalFriendInviteController(DorkNetDbContext db) : ControllerBas
         return Ok(new { Success = true, InviteCode = code, PhoneNumber = phoneNumber ?? string.Empty });
     }
 
+    /// <summary>Accounts who joined via this player's platform invites.
+    ///
+    /// The response is a bare array of account ids — the issuing method is
+    /// <c>FGLDKEJLAKB&lt;List&lt;System.Int32&gt;&gt; POJMMCCLNCB()</c>
+    /// (RecNet.Runtime/OMHDDLFIPLP.txt:923). Returning objects
+    /// (<c>{InviteCode, Kind, Value, CreatedAt}</c>) made Json.NET throw as soon
+    /// as any referrer existed, so the referral screen broke for exactly the
+    /// players who had referred someone.</summary>
     [HttpGet("api/externalfriendinvite/v1/getplatformreferrers")]
     [HttpPost("api/externalfriendinvite/v1/getplatformreferrers")]
     public async Task<IActionResult> GetPlatformReferrers()
-    {
-        var rows = await db.PlayerSettings
-            .Where(s => s.PlayerId == Me && s.Key.StartsWith("externalinvite:platform:"))
-            .OrderByDescending(s => s.Id)
-            .ToListAsync();
-        return Ok(rows.Select(ToInviteWire));
-    }
+        => Ok(await ReferrerIdsAsync("externalinvite:platform:"));
 
+    /// <summary>Same bare-id-array contract as
+    /// <see cref="GetPlatformReferrers"/>, for text-message invites.</summary>
     [HttpGet("api/externalfriendinvite/v1/gettextmessagereferrers")]
     [HttpPost("api/externalfriendinvite/v1/gettextmessagereferrers")]
     public async Task<IActionResult> GetTextMessageReferrers()
+        => Ok(await ReferrerIdsAsync("externalinvite:text:"));
+
+    /// <summary>Account ids recorded against the caller's invites of the given
+    /// kind. The redeeming account id is stored as the second pipe-delimited
+    /// field once an invite is claimed; unclaimed invites contribute nothing.</summary>
+    private async Task<List<int>> ReferrerIdsAsync(string keyPrefix)
     {
         var rows = await db.PlayerSettings
-            .Where(s => s.PlayerId == Me && s.Key.StartsWith("externalinvite:text:"))
+            .Where(s => s.PlayerId == Me && s.Key.StartsWith(keyPrefix))
             .OrderByDescending(s => s.Id)
+            .Select(s => s.Value)
             .ToListAsync();
-        return Ok(rows.Select(ToInviteWire));
+
+        return rows
+            .Select(v => v.Split('|'))
+            .Select(parts => int.TryParse(parts.ElementAtOrDefault(1), out var id) ? id : 0)
+            .Where(id => id > 0)
+            .Distinct()
+            .ToList();
     }
 
-    private static object ToInviteWire(PlayerSettingEntity row)
-    {
-        var parts = row.Value.Split('|');
-        return new
-        {
-            InviteCode = row.Key.Split(':').Last(),
-            Kind = row.Key.Contains(":text:") ? "text" : "platform",
-            Value = parts.FirstOrDefault() ?? string.Empty,
-            CreatedAt = parts.LastOrDefault() ?? string.Empty,
-        };
-    }
 }

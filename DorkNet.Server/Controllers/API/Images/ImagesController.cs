@@ -618,6 +618,16 @@ public class ImagesController(
         public long ImageId { get; set; }
         public string? ImageName { get; set; }
         public bool IsPublic { get; set; }
+
+        /// <summary>What the 2023-03-21 client actually sends:
+        /// 0 = Private, 1 = Public, 2 = FriendsOnly. It never sends
+        /// <see cref="IsPublic"/>, so reading only that flag left every photo
+        /// private no matter what the player picked.</summary>
+        public int? Accessibility { get; set; }
+
+        /// <summary>Resolved visibility: the enum when present, else the
+        /// legacy boolean.</summary>
+        public bool ResolvedIsPublic => Accessibility is int a ? a == 1 : IsPublic;
     }
 
     /// <summary>POST <c>api/images/v1/modifyaccessibility</c> — flip
@@ -630,7 +640,8 @@ public class ImagesController(
         [FromForm(Name = "PhotoId")] long? photoIdForm,
         [FromForm(Name = "ImageId")] long? imageIdForm,
         [FromForm(Name = "ImageName")] string? imageNameForm,
-        [FromForm(Name = "IsPublic")] bool? isPublicForm)
+        [FromForm(Name = "IsPublic")] bool? isPublicForm,
+        [FromForm(Name = "Accessibility")] int? accessibilityForm)
     {
         var pid = this.RequireCurrentPlayerId();
         var photoId = body?.PhotoId ?? body?.ImageId
@@ -638,7 +649,12 @@ public class ImagesController(
         var imageName = body?.ImageName ?? imageNameForm;
         if (photoId <= 0 && string.IsNullOrWhiteSpace(imageName))
             return BadRequest(new { error = "missing photoId" });
-        var isPublic = body?.IsPublic ?? isPublicForm ?? true;
+        // Accessibility (0=Private, 1=Public, 2=FriendsOnly) is what the 2023
+        // client sends; IsPublic is the older boolean.
+        var accessibility = body?.Accessibility ?? accessibilityForm;
+        var isPublic = accessibility is int a
+            ? a == 1
+            : body?.IsPublic ?? isPublicForm ?? true;
 
         var photo = photoId > 0
             ? await db.Photos.FirstOrDefaultAsync(p => p.Id == photoId)

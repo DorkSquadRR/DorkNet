@@ -175,11 +175,18 @@ public class AccountsController(
     [HttpGet("/account/search")]
     [HttpGet("/account/v1/search")]
     [Microsoft.AspNetCore.Authorization.AllowAnonymous]
-    public async Task<IActionResult> Search([FromQuery] string? query, [FromQuery] int take = 20)
+    // The 2023-03-21 client names the search term "name"; binding only "query"
+    // meant every player search came back empty (the handler short-circuited on
+    // a null term before it ever reached the service).
+    public async Task<IActionResult> Search(
+        [FromQuery] string? query,
+        [FromQuery] string? name,
+        [FromQuery] int take = 20)
     {
-        if (string.IsNullOrWhiteSpace(query)) return Ok(Array.Empty<object>());
+        var term = !string.IsNullOrWhiteSpace(name) ? name : query;
+        if (string.IsNullOrWhiteSpace(term)) return Ok(Array.Empty<object>());
         var clamped = Math.Clamp(take, 1, 50);
-        var matches = await playerService.SearchAsync(query.Trim(), clamped);
+        var matches = await playerService.SearchAsync(term.Trim(), clamped);
         return Ok(matches
             .Select(p => BuildAccount(p.Id, p.Username, p.DisplayName, p.ProfileImageName))
             .ToList());
@@ -338,6 +345,10 @@ public class AccountsController(
     /// cutoff is &lt;13 years old; we recompute it on every birthday
     /// write so a freshly turned 13 player loses the junior flag the
     /// next time they update.</summary>
+    // The 2023 client PUTs birthday (verb 3 at OPMAPIOEIFG.txt:7950-7954);
+    // POST-only returned 405 and the birthday step of onboarding always failed.
+    [HttpPut("/account/v1/birthday")]
+    [HttpPut("/account/me/birthday")]
     [HttpPost("/account/v1/birthday")]
     [HttpPost("/account/me/birthday")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]

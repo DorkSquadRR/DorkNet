@@ -272,6 +272,20 @@ public class ClubsController(ClubService clubs) : ControllerBase
     {
         if (HttpMethods.IsPut(Request.Method) || HttpMethods.IsDelete(Request.Method))
         {
+            // The client sends roomId in the form-urlencoded BODY, not the query
+            // string. Reading only the query bound null, and the PUT branch then
+            // wrote that null straight through — so "set clubhouse" silently
+            // CLEARED the clubhouse instead of setting it.
+            if (roomId is null && Request.HasFormContentType)
+            {
+                var form = await Request.ReadFormAsync();
+                foreach (var key in new[] { "roomId", "RoomId" })
+                    if (long.TryParse(form[key].FirstOrDefault(), out var fromForm) && fromForm > 0)
+                    {
+                        roomId = fromForm;
+                        break;
+                    }
+            }
             try
             {
                 var updated = await clubs.ModifyAsync(clubId, Me, c =>
@@ -368,7 +382,7 @@ public class ClubsController(ClubService clubs) : ControllerBase
     [HttpPost("/club/{clubId:long}/modifydetails")]
     [HttpPut("/club/{clubId:long}/modifydetails")]
     [Authorize]
-    public async Task<IActionResult> ClubModify(long clubId, [FromBody] ModifyClubRequest req)
+    public async Task<IActionResult> ClubModify(long clubId, [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] ModifyClubRequest req)
     {
         try
         {
@@ -396,7 +410,7 @@ public class ClubsController(ClubService clubs) : ControllerBase
     [HttpPost("/club/{clubId:long}/mainimage")]
     [HttpPut("/club/{clubId:long}/mainimage")]
     [Authorize]
-    public async Task<IActionResult> ClubMainImage(long clubId, [FromBody] MainImageRequest req)
+    public async Task<IActionResult> ClubMainImage(long clubId, [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] MainImageRequest req)
     {
         try
         {
@@ -417,7 +431,7 @@ public class ClubsController(ClubService clubs) : ControllerBase
     [HttpPost("/club/{clubId:long}/additionalimage/{slot:int}")]
     [HttpPut("/club/{clubId:long}/additionalimage/{slot:int}")]
     [Authorize]
-    public async Task<IActionResult> ClubAdditionalImage(long clubId, int slot, [FromBody] MainImageRequest req)
+    public async Task<IActionResult> ClubAdditionalImage(long clubId, int slot, [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] MainImageRequest req)
     {
         var club = await clubs.GetByIdAsync(clubId);
         if (club is null) return NotFound();
@@ -450,10 +464,15 @@ public class ClubsController(ClubService clubs) : ControllerBase
     {
         var club = await clubs.GetByIdAsync(clubId);
         if (club is null) return NotFound();
+        // Joinability enum, confirmed from the 2023 dump (enum FEHIHCMDOLN):
+        // Open = 0, InviteOnly = 1, AskToJoin = 2.
+        // This used to treat 1 as request-to-join and 2 as invite-only, i.e.
+        // exactly backwards: "Ask to join" clubs rejected every request while
+        // invite-only clubs quietly accepted them.
         var perms = club.Joinability switch
         {
             0 => 0,   // Open: instant member
-            1 => 128, // RequestToJoin: pending
+            2 => 128, // AskToJoin: pending approval
             _ => -1,  // InviteOnly: rejected
         };
         if (perms == -1) return Forbid();
@@ -503,7 +522,7 @@ public class ClubsController(ClubService clubs) : ControllerBase
     [HttpPost("/club/{clubId:long}/members/invite")]
     [HttpPut("/club/{clubId:long}/members/invite")]
     [Authorize]
-    public async Task<IActionResult> MemberInvite(long clubId, [FromBody] MemberInviteRequest req)
+    public async Task<IActionResult> MemberInvite(long clubId, [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] MemberInviteRequest req)
     {
         if (!await clubs.CanManageAsync(clubId, Me)) return Forbid();
         var target = req.PlayerId ?? req.AccountId ?? 0;
@@ -524,7 +543,7 @@ public class ClubsController(ClubService clubs) : ControllerBase
 
     [HttpPost("/club/{clubId:long}/members/invitemembers")]
     [Authorize]
-    public async Task<IActionResult> MemberInviteMembers(long clubId, [FromBody] InviteMembersRequest req)
+    public async Task<IActionResult> MemberInviteMembers(long clubId, [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] InviteMembersRequest req)
     {
         if (!await clubs.CanManageAsync(clubId, Me)) return Forbid();
         var ids = (req.PlayerIds ?? req.AccountIds ?? new List<int>()).Distinct().ToList();
@@ -568,7 +587,7 @@ public class ClubsController(ClubService clubs) : ControllerBase
     /// target's row from Pending to Member.</summary>
     [HttpPost("/club/{clubId:long}/members/acceptrequest")]
     [Authorize]
-    public async Task<IActionResult> MemberAcceptRequest(long clubId, [FromBody] MemberTargetRequest req)
+    public async Task<IActionResult> MemberAcceptRequest(long clubId, [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] MemberTargetRequest req)
     {
         if (!await clubs.CanManageAsync(clubId, Me)) return Forbid();
         var target = req.PlayerId ?? req.AccountId ?? 0;
@@ -588,7 +607,7 @@ public class ClubsController(ClubService clubs) : ControllerBase
 
     [HttpPost("/club/{clubId:long}/members/acceptrequests")]
     [Authorize]
-    public async Task<IActionResult> MemberAcceptRequests(long clubId, [FromBody] BulkTargetRequest req)
+    public async Task<IActionResult> MemberAcceptRequests(long clubId, [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] BulkTargetRequest req)
     {
         if (!await clubs.CanManageAsync(clubId, Me)) return Forbid();
         var ids = (req.PlayerIds ?? req.AccountIds ?? new List<int>()).Distinct().ToList();
@@ -603,7 +622,7 @@ public class ClubsController(ClubService clubs) : ControllerBase
 
     [HttpPost("/club/{clubId:long}/members/denyrequest")]
     [Authorize]
-    public async Task<IActionResult> MemberDenyRequest(long clubId, [FromBody] MemberTargetRequest req)
+    public async Task<IActionResult> MemberDenyRequest(long clubId, [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] MemberTargetRequest req)
     {
         if (!await clubs.CanManageAsync(clubId, Me)) return Forbid();
         var target = req.PlayerId ?? req.AccountId ?? 0;
@@ -614,7 +633,7 @@ public class ClubsController(ClubService clubs) : ControllerBase
 
     [HttpPost("/club/{clubId:long}/members/denyrequests")]
     [Authorize]
-    public async Task<IActionResult> MemberDenyRequests(long clubId, [FromBody] BulkTargetRequest req)
+    public async Task<IActionResult> MemberDenyRequests(long clubId, [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] BulkTargetRequest req)
     {
         if (!await clubs.CanManageAsync(clubId, Me)) return Forbid();
         var ids = (req.PlayerIds ?? req.AccountIds ?? new List<int>()).Distinct().ToList();
@@ -625,7 +644,7 @@ public class ClubsController(ClubService clubs) : ControllerBase
 
     [HttpPost("/club/{clubId:long}/members/remove")]
     [Authorize]
-    public async Task<IActionResult> MemberRemove(long clubId, [FromBody] MemberTargetRequest req)
+    public async Task<IActionResult> MemberRemove(long clubId, [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] MemberTargetRequest req)
     {
         var club = await clubs.GetByIdAsync(clubId);
         if (club is null) return NotFound();
@@ -643,7 +662,7 @@ public class ClubsController(ClubService clubs) : ControllerBase
     /// request-to-join flow can refuse them later.</summary>
     [HttpPost("/club/{clubId:long}/members/ban")]
     [Authorize]
-    public async Task<IActionResult> MemberBan(long clubId, [FromBody] MemberTargetRequest req)
+    public async Task<IActionResult> MemberBan(long clubId, [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] MemberTargetRequest req)
     {
         var club = await clubs.GetByIdAsync(clubId);
         if (club is null) return NotFound();
@@ -658,7 +677,7 @@ public class ClubsController(ClubService clubs) : ControllerBase
 
     [HttpPost("/club/{clubId:long}/members/unban")]
     [Authorize]
-    public async Task<IActionResult> MemberUnban(long clubId, [FromBody] MemberTargetRequest req)
+    public async Task<IActionResult> MemberUnban(long clubId, [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] MemberTargetRequest req)
     {
         if (!await clubs.CanManageAsync(clubId, Me)) return Forbid();
         var target = req.PlayerId ?? req.AccountId ?? 0;
@@ -674,7 +693,7 @@ public class ClubsController(ClubService clubs) : ControllerBase
     [HttpPost("/club/{clubId:long}/members/changetype")]
     [HttpPut("/club/{clubId:long}/members/changetype")]
     [Authorize]
-    public async Task<IActionResult> MemberChangeType(long clubId, [FromBody] MemberTargetRequest req)
+    public async Task<IActionResult> MemberChangeType(long clubId, [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] MemberTargetRequest req)
     {
         var club = await clubs.GetByIdAsync(clubId);
         if (club is null) return NotFound();
@@ -759,12 +778,77 @@ public class ClubsController(ClubService clubs) : ControllerBase
     /// double-fires are safe.</summary>
     [HttpDelete("/announcements/club/{clubId:long}/{announcementId:long}")]
     [HttpPost("/announcements/club/{clubId:long}/{announcementId:long}")]
-    [HttpPut("/announcements/club/{clubId:long}/{announcementId:long}")]
     [Authorize]
     public async Task<IActionResult> AnnouncementDelete(long clubId, long announcementId)
     {
         if (!await clubs.DeleteAnnouncementAsync(clubId, announcementId, Me)) return Forbid();
         return Ok();
+    }
+
+    /// <summary>PUT <c>/announcements/club/{clubId}/{announcementId}</c> — EDIT
+    /// an announcement.
+    ///
+    /// PUT used to be a third binding on <see cref="AnnouncementDelete"/>, so
+    /// editing an announcement silently DELETED it — the edit form's save
+    /// button destroyed the post it was editing. It is its own handler now.</summary>
+    [HttpPut("/announcements/club/{clubId:long}/{announcementId:long}")]
+    [Authorize]
+    public async Task<IActionResult> AnnouncementEdit(long clubId, long announcementId)
+    {
+        var (title, body, imageName) = await ReadAnnouncementFieldsAsync();
+        if (!await clubs.UpdateAnnouncementAsync(clubId, announcementId, Me, title, body, imageName))
+            return Forbid();
+        return Ok();
+    }
+
+    /// <summary>POST <c>/announcements/club/{clubId}</c> — CREATE an
+    /// announcement. The client posts the fields to the COLLECTION url and
+    /// reads the response as a bare Int64 (the new announcement id). No POST
+    /// was registered at that template, so posting a club announcement 404'd.</summary>
+    [HttpPost("/announcements/club/{clubId:long}")]
+    [Authorize]
+    public async Task<IActionResult> AnnouncementCreate(long clubId)
+    {
+        var (title, body, imageName) = await ReadAnnouncementFieldsAsync();
+        var id = await clubs.CreateAnnouncementAsync(
+            clubId, Me, title ?? string.Empty, body ?? string.Empty, imageName ?? string.Empty);
+        if (id is null) return Forbid();
+        return Content(id.Value.ToString(), "application/json");
+    }
+
+    /// <summary>Announcement fields as the client sends them: form-urlencoded,
+    /// with a JSON body accepted as a fallback. Null means "not supplied", so
+    /// an edit can leave a field alone.</summary>
+    private async Task<(string? Title, string? Body, string? ImageName)> ReadAnnouncementFieldsAsync()
+    {
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync();
+            string? F(params string[] keys)
+            {
+                foreach (var k in keys)
+                    if (form.TryGetValue(k, out var v) && v.Count > 0) return v.ToString();
+                return null;
+            }
+            return (F("title", "Title"), F("body", "Body"), F("imageName", "ImageName"));
+        }
+
+        try
+        {
+            Request.EnableBuffering();
+            Request.Body.Position = 0;
+            using var doc = await System.Text.Json.JsonDocument.ParseAsync(Request.Body);
+            Request.Body.Position = 0;
+            string? P(params string[] keys)
+            {
+                foreach (var k in keys)
+                    if (doc.RootElement.TryGetProperty(k, out var v) &&
+                        v.ValueKind == System.Text.Json.JsonValueKind.String) return v.GetString();
+                return null;
+            }
+            return (P("title", "Title"), P("body", "Body"), P("imageName", "ImageName"));
+        }
+        catch (System.Text.Json.JsonException) { return (null, null, null); }
     }
 
     // ── Wire-shape mappers ──────────────────────────────────────────

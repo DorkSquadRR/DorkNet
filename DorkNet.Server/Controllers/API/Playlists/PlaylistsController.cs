@@ -73,56 +73,180 @@ public class PlaylistsController(
     public sealed class BoolFieldRequest { public bool? Value { get; set; } }
     public sealed class TagsRequest { public string? Tags { get; set; } public List<string>? TagsList { get; set; } }
 
+    // The 2023-03-21 client sends these as form-urlencoded PUTs. A
+    // non-optional [FromBody] parameter made [ApiController] demand JSON and
+    // reject every one with 415 before the action ran, so renaming, re-imaging,
+    // re-tagging and publishing a playlist all failed silently. Values are now
+    // read from form, query or JSON body, whichever arrived.
+
     [HttpPost("/playlists/{playlistId:long}/name")]
     [HttpPut("/playlists/{playlistId:long}/name")]
     [Authorize]
-    public Task<IActionResult> PlaylistName(long playlistId, [FromBody] StringFieldRequest req,
-        [FromForm(Name = "Name")] string? formValue) =>
-        ApplyMutation(playlistId, p => p.Name = (req?.Value ?? formValue ?? p.Name).Trim());
+    public async Task<IActionResult> PlaylistName(long playlistId)
+    {
+        var value = await ReadFieldAsync("name", "Name", "value", "Value");
+        return await ApplyMutation(playlistId, p => p.Name = (value ?? p.Name).Trim());
+    }
 
     [HttpPost("/playlists/{playlistId:long}/description")]
     [HttpPut("/playlists/{playlistId:long}/description")]
     [Authorize]
-    public Task<IActionResult> PlaylistDescription(long playlistId, [FromBody] StringFieldRequest req,
-        [FromForm(Name = "Description")] string? formValue) =>
-        ApplyMutation(playlistId, p => p.Description = req?.Value ?? formValue ?? p.Description);
+    public async Task<IActionResult> PlaylistDescription(long playlistId)
+    {
+        var value = await ReadFieldAsync("description", "Description", "value", "Value");
+        return await ApplyMutation(playlistId, p => p.Description = value ?? p.Description);
+    }
 
     [HttpPost("/playlists/{playlistId:long}/image")]
     [HttpPut("/playlists/{playlistId:long}/image")]
     [Authorize]
-    public Task<IActionResult> PlaylistImage(long playlistId, [FromBody] StringFieldRequest req,
-        [FromForm(Name = "ImageName")] string? formValue) =>
-        ApplyMutation(playlistId, p => p.ImageName = req?.Value ?? formValue ?? p.ImageName);
+    public async Task<IActionResult> PlaylistImage(long playlistId)
+    {
+        var value = await ReadFieldAsync("imageName", "ImageName", "value", "Value");
+        return await ApplyMutation(playlistId, p => p.ImageName = value ?? p.ImageName);
+    }
 
+    /// <summary>The client sends REPEATED form fields <c>tag</c> and
+    /// <c>autoTag</c>, not a single CSV <c>Tags</c> value.</summary>
     [HttpPost("/playlists/{playlistId:long}/tags")]
     [HttpPut("/playlists/{playlistId:long}/tags")]
     [Authorize]
-    public Task<IActionResult> PlaylistTags(long playlistId, [FromBody] TagsRequest? req,
-        [FromForm(Name = "Tags")] string? formValue) =>
-        ApplyMutation(playlistId, p =>
+    public async Task<IActionResult> PlaylistTags(long playlistId)
+    {
+        var tags = await ReadFieldsAsync("tag", "Tag", "autoTag", "AutoTag", "tags", "Tags");
+        return await ApplyMutation(playlistId, p =>
         {
-            var csv = req?.Tags
-                ?? (req?.TagsList is { Count: > 0 } list ? string.Join(',', list) : null)
-                ?? formValue
-                ?? p.TagsCsv;
-            p.TagsCsv = csv;
+            if (tags.Count > 0)
+                p.TagsCsv = string.Join(',', tags.Distinct(StringComparer.OrdinalIgnoreCase));
         });
+    }
 
-    /// <summary>Accessibility / visibility / level-voting / restrictions /
-    /// warning are persisted on the playlist row even though the 2020
-    /// PlaylistEntity doesn't have dedicated columns for each — the wire
-    /// shape always reports the union-entry defaults, so for now the
-    /// mutation is a no-op acknowledgement that returns the unchanged
-    /// playlist. Real per-field columns can be added when we have a
-    /// playlist-settings UI to drive them.</summary>
     [HttpPost("/playlists/{playlistId:long}/accessibility")]
+    [HttpPut("/playlists/{playlistId:long}/accessibility")]
     [HttpPost("/playlists/{playlistId:long}/visibility")]
-    [HttpPost("/playlists/{playlistId:long}/levelvoting")]
-    [HttpPost("/playlists/{playlistId:long}/restrictions")]
-    [HttpPost("/playlists/{playlistId:long}/warning")]
+    [HttpPut("/playlists/{playlistId:long}/visibility")]
     [Authorize]
-    public Task<IActionResult> PlaylistAck(long playlistId) =>
-        ApplyMutation(playlistId, _ => { /* no-op: field not persisted yet */ });
+    public async Task<IActionResult> PlaylistAccessibility(long playlistId)
+    {
+        var value = await ReadFieldAsync(
+            "accessibility", "Accessibility", "visibility", "Visibility", "value", "Value");
+        return await ApplyMutation(playlistId, p =>
+        {
+            if (int.TryParse(value, out var v)) p.Accessibility = v;
+        });
+    }
+
+    [HttpPost("/playlists/{playlistId:long}/levelvoting")]
+    [HttpPut("/playlists/{playlistId:long}/levelvoting")]
+    [Authorize]
+    public async Task<IActionResult> PlaylistLevelVoting(long playlistId)
+    {
+        var value = await ReadFieldAsync("supportsLevelVoting", "SupportsLevelVoting", "value", "Value");
+        return await ApplyMutation(playlistId, p =>
+        {
+            if (bool.TryParse(value, out var v)) p.SupportsLevelVoting = v;
+        });
+    }
+
+    [HttpPost("/playlists/{playlistId:long}/restrictions")]
+    [HttpPut("/playlists/{playlistId:long}/restrictions")]
+    [Authorize]
+    public async Task<IActionResult> PlaylistRestrictions(long playlistId)
+    {
+        var juniors  = await ReadFieldAsync("supportsJuniors", "SupportsJuniors");
+        var screens  = await ReadFieldAsync("supportsScreens", "SupportsScreens");
+        var teleport = await ReadFieldAsync("supportsTeleportVR", "SupportsTeleportVR");
+        var walk     = await ReadFieldAsync("supportsWalkVR", "SupportsWalkVR");
+        return await ApplyMutation(playlistId, p =>
+        {
+            if (bool.TryParse(juniors,  out var j)) p.SupportsJuniors    = j;
+            if (bool.TryParse(screens,  out var c)) p.SupportsScreens    = c;
+            if (bool.TryParse(teleport, out var t)) p.SupportsTeleportVR = t;
+            if (bool.TryParse(walk,     out var w)) p.SupportsWalkVR     = w;
+        });
+    }
+
+    [HttpPost("/playlists/{playlistId:long}/warning")]
+    [HttpPut("/playlists/{playlistId:long}/warning")]
+    [Authorize]
+    public async Task<IActionResult> PlaylistWarning(long playlistId)
+    {
+        var mask   = await ReadFieldAsync("warningMask", "WarningMask");
+        var custom = await ReadFieldAsync("customWarning", "CustomWarning");
+        return await ApplyMutation(playlistId, p =>
+        {
+            if (int.TryParse(mask, out var m)) p.WarningMask = m;
+            if (custom is not null) p.CustomWarning = custom.Length > 512 ? custom[..512] : custom;
+        });
+    }
+
+    /// <summary>First value present under any of the given names, looking at
+    /// the form, the query string, then a JSON body. Null means "not sent",
+    /// which every caller treats as "leave this field alone".</summary>
+    private async Task<string?> ReadFieldAsync(params string[] names)
+    {
+        var all = await ReadFieldsAsync(names);
+        return all.Count > 0 ? all[0] : null;
+    }
+
+    /// <summary>Every value present under any of the given names — the client
+    /// repeats a field name to send a list.</summary>
+    private async Task<List<string>> ReadFieldsAsync(params string[] names)
+    {
+        var found = new List<string>();
+
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync();
+            foreach (var n in names)
+                foreach (var v in form[n])
+                    if (!string.IsNullOrWhiteSpace(v)) found.Add(v!);
+        }
+        foreach (var n in names)
+            foreach (var v in Request.Query[n])
+                if (!string.IsNullOrWhiteSpace(v)) found.Add(v!);
+        if (found.Count > 0) return found;
+
+        if (!Request.HasFormContentType)
+        {
+            try
+            {
+                Request.EnableBuffering();
+                Request.Body.Position = 0;
+                using var doc = await System.Text.Json.JsonDocument.ParseAsync(Request.Body);
+                Request.Body.Position = 0;
+                var root = doc.RootElement;
+
+                // The tags endpoint sends a bare JSON array of strings.
+                if (root.ValueKind == System.Text.Json.JsonValueKind.Array)
+                {
+                    foreach (var el in root.EnumerateArray())
+                        if (el.ValueKind == System.Text.Json.JsonValueKind.String)
+                            found.Add(el.GetString()!);
+                    return found;
+                }
+
+                if (root.ValueKind == System.Text.Json.JsonValueKind.Object)
+                {
+                    foreach (var n in names)
+                    {
+                        if (!root.TryGetProperty(n, out var v)) continue;
+                        if (v.ValueKind == System.Text.Json.JsonValueKind.Array)
+                        {
+                            foreach (var el in v.EnumerateArray()) found.Add(el.ToString());
+                        }
+                        else if (v.ValueKind != System.Text.Json.JsonValueKind.Null)
+                        {
+                            found.Add(v.ToString());
+                        }
+                        if (found.Count > 0) break;
+                    }
+                }
+            }
+            catch (System.Text.Json.JsonException) { /* no usable body */ }
+        }
+        return found;
+    }
 
     private async Task<IActionResult> ApplyMutation(long playlistId, Action<PlaylistEntity> mutator)
     {

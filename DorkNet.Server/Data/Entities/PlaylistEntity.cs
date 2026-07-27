@@ -56,6 +56,25 @@ public class PlaylistEntity
     /// <summary>Total joins across all member rooms.</summary>
     public int VisitCount { get; set; } = 0;
 
+    /// <summary>Playlist accessibility enum as the client sends it
+    /// (0 = private, 1 = public). Previously the accessibility/restrictions/
+    /// level-voting/warning mutations were acknowledged and thrown away, so a
+    /// creator could never actually publish a playlist or change its settings —
+    /// the wire always reported the hardcoded defaults back.</summary>
+    public int Accessibility { get; set; } = 0;
+
+    public bool SupportsLevelVoting { get; set; } = false;
+    public bool SupportsJuniors { get; set; } = true;
+    public bool SupportsScreens { get; set; } = true;
+    public bool SupportsTeleportVR { get; set; } = true;
+    public bool SupportsWalkVR { get; set; } = true;
+
+    /// <summary>Content-warning bitmask, plus the creator's free-text warning.</summary>
+    public int WarningMask { get; set; } = 0;
+
+    [MaxLength(512)]
+    public string CustomWarning { get; set; } = string.Empty;
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

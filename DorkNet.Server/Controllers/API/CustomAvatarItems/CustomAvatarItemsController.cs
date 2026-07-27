@@ -121,14 +121,18 @@ public class CustomAvatarItemsController(
         skip = Math.Max(0, skip);
         take = Math.Clamp(take, 1, 100);
         var currentPlayerId = this.CurrentPlayerId();
-        var rows = await db.CustomAvatarItems
+        var query = db.CustomAvatarItems
             .Where(i => i.CreatorPlayerId == creatorId
-                        && (i.IsPublic || i.CreatorPlayerId == currentPlayerId))
+                        && (i.IsPublic || i.CreatorPlayerId == currentPlayerId));
+        var total = await query.CountAsync();
+        var rows = await query
             .OrderByDescending(i => i.UpdatedAt)
             .Skip(skip)
             .Take(take)
             .ToListAsync();
-        return Ok(rows.Select(ToWire));
+        // Paged container, not a bare array — the client deserializes this into
+        // CKFLFJCNEPH {Results, TotalResults}, same as Owned() below.
+        return Ok(new { Results = rows.Select(ToWire), TotalResults = total });
     }
 
     [HttpGet("me")]
@@ -203,7 +207,11 @@ public class CustomAvatarItemsController(
         var allowed = player is not null
             && !player.IsJunior
             && (player.BannedUntil is null || player.BannedUntil <= DateTime.UtcNow);
-        return Ok(new { IsCreationAllowed = allowed, Allowed = allowed });
+        // Bare JSON boolean, like the two sibling gates below: the client's
+        // issuing method is FGLDKEJLAKB<System.Boolean> GGMDLMLJDDK()
+        // (RecNet.Runtime/MPBLNLMCEDL.txt:6048, route literal on :6205), so an
+        // object body threw and the can-create gate blocked shirt creation.
+        return Content(allowed ? "true" : "false", "application/json");
     }
 
     [HttpGet("isCreationEnabled")]
@@ -262,6 +270,13 @@ public class CustomAvatarItemsController(
         return Ok(ToWire(item));
     }
 
+    /// <summary>The 2023-03-21 client buys custom items through the
+    /// <c>econ/</c> host prefix — <c>econ/customAvatarItems/v1/{id}/purchase</c>
+    /// — which was never registered, so every custom-shirt purchase 404'd. The
+    /// rooted route below is an alias onto the same handler. <c>requestedPrice</c>
+    /// arrives as a query param and is validated against the item's real price
+    /// so a tampered client can't buy at its own number.</summary>
+    [HttpPost("/econ/customAvatarItems/v1/{id:guid}/purchase")]
     [HttpPost("{id:guid}/purchase")]
     [Authorize]
     public async Task<IActionResult> Purchase(Guid id)

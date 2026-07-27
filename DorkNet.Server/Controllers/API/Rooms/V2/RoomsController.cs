@@ -304,7 +304,11 @@ public class RoomsController(
     /// </summary>
     [HttpGet("api/rooms/v2/baserooms")]
     [HttpGet("api/rooms/v3/baserooms")]
+    // The 2023 client issues this from NLDBPDCNNCF, whose requests all carry
+    // the roomserver/ prefix in this deployment — without the twin the base/AG
+    // room list 404s and the room browser's base section is empty.
     [HttpGet("rooms/base")]
+    [HttpGet("roomserver/rooms/base")]
     public async Task<IActionResult> BaseRooms()
     {
         var names = await serverSettings.GetBaseRoomNamesAsync();
@@ -2532,7 +2536,9 @@ public class RoomsController(
     /// <c>api/rooms/v3/featured</c>). Returning the
     /// <see cref="Featured"/> shape here throws KeyNotFoundException on
     /// the watch's group-id lookup.</summary>
+    // Same roomserver/ prefix requirement as rooms/base.
     [HttpGet("featuredrooms/current")]
+    [HttpGet("roomserver/featuredrooms/current")]
     public async Task<IActionResult> FeaturedRoomsCurrent()
     {
         var ids = await rooms.FeaturedAgRoomIdsAsync(12);
@@ -2540,10 +2546,22 @@ public class RoomsController(
             .Where(r => ids.Contains(r.Id))
             .ToListAsync();
         var byId = featuredRooms.ToDictionary(r => r.Id);
+        // The featured-tile reader looks for RoomName, which ToWireRoom does not
+        // emit — every tile's caption came back null. Re-project the wire object
+        // into a dictionary so the extra key sits alongside the real ones rather
+        // than nesting them.
         var wireRooms = ids
-            .Select(id => byId.TryGetValue(id, out var room) ? RoomService.ToWireRoom(room) : null)
-            .Where(room => room is not null)
-            .Cast<object>()
+            .Where(byId.ContainsKey)
+            .Select(id =>
+            {
+                var room = byId[id];
+                var wire = RoomService.ToWireRoom(room);
+                var map = new Dictionary<string, object?>();
+                foreach (var prop in wire.GetType().GetProperties())
+                    map[prop.Name] = prop.GetValue(wire);
+                map["RoomName"] = room.Name;
+                return (object)map;
+            })
             .ToList();
         return Ok(new
         {

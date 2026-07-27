@@ -522,6 +522,50 @@ public class ClubService(DorkNetDbContext db)
     public Task<ClubAnnouncementEntity?> AnnouncementAsync(long clubId, long announcementId) =>
         db.ClubAnnouncements.FirstOrDefaultAsync(a => a.Id == announcementId && a.ClubId == clubId);
 
+    /// <summary>Create a club announcement. Returns the new row's id, or null
+    /// when the caller may not manage the club.</summary>
+    public async Task<long?> CreateAnnouncementAsync(
+        long clubId, long callerId, string title, string body, string imageName)
+    {
+        if (!await CanManageAsync(clubId, callerId)) return null;
+        var row = new ClubAnnouncementEntity
+        {
+            ClubId = clubId,
+            AuthorPlayerId = callerId,
+            Title = Truncate(title, 200),
+            Body = Truncate(body, 4000),
+            ImageName = Truncate(imageName, 256),
+        };
+        db.ClubAnnouncements.Add(row);
+        await db.SaveChangesAsync();
+        return row.Id;
+    }
+
+    /// <summary>Edit an existing announcement in place. Null arguments leave
+    /// the corresponding field untouched. Returns false when the caller may
+    /// not manage the club or the row is unknown.</summary>
+    public async Task<bool> UpdateAnnouncementAsync(
+        long clubId, long announcementId, long callerId,
+        string? title, string? body, string? imageName)
+    {
+        if (!await CanManageAsync(clubId, callerId)) return false;
+        var row = await db.ClubAnnouncements
+            .FirstOrDefaultAsync(a => a.Id == announcementId && a.ClubId == clubId);
+        if (row is null) return false;
+        if (title is not null) row.Title = Truncate(title, 200);
+        if (body is not null) row.Body = Truncate(body, 4000);
+        if (imageName is not null) row.ImageName = Truncate(imageName, 256);
+        row.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return true;
+    }
+
+    private static string Truncate(string? value, int max)
+    {
+        value = (value ?? string.Empty).Trim();
+        return value.Length <= max ? value : value[..max];
+    }
+
     /// <summary>Delete an announcement after verifying the caller can
     /// manage the club. Idempotent: missing row → no-op.</summary>
     public async Task<bool> DeleteAnnouncementAsync(long clubId, long announcementId, long callerId)
