@@ -30,9 +30,9 @@ public sealed class TestCaseGitHubIssueTests : IClassFixture<DorkNetServerFactor
 
     public TestCaseGitHubIssueTests(DorkNetServerFactory factory) => _factory = factory;
 
-    private const int StatusNotYetTested = 0;
     private const int StatusClaimed = 1;
     private const int StatusFailed = 2;
+    private const int StatusPassed = 3;
 
     [Fact]
     public async Task Filing_is_idempotent_and_stores_the_issue_url()
@@ -69,7 +69,7 @@ public sealed class TestCaseGitHubIssueTests : IClassFixture<DorkNetServerFactor
     }
 
     [Fact]
-    public async Task A_closed_issue_sends_the_case_back_for_retesting_not_to_passed()
+    public async Task A_closed_issue_marks_the_failing_case_passed()
     {
         var github = new FakeGitHub();
         using var factory = WithGitHub(github);
@@ -87,9 +87,9 @@ public sealed class TestCaseGitHubIssueTests : IClassFixture<DorkNetServerFactor
         var db = scope.ServiceProvider.GetRequiredService<DorkNetDbContext>();
         var tc = await db.TestCases.SingleAsync(c => c.Id == caseId);
 
-        // Closing an issue is a developer saying the fix landed — not a tester
-        // saying the case passes. It goes back in the queue, not to Passed.
-        Assert.Equal(StatusNotYetTested, tc.Status);
+        // A closed issue means the bug is fixed, so the case that was failing
+        // on it passes.
+        Assert.Equal(StatusPassed, tc.Status);
     }
 
     [Fact]
@@ -143,7 +143,8 @@ public sealed class TestCaseGitHubIssueTests : IClassFixture<DorkNetServerFactor
         var tc = await db2.TestCases.SingleAsync(c => c.Id == caseId);
 
         // An open issue against a claimed case says nothing new; flipping it to
-        // Failed would yank it out from under whoever is testing it.
+        // Failed would yank it out from under whoever is testing it. Only
+        // Failed<->Passed are the reconciler's to move.
         Assert.Equal(StatusClaimed, tc.Status);
     }
 

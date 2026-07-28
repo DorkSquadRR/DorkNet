@@ -33,8 +33,8 @@ public class TestCaseIssuesController(
 {
     /// <summary>Test-case status values, matching the client's
     /// <c>TestCaseStatus</c> enum.</summary>
-    private const int StatusNotYetTested = 0;
     private const int StatusFailed = 2;
+    private const int StatusPassed = 3;
 
     /// <summary>POST <c>api/testcasemanagement/v1/testcase/{id}/issue</c> —
     /// file a GitHub issue for a test case and link it.
@@ -102,17 +102,15 @@ public class TestCaseIssuesController(
     /// only:
     ///
     /// <list type="bullet">
-    /// <item>Issue CLOSED and the case is still Failed → back to NotYetTested.
-    /// The bug is fixed, so the case is due for another run. It is deliberately
-    /// NOT marked Passed: closing an issue is a developer's claim that the fix
-    /// landed, not a tester's observation that the case passes.</item>
-    /// <item>Issue REOPENED and the case is NotYetTested → back to Failed.
-    /// The bug came back, so the close transition above is undone.</item>
+    /// <item>Issue CLOSED and the case is Failed → Passed. A closed issue means
+    /// the bug is fixed, and the case that was failing on it therefore passes.</item>
+    /// <item>Issue REOPENED and the case is Passed → Failed. The bug came back,
+    /// so the close transition above is undone.</item>
     /// </list>
     ///
     /// Nothing else moves. Only these two states are the reconciler's to
-    /// change, so a case a tester has Claimed — or marked Passed after
-    /// verifying the fix — is never dragged back underneath them.</summary>
+    /// change, so a case a tester has Claimed, or one nobody has run yet, is
+    /// never rewritten underneath them.</summary>
     [HttpPost("api/testcasemanagement/v1/issues/sync")]
     public async Task<IActionResult> Sync(CancellationToken ct)
     {
@@ -144,15 +142,15 @@ public class TestCaseIssuesController(
             if (issue is null) continue;
 
             var closed = issue.State.Equals("closed", StringComparison.OrdinalIgnoreCase);
-            // Only ever move a case between the two states this reconciler
-            // itself owns. Reopening undoes the close transition and nothing
-            // else: "open issue and the case isn't Failed" would also catch a
-            // case a tester has just Claimed, or one they marked Passed after
-            // verifying the fix, and drag it back to Failed underneath them.
+            // Closed means fixed, so a case failing on that bug now passes.
+            // Only ever move between those two states: reopening undoes the
+            // close and nothing else. "Open issue and the case isn't Failed"
+            // would also catch a case a tester has just Claimed, or one nobody
+            // has run yet, and mark it Failed underneath them.
             int? next = (closed, tc.Status) switch
             {
-                (true, StatusFailed) => StatusNotYetTested,
-                (false, StatusNotYetTested) => StatusFailed,
+                (true, StatusFailed) => StatusPassed,
+                (false, StatusPassed) => StatusFailed,
                 _ => null,
             };
             if (next is not int status) continue;
