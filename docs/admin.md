@@ -222,15 +222,14 @@ issue number is only read from a URL matching the GitHub issue shape.
 
 | Issue | Case status | Result |
 | --- | --- | --- |
-| Closed | Failed | → NotYetTested |
-| Open | NotYetTested | → Failed |
-| anything | Claimed / Passed | untouched |
+| Closed | Failed | → Passed |
+| Open | Passed | → Failed |
+| anything | Claimed / NotYetTested | untouched |
 
-A closed issue does **not** mark the case Passed: closing is a developer's claim
-that the fix landed, not a tester's observation that the case passes, so it goes
-back in the queue for another run. And only those two states are the
-reconciler's to move — a case a tester has Claimed, or marked Passed after
-verifying the fix, is never dragged back underneath them.
+Closed means fixed: the case that was failing on that bug now passes, and
+reopening the issue undoes it. Only those two states are the reconciler's to
+move — a case a tester has Claimed, or one nobody has run yet, is never
+rewritten underneath them.
 
 ## Build And Deploy
 
