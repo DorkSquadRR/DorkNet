@@ -1795,7 +1795,6 @@ public class RoomsController(
                 {
                     Type = RoomTagTypeForWire(t),
                     Tag = t,
-                    IsPrimaryGenre = false,
                 })
                 .ToArray();
 
@@ -2006,7 +2005,6 @@ public class RoomsController(
                     RoomId = room.Id,
                     Name = s.Name,
                     UnityAssetId = s.StudioUnityAssetId,
-                    SubRoomUnityAssetId = s.StudioUnityAssetId,
                     UnityAsset = unityAsset?.Filename ?? string.Empty,
                     UnityAssetHash = string.Empty,
                     DataBlob = dataBlob,
@@ -2017,36 +2015,6 @@ public class RoomsController(
                     MaxPlayers = s.MaxPlayers,
                     Accessibility = room.Accessibility,
                     UnitySceneId = s.RoomSceneLocationId,
-                    CurrentSave = new
-                    {
-                        SubRoomDataSaveId = s.StudioSubRoomDataSaveId ?? 0L,
-                        SubRoomId = (long)s.OrderIndex,
-                        UnityAssetId = s.StudioUnityAssetId,
-                        SubRoomUnityAssetId = s.StudioUnityAssetId,
-                        CreatedByAccountId = room.CreatorPlayerId,
-                        ReferencedUnityAssetIds = Array.Empty<string>(),
-                        DataBlob = dataBlob,
-                        DataBlobHash = (string?)null,
-                        PersistenceVersion = saveVersion,
-                        OMVersion = 0,
-                        SavedByAccountId = room.CreatorPlayerId,
-                        SavedOnPlatform = 0,
-                        SavedOnDeviceClass = 2,
-                        Description = string.Empty,
-                        ModerationState = 0,
-                        CreatedAt = (s.DataModifiedAt == default ? DateTime.UtcNow : s.DataModifiedAt)
-                            .ToString("yyyy-MM-ddTHH:mm:ssZ"),
-                        UgcSubVersion = saveVersion,
-                        UnityAssetHash = string.Empty,
-                        UnityAsset = unityAssetParent,
-                        UnityAssetFilename = unityAsset?.Filename ?? string.Empty,
-                        BakedUnityAssets = bakedAssets,
-                        UnitySubAssets = Array.Empty<object>(),
-                    },
-                    LastModeratedSaveModerationState = 0,
-                    DefaultMatchmakingPolicy = 0,
-                    ShouldAutoStageSaves = true,
-                    StagedSubRoomDataSaveId = (long?)null,
                 };
             }).ToArray()
             : new object[]
@@ -2063,7 +2031,6 @@ public class RoomsController(
                     RoomId = room.Id,
                     Name = "Home",
                     UnityAssetId = string.Empty,
-                    SubRoomUnityAssetId = string.Empty,
                     UnityAsset = string.Empty,
                     UnityAssetHash = string.Empty,
                     // Same rule as the populated branch: honour the override,
@@ -2076,15 +2043,6 @@ public class RoomsController(
                     MaxPlayers = 8,
                     Accessibility = room.Accessibility,
                     UnitySceneId = room.LocationReplicationId,
-                    CurrentSave = new
-                    {
-                        SubRoomDataSaveId = 0L,
-                        SubRoomId = 0L,
-                        UnityAssetId = string.Empty,
-                        SubRoomUnityAssetId = string.Empty,
-                        ReferencedUnityAssetIds = Array.Empty<string>(),
-                        DataBlob = dataBlobName,
-                    },
                 },
             };
 
@@ -2102,7 +2060,6 @@ public class RoomsController(
                 {
                     Type = RoomTagTypeForWire(t),
                     Tag = t,
-                    IsPrimaryGenre = false,
                 })
                 .ToArray();
 
@@ -3384,7 +3341,6 @@ public class RoomsController(
                 {
                     Type = RoomTagTypeForWire(t),
                     Tag = t,
-                    IsPrimaryGenre = false,
                 })
                 .ToList();
 

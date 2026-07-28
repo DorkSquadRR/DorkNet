@@ -35,9 +35,11 @@ import re
 import sys
 from pathlib import Path
 
-# A type with only a couple of fields is usually a wrapper or a false positive
-# (enum name tables register short literal runs too). Real wire DTOs are wider.
-MIN_FIELDS = 4
+# Two is deliberate, not lax. Several real wire DTOs are exactly that small —
+# a room tag is {Tag, Type} — and a higher floor hides them, which is how an
+# invented third key on the tag object went unnoticed. The alias rule in
+# fields_in() is what rejects false positives, not the field count.
+MIN_FIELDS = 2
 
 LITERAL = re.compile(r'Move \w+, "([A-Za-z][A-Za-z0-9_]*)"')
 

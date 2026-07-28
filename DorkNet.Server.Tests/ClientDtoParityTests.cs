@@ -85,7 +85,39 @@ public sealed class ClientDtoParityTests : IClassFixture<DorkNetServerFactory>
         Assert.True(response.IsSuccessStatusCode, $"GET /rooms/{roomId} -> {(int)response.StatusCode}: {body}");
 
         AssertKeyParity(RoomDetailsReader, body, $"GET rooms/{roomId}");
+
+        // The reader walks into the nested objects too, and a wrong key set
+        // there fails exactly the same way — a 200 the client throws on.
+        var details = JsonDocument.Parse(body).RootElement;
+        foreach (var (property, reader) in NestedReaders)
+        {
+            if (!details.TryGetProperty(property, out var value)) continue;
+
+            var element = value.ValueKind switch
+            {
+                JsonValueKind.Array when value.GetArrayLength() > 0 => value[0],
+                JsonValueKind.Object => value,
+                _ => default,
+            };
+            if (element.ValueKind != JsonValueKind.Object) continue;
+
+            AssertKeyParity(reader, element.GetRawText(),
+                $"GET rooms/{roomId} → {property}{(value.ValueKind == JsonValueKind.Array ? "[0]" : "")}");
+        }
     }
+
+    /// <summary>Nested objects in the room-details payload and the reader each
+    /// one is deserialised by. Sub-room 0, the first role, the stats object and
+    /// the first tag all have their own generated readers, and a key set that
+    /// disagrees with them breaks the whole room just as hard as a wrong
+    /// top-level one.</summary>
+    private static readonly (string Property, string Reader)[] NestedReaders =
+    [
+        ("SubRooms", "JDEKAFDPGBE"),
+        ("Roles", "LMEECKCCPHG"),
+        ("Stats", "MLHBPDKBABN"),
+        ("Tags", "GEGADPCDGBO"),
+    ];
 
     [Fact]
     public async Task Chat_thread_carries_exactly_the_keys_the_client_reads()
