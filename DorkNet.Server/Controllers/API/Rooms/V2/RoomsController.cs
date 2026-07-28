@@ -1955,6 +1955,20 @@ public class RoomsController(
         var updatedAt = (room.UpdatedAt == default ? DateTime.UtcNow : room.UpdatedAt)
             .ToString("yyyy-MM-ddTHH:mm:ssZ");
 
+        // The blob the room actually loads from: sub-room 0's, override and
+        // all. `dataBlobName` above is the per-ROOM name, which is the wrong
+        // answer whenever a caller passes an override — a dorm's data is
+        // per-PLAYER (dorm_p{id}_v*.dat) and arrives that way.
+        var primarySubRoom = sceneRows is { Count: > 0 }
+            ? sceneRows.FirstOrDefault(s => s.OrderIndex == 0) ?? sceneRows[0]
+            : null;
+        var primarySubRoomDataBlob =
+            !string.IsNullOrWhiteSpace(overrideDataBlobName) && (sceneRows?.Count ?? 0) <= 1
+                ? overrideDataBlobName!
+                : primarySubRoom is not null
+                    ? SceneOrSyntheticDataBlobName(room, primarySubRoom.DataBlobName, dataBlobName)
+                    : dataBlobName;
+
         object[] subRooms = sceneRows is { Count: > 0 }
             ? sceneRows.Select(s =>
             {
@@ -2052,7 +2066,10 @@ public class RoomsController(
                     SubRoomUnityAssetId = string.Empty,
                     UnityAsset = string.Empty,
                     UnityAssetHash = string.Empty,
-                    DataBlob = dataBlobName,
+                    // Same rule as the populated branch: honour the override,
+                    // so a dorm with no scene rows still points at that
+                    // player's own save rather than a per-room name.
+                    DataBlob = primarySubRoomDataBlob,
                     DataBlobHash = (string?)null,
                     DataSavedAt = updatedAt,
                     IsSandbox = false,
@@ -2141,7 +2158,14 @@ public class RoomsController(
             // already answered 200 to. Kept last so the additions are visible
             // against the reader's own list; key ORDER does not matter to a
             // name-keyed reader, presence does.
-            DataBlob = dataBlobName,
+            // Must be the SAME blob sub-room 0 resolves to, override included.
+            // A dorm's data is per-player (dorm_p{id}_v*.dat) and arrives here
+            // as overrideDataBlobName; the room-level name is per-ROOM
+            // (room_116_*), so reporting that instead hands the client another
+            // player's dorm — or one that was never written — and it rejects
+            // the load outright with "the data in the room you are trying to
+            // load is corrupt".
+            DataBlob = subRooms.Length > 0 ? primarySubRoomDataBlob : dataBlobName,
             DataBlobHash = (string?)null,
             // The room-level cap is the room's own advertised capacity, which is
             // what RoomEntity.MaxCapacity exists for and what matchmaking hands
