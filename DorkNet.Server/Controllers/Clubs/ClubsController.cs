@@ -394,18 +394,93 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
     /// so the body is a BARE JSON boolean — not an object, not a wrapper.
     ///
     /// The answer is the negation of the Club wire field
-    /// <c>ClubChatEnabled</c> that <see cref="ToWireClub"/> emits. That field
-    /// has no column on <see cref="ClubEntity"/> yet and its setter
-    /// (<c>PUT club/{id}/clubChatEnabled</c>) is therefore not implemented, so
-    /// no club can currently be in the disabled state and <c>false</c> is the
-    /// true answer for every club. Both sites must flip together when the
-    /// column lands.</summary>
+    /// <c>ClubChatEnabled</c>, which is now a real column set by
+    /// <c>PUT club/{id}/clubChatEnabled</c>.</summary>
     [HttpGet("/club/{clubId:long}/hasDisabledClubChat")]
     public async Task<IActionResult> ClubHasDisabledChat(long clubId)
     {
         var club = await clubs.GetByIdAsync(clubId);
         if (club is null) return NotFound();
-        return Ok(false);
+        return Content(club.ClubChatEnabled ? "false" : "true", "application/json");
+    }
+
+    /// <summary>PUT <c>/club/{id}/clubChatEnabled</c> — toggle the club's chat
+    /// channel (<c>IKMMOCKDKAF.txt:25779</c>). Form field
+    /// <c>clubChatEnabled</c>; responds with the refreshed details
+    /// envelope.</summary>
+    [HttpPut("/club/{clubId:long}/clubChatEnabled")]
+    [HttpPost("/club/{clubId:long}/clubChatEnabled")]
+    [Authorize]
+    public async Task<IActionResult> SetClubChatEnabled(long clubId)
+    {
+        var value = await ReadBoolFieldAsync("clubChatEnabled", "ClubChatEnabled", "enabled");
+        if (value is not bool enabled) return BadRequest(new { error = "missing_value" });
+        try
+        {
+            var updated = await clubs.ModifyAsync(clubId, Me, c => c.ClubChatEnabled = enabled);
+            if (updated is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+        return await BuildDetailsResponseAsync(clubId);
+    }
+
+    /// <summary>PUT <c>/club/{id}/minlevel</c> — minimum account level required
+    /// to join (<c>IKMMOCKDKAF.txt:16561</c>). Form field <c>minLevel</c>;
+    /// responds with the refreshed details envelope.</summary>
+    [HttpPut("/club/{clubId:long}/minlevel")]
+    [HttpPost("/club/{clubId:long}/minlevel")]
+    [Authorize]
+    public async Task<IActionResult> SetClubMinLevel(long clubId)
+    {
+        var raw = await ReadFieldAsync("minLevel", "MinLevel", "level");
+        if (!int.TryParse(raw, out var minLevel)) return BadRequest(new { error = "missing_value" });
+        minLevel = Math.Clamp(minLevel, 0, 100);
+        try
+        {
+            var updated = await clubs.ModifyAsync(clubId, Me, c => c.MinLevel = minLevel);
+            if (updated is null) return NotFound();
+        }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+        return await BuildDetailsResponseAsync(clubId);
+    }
+
+    /// <summary>First value present under any of the given names, from the
+    /// form, the query string, or a JSON body. Null means "not sent".</summary>
+    private async Task<string?> ReadFieldAsync(params string[] names)
+    {
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync();
+            foreach (var n in names)
+                if (form.TryGetValue(n, out var v) && v.Count > 0) return v.ToString();
+        }
+        foreach (var n in names)
+            if (Request.Query.TryGetValue(n, out var q) && q.Count > 0) return q.ToString();
+
+        if (!Request.HasFormContentType)
+        {
+            try
+            {
+                Request.EnableBuffering();
+                Request.Body.Position = 0;
+                using var doc = await JsonDocument.ParseAsync(Request.Body);
+                Request.Body.Position = 0;
+                if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                    foreach (var n in names)
+                        if (doc.RootElement.TryGetProperty(n, out var v) &&
+                            v.ValueKind != JsonValueKind.Null) return v.ToString();
+            }
+            catch (JsonException) { /* no usable body */ }
+        }
+        return null;
+    }
+
+    private async Task<bool?> ReadBoolFieldAsync(params string[] names)
+    {
+        var raw = await ReadFieldAsync(names);
+        if (raw is null) return null;
+        if (bool.TryParse(raw, out var b)) return b;
+        return raw == "1" ? true : raw == "0" ? false : null;
     }
 
     /// <summary>GET <c>/club/{id}/details</c> — the central club page
@@ -468,7 +543,50 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
     {
         var club = await clubs.GetByIdAsync(clubId);
         if (club is null) return NotFound();
-        return Ok(PermissionsForRole(clubId, role));
+        return Ok(await PermissionsForRoleAsync(clubId, role));
+    }
+
+    /// <summary>PUT <c>/club/{id}/permissions/{role}</c> — rewrite what one
+    /// role may do. Route and verb confirmed at
+    /// <c>IKMMOCKDKAF.txt:17685</c> (route) and <c>:17709</c>
+    /// (<c>Move rdx, 3</c> = PUT); the six form booleans are
+    /// <c>editDetails</c>, <c>approveMember</c>, <c>createEvent</c>,
+    /// <c>postAnnouncement</c>, <c>editPermissionSettings</c> and
+    /// <c>banUnban</c> (<c>IKMMOCKDKAF_NestedType_BOIMHOCCOEI.txt:173</c>,
+    /// :189, :205, :221, :237, :253).
+    ///
+    /// Upserts one row per (club, role). Any field the client omits keeps the
+    /// value it currently resolves to, so a partial write cannot silently
+    /// revoke a permission. Gated on EditPermissionSettings for the caller's
+    /// own role, which is what the client's UI gate checks.</summary>
+    [HttpPut("/club/{clubId:long}/permissions/{role:int}")]
+    [HttpPost("/club/{clubId:long}/permissions/{role:int}")]
+    [Authorize]
+    public async Task<IActionResult> SetClubPermissions(long clubId, int role)
+    {
+        var club = await clubs.GetByIdAsync(clubId);
+        if (club is null) return NotFound();
+        if (!await clubs.CanManageAsync(clubId, Me, club)) return Forbid();
+
+        var current = await ResolveRolePermissionsAsync(clubId, role);
+        var row = await db.ClubRolePermissions
+            .FirstOrDefaultAsync(p => p.ClubId == clubId && p.MembershipType == role);
+        if (row is null)
+        {
+            row = new ClubRolePermissionEntity { ClubId = clubId, MembershipType = role };
+            db.ClubRolePermissions.Add(row);
+        }
+
+        row.EditDetails            = await ReadBoolFieldAsync("editDetails", "EditDetails") ?? current.EditDetails;
+        row.ApproveMember          = await ReadBoolFieldAsync("approveMember", "ApproveMember") ?? current.ApproveMember;
+        row.CreateEvent            = await ReadBoolFieldAsync("createEvent", "CreateEvent") ?? current.CreateEvent;
+        row.PostAnnouncement       = await ReadBoolFieldAsync("postAnnouncement", "PostAnnouncement") ?? current.PostAnnouncement;
+        row.EditPermissionSettings = await ReadBoolFieldAsync("editPermissionSettings", "EditPermissionSettings") ?? current.EditPermissionSettings;
+        row.BanUnban               = await ReadBoolFieldAsync("banUnban", "BanUnban") ?? current.BanUnban;
+        row.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        return await BuildDetailsResponseAsync(clubId);
     }
 
     // ── Account / created lists ──────────────────────────────────────
@@ -627,14 +745,11 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
     /// <summary>POST/PUT <c>/club/{id}/additionalimage/{slot}</c> — the club
     /// gallery's per-slot image setter (<c>IKMMOCKDKAF.txt:16214</c>).
     ///
-    /// The request now binds (the client sends form-urlencoded
-    /// <c>imageName</c>, which <c>[FromBody]</c> used to reject with 415), but
-    /// the slot itself STILL is not persisted: there is no additional-image
-    /// table, and the envelope's <c>AdditionalImages</c> is the client's
-    /// <c>HIKCHBLAMLP</c> — {ImageName, Slot} — with nowhere to come from. So
-    /// the call is accepted and permission-checked, the details envelope comes
-    /// back refreshed, and the gallery renders blank until a
-    /// <c>ClubAdditionalImageEntity</c> lands.</summary>
+    /// The slot is persisted as a <see cref="ClubAdditionalImageEntity"/> row
+    /// and read back by the details envelope's <c>AdditionalImages</c>
+    /// (<c>HIKCHBLAMLP</c> = {ImageName, Slot}), so the gallery renders what
+    /// the creator set. An empty imageName clears the slot, same as the
+    /// DELETE twin.</summary>
     [HttpPost("/club/{clubId:long}/additionalimage/{slot:int}")]
     [HttpPut("/club/{clubId:long}/additionalimage/{slot:int}")]
     [Authorize]
@@ -643,6 +758,50 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
         var club = await clubs.GetByIdAsync(clubId);
         if (club is null) return NotFound();
         if (!await clubs.CanManageAsync(clubId, Me, club)) return Forbid();
+
+        var imageName = (req?.ImageName ?? string.Empty).Trim();
+        var row = await db.ClubAdditionalImages
+            .FirstOrDefaultAsync(i => i.ClubId == clubId && i.Slot == slot);
+        if (imageName.Length == 0)
+        {
+            if (row is not null) db.ClubAdditionalImages.Remove(row);
+        }
+        else if (row is null)
+        {
+            db.ClubAdditionalImages.Add(new ClubAdditionalImageEntity
+            {
+                ClubId = clubId,
+                Slot = slot,
+                ImageName = imageName.Length > 256 ? imageName[..256] : imageName,
+            });
+        }
+        else
+        {
+            row.ImageName = imageName.Length > 256 ? imageName[..256] : imageName;
+            row.UpdatedAt = DateTime.UtcNow;
+        }
+        await db.SaveChangesAsync();
+        return await BuildDetailsResponseAsync(clubId);
+    }
+
+    /// <summary>DELETE <c>/club/{id}/additionalimage/{slot}</c> — clear one
+    /// gallery slot. Same permission gate as the setter; idempotent, so
+    /// clearing an empty slot is a success.</summary>
+    [HttpDelete("/club/{clubId:long}/additionalimage/{slot:int}")]
+    [Authorize]
+    public async Task<IActionResult> ClubAdditionalImageDelete(long clubId, int slot)
+    {
+        var club = await clubs.GetByIdAsync(clubId);
+        if (club is null) return NotFound();
+        if (!await clubs.CanManageAsync(clubId, Me, club)) return Forbid();
+
+        var row = await db.ClubAdditionalImages
+            .FirstOrDefaultAsync(i => i.ClubId == clubId && i.Slot == slot);
+        if (row is not null)
+        {
+            db.ClubAdditionalImages.Remove(row);
+            await db.SaveChangesAsync();
+        }
         return await BuildDetailsResponseAsync(clubId);
     }
 
@@ -1456,10 +1615,14 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
             // gallery slots get a table; see ClubAdditionalImage.
             Club = ToWireClub(club, memberCount),
             CustomTags = await CustomTagsAsync(clubId),
-            AdditionalImages = Array.Empty<object>(),
-            CoownerPermissions = PermissionsForRole(clubId, ClubService.MembershipTypeCoOwner),
-            ModeratorPermissions = PermissionsForRole(clubId, ClubService.MembershipTypeModerator),
-            MemberPermissions = PermissionsForRole(clubId, ClubService.MembershipTypeMember),
+            AdditionalImages = await db.ClubAdditionalImages
+                .Where(i => i.ClubId == clubId)
+                .OrderBy(i => i.Slot)
+                .Select(i => new { i.ImageName, i.Slot })
+                .ToListAsync(),
+            CoownerPermissions = await PermissionsForRoleAsync(clubId, ClubService.MembershipTypeCoOwner),
+            ModeratorPermissions = await PermissionsForRoleAsync(clubId, ClubService.MembershipTypeModerator),
+            MemberPermissions = await PermissionsForRoleAsync(clubId, ClubService.MembershipTypeMember),
             MyMembershipType = myType,
         });
     }
@@ -1536,21 +1699,43 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
     /// Owner/CoOwner do everything, Moderator moderates but cannot re-write the
     /// permission settings, Member and below are read-only.
     /// </summary>
-    private static object PermissionsForRole(long clubId, int membershipType)
+    private readonly record struct RolePermissions(
+        bool EditDetails, bool ApproveMember, bool CreateEvent,
+        bool PostAnnouncement, bool EditPermissionSettings, bool BanUnban);
+
+    /// <summary>The stored permission row for a role, or the derived default
+    /// when the club has never customised it — Owner/CoOwner do everything,
+    /// Moderator moderates but cannot rewrite permissions, Member and below are
+    /// read-only. Falling back rather than defaulting to false keeps every club
+    /// that predates the table behaving exactly as it did.</summary>
+    private async Task<RolePermissions> ResolveRolePermissionsAsync(long clubId, int membershipType)
     {
+        var stored = await db.ClubRolePermissions
+            .FirstOrDefaultAsync(p => p.ClubId == clubId && p.MembershipType == membershipType);
+        if (stored is not null)
+            return new RolePermissions(
+                stored.EditDetails, stored.ApproveMember, stored.CreateEvent,
+                stored.PostAnnouncement, stored.EditPermissionSettings, stored.BanUnban);
+
         var admin = membershipType is ClubService.MembershipTypeOwner
                                    or ClubService.MembershipTypeCoOwner;
         var moderator = admin || membershipType == ClubService.MembershipTypeModerator;
+        return new RolePermissions(admin, moderator, moderator, moderator, admin, moderator);
+    }
+
+    private async Task<object> PermissionsForRoleAsync(long clubId, int membershipType)
+    {
+        var p = await ResolveRolePermissionsAsync(clubId, membershipType);
         return new
         {
             ClubId = clubId,
             Type = membershipType,
-            EditDetails = admin,
-            ApproveMember = moderator,
-            CreateEvent = moderator,
-            PostAnnouncement = moderator,
-            EditPermissionSettings = admin,
-            BanUnban = moderator,
+            p.EditDetails,
+            p.ApproveMember,
+            p.CreateEvent,
+            p.PostAnnouncement,
+            p.EditPermissionSettings,
+            p.BanUnban,
         };
     }
 
@@ -1594,12 +1779,11 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
         MemberCount = memberCount,
         // MinLevel + ClubChatEnabled are registered by the 2023 Club reader
         // (BLIBJIHOENF.txt:1234-1322) and were never emitted, so every club came
-        // back with chat disabled on the profile Clubs tab. Neither has a column
-        // on ClubEntity yet — the client-facing setters are club/{0}/minlevel
-        // and club/{0}/clubChatEnabled (IKMMOCKDKAF.txt:16561,25779) — so they
-        // report the permissive defaults until the schema catches up.
-        MinLevel = 0,
-        ClubChatEnabled = true,
+        // back with chat disabled on the profile Clubs tab. Both are real
+        // columns now, written by club/{0}/minlevel and
+        // club/{0}/clubChatEnabled (IKMMOCKDKAF.txt:16561, :25779).
+        c.MinLevel,
+        c.ClubChatEnabled,
         IsRRO = c.IsRRO,
         ClubhouseRoomId = c.ClubhouseRoomId,
         ClubType = c.ClubType,

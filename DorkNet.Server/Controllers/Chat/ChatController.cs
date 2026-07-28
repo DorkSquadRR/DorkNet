@@ -475,6 +475,60 @@ public class ChatController(
     /// that client a 405 (and a 415 even if it had used PUT). The
     /// response is consumed by an <c>Action&lt;MGGNHLHPHOF&gt;</c>
     /// (instr 162) — a BARE integer body, not a wrapper object.</summary>
+    /// <summary>PUT <c>thread/message/{messageId}/moderate</c> — a moderator
+    /// actions one message.
+    ///
+    /// Binary evidence: <c>DLDKCILCKNA.txt</c> method
+    /// <c>FGLDKEJLAKB&lt;MGGNHLHPHOF&gt; PLBCHNGAEML(RecNet.ChatMessage, MOFGOGFEHNN)</c>
+    /// (:8365); route literal at :8600 with verb constant
+    /// <c>Move rdx, 3</c> (= PUT) at :8610 and chat host <c>r8 = 8</c>; the
+    /// single form field is <c>moderationState</c> (:8615). The response is the
+    /// same BARE <c>MGGNHLHPHOF</c> integer every other chat mutation returns.
+    ///
+    /// Gated to club/room moderators and admins — a plain thread member must
+    /// not be able to rewrite other people's messages.</summary>
+    [HttpPut("/thread/message/{messageId:long}/moderate")]
+    [HttpPost("/thread/message/{messageId:long}/moderate")]
+    public async Task<IActionResult> ModerateMessage(long messageId)
+    {
+        var message = await db.ChatMessages.FirstOrDefaultAsync(m => m.Id == messageId);
+        if (message is null) return Ok(ChatThreadNotFound);
+
+        var raw = Request.HasFormContentType
+            ? (await Request.ReadFormAsync())["moderationState"].FirstOrDefault()
+            : Request.Query["moderationState"].FirstOrDefault();
+        if (!int.TryParse(raw, out var state)) return Ok(ChatInvalidArguments);
+
+        // The message author can retract their own message; anyone else needs
+        // moderator standing on the club whose thread it belongs to.
+        var isAuthor = message.SenderPlayerId == Me;
+        if (!isAuthor)
+        {
+            var clubId = ClubIdFromKey(message.ThreadKey);
+            var allowed = false;
+            if (clubId != 0)
+            {
+                var membership = await db.ClubMemberships
+                    .FirstOrDefaultAsync(m => m.ClubId == clubId && m.PlayerId == Me);
+                allowed = membership is not null &&
+                          ClubService.MembershipTypeFromPerms(membership.Permissions)
+                              >= ClubService.MembershipTypeModerator;
+            }
+            if (!allowed)
+            {
+                allowed = await db.Players
+                    .Where(p => p.Id == Me)
+                    .Select(p => p.IsAdmin || p.IsCommunityTeam)
+                    .FirstOrDefaultAsync();
+            }
+            if (!allowed) return Ok(ChatMembershipNotFound);
+        }
+
+        message.ModerationState = state;
+        await db.SaveChangesAsync();
+        return Ok(ChatSuccess);
+    }
+
     [HttpPut("/thread/{chatThreadId}/rename")]
     [HttpPost("/thread/{chatThreadId}/rename")]
     public async Task<IActionResult> Rename(string chatThreadId,

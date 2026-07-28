@@ -262,6 +262,9 @@ namespace DorkNet.Server.Migrations
                         .HasMaxLength(2000)
                         .HasColumnType("TEXT");
 
+                    b.Property<int>("ModerationState")
+                        .HasColumnType("INTEGER");
+
                     b.Property<long>("SenderPlayerId")
                         .HasColumnType("INTEGER");
 
@@ -384,6 +387,34 @@ namespace DorkNet.Server.Migrations
                         .IsUnique();
 
                     b.ToTable("Cheers");
+                });
+
+            modelBuilder.Entity("DorkNet.Server.Data.Entities.ClubAdditionalImageEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ClubId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ImageName")
+                        .IsRequired()
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Slot")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClubId", "Slot")
+                        .IsUnique();
+
+                    b.ToTable("ClubAdditionalImages");
                 });
 
             modelBuilder.Entity("DorkNet.Server.Data.Entities.ClubAnnouncementEntity", b =>
@@ -514,6 +545,9 @@ namespace DorkNet.Server.Migrations
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
+                    b.Property<bool>("ClubChatEnabled")
+                        .HasColumnType("INTEGER");
+
                     b.Property<int>("ClubType")
                         .HasColumnType("INTEGER");
 
@@ -540,6 +574,9 @@ namespace DorkNet.Server.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<int>("Joinability")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("MinLevel")
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Name")
@@ -593,6 +630,47 @@ namespace DorkNet.Server.Migrations
                         .IsUnique();
 
                     b.ToTable("ClubMemberships");
+                });
+
+            modelBuilder.Entity("DorkNet.Server.Data.Entities.ClubRolePermissionEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("ApproveMember")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("BanUnban")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("ClubId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("CreateEvent")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("EditDetails")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("EditPermissionSettings")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("MembershipType")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("PostAnnouncement")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClubId", "MembershipType")
+                        .IsUnique();
+
+                    b.ToTable("ClubRolePermissions");
                 });
 
             modelBuilder.Entity("DorkNet.Server.Data.Entities.ClubSubscriptionEntity", b =>
@@ -3355,6 +3433,10 @@ namespace DorkNet.Server.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("AssignedPlayerNamesJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CommentsJson")
                         .IsRequired()
                         .HasColumnType("TEXT");
 
