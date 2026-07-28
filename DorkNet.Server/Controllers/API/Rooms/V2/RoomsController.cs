@@ -2109,8 +2109,6 @@ public class RoomsController(
             SupportsQuest2 = true,
             SupportsMobile = room.SupportsMobile,
             SupportsJuniors = room.AllowsJuniors,
-            AllowNewUsers = room.AllowNewUsers,
-            AllowsNewUsers = room.AllowNewUsers,
             MinLevel = room.MinLevel,
             CreatedAt = (room.CreatedAt == default ? DateTime.UtcNow : room.CreatedAt)
                 .ToString("yyyy-MM-ddTHH:mm:ssZ"),
@@ -2122,39 +2120,13 @@ public class RoomsController(
                 VisitCount = room.VisitCount,
             },
             IsDorm = room.IsDormRoom,
-            IsStudioRoom = room.IsStudioRoom,
-            IsRoomLinkedToRecRoomStudio = room.IsRoomLinkedToRecRoomStudio,
-            StudioSessionId = room.StudioSessionId,
             CloningAllowed = room.CloningAllowed,
             DisableMicAutoMute = room.DisableMicAutoMute,
             DisableRoomComments = false,
             EncryptVoiceChat = false,
             LoadScreenLocked = false,
-            // Studio/UGC version family. The 2023 client reads UgcVersion to
-            // decide the asset-bundle version it requests
-            // (unity_assets/{id}/{target}/{UgcVersion}) and PersistenceVersion
-            // to recognise a baked Studio room at all. Matches the real
-            // RecRocks room.json (UgcVersion=1, PersistenceVersion=41). For a
-            // non-Studio room these stay at the legacy 0 so behaviour is
-            // unchanged.
             PersistenceVersion = room.IsStudioRoom ? StudioPersistenceVersion : 0,
-            UgcVersion = room.IsStudioRoom ? StudioUgcVersion : 0,
-            UgcSubVersion = room.IsStudioRoom ? StudioPersistenceVersion : 0,
-            MinUgcSubVersion = room.IsStudioRoom ? StudioPersistenceVersion : 0,
             IsDeveloperOwned = room.IsStudioRoom || HasRoomTag(room, "developer"),
-            IsJuniorCreated = false,
-            IsRecRoomApproved = false,
-            ExcludeFromLists = false,
-            BoostCount = 0,
-            RestrictedCircuitsAllowListNames = Array.Empty<string>(),
-            PublishStateAvailability = new
-            {
-                CanSaveAsBeta = false,
-                CanSaveAsUpdate = true,
-                AvailableUpdateTokenCount = 3,
-                NextAvailableUpdateDateTimeUtc = (string?)null,
-            },
-            PublishState = 0,
             MaxPlayerCalculationMode = room.MaxPlayerCalculationMode,
             SubRooms = subRooms,
             Roles = wireRoles,
@@ -2162,6 +2134,23 @@ public class RoomsController(
             PromoImages = JsonStringArrayOrEmpty(room.PromoImagesJson),
             PromoExternalContent = JsonArrayOrEmpty(room.PromoExternalContentJson),
             Tags = tags,
+            // The client's room-details reader (GLEGPFFPDBE) registers these
+            // five alongside the rest. A registered slot wants a value, and
+            // leaving one absent is not the same as sending null — it is what
+            // makes the reader throw mid-deserialise on a response the server
+            // already answered 200 to. Kept last so the additions are visible
+            // against the reader's own list; key ORDER does not matter to a
+            // name-keyed reader, presence does.
+            DataBlob = dataBlobName,
+            DataBlobHash = (string?)null,
+            // Room-level cap mirrors sub-room 0, which is where the client
+            // reads it from for a single-sub-room room.
+            MaxPlayers = sceneRows is { Count: > 0 } ? sceneRows[0].MaxPlayers : 8,
+            // ToxMod is Rec Room's hosted voice moderation. There is no such
+            // service here, so it is off — the client only uses this to decide
+            // whether to show the indicator.
+            ToxmodEnabled = false,
+            RankingContext = (object?)null,
         };
     }
 

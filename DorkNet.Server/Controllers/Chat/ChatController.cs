@@ -1147,15 +1147,25 @@ public class ChatController(
             ["clubId"] = ClubIdFromKey(thread.ThreadKey),
         };
 
+        // latestMessage is ALWAYS present, null when the thread has nothing in
+        // it. The client's reader (EKEFFNBIOHJ) registers a slot for it, and a
+        // registered slot wants a value — null is one, an absent key is not.
+        // Omitting it is what broke starting a chat with someone: a thread
+        // created by thread/withmembers has no messages yet, so this key
+        // vanished from the one response where it was needed and the client
+        // rejected the payload it had just asked for.
         if (messages is not null)
         {
             dto["messages"] = messages.Select(m => ToWireMessage(m, thread.Id)).ToList();
-            if (messages.Count > 0)
-                dto["latestMessage"] = ToWireMessage(messages[^1], thread.Id);
+            dto["latestMessage"] = messages.Count > 0
+                ? ToWireMessage(messages[^1], thread.Id)
+                : null;
         }
-        else if (latestMessage is not null)
+        else
         {
-            dto["latestMessage"] = ToWireMessage(latestMessage, thread.Id);
+            dto["latestMessage"] = latestMessage is not null
+                ? ToWireMessage(latestMessage, thread.Id)
+                : null;
         }
 
         return dto;
