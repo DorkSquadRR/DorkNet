@@ -18,9 +18,15 @@ namespace DorkNet.Server.Controllers.API.RoomConsumables;
 /// LPFAFIGAIOE / HJOKFJKKEJM / IDBFKCFEAHM / PECGEJAAMHB / DPNLANKOHON):
 ///
 ///   desc      = { RoomConsumableId, RoomId, Name, Description, ImageName,
-///                 PriceAndCurrency: { Price, CurrencyId } }
+///                 Price, PurchaseCurrencyId, ModifiedAt }
 ///   inventory = { RoomConsumableId, AccountId, Count, ConcurrencyCode,
 ///                 ModifiedAt, Consumable: desc }
+///
+/// The desc price is FLAT on the way OUT even though it is NESTED on the way
+/// IN. The response formatter FCIBLPCOODP's key map is exactly the eight keys
+/// above — Price at index 5, PurchaseCurrencyId at 6, ModifiedAt at 7, and no
+/// PriceAndCurrency key at all (FCIBLPCOODP.txt:670/686/710). See ToDescWire.
+/// The inventory key map is likewise exact (CICEHLNDLDE.txt:447-562).
 ///
 /// <c>Consumable</c> must never be null on an inventory row — the
 /// client's RoomConsumablesManager dereferences it unconditionally while

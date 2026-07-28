@@ -1,7 +1,9 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Text.Json;
 using DorkNet.Server.Auth;
+using DorkNet.Server.Data;
 using DorkNet.Server.Data.Entities;
 using DorkNet.Server.Services;
 
@@ -24,20 +26,24 @@ namespace DorkNet.Server.Controllers.Clubs;
 ///   POST   /announcements/club/{clubId}/{announcementId}/read
 ///
 /// Wire types (deserialiser JSON keys, per ISIL):
-///   Club            (<c>PLILLKHMNDA</c>): ClubId, Name, Description,
-///                   MainImageName, State, CreatorAccountId, Category,
-///                   Visibility, Joinability, AllowJuniors, MemberCount,
-///                   IsRRO, ClubhouseRoomId, ClubType
-///   Announcement    (<c>NFEMLMAFFIP</c>): AnnouncementId,
+///   Club            (2020 <c>PLILLKHMNDA</c> / 2023 <c>FOIJDINBPFG</c>):
+///                   ClubId, Name, Description, MainImageName, State,
+///                   CreatorAccountId, Category, Visibility, Joinability,
+///                   AllowJuniors, MemberCount, MinLevel, IsRRO,
+///                   ClubChatEnabled, ClubhouseRoomId, ClubType
+///   Announcement    (<c>NFEMLMAFFIP</c> / <c>JDPPAFLFNBD</c>): AnnouncementId,
 ///                   CreatorAccountId, ClubId, Title, Body, ImageName,
 ///                   CreatedAt, Meta
-///   UnreadResponse  (<c>HPACLJHLHBG</c>) — wraps per-club rows:
-///                   { clubId, LastReadAnnouncementId, announcements: [Announcement] }
+///   UnreadResponse  (<c>EIKPFIDCKNE</c> / <c>NCHLBFPHFJE</c>) — a LIST of
+///                   per-club rows { clubId, LastAnnouncementId,
+///                   LastReadAnnouncementId, announcements: [Announcement] }
+///   ClubFeed        (<c>HPACLJHLHBG</c> / <c>FIAKMDGGIHH</c>) — ONE such row,
+///                   not a list; see <c>AnnouncementsForClub</c>.
 ///   CategoryTags    plain <c>List&lt;String&gt;</c> (per
 ///                   <c>JDJGIBLMFKK.GetPrimaryTags</c> callback shape).
 /// </summary>
 [ApiController]
-public class ClubsController(ClubService clubs) : ControllerBase
+public class ClubsController(ClubService clubs, DorkNetDbContext db) : ControllerBase
 {
     private long Me => this.RequireCurrentPlayerId();
 
@@ -154,7 +160,7 @@ public class ClubsController(ClubService clubs) : ControllerBase
     {
         var pid = Me;
         var rows = await clubs.UnreadDirectAsync(pid);
-        return Ok(GroupByClub(rows));
+        return Ok(GroupByClub(rows, await LastReadByClubAsync(pid, rows.Select(a => a.ClubId))));
     }
 
     [HttpGet("/announcements/v2/subscription/mine/unread")]
@@ -163,7 +169,7 @@ public class ClubsController(ClubService clubs) : ControllerBase
     {
         var pid = Me;
         var rows = await clubs.UnreadSubscriptionAsync(pid);
-        return Ok(GroupByClub(rows));
+        return Ok(GroupByClub(rows, await LastReadByClubAsync(pid, rows.Select(a => a.ClubId))));
     }
 
     /// <summary>GET <c>/subscription/mine/member</c> — list of clubs the
@@ -204,6 +210,17 @@ public class ClubsController(ClubService clubs) : ControllerBase
         return Ok(playerSubs + clubSubs);
     }
 
+    /// <summary>GET <c>/subscription/details/{accountId}</c> — the creator's
+    /// subscription card. Both clients read the same three keys: the 2020 watch
+    /// via <c>LNIKPLKOBDK</c> (exact-match lowercase <c>accountId</c>,
+    /// <c>clubId</c>, <c>subscriberCount</c>) and 2023 via <c>DDFNNBDLBKF</c>
+    /// (tri-cased AccountId/ClubId/SubscriberCount, <c>DDFNNBDLBKF.txt:279-346</c>)
+    /// — camelCase satisfies both, so the casing here is load-bearing for 2020
+    /// and must not be Pascal-ised.
+    ///
+    /// <c>clubId</c> used to be missing entirely. The 2023 caller is literally
+    /// <c>GetCreatorClubIdForSubscription</c>, so the field defaulted to 0 and
+    /// profile→creator-club navigation went nowhere.</summary>
     [HttpGet("/subscription/details/{accountId:long}")]
     public async Task<IActionResult> SubscriptionDetails(long accountId)
     {
@@ -212,9 +229,14 @@ public class ClubsController(ClubService clubs) : ControllerBase
         var subscribedCount = await clubs.PlayerSubscribedCountAsync(accountId);
         var isSubscribed = viewerId is long viewer
             && await clubs.IsSubscribedToPlayerAsync(viewer, accountId);
+        // A creator's "creator club" is the club they own; oldest created wins
+        // when an account somehow owns several.
+        var created = await clubs.CreatedByAsync(accountId);
+        var clubId = created.Count > 0 ? created.Min(c => c.Id) : 0L;
         return Ok(new
         {
             accountId,
+            clubId,
             subscriberCount,
             subscribedCount,
             isSubscribed,
@@ -297,16 +319,19 @@ public class ClubsController(ClubService clubs) : ControllerBase
         return await BuildDetailsResponseAsync(clubId);
     }
 
-    /// <summary>GET <c>/club/{id}/permissions/{role}</c> — bare int of
-    /// the permission bitmask for a role on this club. Used by the
-    /// watch's role-permissions screen. Returns 0 for unknown roles so
-    /// the screen renders an empty checklist instead of erroring.</summary>
+    /// <summary>GET <c>/club/{id}/permissions/{role}</c> — the permission
+    /// record for one role on this club. This used to answer a bare int; both
+    /// clients model it as an OBJECT (2023 <c>MMOCDPPONNG</c>, 2020
+    /// <c>JHEEFBMODPG</c> — identical layout: long ClubId, membership-type
+    /// enum, six bools), so see <see cref="PermissionsForRole"/>. Neither
+    /// client actually issues the GET (both only PUT this template), but the
+    /// shapes now agree.</summary>
     [HttpGet("/club/{clubId:long}/permissions/{role:int}")]
     public async Task<IActionResult> ClubPermissions(long clubId, int role)
     {
         var club = await clubs.GetByIdAsync(clubId);
         if (club is null) return NotFound();
-        return Ok(PermissionsForRole(role));
+        return Ok(PermissionsForRole(clubId, role));
     }
 
     // ── Account / created lists ──────────────────────────────────────
@@ -369,6 +394,17 @@ public class ClubsController(ClubService clubs) : ControllerBase
         public int? Joinability { get; set; }
         public bool? AllowJuniors { get; set; }
         public long? ClubhouseRoomId { get; set; }
+
+        /// <summary>Repeated <c>customTags</c> form field sent by
+        /// <c>club/{0}/modifydetails</c> alongside visibility / joinability /
+        /// allowJuniors (<c>IKMMOCKDKAF_NestedType_MAFIJOPDGHK.txt:139-185</c>).
+        /// Null means "not supplied"; an empty list clears the club's tags.
+        /// Note the form path can only ever deliver null or a non-empty list —
+        /// <c>FormOrJsonModelBinder.Convert</c> collapses an all-blank repeated
+        /// field to null — so a client that clears every tag over
+        /// form-urlencoded leaves the existing set in place. Only the JSON path
+        /// can send an explicit <c>[]</c>.</summary>
+        public List<string>? CustomTags { get; set; }
     }
 
     /// <summary>POST <c>/club/{id}/modify</c> + <c>/modifydetails</c> —
@@ -397,6 +433,9 @@ public class ClubsController(ClubService clubs) : ControllerBase
                 if (req.ClubhouseRoomId is long ch) c.ClubhouseRoomId = ch;
             });
             if (updated is null) return NotFound();
+            // Tags live in the club↔tag junction, not on the club row, so they
+            // are written after ModifyAsync has already vetted the caller.
+            if (req.CustomTags is not null) await ReplaceCustomTagsAsync(updated.Id, req.CustomTags);
             return await BuildDetailsResponseAsync(updated.Id);
         }
         catch (UnauthorizedAccessException) { return Forbid(); }
@@ -422,12 +461,17 @@ public class ClubsController(ClubService clubs) : ControllerBase
         catch (UnauthorizedAccessException) { return Forbid(); }
     }
 
-    /// <summary>POST <c>/club/{id}/additionalimage/{slot}</c> — the
-    /// watch's gallery-image slot setter. The 2020 ClubEntity doesn't
-    /// have additional image slots persisted yet, so we just return
-    /// the current details unchanged (the gallery renders blank).
-    /// Hooked up so the request doesn't 404 — populated once a future
-    /// schema patch lands.</summary>
+    /// <summary>POST/PUT <c>/club/{id}/additionalimage/{slot}</c> — the club
+    /// gallery's per-slot image setter (<c>IKMMOCKDKAF.txt:16214</c>).
+    ///
+    /// The request now binds (the client sends form-urlencoded
+    /// <c>imageName</c>, which <c>[FromBody]</c> used to reject with 415), but
+    /// the slot itself STILL is not persisted: there is no additional-image
+    /// table, and the envelope's <c>AdditionalImages</c> is the client's
+    /// <c>HIKCHBLAMLP</c> — {ImageName, Slot} — with nowhere to come from. So
+    /// the call is accepted and permission-checked, the details envelope comes
+    /// back refreshed, and the gallery renders blank until a
+    /// <c>ClubAdditionalImageEntity</c> lands.</summary>
     [HttpPost("/club/{clubId:long}/additionalimage/{slot:int}")]
     [HttpPut("/club/{clubId:long}/additionalimage/{slot:int}")]
     [Authorize]
@@ -709,35 +753,64 @@ public class ClubsController(ClubService clubs) : ControllerBase
 
     // ── members/bulk + clubreporting ─────────────────────────────────
 
-    /// <summary>GET <c>/members/bulk?clubId=N&amp;playerIds=A&amp;playerIds=B</c>
-    /// — bulk membership lookup. Wire shape is
-    /// <c>List&lt;JHMMGLNJHIB&gt;</c> with each entry carrying
-    /// <c>AccountId</c> + <c>MembershipType</c>.</summary>
+    /// <summary>GET/POST <c>/members/bulk?id=A&amp;id=B</c> — bulk membership
+    /// lookup for nameplate club badges. Response rows are
+    /// <c>FCKGOFHNDNJ</c>: <c>AccountId</c> + <c>MembershipType</c>
+    /// (reader <c>FMKALNIKMKF.txt</c>).
+    ///
+    /// Two things the original handler got wrong, both visible at
+    /// <c>IKMMOCKDKAF.txt:20976-21005</c>:
+    ///   * the account ids ride in repeated <c>id</c> params (:20997), not
+    ///     <c>playerIds</c>;
+    ///   * <c>clubId</c> is NEVER transmitted — it is only the client's local
+    ///     cache key — so hard-requiring it 400'd every single call.
+    /// The verb is picked at runtime by a cmov (:20984-20985,
+    /// <c>cmp rdi,100 / cmovge edx,eax</c> with eax=2): GET under 100 ids,
+    /// POST at 100+. Both are registered.
+    ///
+    /// With no club scope the answer is each account's most privileged
+    /// membership across all clubs, which is what the badge renders anyway;
+    /// an explicit <c>clubId</c> (2020 watch, admin tools) still narrows it.
+    /// </summary>
     [HttpGet("/members/bulk")]
     [HttpPost("/members/bulk")]
     public async Task<IActionResult> MembersBulk()
     {
-        var form = Request.HasFormContentType ? Request.Form : null;
-        if (!long.TryParse(Request.Query["clubId"].ToString(), out var clubId)
-            && (form is null || !long.TryParse(form["clubId"].ToString(), out clubId)))
-            return BadRequest(new { error = "missing_club_id" });
+        var form = Request.HasFormContentType ? await Request.ReadFormAsync() : null;
 
-        var idsRaw = form is null
-            ? Request.Query["playerIds"].AsEnumerable()
-            : Request.Query["playerIds"].Concat(form["playerIds"]);
-        var ids = idsRaw
+        IEnumerable<string?> Values(string key) => form is null
+            ? Request.Query[key].AsEnumerable()
+            : Request.Query[key].Concat(form[key]);
+
+        var ids = new[] { "id", "playerIds", "accountIds" }
+            .SelectMany(Values)
             .SelectMany(v => (v ?? string.Empty).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
             .Select(s => long.TryParse(s, out var n) ? n : 0)
             .Where(n => n != 0)
+            .Distinct()
             .ToList();
         if (ids.Count == 0) return Ok(Array.Empty<object>());
 
-        var rows = await clubs.MembershipsBulkAsync(clubId, ids);
-        return Ok(rows.Select(m => new
-        {
-            AccountId = (int)m.PlayerId,
-            MembershipType = ClubService.MembershipTypeFromPerms(m.Permissions),
-        }));
+        long? clubId = long.TryParse(Request.Query["clubId"].ToString(), out var q) ? q
+            : form is not null && long.TryParse(form["clubId"].ToString(), out var f) ? f
+            : null;
+
+        var rows = clubId is long scope
+            ? await clubs.MembershipsBulkAsync(scope, ids)
+            : await db.ClubMemberships.AsNoTracking()
+                .Where(m => ids.Contains(m.PlayerId))
+                .ToListAsync();
+
+        // One row per account: highest membership type wins (Creator > CoOwner >
+        // Moderator > Member), and ban/pending markers lose to a real role.
+        return Ok(rows
+            .GroupBy(m => m.PlayerId)
+            .Select(g => new
+            {
+                AccountId = (int)g.Key,
+                MembershipType = g.Max(m => ClubService.MembershipTypeFromPerms(m.Permissions)),
+            })
+            .ToList());
     }
 
     // NOTE: POST /api/clubreporting/v1/report is served by
@@ -749,15 +822,25 @@ public class ClubsController(ClubService clubs) : ControllerBase
 
     // ── Announcements (per-club feed + per-announcement) ─────────────
 
-    /// <summary>GET <c>/announcements/club/{clubId}</c> — full
-    /// announcement feed for the club. Wire shape mirrors the unread
-    /// rollup (<c>HPACLJHLHBG</c> envelope) but holds every visible
-    /// announcement, newest first.</summary>
+    /// <summary>GET <c>/announcements/club/{clubId}</c> — full announcement
+    /// feed for one club, newest first.
+    ///
+    /// This returns a SINGLE envelope object, never an array: 2023 reads it as
+    /// <c>FGLDKEJLAKB&lt;FIAKMDGGIHH&gt;</c>
+    /// (<c>IKMMOCKDKAF.txt:1170</c>, route at :1452) and the 2020 watch as
+    /// <c>IPromise&lt;HPACLJHLHBG&gt;</c> (<c>JDJGIBLMFKK.txt:1012,1167</c>).
+    /// Handing either of them the per-club LIST that the unread rollup uses
+    /// failed the reader, so the club announcement board never rendered — and
+    /// a club with no announcements produced <c>[]</c>, not an object at
+    /// all.</summary>
     [HttpGet("/announcements/club/{clubId:long}")]
     public async Task<IActionResult> AnnouncementsForClub(long clubId)
     {
         var rows = await clubs.AnnouncementsForClubAsync(clubId);
-        return Ok(GroupByClub(rows));
+        var lastRead = ControllerBaseExtensions.CurrentPlayerId(User) is long pid
+            ? await LastReadByClubAsync(pid, new[] { clubId })
+            : new Dictionary<long, long>();
+        return Ok(AnnouncementEnvelope(clubId, rows, lastRead.GetValueOrDefault(clubId)));
     }
 
     /// <summary>GET <c>/announcements/club/{clubId}/{aid}</c> — single
@@ -877,37 +960,110 @@ public class ClubsController(ClubService clubs) : ControllerBase
         }
         return Ok(new
         {
-            // PIHMJGCGNLP deserializer at PIHMJGCGNLP.txt:143-194 reads
-            // 7 fields off the response dict, not the 5 the parser-keys
-            // doc lists. Missing any throws KeyNotFoundException —
-            // CustomTags (List<String>) and AdditionalImages
-            // (List<FKFAKOKIEGN>) need to be present even if empty.
+            // All seven keys are mandatory — 2020's PIHMJGCGNLP deserializer
+            // (PIHMJGCGNLP.txt:143-194) throws KeyNotFoundException on a missing
+            // one, and 2023's LCLFBBPEMIH registers exactly these names
+            // (JAHJGFHFKIB.txt:523-678). AdditionalImages stays empty until the
+            // gallery slots get a table; see ClubAdditionalImage.
             Club = ToWireClub(club, memberCount),
-            CustomTags = Array.Empty<string>(),
+            CustomTags = await CustomTagsAsync(clubId),
             AdditionalImages = Array.Empty<object>(),
-            CoownerPermissions = PermissionsForRole(ClubService.MembershipTypeCoOwner),
-            ModeratorPermissions = PermissionsForRole(ClubService.MembershipTypeModerator),
-            MemberPermissions = PermissionsForRole(ClubService.MembershipTypeMember),
+            CoownerPermissions = PermissionsForRole(clubId, ClubService.MembershipTypeCoOwner),
+            ModeratorPermissions = PermissionsForRole(clubId, ClubService.MembershipTypeModerator),
+            MemberPermissions = PermissionsForRole(clubId, ClubService.MembershipTypeMember),
             MyMembershipType = myType,
         });
     }
 
-    /// <summary>
-    /// Bitmask of capabilities a given role has on a club. The bits
-    /// are arbitrary (the wire enum <c>JHEEFBMODPG</c> is opaque in
-    /// the readable dump) but stay consistent so the watch's
-    /// role-permissions screen renders the same checklist on every
-    /// refresh. Owner / Coowner can manage all; Moderator can manage
-    /// content; Member can read.
-    /// </summary>
-    private static int PermissionsForRole(int membershipType) => membershipType switch
+    /// <summary>The club's player-authored tags, for the envelope's
+    /// <c>CustomTags</c> (<c>List&lt;String&gt;</c> on both clients). These used
+    /// to be a hardcoded empty array; they are stored in the existing club↔tag
+    /// junction so the value the client PUT actually comes back.</summary>
+    private Task<List<string>> CustomTagsAsync(long clubId) =>
+        (from a in db.ClubCategoryAssignments
+         join t in db.ClubCategoryTags on a.CategoryTagId equals t.Id
+         where a.ClubId == clubId
+         orderby t.OrderIndex, t.Name
+         select t.Name).ToListAsync();
+
+    /// <summary>Replace a club's tag assignments wholesale — the client always
+    /// PUTs the complete <c>customTags</c> set, never a delta.</summary>
+    private async Task ReplaceCustomTagsAsync(long clubId, List<string> tags)
     {
-        ClubService.MembershipTypeOwner    => 0x7FFF, // everything
-        ClubService.MembershipTypeCoOwner  => 0x7FFE, // all except disband
-        ClubService.MembershipTypeModerator => 0x00FF, // moderation only
-        ClubService.MembershipTypeMember   => 0x0007, // post + read + react
-        _                                  => 0x0001, // read-only
-    };
+        var wanted = tags
+            .Select(t => (t ?? string.Empty).Trim())
+            .Where(t => t.Length > 0 && t.Length <= 64)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var stale = await db.ClubCategoryAssignments
+            .Where(a => a.ClubId == clubId)
+            .ToListAsync();
+        db.ClubCategoryAssignments.RemoveRange(stale);
+
+        foreach (var name in wanted)
+        {
+            var lower = name.ToLower();
+            var tag = await db.ClubCategoryTags.FirstOrDefaultAsync(t => t.Name.ToLower() == lower);
+            if (tag is null)
+            {
+                // A player-authored tag is not part of the admin-curated
+                // category list, so it lands Active=false: assignments still
+                // resolve by id, but /club/categoryTags keeps returning only
+                // the curated set the browse tab is built from.
+                tag = new ClubCategoryTagEntity { Name = name, OrderIndex = 1000, Active = false };
+                db.ClubCategoryTags.Add(tag);
+                await db.SaveChangesAsync();
+            }
+            db.ClubCategoryAssignments.Add(new ClubCategoryAssignmentEntity
+            {
+                ClubId = clubId,
+                CategoryTagId = tag.Id,
+            });
+        }
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// The permission record for one role on a club.
+    ///
+    /// These three envelope keys used to carry a plain bitmask int. Both
+    /// clients declare them as a COMPLEX OBJECT — 2023
+    /// <c>LCLFBBPEMIH.JNOKOILEFHD/OMMHPBFEHBH/IJKKPOBDJGG</c> are
+    /// <c>MMOCDPPONNG</c> (recnet-runtime-decomp/LCLFBBPEMIH.cs:64-115) and the
+    /// 2020 watch's <c>PIHMJGCGNLP</c> uses the identically-laid-out
+    /// <c>JHEEFBMODPG</c> — so feeding an integer into the object reader threw
+    /// and took the whole club page (and club creation) down with it.
+    ///
+    /// Key names are verbatim from the generated reader
+    /// <c>BPHCOIBNCDP.txt:587-766</c>: ClubId, <b>Type</b> (not
+    /// "MembershipType"), EditDetails, ApproveMember, CreateEvent,
+    /// PostAnnouncement, EditPermissionSettings, BanUnban. The same six names
+    /// are the form keys the client PUTs back on the permissions screen
+    /// (<c>IKMMOCKDKAF_NestedType_BOIMHOCCOEI.txt:173-253</c>).
+    ///
+    /// The bools are derived from the role rather than stored: there is no
+    /// per-role permission table yet, so every club uses the default policy —
+    /// Owner/CoOwner do everything, Moderator moderates but cannot re-write the
+    /// permission settings, Member and below are read-only.
+    /// </summary>
+    private static object PermissionsForRole(long clubId, int membershipType)
+    {
+        var admin = membershipType is ClubService.MembershipTypeOwner
+                                   or ClubService.MembershipTypeCoOwner;
+        var moderator = admin || membershipType == ClubService.MembershipTypeModerator;
+        return new
+        {
+            ClubId = clubId,
+            Type = membershipType,
+            EditDetails = admin,
+            ApproveMember = moderator,
+            CreateEvent = moderator,
+            PostAnnouncement = moderator,
+            EditPermissionSettings = admin,
+            BanUnban = moderator,
+        };
+    }
 
     private static object ToWireMembership(ClubMembershipEntity row) => new
     {
@@ -947,6 +1103,14 @@ public class ClubsController(ClubService clubs) : ControllerBase
         Joinability = c.Joinability,
         AllowJuniors = c.AllowJuniors,
         MemberCount = memberCount,
+        // MinLevel + ClubChatEnabled are registered by the 2023 Club reader
+        // (BLIBJIHOENF.txt:1234-1322) and were never emitted, so every club came
+        // back with chat disabled on the profile Clubs tab. Neither has a column
+        // on ClubEntity yet — the client-facing setters are club/{0}/minlevel
+        // and club/{0}/clubChatEnabled (IKMMOCKDKAF.txt:16561,25779) — so they
+        // report the permissive defaults until the schema catches up.
+        MinLevel = 0,
+        ClubChatEnabled = true,
         IsRRO = c.IsRRO,
         ClubhouseRoomId = c.ClubhouseRoomId,
         ClubType = c.ClubType,
@@ -1011,28 +1175,74 @@ public class ClubsController(ClubService clubs) : ControllerBase
     };
 
     /// <summary>
-    /// Group a flat list of announcements into the per-club
-    /// <c>HPACLJHLHBG</c> envelope shape. Uses
-    /// <see cref="Dictionary{TKey, TValue}"/> for the outer object
-    /// because the wire mixes lowercase and PascalCase keys for the
-    /// same record (<c>clubId</c> + <c>LastReadAnnouncementId</c> +
-    /// <c>announcements</c>) and anonymous types can't model that.
+    /// Group a flat list of announcements into per-club envelopes — the shape
+    /// the two unread rollups return as a LIST (2023
+    /// <c>List&lt;NCHLBFPHFJE&gt;</c>, 2020 <c>List&lt;EIKPFIDCKNE&gt;</c>).
     /// </summary>
     private static List<Dictionary<string, object?>> GroupByClub(
-        List<ClubAnnouncementEntity> rows)
+        List<ClubAnnouncementEntity> rows, Dictionary<long, long> lastReadByClub)
     {
         return rows
             .GroupBy(a => a.ClubId)
-            .Select(g =>
-            {
-                var ordered = g.OrderByDescending(a => a.CreatedAt).ToList();
-                return new Dictionary<string, object?>
-                {
-                    ["clubId"] = g.Key,
-                    ["LastReadAnnouncementId"] = (long?)null,
-                    ["announcements"] = ordered.Select(ToWireAnnouncement).ToList(),
-                };
-            })
+            .Select(g => AnnouncementEnvelope(g.Key, g.ToList(), lastReadByClub.GetValueOrDefault(g.Key)))
             .ToList();
+    }
+
+    /// <summary>
+    /// One club's announcement envelope. Uses
+    /// <see cref="Dictionary{TKey, TValue}"/> rather than an anonymous type
+    /// because the wire mixes casings inside a single record: the 2020 readers
+    /// match key names EXACTLY and want <c>clubId</c> + <c>announcements</c>
+    /// lowercase but <c>LastAnnouncementId</c>/<c>LastReadAnnouncementId</c>
+    /// PascalCase (<c>EIKPFIDCKNE.txt</c>, <c>HPACLJHLHBG.txt:270-280</c>).
+    /// The 2023 readers are tri-cased (<c>CAKCKAMAAPP.txt:331-414</c>,
+    /// <c>AECJMONHBHM.txt:267-326</c>) so camelCase satisfies them too.
+    ///
+    /// Two fixes over the original projection:
+    ///   * <c>LastAnnouncementId</c> was omitted entirely though both readers
+    ///     register it;
+    ///   * <c>LastReadAnnouncementId</c> was an explicit JSON <c>null</c> into
+    ///     a NON-nullable Int64 field on both clients. Always a number now.
+    /// </summary>
+    private static Dictionary<string, object?> AnnouncementEnvelope(
+        long clubId, List<ClubAnnouncementEntity> rows, long lastReadId)
+    {
+        var ordered = rows.OrderByDescending(a => a.CreatedAt).ThenByDescending(a => a.Id).ToList();
+        return new Dictionary<string, object?>
+        {
+            ["clubId"] = clubId,
+            ["LastAnnouncementId"] = ordered.Count == 0 ? 0L : ordered.Max(a => a.Id),
+            ["LastReadAnnouncementId"] = lastReadId,
+            ["announcements"] = ordered.Select(ToWireAnnouncement).ToList(),
+        };
+    }
+
+    /// <summary>
+    /// Highest announcement id the caller has actually read, per club — the
+    /// <c>LastReadAnnouncementId</c> the envelopes above must carry. Done as
+    /// two index-supported reads plus an in-memory join for the same reason
+    /// <see cref="ClubService"/> avoids the LEFT JOIN: EF Core generates
+    /// pathological SQL for the anti-join on SQLite.
+    /// </summary>
+    private async Task<Dictionary<long, long>> LastReadByClubAsync(
+        long playerId, IEnumerable<long> clubIds)
+    {
+        var ids = clubIds.Distinct().ToList();
+        if (ids.Count == 0) return new Dictionary<long, long>();
+
+        var readIds = await db.ClubAnnouncementReads
+            .Where(r => r.PlayerId == playerId)
+            .Select(r => r.AnnouncementId)
+            .ToListAsync();
+        if (readIds.Count == 0) return new Dictionary<long, long>();
+
+        var read = await db.ClubAnnouncements
+            .Where(a => ids.Contains(a.ClubId) && readIds.Contains(a.Id))
+            .Select(a => new { a.ClubId, a.Id })
+            .ToListAsync();
+
+        return read
+            .GroupBy(a => a.ClubId)
+            .ToDictionary(g => g.Key, g => g.Max(a => a.Id));
     }
 }

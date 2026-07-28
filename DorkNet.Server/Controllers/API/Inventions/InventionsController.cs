@@ -387,19 +387,59 @@ public class InventionsController(
     /// <c>List → Dictionary</c> cast inside <c>Util.Deserialize&lt;T&gt;</c>
     /// and surfaced as "Failed to get tags: Malformed Response"
     /// (output_log.txt:1602+1639) — and that bubbles up as the
-    /// dorm-load destabilisation we've been hunting.</summary>
+    /// dorm-load destabilisation we've been hunting.
+    ///
+    /// The 2023 DTO reads a THIRD list, <c>TrendingFilters</c>
+    /// (HMDONHHKKGA.txt:099/169), which we never sent — callers projecting that
+    /// list got an empty filter row. Popular/Trending are now derived from the
+    /// tags actually in use (<see cref="InventionEntity.TagsCsv"/>) rather than
+    /// echoing the pinned array three times; the curated list is the fallback
+    /// so a fresh server still shows filters. The 2020.12 watch's
+    /// <c>AEBEPCMAABC</c> reads only Pinned/Popular, so the extra key is
+    /// inert there.</summary>
     [HttpGet("api/inventions/v1/tagfilters")]
-    public IActionResult TagFilters()
+    public async Task<IActionResult> TagFilters()
     {
-        var tags = new[]
-        {
+        string[] pinned =
+        [
             "sport", "game", "vehicle", "weapon", "decor", "tool",
             "art", "music", "puzzle", "combat", "build", "race",
-        };
+        ];
+
+        // TagsCsv is a packed list no provider can split, so the frequency count
+        // runs in memory over a bounded window of the most recently touched
+        // tagged inventions.
+        var rows = await db.Inventions
+            .Where(i => !i.IsDeleted && i.IsPublished && i.TagsCsv != "")
+            .OrderByDescending(i => i.UpdatedAt)
+            .Select(i => new { i.TagsCsv, i.UpdatedAt })
+            .Take(2000)
+            .ToListAsync();
+
+        static IEnumerable<string> SplitTags(string csv) => csv
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        static List<string> Rank(IEnumerable<string> tags) => tags
+            .GroupBy(t => t, StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(g => g.Count())
+            .ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(g => g.Key)
+            .Take(12)
+            .ToList();
+
+        var since = DateTime.UtcNow.AddDays(-7);
+        var popular = Rank(rows.SelectMany(r => SplitTags(r.TagsCsv)));
+        var trending = Rank(rows.Where(r => r.UpdatedAt >= since)
+            .SelectMany(r => SplitTags(r.TagsCsv)));
+
+        if (popular.Count == 0) popular = [.. pinned];
+        if (trending.Count == 0) trending = popular;
+
         return Ok(new
         {
-            PinnedFilters = tags,
-            PopularFilters = tags,
+            PinnedFilters = pinned,
+            PopularFilters = popular,
+            TrendingFilters = trending,
         });
     }
 
@@ -520,18 +560,26 @@ public class InventionsController(
         return Ok(ToWire(i));
     }
 
-    /// <summary>POST <c>api/storefronts/v1/trialInvention?inventionId={id}</c>
-    /// — start a free trial of a store invention. Client
-    /// (RecNet.Runtime <c>DCFKEFHJAGC.PPCLLFMHJLD(long)</c>) expects a SINGLE
-    /// Invention DTO back (same <see cref="ToWire"/> shape it uses for
-    /// search), which it spawns for the trial window (length from
-    /// <c>trialInvention/duration</c>). Hosted here — not in
+    /// <summary>POST <c>api/storefronts/v1/trialInvention</c> — start a free
+    /// trial of a store invention, spawned for the window returned by
+    /// <c>trialInvention/duration</c>. Hosted here — not in
     /// StorefrontsController — so it can reuse the invention wire builder.
-    /// We record the trial start so it's an auditable action.</summary>
+    /// We record the trial start so it's an auditable action.
+    ///
+    /// TWO wire corrections. (1) The id is a FORM field, not a query param:
+    /// DCFKEFHJAGC.txt:9037 sets verb 2 (POST) and :9050 adds the pair via
+    /// <c>AFGEDDANEKP("inventionId", …)</c>, and on a non-GET those pairs go
+    /// into an HTTPUrlEncodedForm body (see the id-list block comment above), so
+    /// <c>[FromQuery]</c> bound 0 and every trial 404'd. (2) The reply is the
+    /// Status/Invention/InventionVersion envelope: the continuation at
+    /// DCFKEFHJAGC.txt:9086 is a
+    /// <c>Func&lt;BDNCJIPHHOK, FGLDKEJLAKB&lt;IFJONDCAKKM&gt;&gt;</c> which
+    /// projects <c>.Invention</c> — a bare invention left that null.</summary>
     [HttpPost("api/storefronts/v1/trialInvention")]
     [Authorize]
-    public async Task<ActionResult> TrialInvention([FromQuery] long inventionId)
+    public async Task<ActionResult> TrialInvention()
     {
+        var inventionId = await ReadLongFieldAsync("inventionId") ?? 0;
         var i = await db.Inventions.FirstOrDefaultAsync(x => x.Id == inventionId && !x.IsDeleted);
         if (i is null) return NotFound();
         if (!i.IsPublished && i.CreatorPlayerId != CurrentPlayerIdOrNull)
@@ -550,9 +598,21 @@ public class InventionsController(
                 row.Value = DateTime.UtcNow.ToString("O");
             await db.SaveChangesAsync();
         }
-        return Ok(ToWire(i));
+        return Ok(await EnvelopeAsync(i));
     }
 
+    /// <summary>GET <c>api/inventions/v1/details</c> — the ONLY key either
+    /// client reads off this response is <c>Tags</c>: the 2023 continuation is
+    /// <c>Action&lt;OIABGAKJABE&gt;</c> (OEGFNFEAAGO.txt:6312) whose reader takes
+    /// exactly one literal, "Tags" (DBAHPLOPFIO.txt:034), and the 2020.12 watch's
+    /// HJPDBNLCGIB does the same. Each element is
+    /// <c>{Tag:String, Type:Int32}</c> (PCMLHLIBLNJ.txt:038/057). Without the key
+    /// the invention detail page's tag row was permanently empty. Invention +
+    /// Versions stay on the wire — unknown members are ignored by both readers.
+    /// <c>Type</c> is always 0: <see cref="SetTags"/> merges the client's
+    /// AutoTags and CustomTags into one <see cref="InventionEntity.TagsCsv"/>
+    /// column, so the auto/custom distinction is not recoverable without a
+    /// second column.</summary>
     [HttpGet("api/inventions/v1/details")]
     public async Task<ActionResult> Details([FromQuery] long inventionId)
     {
@@ -566,21 +626,33 @@ public class InventionsController(
             .ToListAsync();
         return Ok(new
         {
+            Tags = i.TagsCsv
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(t => new { Tag = t, Type = 0 }),
             Invention = ToWire(i),
             Versions = versions.Select(ToVersionWire),
         });
     }
 
+    /// <summary>GET <c>api/inventions/v1/personaldetails/{id}</c> — the caller's
+    /// own relationship to the invention. Both clients read a single key here:
+    /// the 2023 continuation is <c>FGLDKEJLAKB&lt;CEAFHBOOBKL&gt;</c>
+    /// (OEGFNFEAAGO.txt:8995) and CEAFHBOOBKL's reader takes only "IsCheering"
+    /// (BCLCHNGENDE.txt:036); the 2020.12 watch's OEGPIPBKHCN is identical.
+    /// Without it the detail page never lit the player's own cheer.</summary>
     [HttpGet("api/inventions/v1/personaldetails/{id:long}")]
     [Authorize]
     public async Task<ActionResult> PersonalDetails(long id)
     {
         var i = await db.Inventions.FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted);
         if (i is null) return NotFound();
+        var pid = CurrentPlayerId;
         return Ok(new
         {
+            IsCheering = await db.Cheers.AnyAsync(c =>
+                c.FromPlayerId == pid && c.TargetInventionId == id),
             Invention = ToWire(i),
-            CanEdit = i.CreatorPlayerId == CurrentPlayerId,
+            CanEdit = i.CreatorPlayerId == pid,
         });
     }
 
@@ -613,6 +685,14 @@ public class InventionsController(
         public string? ImageName { get; set; }
         public int InstantiationCost { get; set; }
         public int LightsCost { get; set; }
+        /// <summary>RecNet.NewInventionRequestDTO carries <c>chipsCost</c> and
+        /// <c>cloudVariablesCost</c> too (2023.06 dump.cs:1283258-1283259).
+        /// <see cref="InventionVersionEntity"/> has no column for either, so
+        /// they cannot be persisted — but binding them lets the save response
+        /// echo back the budget the client just reported instead of two
+        /// zeroes.</summary>
+        public int ChipsCost { get; set; }
+        public int CloudVariablesCost { get; set; }
         public int AiCost { get; set; }
         public long? CreationRoomId { get; set; }
         public string? InventionDataFilename { get; set; }
@@ -686,7 +766,8 @@ public class InventionsController(
         {
             Status = 0,
             Invention = ToWireV4(inv),
-            InventionVersion = ToVersionWire(v1),
+            InventionVersion = ToVersionWire(
+                v1, Math.Max(0, req.ChipsCost), Math.Max(0, req.CloudVariablesCost)),
         });
     }
 
@@ -727,7 +808,7 @@ public class InventionsController(
         inv.CurrentVersionNumber = nextVer;
         inv.UpdatedAt = DateTime.UtcNow;
 
-        db.InventionVersions.Add(new InventionVersionEntity
+        var version = new InventionVersionEntity
         {
             InventionId = inv.Id,
             ReplicationId = Guid.NewGuid().ToString("D"),
@@ -735,9 +816,20 @@ public class InventionsController(
             BlobName = blobName,
             InstantiationCost = req.InstantiationCost ?? 0,
             LightsCost = req.LightsCost ?? 0,
-        });
+        };
+        db.InventionVersions.Add(version);
         await db.SaveChangesAsync();
-        return Ok(ToWire(inv));
+
+        // Envelope, not a bare invention — see EnvelopeAsync. The version we
+        // just wrote is the one the client wants back, and the two cost fields
+        // it sent are echoed because no column stores them.
+        return Ok(new
+        {
+            Status = 0,
+            Invention = ToWire(inv),
+            InventionVersion = ToVersionWire(
+                version, Math.Max(0, req.ChipsCost ?? 0), Math.Max(0, req.CloudVariablesCost ?? 0)),
+        });
     }
 
     // ── GET-based mutations (Core.Get pattern) ───────────────────────────
@@ -775,14 +867,42 @@ public class InventionsController(
         }
         inv.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
-        return Ok(ToWire(inv));
+        return Ok(await EnvelopeAsync(inv));
     }
 
+    /// <summary>Body shape for the POST form of <c>updateprice</c> —
+    /// RecNet.UpdatePriceRequest, real field names preserved in the 2023.06
+    /// dump (dump.cs:1283355-1283356). Settable properties + a parameterless
+    /// ctor because <see cref="Binding.FormOrJsonModelBinder"/> constructs the
+    /// instance itself.</summary>
+    public sealed class UpdatePriceRequest
+    {
+        public long InventionId { get; set; }
+        public int Price { get; set; }
+    }
+
+    /// <summary>Both clients POST <c>updateprice</c> with a body; only the GET
+    /// query form was registered, so ASP.NET answered 405 and re-pricing a paid
+    /// invention always failed. 2023: OEGFNFEAAGO.txt:9850 sets verb 2 and
+    /// :9870-9876 hands <c>JsonUtility.ToJson(UpdatePriceRequest)</c> to
+    /// <c>FJLLPHFOOJJ</c>, which wraps it in a BestHTTP RawJsonForm
+    /// (<c>application/json</c>, RawJsonForm.txt:40). December POSTs the same
+    /// route form-encoded (2020.12 BBHENFCNLAB.txt:6480). The binder accepts
+    /// both; the GET stays for callers that still use the query string.</summary>
     [HttpGet("api/inventions/v1/updateprice")]
     [Authorize]
-    public async Task<ActionResult> UpdatePrice(
+    public Task<ActionResult> UpdatePrice(
         [FromQuery] long inventionId,
         [FromQuery] int price)
+        => ApplyPriceAsync(inventionId, price);
+
+    [HttpPost("api/inventions/v1/updateprice")]
+    [Authorize]
+    public Task<ActionResult> UpdatePricePost(
+        [ModelBinder(typeof(Binding.FormOrJsonModelBinder))] UpdatePriceRequest req)
+        => ApplyPriceAsync(req.InventionId, req.Price);
+
+    private async Task<ActionResult> ApplyPriceAsync(long inventionId, int price)
     {
         var pid = CurrentPlayerId;
         var inv = await db.Inventions.FirstOrDefaultAsync(x => x.Id == inventionId && !x.IsDeleted);
@@ -791,7 +911,7 @@ public class InventionsController(
         inv.Price = Math.Clamp(price, 0, 1000000);
         inv.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
-        return Ok(ToWire(inv));
+        return Ok(await EnvelopeAsync(inv));
     }
 
     [HttpGet("api/inventions/v1/delete")]
@@ -807,13 +927,29 @@ public class InventionsController(
         inv.IsPublished = false;
         inv.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
-        return Ok(ToWire(inv));
+        return Ok(await EnvelopeAsync(inv));
     }
 
+    /// <summary>The 2023 publish call carries FOUR query params, not two:
+    /// OEGFNFEAAGO.txt:9437/9449/9461/9473 add <c>inventionId</c>,
+    /// <c>permissionLevel</c>, <c>accessibility</c> and a
+    /// <c>Nullable&lt;Int32&gt;</c> <c>price</c> — the wrapper signature is
+    /// OEGFNFEAAGO.txt:9216. Dropping accessibility meant "publish as Private /
+    /// Unlisted" still went fully public, and a paid publish lost its price.
+    /// Accessibility constants: Private=0, Public=1, Unlisted=2
+    /// (AEFFFPIJDHG.GAKJKOGJEEH, 2023.06 dump.cs:1282644-1282646). With no
+    /// Accessibility column on the entity only the Private/not-Private half can
+    /// be stored, so Unlisted currently behaves as Public. The param is
+    /// NULLABLE on purpose — the 2020.12 watch sends only inventionId +
+    /// permissionLevel (2020.12 BBHENFCNLAB.txt:6171), and a missing value must
+    /// not be read as Private or December could never publish.</summary>
     [HttpGet("api/inventions/v3/publish")]
     [Authorize]
     public async Task<ActionResult> Publish(
-        [FromQuery] long inventionId, [FromQuery] int permissionLevel)
+        [FromQuery] long inventionId,
+        [FromQuery] int permissionLevel,
+        [FromQuery] int? accessibility,
+        [FromQuery] int? price)
     {
         var pid = CurrentPlayerId;
         var inv = await db.Inventions.FirstOrDefaultAsync(x => x.Id == inventionId && !x.IsDeleted);
@@ -821,13 +957,15 @@ public class InventionsController(
         if (inv.CreatorPlayerId != pid) return Forbid();
         var perm = ClampInventionPermission(permissionLevel);
         if (perm == 0) return BadRequest("permissionLevel must be > 0 (Unassigned)");
+        var access = accessibility ?? 1 /* Public */;
         inv.GeneralPermission = perm;
-        inv.IsPublished = true;
-        inv.FirstPublishedAt ??= DateTime.UtcNow;
+        inv.IsPublished = access != 0;
+        if (inv.IsPublished) inv.FirstPublishedAt ??= DateTime.UtcNow;
         inv.Permission = perm >= 60 ? 2 : (perm >= 20 ? 1 : 0);
+        if (price.HasValue) inv.Price = Math.Clamp(price.Value, 0, 1000000);
         inv.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
-        return Ok(ToWire(inv));
+        return Ok(await EnvelopeAsync(inv));
     }
 
     [HttpGet("api/inventions/v1/unpublish")]
@@ -843,7 +981,7 @@ public class InventionsController(
         inv.Permission = 0;
         inv.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
-        return Ok(ToWire(inv));
+        return Ok(await EnvelopeAsync(inv));
     }
 
     [HttpGet("api/inventions/v1/download")]
@@ -870,13 +1008,30 @@ public class InventionsController(
     /// <summary>The client sends <c>AutoTags</c> and <c>CustomTags</c> as JSON
     /// ARRAYS of strings. Binding them to <c>string</c> made deserialization
     /// throw, so every tag edit 400'd. <c>PlayerAddedTags</c> is kept as an
-    /// alias for older callers.</summary>
+    /// alias for older callers. Field names are literal in the 2023.06 dump —
+    /// RecNet.ModifyTagsRequest keeps real names (dump.cs:1283295-1283301) —
+    /// and the body is a RAW JSON document
+    /// (<c>JsonUtility.ToJson</c> → <c>BNDIAONDFFF.FJLLPHFOOJJ</c>,
+    /// OEGFNFEAAGO.txt:3082-3088), so [FromBody] is right here.</summary>
     public sealed record SetTagsRequest(
         long InventionId,
         List<string>? AutoTags,
         List<string>? CustomTags,
         List<string>? PlayerAddedTags);
 
+    /// <summary>POST <c>api/inventions/v1/settags</c> — the reply is NOT an
+    /// invention. The 2023 issuing method is typed
+    /// <c>FGLDKEJLAKB&lt;PNGLFHEAJIH&gt;</c> (OEGFNFEAAGO.txt:2744) and
+    /// PNGLFHEAJIH exposes exactly two members — an int-backed result enum and
+    /// <c>List&lt;String&gt;</c> (PNGLFHEAJIH.txt:3/83) — read from the literals
+    /// "Result" and "Tags" (ALJPHDEAHBK.txt:191/210). The 2020.12 watch is
+    /// identical: NJMAEIPIOAP.PPGFHEDFBEA pulls "Result" then "Tags"
+    /// (2020.12 NJMAEIPIOAP.txt:85/90) with the throwing Util.GetKey, so the
+    /// old bare-invention reply killed every tag edit on December too.
+    /// <c>Result = 0</c> is success: the enum's message formatter jump-tables on
+    /// the value and case 0 returns "Success!" (PNGLFHEAJIH.txt:334-341).
+    /// <c>Tags</c> is a flat string list — NOT the {Tag,Type} pairs
+    /// <see cref="Details"/> returns.</summary>
     [HttpPost("api/inventions/v1/settags")]
     [Authorize]
     public async Task<ActionResult> SetTags([FromBody] SetTagsRequest req)
@@ -885,20 +1040,39 @@ public class InventionsController(
         var inv = await db.Inventions.FirstOrDefaultAsync(x => x.Id == req.InventionId && !x.IsDeleted);
         if (inv is null) return NotFound();
         if (inv.CreatorPlayerId != pid) return Forbid();
-        var combined = string.Join(',', new[] { req.AutoTags, req.CustomTags, req.PlayerAddedTags }
+        var tags = new[] { req.AutoTags, req.CustomTags, req.PlayerAddedTags }
             .Where(list => list is not null)
             .SelectMany(list => list!)
-            .Select(t => t?.Trim())
-            .Where(t => !string.IsNullOrWhiteSpace(t))
-            .Distinct(StringComparer.OrdinalIgnoreCase));
-        inv.TagsCsv = combined;
+            .Select(t => (t ?? string.Empty).Trim())
+            .Where(t => t.Length > 0)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        inv.TagsCsv = string.Join(',', tags);
         inv.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
-        return Ok(ToWire(inv));
+        return Ok(new { Result = 0, Tags = tags });
     }
 
-    public sealed record CheerRequest(long InventionId);
+    /// <summary>RecNet.CheerRequest carries a SECOND field — <c>Cheer</c>, the
+    /// desired state — whose real name survives in the 2023.06 dump
+    /// (dump.cs:1283338-1283342: <c>long InventionId</c> @0x10,
+    /// <c>bool Cheer</c> @0x18). Both writes are visible in the ISIL: 2023 sets
+    /// [rdi+16] and [rdi+24] before <c>JsonUtility.ToJson</c>
+    /// (OEGFNFEAAGO.txt:11228-11233) and December does the same
+    /// (2020.12 BBHENFCNLAB.txt:7624-7628) — its wrapper signature is
+    /// <c>ANJHOOPIAKM(Int64, Boolean)</c> (BBHENFCNLAB.txt:7503). Ignoring the
+    /// flag made un-cheering a no-op: the button toggled off in the UI and the
+    /// cheer stayed on the invention forever.</summary>
+    public sealed record CheerRequest(long InventionId, bool Cheer = true);
 
+    /// <summary>POST <c>api/inventions/v1/cheer</c> — answers with the
+    /// Status/Invention/InventionVersion envelope like every other invention
+    /// mutation: the 2023 method is <c>FGLDKEJLAKB&lt;BDNCJIPHHOK&gt;</c>
+    /// (OEGFNFEAAGO.txt:11065) and December's is
+    /// <c>IPromise&lt;AHEPPAEOLOD&gt;</c> (2020.12 BBHENFCNLAB.txt:7503). The old
+    /// <c>{Id, CheerCount}</c> reply left Invention null on 2023 and threw
+    /// KeyNotFoundException on December, so the tile never refreshed its
+    /// count.</summary>
     [HttpPost("api/inventions/v1/cheer")]
     [Authorize]
     public async Task<ActionResult> Cheer([FromBody] CheerRequest req)
@@ -907,10 +1081,11 @@ public class InventionsController(
         var inv = await db.Inventions.FirstOrDefaultAsync(x => x.Id == req.InventionId && !x.IsDeleted);
         if (inv is null) return NotFound();
 
-        // Idempotent: one cheer per (player, invention).
+        // Idempotent in both directions: one cheer row per (player, invention).
         var existing = await db.Cheers.FirstOrDefaultAsync(c =>
             c.FromPlayerId == pid && c.TargetInventionId == req.InventionId);
-        if (existing is null)
+
+        if (req.Cheer && existing is null)
         {
             db.Cheers.Add(new CheerEntity
             {
@@ -926,12 +1101,29 @@ public class InventionsController(
                     PushNotificationId.InventionModerationStateChanged,
                     new { Type = "cheer", inv.Id, From = pid, inv.CheerCount });
         }
-        return Ok(new { inv.Id, inv.CheerCount });
+        else if (!req.Cheer && existing is not null)
+        {
+            db.Cheers.Remove(existing);
+            inv.CheerCount = Math.Max(0, inv.CheerCount - 1);
+            await db.SaveChangesAsync();
+        }
+
+        return Ok(await EnvelopeAsync(inv));
     }
 
     public sealed record ReportInventionRequest(
         long InventionId, int? ReportCategory, string? Details);
 
+    /// <summary>POST <c>api/inventions/v1/report</c> — the reply is a
+    /// success/message pair, not a status flag of our own invention. The 2023
+    /// method is <c>FGLDKEJLAKB&lt;PHMHCPEMABG&gt;</c> (OEGFNFEAAGO.txt:10917)
+    /// and PHMHCPEMABG holds a Boolean + a String (PHMHCPEMABG.txt:3/23) read
+    /// from the literals "Success"/"Message" (GBPDOLJBABB.txt:191/210); the
+    /// 2020.12 watch's KLAMKCBENEA.PPGFHEDFBEA pulls the same two literals
+    /// (2020.12 KLAMKCBENEA.txt:85/90). Our old <c>{Reported:true}</c> left
+    /// Success at default false, so the report UI reported failure even though
+    /// the row persisted. <c>Message</c> must be a string — December's
+    /// Util.GetKey casts it — so send "" rather than null.</summary>
     [HttpPost("api/inventions/v1/report")]
     [Authorize]
     public async Task<ActionResult> Report([FromBody] ReportInventionRequest req)
@@ -949,7 +1141,7 @@ public class InventionsController(
             Message = (req.Details ?? string.Empty)[..Math.Min(1000, (req.Details ?? string.Empty).Length)],
         });
         await db.SaveChangesAsync();
-        return Ok(new { Reported = true });
+        return Ok(new { Success = true, Message = string.Empty });
     }
 
     // ── Wire serializers ─────────────────────────────────────────────────
@@ -1000,13 +1192,40 @@ public class InventionsController(
         i.CreatorPermission,
         i.GeneralPermission,
         IsAGInvention = i.IsAgInvention,
+        // The 2023-03-21 DTO dropped IsPublished and reads "Accessibility"
+        // instead (IOEPPCKGBFL.txt:309 / :1602 — the member switch has no
+        // IsPublished arm at all). Constants come from the nested enum
+        // AEFFFPIJDHG.GAKJKOGJEEH in the 2023.06 dump
+        // (dump.cs:1282644-1282646): Private=0, Public=1, Unlisted=2. With the
+        // key absent the reader left the field at its default, so EVERY
+        // published store invention presented as Private in the 2023 UI.
+        // InventionEntity has no Accessibility column, so only the
+        // Private/Public bit round-trips; Unlisted needs a real column.
+        // IsPublished stays on the wire because the 2020.12 watch's
+        // OBBBPCBIMME reader still requires it.
+        Accessibility = i.IsPublished ? 1 : 0,
+        // IOEPPCKGBFL.txt:565 — DorkNet runs no certification programme.
+        IsCertifiedInvention = false,
         i.Price,
         HideFromPlayer = false,
     };
 
     private static object ToWireV4(InventionEntity i) => ToWire(i);
 
-    private static object ToVersionWire(InventionVersionEntity v) => new
+    private static object ToVersionWire(InventionVersionEntity v)
+        => ToVersionWire(v, 0, 0);
+
+    /// <summary>The 2023 InventionVersion DTO reads NINE keys
+    /// (OLPHKLCPFEF.txt:084-295): the six we already emitted plus
+    /// <c>ChipsCost</c>, <c>CloudVariablesCost</c> and <c>BlobHash</c>.
+    /// <see cref="InventionVersionEntity"/> has no column for any of the three,
+    /// so stored rows report 0/empty and only the save/addversion round-trip can
+    /// echo back the costs the client just sent. An empty BlobHash is safe:
+    /// PLIKEBBPJGI's hash getter (<c>EHENFDMIAIM</c>, OLPHKLCPFEF's owner type
+    /// PLIKEBBPJGI.txt:167) has no call site anywhere in the IsilDump — the
+    /// client only ever writes it — so the key's presence is what matters.</summary>
+    private static object ToVersionWire(
+        InventionVersionEntity v, int chipsCost, int cloudVariablesCost) => new
     {
         v.InventionId,
         ReplicationId = string.IsNullOrEmpty(v.ReplicationId)
@@ -1014,6 +1233,34 @@ public class InventionsController(
         v.VersionNumber,
         v.InstantiationCost,
         v.LightsCost,
+        ChipsCost = chipsCost,
+        CloudVariablesCost = cloudVariablesCost,
         v.BlobName,
+        BlobHash = string.Empty,
     };
+
+    /// <summary>Every invention MUTATION route answers with the
+    /// Status/Invention/InventionVersion envelope, never a bare invention: the
+    /// 2023 client deserialises <c>BDNCJIPHHOK</c> (key literals at
+    /// GMBGBPNMGBA.txt:044-095) and the 2020.12 watch deserialises
+    /// <c>AHEPPAEOLOD</c>, whose reader pulls the same three literals
+    /// (2020.12 IsilDump AHEPPAEOLOD.txt:110/115/120). Returning the invention
+    /// flat left <c>Invention</c> null on 2023 and threw KeyNotFoundException on
+    /// December. <c>Status = 0</c> is success —
+    /// EnterInventionNameDialog.txt:622-624 loads the boxed Status field and
+    /// does <c>test eax,eax / je &lt;success&gt;</c>.</summary>
+    private async Task<object> EnvelopeAsync(InventionEntity inv)
+    {
+        var current = await db.InventionVersions
+            .Where(x => x.InventionId == inv.Id)
+            .OrderByDescending(x => x.VersionNumber)
+            .FirstOrDefaultAsync();
+        object? versionWire = current is null ? null : ToVersionWire(current);
+        return new
+        {
+            Status = 0,
+            Invention = ToWire(inv),
+            InventionVersion = versionWire,
+        };
+    }
 }

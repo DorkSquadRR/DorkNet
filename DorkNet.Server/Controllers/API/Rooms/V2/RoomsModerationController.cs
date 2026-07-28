@@ -721,43 +721,6 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
         return null;
     }
 
-    private async Task<JsonElement?> ReadJsonElementAsync(params string[] stringKeys)
-    {
-        if (Request.HasFormContentType)
-        {
-            var form = await Request.ReadFormAsync();
-            var dict = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var key in form.Keys)
-            {
-                var value = form[key].FirstOrDefault();
-                if (!string.IsNullOrWhiteSpace(value)) dict[key] = value;
-            }
-            if (dict.Count == 0) return null;
-            return JsonSerializer.SerializeToElement(dict);
-        }
-
-        if ((Request.ContentLength ?? 0) > 0)
-        {
-            try
-            {
-                using var doc = await JsonDocument.ParseAsync(Request.Body);
-                return doc.RootElement.Clone();
-            }
-            catch (JsonException)
-            {
-                return null;
-            }
-        }
-
-        foreach (var key in stringKeys)
-        {
-            var value = Request.Query[key].FirstOrDefault();
-            if (!string.IsNullOrWhiteSpace(value)) return JsonSerializer.SerializeToElement(value);
-        }
-
-        return null;
-    }
-
     // ── Multi-field payload reader ──────────────────────────────────────
     //
     // The single-key Read*Async helpers above each parse Request.Body, and a
@@ -1184,6 +1147,18 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
         });
     }
 
+    /// <summary>PUT <c>rooms/{id}/promo_external</c> — "add room promotional
+    /// content" (verb byte 3 = PUT at NLDBPDCNNCF.txt:8181). Both the add and
+    /// the remove closures send exactly two form keys: <c>type</c> — a BOXED
+    /// System.Int32 (NLDBPDCNNCF/OJAKIAHKALI:017 boxes typeof(System.Int32),
+    /// key at :022) — and <c>reference</c>, a string (:031).
+    ///
+    /// The old code stored the raw form dictionary, so Type landed on the
+    /// wire as the STRING "1"; the client's promo-external reader
+    /// (EPPPACFECMH.txt:191/:210 registers Type + Reference, and :233 reads
+    /// Type through the numeric accessor FAHHHNKECAB while :254 reads
+    /// Reference through the string accessor BKKEIINKNCL) rejects a string
+    /// there. Build the two members explicitly and typed.</summary>
     [HttpPost("rooms/{roomId:long}/promo_external")]
     [HttpPut("rooms/{roomId:long}/promo_external")]
     [HttpPost("roomserver/rooms/{roomId:long}/promo_external")]
@@ -1191,70 +1166,186 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
     public async Task<IActionResult> BarePromoExternalAdd(long roomId)
     {
-        var payload = await ReadJsonElementAsync("url", "Url", "value", "Value");
-        if (payload is null) return BadRequest(new { error = "missing_promo_external" });
+        var payload = await ReadPayloadAsync();
+        var reference = Value(payload, "reference", "Reference", "url", "Url", "value", "Value");
+        if (string.IsNullOrWhiteSpace(reference))
+            return BadRequest(new { error = "missing_promo_external" });
+        var type = IntValue(payload, "type", "Type") ?? 0;
         return await ApplyAndReturn(roomId, r =>
         {
-            var items = ReadJsonElementList(r.PromoExternalContentJson);
-            var raw = payload.Value.GetRawText();
-            if (!items.Any(i => string.Equals(i.GetRawText(), raw, StringComparison.Ordinal)))
-                items.Add(payload.Value);
+            var items = ReadJsonElementList(r.PromoExternalContentJson)
+                .Where(i => !PromoExternalMatches(i, type, reference))
+                .ToList();
+            items.Add(JsonSerializer.SerializeToElement(new
+            {
+                Type = type,
+                Reference = reference,
+            }));
             r.PromoExternalContentJson = SerializeLimited(items);
         });
     }
 
+    /// <summary>DELETE <c>rooms/{id}/promo_external</c> — "remove room
+    /// promotional content" (verb byte 4 = DELETE at NLDBPDCNNCF.txt:8343).
+    /// Identity is the (<c>type</c>, <c>reference</c>) PAIR
+    /// (NLDBPDCNNCF/LLFPMJMCLBP:022 and :031), not an id/url — the old
+    /// id/url/value lookup always missed, so every remove 400'd with
+    /// missing_promo_external and promo links could not be deleted.</summary>
     [HttpDelete("rooms/{roomId:long}/promo_external")]
     [HttpDelete("roomserver/rooms/{roomId:long}/promo_external")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
     public async Task<IActionResult> BarePromoExternalRemove(long roomId)
     {
-        var match = await ReadStringValueAsync("id", "Id", "url", "Url", "value", "Value");
-        if (string.IsNullOrWhiteSpace(match)) return BadRequest(new { error = "missing_promo_external" });
+        var payload = await ReadPayloadAsync();
+        var reference = Value(payload, "reference", "Reference", "id", "Id", "url", "Url", "value", "Value");
+        if (string.IsNullOrWhiteSpace(reference))
+            return BadRequest(new { error = "missing_promo_external" });
+        // type is absent on the 2020.12 watch's remove — treat "no type" as
+        // "match on reference alone".
+        var type = IntValue(payload, "type", "Type");
         return await ApplyAndReturn(roomId, r =>
         {
             var items = ReadJsonElementList(r.PromoExternalContentJson)
-                .Where(i => !PromoExternalMatches(i, match))
+                .Where(i => !PromoExternalMatches(i, type, reference))
                 .ToList();
             r.PromoExternalContentJson = SerializeLimited(items);
         });
     }
 
-    private static bool PromoExternalMatches(JsonElement item, string match)
+    /// <summary>A stored promo-external entry matches when its Reference
+    /// does and (when the caller supplied one) its Type agrees. Legacy rows
+    /// written before the typed shape landed may be bare strings or carry
+    /// Url/Id instead of Reference, so those spellings are still probed.
+    /// </summary>
+    private static bool PromoExternalMatches(JsonElement item, int? type, string reference)
     {
-        if (string.Equals(item.GetRawText(), match, StringComparison.OrdinalIgnoreCase)) return true;
         if (item.ValueKind == JsonValueKind.String)
-            return string.Equals(item.GetString(), match, StringComparison.OrdinalIgnoreCase);
+            return string.Equals(item.GetString(), reference, StringComparison.OrdinalIgnoreCase);
         if (item.ValueKind != JsonValueKind.Object) return false;
-        foreach (var key in new[] { "Id", "id", "Url", "url", "Value", "value" })
+
+        var referenceMatches = false;
+        foreach (var key in new[] { "Reference", "reference", "Url", "url", "Id", "id", "Value", "value" })
         {
             if (item.TryGetProperty(key, out var prop) &&
                 prop.ValueKind == JsonValueKind.String &&
-                string.Equals(prop.GetString(), match, StringComparison.OrdinalIgnoreCase))
-                return true;
+                string.Equals(prop.GetString(), reference, StringComparison.OrdinalIgnoreCase))
+            {
+                referenceMatches = true;
+                break;
+            }
         }
-        return false;
+        if (!referenceMatches) return false;
+        if (type is not int wanted) return true;
+
+        foreach (var key in new[] { "Type", "type" })
+        {
+            if (!item.TryGetProperty(key, out var prop)) continue;
+            if (prop.ValueKind == JsonValueKind.Number && prop.TryGetInt32(out var n)) return n == wanted;
+            if (prop.ValueKind == JsonValueKind.String && int.TryParse(prop.GetString(), out n)) return n == wanted;
+        }
+        // Untyped legacy row — reference alone is enough.
+        return true;
     }
 
-    /// <summary><c>rooms/{id}/comments</c> + <c>voice_chat_encryption</c>
-    /// — fields not persisted in the 2020 RoomEntity. Owner-gated
-    /// acknowledgement so the watch's settings panel doesn't surface
-    /// a "save failed" error; populated when the columns land.</summary>
+    /// <summary><c>rooms/{id}/comments</c> (form key <c>disable</c>, Boolean —
+    /// NLDBPDCNNCF/EKLEDLOPLJB:015/:020) and
+    /// <c>rooms/{id}/voice_chat_encryption</c> (form key
+    /// <c>encryptVoiceChat</c>, Boolean — NLDBPDCNNCF/NDKDDENPHJP:015/:020).
+    /// Both are PUT (verb byte 3 at NLDBPDCNNCF.txt:6879 and :7033) and both
+    /// are issued under the roomserver/ prefix by the 2023 in-room settings
+    /// panel — the missing twins made them 404 there.
+    ///
+    /// The VALUES still aren't persisted: RoomEntity has no
+    /// DisableRoomComments / EncryptVoiceChat column, so RoomService.cs:1122
+    /// and RoomsController.cs:2130 hardcode both to false on the wire.
+    /// Adding those columns (plus a migration and the two detail builders)
+    /// is outside this file. Until then this stays an owner-gated
+    /// acknowledgement that answers with the full details object the call
+    /// site's reader [0x1884C1948] expects, so the panel doesn't report a
+    /// save failure on top of the toggle not sticking.</summary>
     [HttpPost("rooms/{roomId:long}/comments")]
     [HttpPut("rooms/{roomId:long}/comments")]
+    [HttpPost("roomserver/rooms/{roomId:long}/comments")]
+    [HttpPut("roomserver/rooms/{roomId:long}/comments")]
     [HttpPost("rooms/{roomId:long}/voice_chat_encryption")]
     [HttpPut("rooms/{roomId:long}/voice_chat_encryption")]
+    [HttpPost("roomserver/rooms/{roomId:long}/voice_chat_encryption")]
+    [HttpPut("roomserver/rooms/{roomId:long}/voice_chat_encryption")]
+    [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
     public async Task<IActionResult> BareAck(long roomId) =>
-        await ApplyAndReturn(roomId, _ => { /* no-op: not modelled yet */ });
+        await ApplyAndReturn(roomId, _ => { /* value not persistable: no column */ });
 
-    /// <summary><c>rooms/{id}/modify</c> — bare-path equivalent
-    /// of <c>api/rooms/v2/modify</c>. Reuses <see cref="Modify"/> by
-    /// forwarding the body with RoomId pre-populated from the URL.</summary>
+    /// <summary>PUT <c>rooms/{id}/modify</c> — the room-settings panel's bulk
+    /// save (verb byte 3 = PUT at NLDBPDCNNCF.txt:10829, "modify room"), and
+    /// the 2023 client issues it under the roomserver/ prefix too.
+    ///
+    /// The body is x-www-form-urlencoded with ELEVEN camelCase keys, emitted
+    /// in this order by NLDBPDCNNCF/MMMNLOBFFKO: <c>name</c> (string, :039),
+    /// <c>description</c> (string, :049), <c>accessibility</c> (Int32, boxed
+    /// at :059 / key :063), then eight Booleans — <c>supportsScreens</c>
+    /// (:076), <c>supportsWalkVR</c> (:089), <c>supportsTeleportVR</c>
+    /// (:102), <c>supportsJuniors</c> (:115), <c>cloningAllowed</c> (:128),
+    /// <c>disableMicAutoMute</c> (:141), <c>disableRoomComments</c> (:154)
+    /// and <c>encryptVoiceChat</c> (:167).
+    ///
+    /// The old <c>[FromBody] ModifyRoomRequest</c> forwarder 415'd on that
+    /// form body before the handler ran, was missing four of the fields, and
+    /// answered <c>{Result, Room}</c> — but the call site attaches the full
+    /// details reader [0x1884C1948] (:10826), the same one clone uses, so
+    /// the response must be BuildRoomServerDetails.
+    ///
+    /// disableRoomComments / encryptVoiceChat are deliberately NOT read here:
+    /// RoomEntity has no column for either, so there is nowhere to put them
+    /// (see <see cref="BareAck"/> above).</summary>
     [HttpPost("rooms/{roomId:long}/modify")]
     [HttpPut("rooms/{roomId:long}/modify")]
-    public async Task<IActionResult> BareModify(long roomId, [FromBody] ModifyRoomRequest req)
+    [HttpPost("roomserver/rooms/{roomId:long}/modify")]
+    [HttpPut("roomserver/rooms/{roomId:long}/modify")]
+    [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    public async Task<IActionResult> BareModify(long roomId)
     {
-        req.RoomId = roomId;
-        return await Modify(req);
+        var payload = await ReadPayloadAsync();
+        var name = Value(payload, "name", "Name");
+        // RawValue for description: clearing it sends the key with "".
+        var description = RawValue(payload, "description", "Description");
+        var accessibility = IntValue(payload, "accessibility", "Accessibility");
+        var imageName = Value(payload, "imageName", "ImageName");
+        var screens = BoolValue(payload, "supportsScreens", "SupportsScreens");
+        var walkVR = BoolValue(payload, "supportsWalkVR", "SupportsWalkVR");
+        var teleportVR = BoolValue(payload, "supportsTeleportVR", "SupportsTeleportVR");
+        var juniors = BoolValue(payload, "supportsJuniors", "AllowsJuniors");
+        var cloning = BoolValue(payload, "cloningAllowed", "CloningAllowed");
+        var autoMute = BoolValue(payload, "disableMicAutoMute", "DisableMicAutoMute");
+        var mobile = BoolValue(payload, "supportsMobile", "SupportsMobile");
+        var vrLow = BoolValue(payload, "supportsVRLow", "SupportsVRLow");
+
+        var room = await RequireOwnedRoomAsync(roomId);
+        if (room is null) return NotFound();
+
+        if (!string.IsNullOrWhiteSpace(name)) room.Name = name.Trim();
+        if (description is not null) room.Description = description;
+        if (imageName is not null) room.ImageName = imageName;
+        if (accessibility is int a) room.Accessibility = Math.Clamp(a, 0, 2);
+        if (screens is bool s) room.SupportsScreens = s;
+        if (walkVR is bool w) room.SupportsWalkVR = w;
+        if (teleportVR is bool t) room.SupportsTeleportVR = t;
+        if (juniors is bool j) room.AllowsJuniors = j;
+        if (cloning is bool c) room.CloningAllowed = c;
+        if (autoMute is bool m) room.DisableMicAutoMute = m;
+        if (mobile is bool mo) room.SupportsMobile = mo;
+        if (vrLow is bool vl) room.SupportsVRLow = vl;
+        room.UpdatedAt = DateTime.UtcNow;
+
+        try
+        {
+            await db.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            // Likely a unique-name collision.
+            return Conflict(new { Result = 2, Message = "name taken" });
+        }
+        return Ok(await BuildRoomDetailsAsync(room));
     }
 
     /// <summary>POST <c>rooms/{id}/clone</c> — bare-path alias of
@@ -1463,24 +1554,89 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
     }
 
     // ── Bare-path bans aliases ─────────────────────────────────────────
-
-    public sealed class BareBanRequest { public long PlayerId { get; set; } public int BanType { get; set; } public DateTime? Until { get; set; } public string? Reason { get; set; } }
+    //
+    // Every one of these needs the roomserver/ twin: the 2023 in-room
+    // banned-players panel issues them under that prefix
+    // (NLDBPDCNNCF.txt:12901 GET, :13044 POST "ban players", :13191 POST
+    // "rooms/{0}/bans/import", :13353 DELETE "rooms/{0}/bans/{1}"), and a
+    // bare-only registration 404s there.
 
     [HttpGet("rooms/{roomId:long}/bans")]
+    [HttpGet("roomserver/rooms/{roomId:long}/bans")]
     public Task<IActionResult> BareBansList(long roomId) => RoomBansList(roomId);
 
+    /// <summary>POST <c>rooms/{id}/bans</c> — "ban players" (verb byte 2 =
+    /// POST at NLDBPDCNNCF.txt:13060). The client sends
+    /// x-www-form-urlencoded with ONE <c>banMask</c> (boxed Int32) plus a
+    /// REPEATED <c>id</c> key — one per account being banned
+    /// (NLDBPDCNNCF/DMMILEJMMCC:024 and :034; the `id` binder is the
+    /// list-valued overload, fed from the
+    /// <c>IReadOnlyList&lt;Int32&gt;</c> parameter of the issuing method at
+    /// NLDBPDCNNCF.txt:12920). The old <c>[FromBody] BareBanRequest</c>
+    /// rejected the form body with 415 before the handler ran, and named
+    /// PlayerId/BanType — keys the client never sends — so in-room bans
+    /// never persisted. No response reader is attached at the call site
+    /// (plain BDBHCEGKGDC dispatch, :13065), so the ack shape is free.
+    /// </summary>
     [HttpPost("rooms/{roomId:long}/bans")]
-    public Task<IActionResult> BareBan(long roomId, [FromBody] BareBanRequest req) =>
-        BanFromRoom(new BanFromRoomRequest
+    [HttpPost("roomserver/rooms/{roomId:long}/bans")]
+    [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    public async Task<IActionResult> BareBan(long roomId)
+    {
+        var room = await RequireOwnedRoomAsync(roomId);
+        if (room is null) return NotFound();
+
+        var payload = await ReadPayloadAsync();
+        // banMask IS the BanType enum on the wire. Default 1 (Permanent):
+        // the in-room panel's only ban action is a permanent ban.
+        var banType = IntValue(payload, "banMask", "banType", "type", "BanType") ?? 1;
+        var reason = RawValue(payload, "reason", "Reason") ?? string.Empty;
+        DateTime? until = DateTime.TryParse(Value(payload, "until", "Until"), out var parsedUntil)
+            ? (DateTime?)parsedUntil.ToUniversalTime()
+            : null;
+
+        // "id" is the 2023 key; the others are 2020.12 / admin spellings. The
+        // payload map is case-insensitive, so PascalCase variants fall out.
+        var ids = Values(payload, "id", "playerId", "accountId")
+            .Select(v => long.TryParse(v, out var n) ? n : 0L)
+            .Where(n => n > 0)
+            .Distinct()
+            .ToList();
+        if (ids.Count == 0) return BadRequest(new { error = "missing_player" });
+
+        var existing = await db.RoomBans
+            .Where(b => b.RoomId == roomId && ids.Contains(b.BannedPlayerId))
+            .ToListAsync();
+        foreach (var id in ids)
         {
-            RoomId = roomId,
-            PlayerId = req.PlayerId,
-            BanType = req.BanType,
-            Until = req.Until,
-            Reason = req.Reason,
-        });
+            // Re-banning an already-banned player updates the row rather than
+            // stacking duplicates — the panel re-sends the whole selection.
+            var row = existing.FirstOrDefault(b => b.BannedPlayerId == id);
+            if (row is null)
+            {
+                db.RoomBans.Add(new RoomBanEntity
+                {
+                    RoomId = roomId,
+                    BannedPlayerId = id,
+                    BannedByPlayerId = Me,
+                    BanType = banType,
+                    Until = until,
+                    Reason = reason.Length > 512 ? reason[..512] : reason,
+                });
+            }
+            else
+            {
+                row.BanType = banType;
+                row.Until = until;
+                if (reason.Length > 0) row.Reason = reason.Length > 512 ? reason[..512] : reason;
+            }
+        }
+        await db.SaveChangesAsync();
+        return Ok(new { Result = 0, Banned = ids.Count });
+    }
 
     [HttpDelete("rooms/{roomId:long}/bans/{playerId:long}")]
+    [HttpDelete("roomserver/rooms/{roomId:long}/bans/{playerId:long}")]
     public async Task<IActionResult> BareUnban(long roomId, long playerId)
     {
         var room = await RequireOwnedRoomAsync(roomId);
@@ -1494,11 +1650,59 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
         return Ok(new { Removed = rows.Count });
     }
 
+    /// <summary>POST <c>rooms/{id}/bans/import</c> — "import ban list"
+    /// (verb byte 2 = POST at NLDBPDCNNCF.txt:13207). The client names a
+    /// SOURCE ROOM whose bans should be copied in — a single Int64 form key
+    /// <c>sourceRoomId</c> (NLDBPDCNNCF/KGDNOLMFENE:015 boxes System.Int64,
+    /// :020 is the key) — NOT an explicit ban list. The old
+    /// <c>[FromBody] ImportRoomBansRequest</c> therefore 415'd on the form
+    /// body AND modelled the wrong contract. The JSON ban-list shape stays
+    /// available on the legacy <c>api/rooms/v1/importroombans</c>.</summary>
     [HttpPost("rooms/{roomId:long}/bans/import")]
-    public Task<IActionResult> BareBansImport(long roomId, [FromBody] ImportRoomBansRequest req)
+    [HttpPost("roomserver/rooms/{roomId:long}/bans/import")]
+    [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    public async Task<IActionResult> BareBansImport(long roomId)
     {
-        req.RoomId = roomId;
-        return ImportRoomBans(req);
+        var target = await RequireOwnedRoomAsync(roomId);
+        if (target is null) return NotFound();
+
+        var payload = await ReadPayloadAsync();
+        // Deliberately NOT aliased to "roomId" — that name means the TARGET
+        // room elsewhere in this surface and would silently self-import.
+        var sourceRoomId = LongValue(payload, "sourceRoomId", "SourceRoomId") ?? 0;
+        if (sourceRoomId <= 0) return BadRequest(new { error = "missing_source_room" });
+        if (sourceRoomId == roomId) return Ok(new { Imported = 0 });
+
+        // Owner-gate BOTH rooms — importing bulk-reads the source room's ban
+        // list, which is owner-only information (see RoomBansList).
+        var source = await RequireOwnedRoomAsync(sourceRoomId);
+        if (source is null) return Forbid();
+
+        var sourceBans = await db.RoomBans
+            .Where(b => b.RoomId == sourceRoomId)
+            .ToListAsync();
+        var seen = new HashSet<long>(await db.RoomBans
+            .Where(b => b.RoomId == roomId)
+            .Select(b => b.BannedPlayerId)
+            .ToListAsync());
+
+        var imported = 0;
+        foreach (var b in sourceBans)
+        {
+            if (!seen.Add(b.BannedPlayerId)) continue;
+            db.RoomBans.Add(new RoomBanEntity
+            {
+                RoomId = roomId,
+                BannedPlayerId = b.BannedPlayerId,
+                BannedByPlayerId = Me,
+                BanType = b.BanType,
+                Until = b.Until,
+                Reason = b.Reason,
+            });
+            imported++;
+        }
+        if (imported > 0) await db.SaveChangesAsync();
+        return Ok(new { Imported = imported });
     }
 
     private async Task<IActionResult> ApplyAndReturn(long roomId, Action<RoomEntity> mutator)
@@ -1509,6 +1713,33 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
         room.UpdatedAt = DateTime.UtcNow;
         try { await db.SaveChangesAsync(); }
         catch (DbUpdateException) { return Conflict(new { Result = 2 }); }
-        return Ok(Services.RoomService.ToWireRoom(room));
+        return Ok(await BuildRoomDetailsAsync(room));
+    }
+
+    /// <summary>The response body EVERY bare-path room mutation must return.
+    ///
+    /// The 2023 roomserver client dispatches all of them through the same
+    /// typed helper (<c>0x1835E50A0</c>) with the same response-reader token
+    /// <c>[0x1884C1948]</c> — see NLDBPDCNNCF.txt:5366 (description),
+    /// :5691 (tags), :6006 (accessibility), :6169 (restrictions),
+    /// :6335 (cloning), :6710 (automute), :6876 (comments), :7195 (min_level),
+    /// :7360 (allow_new_users), :7859 (promo_images), :8178 (promo_external),
+    /// :8516 (loadscreen), :10826 (modify). That is the SAME token the clone
+    /// call site uses (:4815), which the repo already established is the full
+    /// FGCPNAACHIK details object built by BuildRoomServerDetails (see
+    /// <see cref="BareClone"/>). The slim RoomService.ToWireRoom has no
+    /// SubRooms/Roles/Tags/LoadScreens/PromoImages/DataBlob, so the strict
+    /// reader's dispose-walk NRE'd on the missing nested lists and every
+    /// mutation reported failure even though it had persisted.</summary>
+    private async Task<object> BuildRoomDetailsAsync(RoomEntity room)
+    {
+        var scenes = await db.RoomScenes
+            .Where(s => s.RoomId == room.Id)
+            .OrderBy(s => s.OrderIndex)
+            .ToListAsync();
+        var roles = await db.RoomRoles
+            .Where(r => r.RoomId == room.Id)
+            .ToListAsync();
+        return RoomsController.BuildRoomServerDetails(room, scenes, roles: roles);
     }
 }
