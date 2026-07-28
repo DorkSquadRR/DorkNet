@@ -322,6 +322,41 @@ public class ImagesController(
         return Ok(BuildImageInfo(photo, photo.UploaderPlayerId));
     }
 
+    /// <summary>GET <c>api/images/v6/{id}</c> — single photo by numeric id.
+    /// The 2023-03-21 client builds the path with
+    /// <c>String.Format("{0}v6/{1}", "api/images/", id)</c>
+    /// (<c>KLJOGJHBONK.txt:2694-2698</c>) and passes verb 0 = GET into the
+    /// request-builder ctor (<c>:2702 Move rdx, 0</c> → <c>:2708 Call
+    /// 0x1830036A0</c>); no query fields are attached.
+    ///
+    /// The issuing method <c>KLJOGJHBONK.HLANOFILAEO(System.Int64)</c> returns
+    /// <c>FGLDKEJLAKB&lt;IReadOnlyList&lt;Int32&gt;&gt;</c>, but that is a
+    /// CLIENT-SIDE projection: a
+    /// <c>Func&lt;LGLCPNPJCEC, IReadOnlyList&lt;Int32&gt;&gt;</c>
+    /// (<c>:2756</c>) reduces the wire object to its tagged-player ids. So the
+    /// body must be ONE <c>LGLCPNPJCEC</c> object — an array breaks the reader —
+    /// with the 12 keys its generated serializer registers
+    /// (<c>IBILPLGNAJE.txt:819-1078</c>: Id, ImageName, PlayerId, RoomId,
+    /// PlayerEventId, Accessibility, AccessibilityLocked, Type, CreatedAt,
+    /// TaggedPlayerIds, CheerCount, CommentCount), all of which
+    /// <see cref="BuildImageInfo"/> already emits.
+    ///
+    /// Without this route the request fell through to
+    /// <c>api/images/{*path}</c>, which rejects "123" as a non-image filename →
+    /// 404 on every photo-detail open. Visibility matches the by-name lookup:
+    /// public photos to anyone, private ones only to their uploader.</summary>
+    [HttpGet("api/images/v6/{id:long}")]
+    [AllowAnonymous]
+    public async Task<IActionResult> ImageByIdV6(long id)
+    {
+        var pid = this.CurrentPlayerId();
+        var photo = await db.Photos.FirstOrDefaultAsync(p =>
+            p.Id == id && p.DeletedAt == null &&
+            (p.IsPublic || (pid != null && p.UploaderPlayerId == pid.Value)));
+        if (photo is null) return NotFound();
+        return Ok(BuildImageInfo(photo, photo.UploaderPlayerId));
+    }
+
     /// <summary>GET <c>api/images/v2/named</c> — the watch's
     /// <c>Images.DownloadNamedImageMappings</c> endpoint. Returns a
     /// list of <c>NamedImageDTO</c> entries; an empty list is a valid
@@ -522,6 +557,51 @@ public class ImagesController(
         return Ok(new { deleted = id });
     }
 
+    /// <summary>POST <c>api/images/v1/{id}/report</c> — file a moderation
+    /// report against a photo from the in-game photo viewer.
+    /// <c>KLJOGJHBONK.IDAJEMBKAGF(System.Int64)</c> formats the path as
+    /// <c>String.Format("{0}v1/{1}/report", "api/images/", id)</c>
+    /// (<c>KLJOGJHBONK.txt:4010-4014</c>) and moves verb 2 = POST into the
+    /// builder ctor (<c>:4021 Move rdx, 2</c>, host 1 at <c>:4020</c>).
+    ///
+    /// The request carries NO fields and NO body — no category, no free text —
+    /// and the reply is dispatched through <c>BNDIAONDFFF.KDOPJCNKOOK</c>
+    /// (<c>:4031</c>), which never deserialises it: the call is
+    /// fire-and-forget, so the client cannot tell a 404 from a 200 and every
+    /// report was being dropped silently. Everything actionable therefore has
+    /// to be derived server-side from the photo id, which is why the reported
+    /// photo's uploader becomes the report target and the photo's room the
+    /// context. Category 5 = "Other", matching the screenshare reporter's
+    /// default for reports that arrive without one.</summary>
+    [HttpPost("api/images/v1/{id:long}/report")]
+    [Authorize]
+    public async Task<IActionResult> ReportPhoto(long id)
+    {
+        var reporter = this.RequireCurrentPlayerId();
+        var photo = await db.Photos.FirstOrDefaultAsync(p => p.Id == id && p.DeletedAt == null);
+        if (photo is null) return NotFound();
+
+        // ReportEntity has no TargetPhotoId column, so the photo id + blob name
+        // ride in the message text the same way club reports carry "[club {id}]"
+        // — a moderator needs the actual image to act on the report.
+        var message = $"[photo {photo.Id} {photo.BlobName}] reported from the in-game photo viewer";
+        db.Reports.Add(new ReportEntity
+        {
+            ReporterPlayerId = reporter,
+            TargetPlayerId = photo.UploaderPlayerId,
+            RoomId = photo.RoomId,
+            Category = 5,
+            Message = message[..Math.Min(1000, message.Length)],
+        });
+        await db.SaveChangesAsync();
+
+        logger.LogInformation(
+            "[images] photo {PhotoId} reported by {Reporter} (uploader {Uploader}, room {RoomId})",
+            photo.Id, reporter, photo.UploaderPlayerId, photo.RoomId);
+
+        return Ok(new RecNetResult { Success = true, Error = string.Empty });
+    }
+
     // ── Legacy v1 ops (real persistence, was Ack-only stubs) ─────────
 
     public sealed class CheerImageRequest
@@ -530,23 +610,48 @@ public class ImagesController(
         public long PhotoId { get; set; }
     }
 
-    public sealed class BulkCheeredRequest
-    {
-        public List<long>? SavedImageIds { get; set; }
-        public List<long>? ImageIds { get; set; }
-    }
+    /// <summary>Field names the cheer-state batch accepts. The 2023-03-21
+    /// client sends the singular <c>"id"</c>
+    /// (<c>KLJOGJHBONK.txt:3763 Move rdx, "id"</c>); the older spellings are
+    /// kept so the 2020.12 watch and our own tooling keep working.</summary>
+    private static readonly string[] CheerBulkIdKeys =
+        { "id", "ids", "SavedImageId", "SavedImageIds", "ImageId", "ImageIds" };
 
+    /// <summary>GET — and POST once the id list reaches 100 — for
+    /// <c>api/images/v{4,5}/cheered/bulk</c>: the caller's cheer state for a
+    /// batch of photos (the hearts on the photo feed).
+    ///
+    /// VERB: the client picks it at runtime.
+    /// <c>KLJOGJHBONK.JCLGICHPPGB(IEnumerable&lt;Int64&gt;)</c> calls
+    /// <c>ALHIJCJOLCB.JIECAFGCODK(count, 100)</c> and moves the result straight
+    /// into the request-builder's verb register
+    /// (<c>KLJOGJHBONK.txt:3747 Call ALHIJCJOLCB.JIECAFGCODK</c> →
+    /// <c>:3755 Move rdx, rdi</c> → <c>:3753 Move r9,
+    /// "api/images/v5/cheered/bulk"</c>) — GET (0) for short lists, POST (2) for
+    /// long ones. Registering POST only meant the common case fell into the
+    /// <c>api/images/{*path}</c> byte catch-all and 404'd, so cheer state never
+    /// loaded.
+    ///
+    /// REQUEST: one field, <c>"id"</c>, added via
+    /// <c>BNDIAONDFFF.AFGEDDANEKP("id", ids)</c> (<c>KLJOGJHBONK.txt:3763</c>).
+    /// The builder emits fields as query values on GET and form values on POST —
+    /// never as a JSON body — so the ids are read straight off the request
+    /// instead of through <c>[FromBody]</c>, which would 415 the form POST
+    /// before the action ran.
+    ///
+    /// RESPONSE: <c>List&lt;LAKGLIDCEDE&gt;</c>, i.e.
+    /// <c>[{"SavedImageId":Int64,"IsCheered":Boolean}]</c> — key literals in the
+    /// generated serializer at <c>KJEIGGBIIHP.txt:215,242</c>. One entry per
+    /// requested id so the client's cache has no holes.</summary>
+    [HttpGet("api/images/v4/cheered/bulk")]
+    [HttpGet("api/images/v5/cheered/bulk")]
     [HttpPost("api/images/v4/cheered/bulk")]
     [HttpPost("api/images/v5/cheered/bulk")]
     [Authorize]
-    public async Task<IActionResult> CheeredBulk([FromBody] BulkCheeredRequest? body)
+    public async Task<IActionResult> CheeredBulk()
     {
         var pid = this.RequireCurrentPlayerId();
-        var ids = (body?.SavedImageIds ?? body?.ImageIds ?? new())
-            .Where(id => id > 0)
-            .Distinct()
-            .Take(200)
-            .ToList();
+        var ids = await ReadCheerBulkIdsAsync();
         if (ids.Count == 0) return Ok(Array.Empty<object>());
 
         var cheered = await db.Cheers
@@ -559,6 +664,82 @@ public class ImagesController(
             SavedImageId = id,
             IsCheered = set.Contains(id),
         }));
+    }
+
+    /// <summary>Collect the cheer-state batch ids from wherever this client
+    /// put them: query values on the GET path, form values on the POST path
+    /// (both produced by <c>BNDIAONDFFF</c>'s field list), or a JSON body for
+    /// non-game callers. Repeated fields and comma-joined values are both
+    /// accepted because the builder's query assembler emits one
+    /// <c>&amp;id=</c> per element while our own admin tooling sends a single
+    /// comma-separated value.</summary>
+    private async Task<List<long>> ReadCheerBulkIdsAsync()
+    {
+        var ids = new List<long>();
+
+        void Collect(string? raw)
+        {
+            if (string.IsNullOrWhiteSpace(raw)) return;
+            foreach (var part in raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                if (long.TryParse(part, out var id) && id > 0) ids.Add(id);
+        }
+
+        foreach (var key in CheerBulkIdKeys)
+            foreach (var value in Request.Query[key])
+                Collect(value);
+
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync();
+            foreach (var key in CheerBulkIdKeys)
+                foreach (var value in form[key])
+                    Collect(value);
+        }
+        else if (Request.ContentLength is > 0)
+        {
+            try
+            {
+                Request.EnableBuffering();
+                Request.Body.Position = 0;
+                using var doc = await JsonDocument.ParseAsync(Request.Body, cancellationToken: HttpContext.RequestAborted);
+                Request.Body.Position = 0;
+                CollectJsonIds(doc.RootElement, Collect);
+            }
+            catch (JsonException)
+            {
+                // Not JSON — the query/form pass above is authoritative.
+            }
+        }
+
+        return ids.Distinct().Take(500).ToList();
+    }
+
+    /// <summary>Pull ids out of a JSON body that is either a bare array of
+    /// numbers or an object keyed by one of <see cref="CheerBulkIdKeys"/>.</summary>
+    private static void CollectJsonIds(JsonElement root, Action<string?> collect)
+    {
+        switch (root.ValueKind)
+        {
+            case JsonValueKind.Array:
+                foreach (var item in root.EnumerateArray()) CollectJsonIds(item, collect);
+                break;
+            case JsonValueKind.Object:
+                foreach (var key in CheerBulkIdKeys)
+                {
+                    foreach (var prop in root.EnumerateObject())
+                    {
+                        if (!string.Equals(prop.Name, key, StringComparison.OrdinalIgnoreCase)) continue;
+                        CollectJsonIds(prop.Value, collect);
+                    }
+                }
+                break;
+            case JsonValueKind.Number:
+                collect(root.GetRawText());
+                break;
+            case JsonValueKind.String:
+                collect(root.GetString());
+                break;
+        }
     }
 
     /// <summary>POST <c>api/images/v1/cheer</c> — cheer a photo.

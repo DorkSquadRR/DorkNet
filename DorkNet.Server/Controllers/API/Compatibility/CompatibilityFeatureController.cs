@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
 using DorkNet.Server.Auth;
@@ -109,6 +110,109 @@ public class CompatibilityFeatureController(DorkNetDbContext db) : ControllerBas
     public IActionResult Ps5RecRoomPlusEnabledForAllPlayers()
         => Content("true", "application/json");
 
+    /// <summary>The 2023-03-21 client POSTs this — the request is built at
+    /// RecNet.Runtime/GAAPALMODOL.txt:104-106, where the route literal
+    /// <c>"api/AppIntegrity/v1/iosproducts"</c> goes into <c>r9</c> and the
+    /// verb register <c>rdx=2</c> = <c>BestHTTP.HTTPMethods.Post</c> (host
+    /// <c>r8=1</c>). The payload is a RAW JSON body — the serialized list is
+    /// handed to <c>BNDIAONDFFF.FJLLPHFOOJJ</c> (:138), not the
+    /// form-parameter helper — holding
+    /// <c>List&lt;GAAPALMODOL/KOLPHINEHDD&gt;</c>, i.e. a top-level array of
+    /// {Name:String, Price:Single, ProductId:String} (getters at
+    /// GAAPALMODOL_NestedType_KOLPHINEHDD.txt:3/25/45; formatter key table,
+    /// which also accepts camel/lower spellings, at KAONMCEONPF.txt:255-306).
+    /// The issuing method's return type is
+    /// <c>FGLDKEJLAKB&lt;PHMHCPEMABG&gt;</c> (:3) and PHMHCPEMABG is
+    /// {Boolean, String} (PHMHCPEMABG.txt:3/23) keyed
+    /// <c>Success</c>/<c>Message</c> (GBPDOLJBABB.txt:191-218).
+    ///
+    /// <see cref="DorkNet.Server.Controllers.API.AppIntegrity.AppIntegrityController"/>
+    /// registers the same
+    /// path GET-only, so the client's POST hit a 405 and the StoreKit
+    /// price report was dropped. Registering only the POST verb here leaves
+    /// that GET (and its consumers) untouched — the two never collide
+    /// because the method constraints are disjoint.
+    ///
+    /// The reported catalogue is what Apple's StoreKit resolved on the
+    /// device, so it is inherently per-account/per-storefront: it is
+    /// persisted as the reporting player's <c>appintegrity:iosproducts</c>
+    /// setting (same PlayerSettings convention as the ban-appeal handler
+    /// above), replacing any earlier report. Only a malformed body answers
+    /// Success=false; the client shows nothing on success and PHMHCPEMABG's
+    /// Message is left empty.</summary>
+    [HttpPost("api/AppIntegrity/v1/iosproducts")]
+    [Authorize]
+    public async Task<IActionResult> IosProducts()
+    {
+        var pid = this.RequireCurrentPlayerId();
+
+        List<IosProduct>? products;
+        try
+        {
+            products = await JsonSerializer.DeserializeAsync<List<IosProduct>>(
+                Request.Body,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (JsonException)
+        {
+            return IosProductsResult(false, "malformed_product_list");
+        }
+
+        if (products is null) return IosProductsResult(false, "malformed_product_list");
+
+        // "{productId}={price}" pairs rather than the raw JSON: the
+        // localized Name adds nothing a server-side reader needs and
+        // PlayerSettingEntity.Value caps at 1024 chars, so entries are
+        // dropped (never truncated mid-pair) once the budget is spent.
+        var parts = new List<string>();
+        var length = 0;
+        foreach (var p in products)
+        {
+            var productId = p.ProductId?.Trim();
+            if (string.IsNullOrEmpty(productId)) continue;
+            var pair = $"{productId}={p.Price.ToString(CultureInfo.InvariantCulture)}";
+            var cost = parts.Count == 0 ? pair.Length : pair.Length + 1;
+            if (length + cost > 1024) break;
+            parts.Add(pair);
+            length += cost;
+        }
+
+        const string key = "appintegrity:iosproducts";
+        var row = await db.PlayerSettings
+            .FirstOrDefaultAsync(s => s.PlayerId == pid && s.Key == key);
+        if (row is null)
+        {
+            db.PlayerSettings.Add(new PlayerSettingEntity
+            {
+                PlayerId = pid,
+                Key = key,
+                Value = string.Join(';', parts),
+            });
+        }
+        else
+        {
+            row.Value = string.Join(';', parts);
+        }
+        await db.SaveChangesAsync();
+
+        return IosProductsResult(true, string.Empty);
+    }
+
+    /// <summary>PHMHCPEMABG accepts PascalCase, camelCase and all-lowercase
+    /// key spellings (GBPDOLJBABB.txt:191-218), so either casing alone would
+    /// satisfy it; both are emitted for the same reason the CampusCard
+    /// payload above does. Dictionary keys go out verbatim — the global
+    /// serializer sets PropertyNamingPolicy = null
+    /// (Startup/ServiceCollectionExtensions.cs:381).</summary>
+    private IActionResult IosProductsResult(bool success, string message)
+        => Ok(new Dictionary<string, object?>
+        {
+            ["Success"] = success,
+            ["Message"] = message,
+            ["success"] = success,
+            ["message"] = message,
+        });
+
     [HttpPost("api/clubreporting/v1/report")]
     [Authorize]
     [Consumes("application/json", "application/x-www-form-urlencoded", "multipart/form-data")]
@@ -190,6 +294,18 @@ public class CompatibilityFeatureController(DorkNetDbContext db) : ControllerBas
     {
         public bool Subscription { get; set; }
         public long PlatformAccountSubscribedPlayerId { get; set; }
+    }
+
+    /// <summary>One entry of the client's raw JSON array —
+    /// GAAPALMODOL/KOLPHINEHDD, whose three properties are String, Single,
+    /// String in that field order (offsets 0x10/0x18/0x20 in
+    /// GAAPALMODOL_NestedType_KOLPHINEHDD.txt) and whose formatter writes
+    /// the keys Name / Price / ProductId (KAONMCEONPF.txt:321-360).</summary>
+    private sealed class IosProduct
+    {
+        public string? Name { get; set; }
+        public float Price { get; set; }
+        public string? ProductId { get; set; }
     }
 
     private sealed class ClubReportRequest

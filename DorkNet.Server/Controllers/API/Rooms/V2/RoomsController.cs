@@ -2291,6 +2291,109 @@ public class RoomsController(
     public async Task<IActionResult> CreatedByOther(long otherPlayerId)
         => Ok((await rooms.CreatedByAsync(otherPlayerId)).Select(RoomService.ToWireRoom).ToList());
 
+    /// <summary>Per-player showcase curation, stored in the existing generic
+    /// player-settings table as a CSV of room ids. Colon-namespaced to match
+    /// the other server-owned keys (<c>settings:partyinvite</c>).</summary>
+    private const string ShowcaseSettingKey = "rooms:showcase";
+    private const int ShowcaseMaxRooms = 50;
+
+    /// <summary>GET <c>showcase/{accountId}</c> — the profile "Showcase Rooms"
+    /// carousel (<c>RoomListModel.JMGLGEKHHAK.PlayerShowcaseRooms = 7</c>,
+    /// dump.cs:2042498, driven by
+    /// <c>AccountModelController.RoomsShowcaseLinkImpl</c> at dump.cs:2113041).
+    /// Distinct from <c>PlayerCreatedRooms = 5</c>, which is the
+    /// <c>rooms/createdby/{id}</c> list above.
+    ///
+    /// <para><b>Verb.</b> <c>NLDBPDCNNCF.EJPNHLIJNPM</c> formats the literal
+    /// <c>"showcase/{0}"</c> (NLDBPDCNNCF.txt ISIL 021 at :4484) and moves the
+    /// HTTPMethods ordinal <c>0</c> (= GET) into rdx immediately before the
+    /// dispatch call (ISIL 031/032 at :4494-4495). No cmov, so GET is the only
+    /// verb. The path arg is boxed as <c>System.Int32</c> (ISIL 017) — the
+    /// account id.</para>
+    ///
+    /// <para><b>Response shape.</b> The issuing method's return type is the
+    /// contract: <c>Task&lt;List&lt;System.Int64&gt;&gt;</c>
+    /// (NLDBPDCNNCF.txt:4422) — a BARE JSON array of room ids, not Room
+    /// objects and not a <c>{Results,TotalResults}</c> container. The Rooms the
+    /// UI renders are a purely client-side projection: the cache entry
+    /// <c>&lt;GetRoomsShowcase&gt;b__0</c> is typed
+    /// <c>Task&lt;IReadOnlyList&lt;Int64&gt;&gt;</c>
+    /// (IBEOONPEELF_NestedType_HHDHJPIJBJB.txt:14) and the outer
+    /// <c>IBEOONPEELF.EJPNHLIJNPM</c> resolves those ids through the room cache
+    /// to <c>FGLDKEJLAKB&lt;IReadOnlyList&lt;NEMINAEBALC&gt;&gt;</c>
+    /// (IBEOONPEELF.txt:8952) before <c>RoomListModel</c> consumes it
+    /// (RoomListModel.txt ISIL 742 at :5819).</para>
+    ///
+    /// <para><b>Backing data.</b> <c>showcase/{0}</c> is the only showcase
+    /// literal in the binary — the 2023 client can read the list but never
+    /// writes it (curation lived on the website), so the curated order is kept
+    /// in the existing per-player settings store under
+    /// <see cref="ShowcaseSettingKey"/> and is writable through
+    /// <c>PUT /settings/v1/{accountId}</c> with no new schema. Curated ids are
+    /// re-validated against Rooms on every read so a room that has since been
+    /// archived or privatised drops off the profile, and the curated order is
+    /// preserved. A player who never curated one falls back to the rooms they
+    /// actually created, most prominent first — the showcase the carousel is
+    /// there to display.</para>
+    ///
+    /// <para>Unauthenticated on purpose: this is another player's profile
+    /// surface, and the sibling <c>rooms/createdby/{id}</c> is open too. The
+    /// owner viewing their own profile additionally sees their non-public
+    /// picks; everyone else sees public rooms only.</para></summary>
+    [HttpGet("showcase/{accountId:long}")]
+    // roomserver/ twin: EJPNHLIJNPM lives on NLDBPDCNNCF, whose requests all
+    // arrive with the roomserver/ prefix in this deployment
+    // (docs/recroom-2023-room-save.md:83-93) — same reason every other
+    // NLDBPDCNNCF route in this file is registered twice.
+    [HttpGet("roomserver/showcase/{accountId:long}")]
+    public async Task<IActionResult> RoomsShowcase(long accountId)
+    {
+        var viewerIsOwner = CurrentPlayerId == accountId;
+
+        var curatedCsv = await db.PlayerSettings.AsNoTracking()
+            .Where(s => s.PlayerId == accountId && s.Key == ShowcaseSettingKey)
+            .Select(s => s.Value)
+            .FirstOrDefaultAsync();
+
+        var curatedIds = (curatedCsv ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(v => long.TryParse(v, out var id) ? id : 0L)
+            .Where(id => id > 0)
+            .Distinct()
+            .Take(ShowcaseMaxRooms)
+            .ToList();
+
+        if (curatedIds.Count > 0)
+        {
+            var visible = await db.Rooms.AsNoTracking()
+                .Where(r => curatedIds.Contains(r.Id)
+                         && r.State == 0
+                         && !r.IsDormRoom
+                         && !r.HiddenFromBrowse
+                         && (r.Accessibility == 1 || viewerIsOwner))
+                .Select(r => r.Id)
+                .ToListAsync();
+            var visibleSet = visible.ToHashSet();
+            // Curated order is the display order — filter, don't re-sort.
+            var ordered = curatedIds.Where(visibleSet.Contains).ToList();
+            if (ordered.Count > 0) return Ok(ordered);
+        }
+
+        var fallback = await db.Rooms.AsNoTracking()
+            .Where(r => r.CreatorPlayerId == accountId
+                     && r.State == 0
+                     && !r.IsDormRoom
+                     && !r.HiddenFromBrowse
+                     && (r.Accessibility == 1 || viewerIsOwner))
+            .OrderByDescending(r => r.HotScore)
+            .ThenByDescending(r => r.VisitCount)
+            .ThenByDescending(r => r.UpdatedAt)
+            .Select(r => r.Id)
+            .Take(ShowcaseMaxRooms)
+            .ToListAsync();
+        return Ok(fallback);
+    }
+
     [HttpGet("api/rooms/v1/visitedby/me")]
     [HttpGet("api/rooms/v2/visitedby/me")]
     [HttpGet("api/rooms/v3/visitedby/me")]

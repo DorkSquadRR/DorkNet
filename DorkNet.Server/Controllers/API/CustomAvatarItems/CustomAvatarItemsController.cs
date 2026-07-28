@@ -590,6 +590,236 @@ public class CustomAvatarItemsController(
         return Ok(new { Success = true, Balance = newBalance, Item = ToWire(item) });
     }
 
+    /// <summary>POST api/customAvatarItems/v1/{id}/report — file a moderation
+    /// report against another player's custom shirt. No report route was
+    /// registered anywhere on the server, so the report dialog's "Submit"
+    /// button 404'd and the client toasted "Unable to report custom avatar
+    /// item {0}".
+    ///
+    /// Verb ordinal <c>dl=2</c> = POST, on the URL
+    /// String.Format("{0}/v1/{1}/report") over "api/customAvatarItems"
+    /// (RecNet.Runtime/MPBLNLMCEDL.txt:4261-4275; the failure literal is
+    /// :4301). The body is RAW JSON — JsonConvert.SerializeObject of a
+    /// JEHCPEEKMML handed straight to BNDIAONDFFF.FJLLPHFOOJJ (:4252-4256,
+    /// :4282), NOT form-urlencoded — so the body is read here instead of
+    /// model-bound, exactly like PUT {id} above.
+    ///
+    /// The issuing method IALGIAGBJMA (:4079) returns LDGADANDBIO — status
+    /// only. Its continuation chain (0x181F2F300 → 0x1836E6740 →
+    /// BFDGEKKNAPB.PEFKBAEAOPD, :4285-4294) is byte-for-byte the one the
+    /// DELETE {id} path uses (:2206-2215), and that path is satisfied by a
+    /// bare 200, so an empty 200 is the whole response contract here too.
+    ///
+    /// JEHCPEEKMML has exactly three members, pinned by field offset from the
+    /// accessor bodies (JEHCPEEKMML.txt:6/86/108) and by the arg-store
+    /// sequence that fills it (:4239-4247): +0x10 the reason enum, +0x18 the
+    /// free-text detail, +0x20 a Nullable&lt;Int32&gt;. Their JSON KEY names
+    /// live in attribute metadata Cpp2IL doesn't render — obfuscated in the
+    /// 2023.06 dump too (EFPKFBKGLCD, dump.cs:1256458-1256469) — so each is
+    /// matched against an alias list, with a positional fallback in
+    /// declaration order for anything unrecognised (Newtonsoft writes members
+    /// in declaration order and the DTO has exactly these three).
+    ///
+    /// The reason enum IS readable: LGEPGEHKNAG.KFCMACCLDEJ in the 2023.06
+    /// dump (dump.cs:1250039-1250044) — CoC_Discriminatory=0, CoC_Sexual=1,
+    /// CoC_Trolling=2, Misleading=3, Other=4, InappropriateClothing=5. That is
+    /// a DIFFERENT numbering from <see cref="ReportEntity.Category"/>'s
+    /// RoomieReportCategory convention (Harassment=1 … Other=5), so the
+    /// ordinal is stored verbatim and the readable name is written into the
+    /// message — otherwise a moderator reading the shared queue cannot tell a
+    /// CoC_Sexual=1 clothing report from a Harassment=1 player report.
+    ///
+    /// <see cref="ReportEntity"/> has no custom-avatar-item column and adding
+    /// one is a migration, so the reported item's guid is carried in the
+    /// stored text — the same thing the sibling screen-share report handler
+    /// does with its image/instance evidence. That marker prefix is also what
+    /// makes the duplicate check below work.</summary>
+    [HttpPost("{id:guid}/report")]
+    [Authorize]
+    public async Task<IActionResult> Report(Guid id)
+    {
+        var pid = this.RequireCurrentPlayerId();
+        var item = await db.CustomAvatarItems.FirstOrDefaultAsync(i => i.PublicId == id);
+        if (item is null) return NotFound();
+        // The report button only renders on someone else's item, so this is an
+        // impossible UI state; reject rather than pollute the queue.
+        if (item.CreatorPlayerId == pid) return BadRequest(new { error = "cannot_report_own_item" });
+
+        var req = await ReadReportRequestAsync();
+        // The dialog refuses to submit without a category ("Cannot report
+        // custom clothing without a report category." —
+        // Assembly-CSharp/RRUI/Data/CustomAvatarItemReportModel.txt:1941), so
+        // a missing reason means a non-stock caller; bucket it as Other=4.
+        var reason = req.Reason ?? 4;
+
+        var context = new List<string> { $"reason={ReportReasonName(reason)}({reason})" };
+        // The only in-game caller passes null for the Nullable<Int32>
+        // (CustomAvatarItemReportModel.txt:2008/2011 push rbx=0 for both it and
+        // the trailing bool), so its meaning is unproven — keep whatever a
+        // client does send rather than silently dropping evidence.
+        if (req.Context is { } ctx) context.Add($"ctx={ctx}");
+
+        var details = (req.Details ?? string.Empty).Trim();
+        var message = $"{ReportMarker(id)}{string.Join(' ', context)}] {details}".Trim();
+        if (message.Length > 1000) message = message[..1000];
+
+        // One open report per (reporter, item): the dialog is re-openable and
+        // the client retries on a failed submit, so without this a single
+        // annoyed player can flood the moderation queue.
+        var marker = ReportMarker(id);
+        var duplicate = await db.Reports.AnyAsync(r =>
+            r.ReporterPlayerId == pid && r.ResolvedAt == null && r.Message.StartsWith(marker));
+        if (duplicate)
+        {
+            logger.LogInformation(
+                "[customAvatarItems] duplicate report of {PublicId} by {Pid} ignored", id, pid);
+            return Ok();
+        }
+
+        db.Reports.Add(new ReportEntity
+        {
+            ReporterPlayerId = pid,
+            TargetPlayerId = item.CreatorPlayerId,
+            Category = reason,
+            Message = message,
+        });
+        await db.SaveChangesAsync();
+        logger.LogInformation(
+            "[customAvatarItems] reported {PublicId} (creator {Creator}) by {Pid} reason={Reason}",
+            id, item.CreatorPlayerId, pid, ReportReasonName(reason));
+        return Ok();
+    }
+
+    /// <summary>Prefix every stored custom-item report with the item guid so
+    /// the row is attributable without a dedicated column, and so the
+    /// duplicate check can find prior reports with a plain LIKE.</summary>
+    private static string ReportMarker(Guid id) => $"[customAvatarItem {id:D} ";
+
+    /// <summary>LGEPGEHKNAG.KFCMACCLDEJ, verbatim from the 2023.06 dump
+    /// (dump.cs:1250039-1250044). Index IS the wire ordinal.</summary>
+    private static readonly string[] ReportReasonNames =
+    {
+        "CoC_Discriminatory", "CoC_Sexual", "CoC_Trolling",
+        "Misleading", "Other", "InappropriateClothing",
+    };
+
+    private static string ReportReasonName(int reason) =>
+        reason >= 0 && reason < ReportReasonNames.Length ? ReportReasonNames[reason] : "Unknown";
+
+    /// <summary>Read the report body. The stock client sends raw JSON, but
+    /// form encodings are accepted too so an admin/tooling caller can post the
+    /// same three fields flat.</summary>
+    private async Task<ReportRequest> ReadReportRequestAsync()
+    {
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync();
+            string? Field(params string[] keys)
+            {
+                foreach (var key in keys)
+                    if (form[key].FirstOrDefault() is { } v) return v;
+                return null;
+            }
+
+            return new ReportRequest
+            {
+                Reason = ParseReportReason(Field("reason", "Reason", "reportReason", "ReportReason",
+                    "category", "Category", "reportCategory", "ReportCategory", "type", "Type")),
+                Details = Field("details", "Details", "description", "Description",
+                    "message", "Message", "comment", "Comment"),
+                Context = int.TryParse(
+                    Field("contextId", "ContextId", "instanceId", "InstanceId",
+                        "roomInstanceId", "RoomInstanceId", "roomId", "RoomId",
+                        "accountId", "AccountId", "playerId", "PlayerId"),
+                    out var ctx)
+                    ? ctx
+                    : null,
+            };
+        }
+
+        using var reader = new StreamReader(Request.Body);
+        return ParseReportJson(await reader.ReadToEndAsync());
+    }
+
+    /// <summary>Lenient JSON → <see cref="ReportRequest"/>. Alias-matched
+    /// first; anything left over is assigned positionally in JEHCPEEKMML's
+    /// declaration order (reason, detail, nullable int) so an unguessed key
+    /// spelling still lands in the right slot.</summary>
+    private static ReportRequest ParseReportJson(string json)
+    {
+        var req = new ReportRequest();
+        if (string.IsNullOrWhiteSpace(json)) return req;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return req;
+
+            var unmatched = new List<JsonElement>();
+            foreach (var prop in doc.RootElement.EnumerateObject())
+            {
+                switch (prop.Name.ToLowerInvariant())
+                {
+                    case "reason" or "reportreason" or "category" or "reportcategory" or "type" or "reporttype":
+                        req.Reason ??= ParseReportReason(prop.Value);
+                        break;
+                    case "details" or "detail" or "description" or "reportdescription"
+                        or "message" or "comment" or "text":
+                        req.Details ??= AsString(prop.Value);
+                        break;
+                    case "contextid" or "instanceid" or "roominstanceid" or "roomid"
+                        or "accountid" or "playerid" or "reportedplayerid":
+                        req.Context ??= AsInt(prop.Value);
+                        break;
+                    default:
+                        unmatched.Add(prop.Value);
+                        break;
+                }
+            }
+
+            foreach (var value in unmatched)
+            {
+                if (req.Reason is null && ParseReportReason(value) is { } reason)
+                {
+                    req.Reason = reason;
+                    continue;
+                }
+
+                if (req.Details is null && value.ValueKind == JsonValueKind.String)
+                {
+                    req.Details = value.GetString();
+                    continue;
+                }
+
+                req.Context ??= AsInt(value);
+            }
+        }
+        catch (JsonException)
+        {
+        }
+
+        return req;
+    }
+
+    /// <summary>Accept the reason as an ordinal or as one of the enum's own
+    /// names — Newtonsoft writes an int by default, but a StringEnumConverter
+    /// on the DTO (an attribute the dump doesn't render) would write the name.</summary>
+    private static int? ParseReportReason(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.Number => value.TryGetInt32(out var n) ? n : null,
+        JsonValueKind.String => ParseReportReason(value.GetString()),
+        _ => null,
+    };
+
+    private static int? ParseReportReason(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        if (int.TryParse(value, out var ordinal)) return ordinal;
+        var index = Array.FindIndex(
+            ReportReasonNames,
+            n => string.Equals(n, value, StringComparison.OrdinalIgnoreCase));
+        return index >= 0 ? index : null;
+    }
+
     private async Task EnsureOwnershipAsync(long playerId, long itemId)
     {
         if (await db.CustomAvatarItemOwnership.AnyAsync(o =>
@@ -969,6 +1199,18 @@ public class CustomAvatarItemsController(
         public string ImageName { get; set; } = string.Empty;
 
         public bool Deleted { get; set; }
+    }
+
+    /// <summary>The three members of the client's report DTO JEHCPEEKMML,
+    /// in its declaration order: the reason enum (+0x10), the free-text
+    /// detail (+0x18) and an unidentified Nullable&lt;Int32&gt; (+0x20) that
+    /// the stock report dialog always leaves null. All nullable so
+    /// "not sent" is distinguishable from "sent empty".</summary>
+    public sealed class ReportRequest
+    {
+        public int? Reason { get; set; }
+        public string? Details { get; set; }
+        public int? Context { get; set; }
     }
 
     public sealed class DesignRequest

@@ -30,10 +30,22 @@ public class ChatController(
     DorkNetDbContext db,
     NotificationService notifications) : ControllerBase
 {
+    // MGGNHLHPHOF on the 2023 wire: Success=0, InvalidArguments=1,
+    // ThreadNotFound=2, MembershipNotFound=3, PlayerAlreadyOnThread=4,
+    // CannotMessagePlayer=5, InvalidCharacters=6, RecentlyLeftThread=7,
+    // ThreadTooLarge=8.
     private const int ChatSuccess = 0;
     private const int ChatInvalidArguments = 1;
+    private const int ChatThreadNotFound = 2;
     private const int ChatMembershipNotFound = 3;
     private const int ChatPlayerAlreadyOnThread = 4;
+
+    /// <summary>Bit markers on <c>ClubMembershipEntity.Permissions</c>:
+    /// 128 = pending invite/request, 256 = banned. Both mean "not on the
+    /// roster" — same test <c>ClubService.MembershipTypeFromPerms</c>
+    /// applies.</summary>
+    private const int ClubPendingFlag = 128;
+    private const int ClubBannedFlag = 256;
 
     private long Me => this.RequireCurrentPlayerId();
 
@@ -64,10 +76,34 @@ public class ChatController(
             .Distinct()
             .ToListAsync();
 
+        //   3. Club chats for every club I'm actually on the roster of —
+        //      club threads carry no ChatThreadMembers rows (the roster
+        //      IS the membership), so without this the "Club chats"
+        //      filter on the thread list is always empty. Only clubs
+        //      whose channel has been used are listed, so browsing the
+        //      inbox never materialises empty threads.
+        var myClubKeys = (await db.ClubMemberships
+            .Where(m => m.PlayerId == Me &&
+                        (m.Permissions & ClubPendingFlag) == 0 &&
+                        (m.Permissions & ClubBannedFlag) == 0)
+            .Select(m => m.ClubId)
+            .ToListAsync())
+            .Select(ClubKey)
+            .ToList();
+        var activeClubKeys = myClubKeys.Count == 0
+            ? new List<string>()
+            : await db.ChatMessages
+                .Where(c => myClubKeys.Contains(c.ThreadKey))
+                .Select(c => c.ThreadKey)
+                .Distinct()
+                .ToListAsync();
+
         var keys = sentOrReceived
             .Concat(memberKeys)
+            .Concat(activeClubKeys)
             .Distinct()
             .Where(k => !k.StartsWith("group:") || memberKeys.Contains(k))
+            .Where(k => ClubIdFromKey(k) == 0 || activeClubKeys.Contains(k))
             .ToList();
         if (keys.Count == 0) return Ok(Array.Empty<object>());
 
@@ -83,6 +119,7 @@ public class ChatController(
             .Where(m => m.PlayerId == Me && keys.Contains(m.ThreadKey))
             .ToDictionaryAsync(m => m.ThreadKey, m => m);
         var participants = await LoadParticipantsAsync(keys);
+        var favorites = await LoadFavoritesAsync(keys);
 
         return Ok(latest
             .OrderByDescending(c => c.SentAt)
@@ -95,7 +132,8 @@ public class ChatController(
                     meta,
                     member,
                     playerIds ?? new List<int>(),
-                    latestMessage: c);
+                    latestMessage: c,
+                    isFavorited: favorites.Contains(c.ThreadKey));
             })
             .ToList());
     }
@@ -119,11 +157,83 @@ public class ChatController(
             .FirstOrDefaultAsync(m => m.ThreadKey == key && m.PlayerId == Me);
         var participants = await LoadParticipantsAsync(new[] { key });
         participants.TryGetValue(key, out var playerIds);
+        var favorites = await LoadFavoritesAsync(new[] { key });
         return Ok(ToWireThread(
             meta,
             member,
             playerIds ?? new List<int>(),
-            messages: rows.OrderBy(c => c.SentAt).ToList()));
+            messages: rows.OrderBy(c => c.SentAt).ToList(),
+            isFavorited: favorites.Contains(key)));
+    }
+
+    /// <summary>GET <c>thread/club/{clubId}</c> — the 2023-03-21 club
+    /// chat tab's only entry point. Binary evidence: RecNet.Runtime
+    /// <c>DLDKCILCKNA.txt</c> method <c>BOOOAPKCCJI(Int64)</c>, instr
+    /// 045 <c>Move rcx, "thread/club/{0}"</c>, verb constant
+    /// <c>Move rdx, 0</c> at instr 054 = HTTPMethods.Get, query fields
+    /// <c>maxCount</c> (instr 067, default 10) and <c>mode</c> (instr
+    /// 079, default 0). The declared return type is
+    /// <c>FGLDKEJLAKB&lt;List&lt;JNMKLHDFPOJ&gt;&gt;</c>, so the body
+    /// must be a JSON ARRAY of chat threads even though a club has
+    /// exactly one channel — hence the one-element array.
+    ///
+    /// The three-segment path matched no template before, so this 404'd
+    /// and club chat could not open at all.
+    ///
+    /// <paramref name="mode"/> is accepted and ignored: the client
+    /// always sends 0 and its semantics are not resolvable from the
+    /// ISIL (no other value is ever passed).</summary>
+    [HttpGet("/thread/club/{clubId:long}")]
+    public async Task<IActionResult> GetClubThreads(long clubId,
+        [FromQuery] int maxCount = 10,
+        [FromQuery] int mode = 0)
+    {
+        _ = mode;
+        var take = Math.Clamp(maxCount, 1, 200);
+
+        var club = await db.Clubs.FirstOrDefaultAsync(c => c.Id == clubId);
+        if (club is null) return Ok(Array.Empty<object>());
+
+        // Only roster members see the club channel. Non-members get an
+        // empty array rather than a 403 — the client deserialises the
+        // body as a list before it ever looks at the status code.
+        var onRoster = await db.ClubMemberships.AnyAsync(m =>
+            m.ClubId == clubId && m.PlayerId == Me &&
+            (m.Permissions & ClubPendingFlag) == 0 &&
+            (m.Permissions & ClubBannedFlag) == 0);
+        if (!onRoster) return Ok(Array.Empty<object>());
+
+        var key = ClubKey(clubId);
+        var meta = await EnsureThreadRowAsync(key);
+        // Name the thread after the club the first time it materialises
+        // so the thread-list card has a label without a second fetch.
+        if (string.IsNullOrEmpty(meta.Name) && !string.IsNullOrEmpty(club.Name))
+        {
+            meta.Name = club.Name.Length > 128 ? club.Name[..128] : club.Name;
+            meta.UpdatedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+        }
+
+        var rows = await db.ChatMessages
+            .Where(c => c.ThreadKey == key)
+            .OrderByDescending(c => c.SentAt)
+            .Take(take)
+            .ToListAsync();
+        var member = await db.ChatThreadMembers
+            .FirstOrDefaultAsync(m => m.ThreadKey == key && m.PlayerId == Me);
+        var participants = await LoadParticipantsAsync(new[] { key });
+        participants.TryGetValue(key, out var playerIds);
+        var favorites = await LoadFavoritesAsync(new[] { key });
+
+        return Ok(new List<Dictionary<string, object?>>
+        {
+            ToWireThread(
+                meta,
+                member,
+                playerIds ?? new List<int>(),
+                messages: rows.OrderBy(c => c.SentAt).ToList(),
+                isFavorited: favorites.Contains(key)),
+        });
     }
 
     /// <summary>Recent messages for a thread, paginated by
@@ -228,20 +338,8 @@ public class ChatController(
         // the sender's chat UI doesn't show its own outgoing message
         // until the next thread refresh. DM keys encode the two
         // participants directly; group chat threads fan out across the
-        // explicit membership table.
-        var recipients = new List<long>();
-        if (key.StartsWith("dm:") && TryParseDmKey(key, out var a, out var b))
-        {
-            var other = a == Me ? b : a;
-            recipients.Add(other);
-        }
-        else if (key.StartsWith("group:"))
-        {
-            recipients = await db.ChatThreadMembers
-                .Where(m => m.ThreadKey == key && m.PlayerId != Me)
-                .Select(m => m.PlayerId)
-                .ToListAsync();
-        }
+        // explicit membership table; club chats fan out over the roster.
+        var recipients = await ThreadRecipientsAsync(key);
         recipients.Add(Me);
         foreach (var rid in recipients)
         {
@@ -341,7 +439,11 @@ public class ChatController(
     public async Task<IActionResult> Leave(string chatThreadId)
     {
         chatThreadId = await ResolveThreadKeyAsync(chatThreadId);
-        if (chatThreadId.StartsWith("dm:"))
+        // DMs can't be left, and neither can club chats — club channel
+        // membership is the club roster, so "leaving" is leaving the
+        // club. Deleting the row here would only discard the caller's
+        // last-read pointer.
+        if (chatThreadId.StartsWith("dm:") || ClubIdFromKey(chatThreadId) != 0)
             return Ok(ChatInvalidArguments);
         var removed = await db.ChatThreadMembers
             .Where(m => m.ThreadKey == chatThreadId && m.PlayerId == Me)
@@ -349,24 +451,40 @@ public class ChatController(
         return Ok(removed > 0 ? ChatSuccess : ChatMembershipNotFound);
     }
 
-    public sealed record RenameRequest(string Name);
+    /// <summary>Rename payload. A plain class with a parameterless ctor
+    /// (not a positional record) because
+    /// <see cref="Binding.FormOrJsonModelBinder"/> constructs it with
+    /// <c>Activator.CreateInstance</c> and then sets properties.</summary>
+    public sealed class RenameRequest
+    {
+        public string? Name { get; set; }
+    }
 
     /// <summary>Set the thread's display name. Permission: any member
     /// of the thread can rename. For DMs the watch typically nudges
     /// users to pick a nickname after first send; group-chat creators
-    /// usually set the name at creation time.</summary>
+    /// usually set the name at creation time.
+    ///
+    /// The 2023-03-21 client sends this as a form POST, not a JSON PUT:
+    /// RecNet.Runtime <c>DLDKCILCKNA.txt</c> method
+    /// <c>BKNMPEEMNPB(Int64, String)</c>, instr 122
+    /// <c>Move rcx, "thread/{0}/rename"</c> with verb constant
+    /// <c>Move rdx, 2</c> at instr 131 (= HTTPMethods.Post) and a single
+    /// form field <c>name</c> added at instr 145 via
+    /// <c>BNDIAONDFFF.AFGEDDANEKP</c>. PUT-only + <c>[FromBody]</c> gave
+    /// that client a 405 (and a 415 even if it had used PUT). The
+    /// response is consumed by an <c>Action&lt;MGGNHLHPHOF&gt;</c>
+    /// (instr 162) — a BARE integer body, not a wrapper object.</summary>
     [HttpPut("/thread/{chatThreadId}/rename")]
-    public async Task<IActionResult> Rename(string chatThreadId, [FromBody] RenameRequest body)
+    [HttpPost("/thread/{chatThreadId}/rename")]
+    public async Task<IActionResult> Rename(string chatThreadId,
+        [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] RenameRequest body)
     {
         chatThreadId = await ResolveThreadKeyAsync(chatThreadId);
-        var name = (body.Name ?? string.Empty).Trim();
+        var name = (body?.Name ?? string.Empty).Trim();
         if (name.Length > 128) name = name[..128];
 
-        var iAmMember = chatThreadId.StartsWith("dm:")
-            ? IsDmParticipant(chatThreadId, Me)
-            : await db.ChatThreadMembers
-                .AnyAsync(m => m.ThreadKey == chatThreadId && m.PlayerId == Me);
-        if (!iAmMember) return Ok(ChatMembershipNotFound);
+        if (!await IsThreadMemberAsync(chatThreadId)) return Ok(ChatMembershipNotFound);
 
         var meta = await db.ChatThreads.FirstOrDefaultAsync(t => t.ThreadKey == chatThreadId);
         if (meta is null)
@@ -382,6 +500,112 @@ public class ChatController(
         meta.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
         return Ok(ChatSuccess);
+    }
+
+    /// <summary>Favourite payload — plain class for the same
+    /// <see cref="Binding.FormOrJsonModelBinder"/> reason as
+    /// <see cref="RenameRequest"/>.</summary>
+    public sealed class FavoriteRequest
+    {
+        public bool Favorite { get; set; }
+    }
+
+    /// <summary>Star / unstar a chat thread for the caller.
+    ///
+    /// Binary evidence: RecNet.Runtime <c>DLDKCILCKNA.txt</c> method
+    /// <c>DHKDPHCNLKD(Int64, Boolean)</c> — instr 106
+    /// <c>Move rcx, "thread/{0}/favorite"</c>, verb constant
+    /// <c>Move rdx, 3</c> at instr 115 (= HTTPMethods.Put), single form
+    /// field <c>favorite</c> (Boolean, boxed at instr 122, added at
+    /// instr 128). No route existed at all, so this 404'd.
+    ///
+    /// RESPONSE SHAPE: the continuation at instr 142 is
+    /// <c>Func&lt;GLIKNMPPEHL, MGGNHLHPHOF&gt;</c> — a client-side
+    /// PROJECTION, so the body is the wrapper object
+    /// <c>GLIKNMPPEHL</c>, NOT the bare chat-result int the method's
+    /// return type suggests. Its reader (<c>OGCMIDEFOEE.txt</c> instrs
+    /// 042/069) accepts exactly two keys, each in the usual three
+    /// casings: <c>ChatResult</c> and <c>IsFavorited</c>.
+    ///
+    /// The flag is per-(player, thread) and there is no column for it on
+    /// <see cref="ChatThreadMemberEntity"/>, so it is persisted in the
+    /// generic <c>PlayerSettings</c> table under
+    /// <c>chat.favorite:&lt;threadKey&gt;</c> and read back into the
+    /// thread DTO's <c>IsFavorited</c> by
+    /// <see cref="LoadFavoritesAsync"/>.</summary>
+    [HttpPut("/thread/{chatThreadId}/favorite")]
+    [HttpPost("/thread/{chatThreadId}/favorite")]
+    public async Task<IActionResult> Favorite(string chatThreadId,
+        [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] FavoriteRequest body)
+    {
+        var key = await ResolveThreadKeyAsync(chatThreadId);
+        if (!await db.ChatThreads.AnyAsync(t => t.ThreadKey == key) &&
+            !await db.ChatMessages.AnyAsync(c => c.ThreadKey == key))
+        {
+            return Ok(new Dictionary<string, object?>
+            {
+                ["chatResult"] = ChatThreadNotFound,
+                ["isFavorited"] = false,
+            });
+        }
+        if (!await IsThreadMemberAsync(key))
+        {
+            return Ok(new Dictionary<string, object?>
+            {
+                ["chatResult"] = ChatMembershipNotFound,
+                ["isFavorited"] = false,
+            });
+        }
+
+        var favorite = body?.Favorite ?? false;
+        var settingKey = FavoriteSettingKey(key);
+        var row = await db.PlayerSettings
+            .FirstOrDefaultAsync(s => s.PlayerId == Me && s.Key == settingKey);
+        if (favorite)
+        {
+            if (row is null)
+            {
+                db.PlayerSettings.Add(new PlayerSettingEntity
+                {
+                    PlayerId = Me,
+                    Key = settingKey,
+                    Value = "1",
+                });
+            }
+            else
+            {
+                row.Value = "1";
+            }
+        }
+        else if (row is not null)
+        {
+            db.PlayerSettings.Remove(row);
+        }
+        await db.SaveChangesAsync();
+
+        return Ok(new Dictionary<string, object?>
+        {
+            ["chatResult"] = ChatSuccess,
+            ["isFavorited"] = favorite,
+        });
+    }
+
+    /// <summary>Is the caller a participant of this thread? DM keys
+    /// carry both ids, group chats use the membership table, club chats
+    /// use the club roster.</summary>
+    private async Task<bool> IsThreadMemberAsync(string key)
+    {
+        if (key.StartsWith("dm:")) return IsDmParticipant(key, Me);
+        var clubId = ClubIdFromKey(key);
+        if (clubId != 0)
+        {
+            return await db.ClubMemberships.AnyAsync(m =>
+                m.ClubId == clubId && m.PlayerId == Me &&
+                (m.Permissions & ClubPendingFlag) == 0 &&
+                (m.Permissions & ClubBannedFlag) == 0);
+        }
+        return await db.ChatThreadMembers
+            .AnyAsync(m => m.ThreadKey == key && m.PlayerId == Me);
     }
 
     public sealed record CreateGroupChatRequest(List<long> MemberIds, string? Name);
@@ -456,7 +680,10 @@ public class ChatController(
             .ToListAsync();
         var meta = await EnsureThreadRowAsync(key);
         var participants = ids.Concat(new[] { Me }).Distinct().Select(x => (int)x).ToList();
-        return Ok(ToWireThread(meta, null, participants, messages: rows.OrderBy(c => c.SentAt).ToList()));
+        var favorites = await LoadFavoritesAsync(new[] { key });
+        return Ok(ToWireThread(meta, null, participants,
+            messages: rows.OrderBy(c => c.SentAt).ToList(),
+            isFavorited: favorites.Contains(key)));
     }
 
     /// <summary>Form-urlencoded variant of <see cref="Send"/> used by
@@ -491,19 +718,7 @@ public class ChatController(
         // Notify every participant, sender INCLUDED — see SendMessageJson
         // above for the rationale; the 2020 watch's chat send path needs
         // the self-push to refresh its own UI.
-        var recipients = new List<long>();
-        if (key.StartsWith("dm:") && TryParseDmKey(key, out var a, out var b))
-        {
-            var other = a == Me ? b : a;
-            if (other != Me) recipients.Add(other);
-        }
-        else if (key.StartsWith("group:"))
-        {
-            recipients = await db.ChatThreadMembers
-                .Where(m => m.ThreadKey == key && m.PlayerId != Me)
-                .Select(m => m.PlayerId)
-                .ToListAsync();
-        }
+        var recipients = await ThreadRecipientsAsync(key);
         recipients.Add(Me);
         foreach (var rid in recipients)
         {
@@ -513,9 +728,11 @@ public class ChatController(
         }
         var participants = await LoadParticipantsAsync(new[] { key });
         participants.TryGetValue(key, out var playerIds);
+        var favorites = await LoadFavoritesAsync(new[] { key });
         return Ok(new Dictionary<string, object?>
         {
-            ["chatThread"] = ToWireThread(thread, null, playerIds ?? new List<int>(), latestMessage: entry),
+            ["chatThread"] = ToWireThread(thread, null, playerIds ?? new List<int>(),
+                latestMessage: entry, isFavorited: favorites.Contains(key)),
             ["chatResult"] = ChatSuccess,
         });
     }
@@ -545,19 +762,7 @@ public class ChatController(
         db.ChatMessages.Add(entry);
         await db.SaveChangesAsync();
 
-        var recipients = new List<long>();
-        if (key.StartsWith("dm:") && TryParseDmKey(key, out var a, out var b))
-        {
-            var other = a == Me ? b : a;
-            if (other != Me) recipients.Add(other);
-        }
-        else if (key.StartsWith("group:"))
-        {
-            recipients = await db.ChatThreadMembers
-                .Where(m => m.ThreadKey == key && m.PlayerId != Me)
-                .Select(m => m.PlayerId)
-                .ToListAsync();
-        }
+        var recipients = await ThreadRecipientsAsync(key);
         // Include the sender so the form-POST send path also refreshes
         // its own chat thread — same reason as the JSON send path above.
         recipients.Add(Me);
@@ -761,15 +966,109 @@ public class ChatController(
                 result[group.Key] = group.Select(m => (int)m.PlayerId).Distinct().ToList();
         }
 
+        // Club threads have no ChatThreadMembers rows — membership IS
+        // the club roster, so joining/leaving the club joins/leaves the
+        // chat automatically.
+        var clubIds = distinct
+            .Select(k => new { Key = k, ClubId = ClubIdFromKey(k) })
+            .Where(x => x.ClubId != 0)
+            .ToList();
+        if (clubIds.Count > 0)
+        {
+            var ids = clubIds.Select(x => x.ClubId).Distinct().ToList();
+            var roster = await db.ClubMemberships
+                .Where(m => ids.Contains(m.ClubId) &&
+                            (m.Permissions & ClubPendingFlag) == 0 &&
+                            (m.Permissions & ClubBannedFlag) == 0)
+                .Select(m => new { m.ClubId, m.PlayerId })
+                .ToListAsync();
+            foreach (var x in clubIds)
+            {
+                result[x.Key] = roster
+                    .Where(m => m.ClubId == x.ClubId)
+                    .Select(m => (int)m.PlayerId)
+                    .Distinct()
+                    .ToList();
+            }
+        }
+
         return result;
     }
 
+    /// <summary>PlayerSettings key holding the caller's per-thread
+    /// favourite flag. The flag is per-(player, thread) and there is no
+    /// column for it on <see cref="ChatThreadMemberEntity"/>, so it
+    /// lives in the same generic per-player settings table the rest of
+    /// the server uses for exactly this kind of flag (see
+    /// RoomsController's playerdata and InventionsController).</summary>
+    private const string FavoritePrefix = "chat.favorite:";
+
+    private static string FavoriteSettingKey(string threadKey) => FavoritePrefix + threadKey;
+
+    /// <summary>Thread keys the caller has starred, out of
+    /// <paramref name="keys"/>.</summary>
+    private async Task<HashSet<string>> LoadFavoritesAsync(IEnumerable<string> keys)
+    {
+        var distinct = keys.Distinct().ToList();
+        if (distinct.Count == 0) return new HashSet<string>();
+        var settingKeys = distinct.Select(FavoriteSettingKey).ToList();
+        var rows = await db.PlayerSettings
+            .AsNoTracking()
+            .Where(s => s.PlayerId == Me && settingKeys.Contains(s.Key) && s.Value == "1")
+            .Select(s => s.Key)
+            .ToListAsync();
+        return rows.Select(k => k[FavoritePrefix.Length..]).ToHashSet();
+    }
+
+    /// <summary>Players to push a new message to. DM keys carry both
+    /// participants; group chats fan out over the membership table;
+    /// club chats fan out over the club roster.</summary>
+    private async Task<List<long>> ThreadRecipientsAsync(string key)
+    {
+        if (key.StartsWith("dm:") && TryParseDmKey(key, out var a, out var b))
+        {
+            var other = a == Me ? b : a;
+            return other == Me ? new List<long>() : new List<long> { other };
+        }
+        if (key.StartsWith("group:"))
+        {
+            return await db.ChatThreadMembers
+                .Where(m => m.ThreadKey == key && m.PlayerId != Me)
+                .Select(m => m.PlayerId)
+                .ToListAsync();
+        }
+        var clubId = ClubIdFromKey(key);
+        if (clubId != 0)
+        {
+            return await db.ClubMemberships
+                .Where(m => m.ClubId == clubId && m.PlayerId != Me &&
+                            (m.Permissions & ClubPendingFlag) == 0 &&
+                            (m.Permissions & ClubBannedFlag) == 0)
+                .Select(m => m.PlayerId)
+                .Distinct()
+                .ToListAsync();
+        }
+        return new List<long>();
+    }
+
+    /// <summary>Project a thread row onto the client's chat-thread DTO.
+    /// The 2023-03-21 reader (RecNet.Runtime EKEFFNBIOHJ.txt, instrs
+    /// 082/109/133/149/173/197/221/245/269) matches exactly nine keys,
+    /// each in PascalCase / camelCase / lowercase:
+    /// <c>ChatThreadId, LastReadMessageId, Messages, LatestMessage,
+    /// PlayerIds, ChatThreadName, SnoozedUntil, IsFavorited, ClubId</c>.
+    /// <c>IsFavorited</c> and <c>ClubId</c> did not exist on the 2020
+    /// watch's DTO, so they were missing here; both are emitted now.
+    /// <c>LatestMessage</c> is emitted alongside <c>Messages</c> because
+    /// the thread-list card binds the preview off it even when the full
+    /// message array is present.</summary>
     private static Dictionary<string, object?> ToWireThread(
         ChatThreadEntity thread,
         ChatThreadMemberEntity? member,
         List<int> playerIds,
         ChatMessageEntity? latestMessage = null,
-        List<ChatMessageEntity>? messages = null)
+        List<ChatMessageEntity>? messages = null,
+        bool isFavorited = false)
     {
         var dto = new Dictionary<string, object?>
         {
@@ -778,11 +1077,15 @@ public class ChatController(
             ["lastReadMessageId"] = member?.LastReadMessageId ?? 0,
             ["snoozedUntil"] = member?.SnoozeUntil,
             ["playerIds"] = playerIds,
+            ["isFavorited"] = isFavorited,
+            ["clubId"] = ClubIdFromKey(thread.ThreadKey),
         };
 
         if (messages is not null)
         {
             dto["messages"] = messages.Select(m => ToWireMessage(m, thread.Id)).ToList();
+            if (messages.Count > 0)
+                dto["latestMessage"] = ToWireMessage(messages[^1], thread.Id);
         }
         else if (latestMessage is not null)
         {
@@ -791,6 +1094,18 @@ public class ChatController(
 
         return dto;
     }
+
+    /// <summary>Canonical thread key for a club's chat channel. One
+    /// thread per club — the 2023 client's club chat tab is a single
+    /// channel, and <c>GET thread/club/{id}</c> returns it wrapped in a
+    /// one-element array.</summary>
+    private static string ClubKey(long clubId) => $"club:{clubId}";
+
+    /// <summary>Inverse of <see cref="ClubKey"/>; 0 for non-club
+    /// threads, which is what the client's <c>ClubId</c> field carries
+    /// for DMs and group chats.</summary>
+    private static long ClubIdFromKey(string key) =>
+        key.StartsWith("club:") && long.TryParse(key.AsSpan(5), out var id) ? id : 0;
 
     private static Dictionary<string, object?> ToWireMessage(ChatMessageEntity c, long chatThreadId) => new()
     {

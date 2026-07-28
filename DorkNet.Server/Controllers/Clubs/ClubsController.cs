@@ -18,12 +18,32 @@ namespace DorkNet.Server.Controllers.Clubs;
 /// URL surface (verb + template) verified against
 /// <c>Cpp2IL_ISIL/.../JDJGIBLMFKK.txt</c>:
 ///   GET    /club/home/me
+///   PUT    /club/home/me                       (2023, form clubId)
+///   DELETE /club/home/me                       (2023)
 ///   GET    /club/mine/member
 ///   GET    /club/mine/created
 ///   GET    /club/categoryTags
+///   DELETE /club/{clubId}                      (2023, disband)
+///   GET    /club/{clubId}/hasDisabledClubChat  (2023, bare bool)
+///   DELETE /club/{clubId}/mainimage            (2023)
+///   GET    /club/{clubId}/members              (2023, bare array)
+///   GET    /club/{clubId}/members/banned       (2023, bare array)
+///   GET    /club/{clubId}/members/requests     (2023, bare array)
+///   GET    /club/{clubId}/members/search       (2023, paged envelope)
+///   GET    /club/{clubId}/members/requests/search (2023, paged envelope)
+///   GET    /announcements/mine                 (2023, flat array)
+///   GET    /announcements/subscription/mine    (2023, flat array)
 ///   GET    /announcements/v2/mine/unread
 ///   GET    /announcements/v2/subscription/mine/unread
 ///   POST   /announcements/club/{clubId}/{announcementId}/read
+///
+/// Still unserved for want of schema (see the per-route notes in
+/// <c>docs/recroom-2023-client-api-complete.md</c>): PUT
+/// <c>club/{id}/minlevel</c>, PUT <c>club/{id}/clubChatEnabled</c>, PUT
+/// <c>club/{id}/permissions/{role}</c> and DELETE
+/// <c>club/{id}/additionalimage/{slot}</c> — each needs storage that does
+/// not exist yet (ClubEntity.MinLevel, ClubEntity.ClubChatEnabled, a
+/// per-role club-permission table, a club additional-image table).
 ///
 /// Wire types (deserialiser JSON keys, per ISIL):
 ///   Club            (2020 <c>PLILLKHMNDA</c> / 2023 <c>FOIJDINBPFG</c>):
@@ -65,6 +85,50 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
         }
         var memberCount = await clubs.MemberCountAsync(home.Id);
         return Ok(ToWireClub(home, memberCount));
+    }
+
+    /// <summary>PUT <c>/club/home/me</c> — "Set Home Clubhouse Room". The
+    /// 2023 client sends the target club in a form-urlencoded
+    /// <c>clubId</c> field (boxed <c>Nullable&lt;Int64&gt;</c> pushed through
+    /// <c>BNDIAONDFFF.AFGEDDANEKP</c> at <c>IKMMOCKDKAF.txt:16923-16927</c>)
+    /// and parses NO response DTO — the issuing method is
+    /// <c>LDGADANDBIO JOPMBFIFFBB(Nullable&lt;Int64&gt;)</c>, the status-only
+    /// promise type, so an empty 200 is the contract. Verb ordinal 3 (PUT)
+    /// is the HasValue branch of the same method at :16911; the null branch
+    /// is the DELETE below (:16838).</summary>
+    [HttpPut("/club/home/me")]
+    [Authorize]
+    public async Task<IActionResult> HomeMeSet()
+    {
+        var pid = Me;
+        long clubId = 0;
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync();
+            foreach (var key in new[] { "clubId", "ClubId" })
+                if (long.TryParse(form[key].FirstOrDefault(), out var fromForm) && fromForm > 0)
+                {
+                    clubId = fromForm;
+                    break;
+                }
+        }
+        if (clubId == 0 && long.TryParse(Request.Query["clubId"].FirstOrDefault(), out var fromQuery))
+            clubId = fromQuery;
+        if (clubId <= 0) return BadRequest(new { error = "missing_club_id" });
+        if (!await clubs.SetHomeClubAsync(pid, clubId)) return NotFound();
+        return Ok();
+    }
+
+    /// <summary>DELETE <c>/club/home/me</c> — "Remove Home Clubhouse Room".
+    /// No body, no response DTO (<c>IKMMOCKDKAF.txt:16830-16841</c>: route
+    /// literal, host 13, verb ordinal 4, error string "Failed to Remove Home
+    /// Clubhouse Room"). Idempotent so a double-tap is harmless.</summary>
+    [HttpDelete("/club/home/me")]
+    [Authorize]
+    public async Task<IActionResult> HomeMeClear()
+    {
+        await clubs.ClearHomeClubAsync(Me);
+        return Ok();
     }
 
     [HttpGet("/club/mine/member")]
@@ -161,6 +225,35 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
         var pid = Me;
         var rows = await clubs.UnreadDirectAsync(pid);
         return Ok(GroupByClub(rows, await LastReadByClubAsync(pid, rows.Select(a => a.ClubId))));
+    }
+
+    /// <summary>GET <c>/announcements/mine</c> — every announcement across the
+    /// clubs the caller is a member of, newest first. Distinct from the v2
+    /// unread rollup above in BOTH shape and semantics: the issuing method is
+    /// <c>FGLDKEJLAKB&lt;List&lt;JDPPAFLFNBD&gt;&gt; IOCFHCFLIMJ()</c>
+    /// (<c>IKMMOCKDKAF.txt:996</c>), i.e. a FLAT array of Announcement objects
+    /// with no per-club envelope and no unread filter — the request literals
+    /// at :1075 carry the description "get all announcements for clubs I'm
+    /// in".</summary>
+    [HttpGet("/announcements/mine")]
+    [Authorize]
+    public async Task<IActionResult> AnnouncementsMine()
+    {
+        var rows = await clubs.AnnouncementsForMemberClubsAsync(Me);
+        return Ok(rows.Select(ToWireAnnouncement).ToList());
+    }
+
+    /// <summary>GET <c>/announcements/subscription/mine</c> — same flat
+    /// <c>List&lt;JDPPAFLFNBD&gt;</c> shape as
+    /// <see cref="AnnouncementsMine"/> (<c>IIOMOLFOLPD</c> at
+    /// <c>IKMMOCKDKAF.txt:1083</c>, route literal at :1162) but scoped to the
+    /// clubs the caller SUBSCRIBES to rather than belongs to.</summary>
+    [HttpGet("/announcements/subscription/mine")]
+    [Authorize]
+    public async Task<IActionResult> AnnouncementsSubscriptionMine()
+    {
+        var rows = await clubs.AnnouncementsForSubscribedClubsAsync(Me);
+        return Ok(rows.Select(ToWireAnnouncement).ToList());
     }
 
     [HttpGet("/announcements/v2/subscription/mine/unread")]
@@ -269,6 +362,50 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
         if (club is null) return NotFound();
         var members = await clubs.MemberCountAsync(clubId);
         return Ok(ToWireClub(club, members));
+    }
+
+    /// <summary>DELETE <c>/club/{id}</c> — "Delete Club" (disband). Issuing
+    /// method is <c>LDGADANDBIO MACDNDJNODA(Int64, String)</c> — the string is
+    /// the club NAME used only for the client-side confirmation copy and is
+    /// never transmitted; the request is a bare DELETE with no body
+    /// (<c>IKMMOCKDKAF.txt:17107-17120</c>, verb ordinal 4, host 13, error
+    /// string "Failed to Delete Club"). <c>LDGADANDBIO</c> is the status-only
+    /// promise so an empty 200 is the whole contract.
+    ///
+    /// Owner-only, and a soft delete — see
+    /// <see cref="ClubService.DisbandAsync"/>.</summary>
+    [HttpDelete("/club/{clubId:long}")]
+    [Authorize]
+    public async Task<IActionResult> ClubDelete(long clubId)
+    {
+        try
+        {
+            var disbanded = await clubs.DisbandAsync(clubId, Me);
+            if (disbanded is null) return NotFound();
+            return Ok();
+        }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+    }
+
+    /// <summary>GET <c>/club/{id}/hasDisabledClubChat</c> — the gate the club
+    /// chat flow checks before it will even request the club's thread. The
+    /// issuing method is <c>FGLDKEJLAKB&lt;System.Boolean&gt; OFOJAHBKMOJ(Int64)</c>
+    /// (<c>IKMMOCKDKAF.txt:25422</c>, route + verb ordinal 0 at :25540-25547),
+    /// so the body is a BARE JSON boolean — not an object, not a wrapper.
+    ///
+    /// The answer is the negation of the Club wire field
+    /// <c>ClubChatEnabled</c> that <see cref="ToWireClub"/> emits. That field
+    /// has no column on <see cref="ClubEntity"/> yet and its setter
+    /// (<c>PUT club/{id}/clubChatEnabled</c>) is therefore not implemented, so
+    /// no club can currently be in the disabled state and <c>false</c> is the
+    /// true answer for every club. Both sites must flip together when the
+    /// column lands.</summary>
+    [HttpGet("/club/{clubId:long}/hasDisabledClubChat")]
+    public async Task<IActionResult> ClubHasDisabledChat(long clubId)
+    {
+        var club = await clubs.GetByIdAsync(clubId);
+        if (club is null) return NotFound();
+        return Ok(false);
     }
 
     /// <summary>GET <c>/club/{id}/details</c> — the central club page
@@ -461,6 +598,32 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
         catch (UnauthorizedAccessException) { return Forbid(); }
     }
 
+    /// <summary>DELETE <c>/club/{id}/mainimage</c> — "Remove Club Image".
+    /// One method, <c>BLEDOCHHHJM(Int64, String imageName)</c>, drives both
+    /// verbs: <c>IKMMOCKDKAF.txt:16010</c> tests the captured imageName and
+    /// branches to verb ordinal 4 with no body when it is null (:16019-16024,
+    /// description "Remove Club Image") or verb 3 with the form field when it
+    /// is not (:16046-16050). Both branches go through
+    /// <c>IBAKMFKEEDJ</c>, so the response is the full <c>LCLFBBPEMIH</c>
+    /// details envelope, NOT a status-only 200.
+    ///
+    /// Registered as its own action rather than a third binding on
+    /// <see cref="ClubMainImage"/> so the delete semantics are explicit —
+    /// aliasing an edit verb onto a destructive handler is the exact bug that
+    /// made <c>PUT /announcements/club/{c}/{a}</c> destroy posts.</summary>
+    [HttpDelete("/club/{clubId:long}/mainimage")]
+    [Authorize]
+    public async Task<IActionResult> ClubMainImageDelete(long clubId)
+    {
+        try
+        {
+            var updated = await clubs.ModifyAsync(clubId, Me, c => c.ImageName = string.Empty);
+            if (updated is null) return NotFound();
+            return await BuildDetailsResponseAsync(updated.Id);
+        }
+        catch (UnauthorizedAccessException) { return Forbid(); }
+    }
+
     /// <summary>POST/PUT <c>/club/{id}/additionalimage/{slot}</c> — the club
     /// gallery's per-slot image setter (<c>IKMMOCKDKAF.txt:16214</c>).
     ///
@@ -495,6 +658,332 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
         if (row is null) return NotFound();
         return Ok(ToWireMembership(row));
     }
+
+    // ── Member lists (roster / banned / requests, + their searches) ──
+
+    /// <summary>GET <c>/club/{id}/members</c> — the club page's member roster.
+    /// Issuing method is
+    /// <c>FGLDKEJLAKB&lt;List&lt;CADEIMCFIIG&gt;&gt; GFOBOIIGDJF(Int64, GNLOJEONFIG?, MJOOBDNCHBO?, Int32?, Int32?)</c>
+    /// (<c>IKMMOCKDKAF.txt:19444</c>) so the body is a bare JSON ARRAY of the
+    /// same membership row <see cref="ClubMember"/> already serves — no paged
+    /// envelope. Verb ordinal 0 (GET) at :19746, query keys verbatim from
+    /// :19753/:19777/:19809/:19822: <c>membershipType</c>, <c>sortBy</c>,
+    /// <c>skip</c>, <c>take</c>.
+    ///
+    /// <c>membershipType</c> is the MJOOBDNCHBO wire value, not the stored
+    /// perms int, so it is compared after
+    /// <see cref="ClubService.MembershipTypeFromPerms"/>. With no filter the
+    /// roster is real members only — ban markers and pending rows have their
+    /// own endpoints below and must not leak into the member list.</summary>
+    [HttpGet("/club/{clubId:long}/members")]
+    public async Task<IActionResult> ClubMembers(
+        [FromRoute] long clubId,
+        [FromQuery] int? membershipType,
+        [FromQuery] int? sortBy,
+        [FromQuery] int? skip,
+        [FromQuery] int? take)
+    {
+        var club = await clubs.GetByIdAsync(clubId);
+        if (club is null) return NotFound();
+
+        var rows = await LoadMemberRowsAsync(clubId);
+        rows = membershipType is int wanted
+            ? rows.Where(r => r.MembershipType == wanted).ToList()
+            : rows.Where(r => r.MembershipType >= ClubService.MembershipTypeMember).ToList();
+
+        return Ok(Page(SortMembers(rows, sortBy ?? 0), skip ?? 0, take ?? 0)
+            .Select(r => ToWireMembership(r.Row))
+            .ToList());
+    }
+
+    /// <summary>GET <c>/club/{id}/members/banned</c> — the banned list.
+    /// <c>MBKDPCIOMDD(Int64, GNLOJEONFIG?, Int32?, Int32?)</c> returns
+    /// <c>List&lt;ICPNBOOIDLI&gt;</c> (<c>IKMMOCKDKAF.txt:18692</c>): a bare
+    /// array whose rows carry only <c>AccountId</c> (int), <c>ClubId</c>
+    /// (long) and <c>CreatedAt</c> — there is no MembershipType field on
+    /// ICPNBOOIDLI (recnet-runtime-decomp/ICPNBOOIDLI.cs). GET at :18978,
+    /// query keys <c>sortBy</c>/<c>skip</c>/<c>take</c> at :18985/:19016/:19028.
+    ///
+    /// Rows are the perms=256 ban markers stamped by
+    /// <see cref="MemberBan"/>. Moderator-gated: the ban list is staff-only
+    /// information.</summary>
+    [HttpGet("/club/{clubId:long}/members/banned")]
+    [Authorize]
+    public async Task<IActionResult> ClubMembersBanned(
+        [FromRoute] long clubId,
+        [FromQuery] int? sortBy,
+        [FromQuery] int? skip,
+        [FromQuery] int? take)
+    {
+        var club = await clubs.GetByIdAsync(clubId);
+        if (club is null) return NotFound();
+        if (!await clubs.CanManageAsync(clubId, Me, club)) return Forbid();
+
+        var rows = (await LoadMemberRowsAsync(clubId))
+            .Where(r => (r.Row.Permissions & 256) != 0)
+            .ToList();
+
+        return Ok(Page(SortMembers(rows, sortBy ?? 0), skip ?? 0, take ?? 0)
+            .Select(r => ToWireBan(r.Row))
+            .ToList());
+    }
+
+    /// <summary>GET <c>/club/{id}/members/requests</c> — pending join
+    /// requests / outstanding invites.
+    /// <c>GBJMBMCGCDL(Int64, Int32?, Int32?)</c> returns
+    /// <c>List&lt;AADIHDCMEDB&gt;</c> (<c>IKMMOCKDKAF.txt:21086</c>) — a bare
+    /// array, GET at :21325, only <c>skip</c> + <c>take</c> query keys
+    /// (:21338, :21350). Error copy "Failed to get pending club member
+    /// requests" at :21394 confirms the screen.</summary>
+    [HttpGet("/club/{clubId:long}/members/requests")]
+    [Authorize]
+    public async Task<IActionResult> ClubMemberRequests(
+        [FromRoute] long clubId,
+        [FromQuery] int? skip,
+        [FromQuery] int? take)
+    {
+        var club = await clubs.GetByIdAsync(clubId);
+        if (club is null) return NotFound();
+        if (!await clubs.CanManageAsync(clubId, Me, club)) return Forbid();
+
+        var rows = PendingRows(await LoadMemberRowsAsync(clubId));
+        return Ok(Page(SortMembers(rows, 1), skip ?? 0, take ?? 0)
+            .Select(r => ToWireMemberRequest(r.Row))
+            .ToList());
+    }
+
+    /// <summary>GET <c>/club/{id}/members/search</c> — the member-list search
+    /// box. <c>PGMGPEKCNJP</c> returns <c>MBMNHFAPFCJ</c>
+    /// (<c>IKMMOCKDKAF.txt:18108</c>), a PAGED envelope —
+    /// <c>List&lt;CADEIMCFIIG&gt;</c> + Int32 total + String continuation
+    /// token (recnet-runtime-decomp/MBMNHFAPFCJ.cs) — not the bare array the
+    /// unsearched roster returns. GET at :18475; query keys are DOT-PREFIXED
+    /// and must be read off <see cref="HttpRequest.Query"/> rather than bound
+    /// as properties: <c>parameters.name</c> (:18484),
+    /// <c>parameters.type</c> (:18492), <c>parameters.sortBy</c> (:18521),
+    /// <c>parameters.maxCount</c> (:18554), plus an unprefixed
+    /// <c>continuationToken</c> (:18563).
+    ///
+    /// The envelope's own key names are the one thing the binary cannot give
+    /// up (they live in DataMember blobs in global-metadata.dat), so the
+    /// entity-named pair validated on the sibling <c>club/search</c> envelope
+    /// — <c>Clubs</c>/<c>TotalClubs</c>/<c>ContinuationToken</c> — is mirrored
+    /// here as <c>Members</c>/<c>TotalMembers</c>, with <c>Results</c>/
+    /// <c>TotalResults</c> alongside as the alternate spelling. Json.NET
+    /// ignores whichever pair the DTO doesn't declare.</summary>
+    [HttpGet("/club/{clubId:long}/members/search")]
+    public async Task<IActionResult> ClubMembersSearch(long clubId)
+    {
+        var club = await clubs.GetByIdAsync(clubId);
+        if (club is null) return NotFound();
+
+        var name = QueryValue("parameters.name", "name");
+        var type = QueryInt("parameters.type", "type", "membershipType");
+        var sortBy = QueryInt("parameters.sortBy", "sortBy");
+        var maxCount = QueryInt("parameters.maxCount", "maxCount", "take");
+        var offset = QueryInt("continuationToken") ?? 0;
+
+        var rows = await LoadMemberRowsAsync(clubId);
+        rows = type is int wanted
+            ? rows.Where(r => r.MembershipType == wanted).ToList()
+            : rows.Where(r => r.MembershipType >= ClubService.MembershipTypeMember).ToList();
+        rows = FilterByName(rows, name);
+
+        var ordered = SortMembers(rows, sortBy ?? 0).ToList();
+        var (page, nextToken) = Slice(ordered, offset, maxCount);
+        return Ok(PagedEnvelope("Members", "TotalMembers",
+            page.Select(r => ToWireMembership(r.Row)).ToList(), ordered.Count, nextToken));
+    }
+
+    /// <summary>GET <c>/club/{id}/members/requests/search</c> — search inside
+    /// the pending-requests screen. <c>EDANLDCJECM</c> returns
+    /// <c>EDFOCLNECPM</c> (<c>IKMMOCKDKAF.txt:21448</c>): the paged envelope
+    /// over <c>List&lt;AADIHDCMEDB&gt;</c>. GET at :21812; dot-prefixed query
+    /// keys <c>parameters.name</c> (:21821), <c>parameters.sortBy</c>
+    /// (:21829, the NAHBJCGNJKA enum — Default=0, RequestDate_Asc=1,
+    /// RequestDate_Desc=2, Username_Asc=3, Username_Desc=4),
+    /// <c>parameters.maxCount</c> (:21862), <c>parameters.status</c> (:21867,
+    /// MDFFODMAIGJ — Invited=0, Requested=1, Denied=2) and unprefixed
+    /// <c>continuationToken</c> (:21896).
+    ///
+    /// RequestDate_Asc/Desc index the same JoinedAt column JoinDate_Asc/Desc
+    /// do on the roster sort, so the two enums share
+    /// <see cref="SortMembers"/>. The <c>status</c> filter can only ever
+    /// match Requested — see <see cref="ToWireMemberRequest"/>.</summary>
+    [HttpGet("/club/{clubId:long}/members/requests/search")]
+    [Authorize]
+    public async Task<IActionResult> ClubMemberRequestsSearch(long clubId)
+    {
+        var club = await clubs.GetByIdAsync(clubId);
+        if (club is null) return NotFound();
+        if (!await clubs.CanManageAsync(clubId, Me, club)) return Forbid();
+
+        var name = QueryValue("parameters.name", "name");
+        var sortBy = QueryInt("parameters.sortBy", "sortBy");
+        var maxCount = QueryInt("parameters.maxCount", "maxCount", "take");
+        var status = QueryInt("parameters.status", "status");
+        var offset = QueryInt("continuationToken") ?? 0;
+
+        var rows = FilterByName(PendingRows(await LoadMemberRowsAsync(clubId)), name);
+        if (status is int wantedStatus)
+            rows = rows.Where(r => RequestStatusFor(r.Row) == wantedStatus).ToList();
+
+        var ordered = SortMembers(rows, sortBy ?? 0).ToList();
+        var (page, nextToken) = Slice(ordered, offset, maxCount);
+        return Ok(PagedEnvelope("Requests", "TotalRequests",
+            page.Select(r => ToWireMemberRequest(r.Row)).ToList(), ordered.Count, nextToken));
+    }
+
+    /// <summary>A membership row paired with the account's username, which
+    /// every list endpoint above needs for the Username_Asc/Desc sorts and
+    /// the <c>parameters.name</c> filter. Loaded once per request rather than
+    /// per row.</summary>
+    private sealed record MemberRow(ClubMembershipEntity Row, string Username)
+    {
+        public int MembershipType => ClubService.MembershipTypeFromPerms(Row.Permissions);
+    }
+
+    private async Task<List<MemberRow>> LoadMemberRowsAsync(long clubId)
+    {
+        var rows = await db.ClubMemberships.AsNoTracking()
+            .Where(m => m.ClubId == clubId)
+            .ToListAsync();
+        if (rows.Count == 0) return new List<MemberRow>();
+
+        var ids = rows.Select(r => r.PlayerId).Distinct().ToList();
+        var names = await db.Players.AsNoTracking()
+            .Where(p => ids.Contains(p.Id))
+            .Select(p => new { p.Id, p.Username, p.DisplayName })
+            .ToListAsync();
+        var byId = names.ToDictionary(
+            n => n.Id,
+            n => string.IsNullOrWhiteSpace(n.Username) ? n.DisplayName : n.Username);
+
+        return rows
+            .Select(r => new MemberRow(r, byId.GetValueOrDefault(r.PlayerId, string.Empty)))
+            .ToList();
+    }
+
+    /// <summary>Rows carrying the pending marker (128) and NOT the ban marker
+    /// — the join-request / invite queue.</summary>
+    private static List<MemberRow> PendingRows(List<MemberRow> rows) => rows
+        .Where(r => (r.Row.Permissions & 128) != 0 && (r.Row.Permissions & 256) == 0)
+        .ToList();
+
+    private static List<MemberRow> FilterByName(List<MemberRow> rows, string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return rows;
+        var needle = name.Trim();
+        return rows
+            .Where(r => r.Username.Contains(needle, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+    }
+
+    /// <summary>Shared ordering for GNLOJEONFIG (roster/banned) and
+    /// NAHBJCGNJKA (requests) — both enums are Default=0, date asc=1,
+    /// date desc=2, Username_Asc=3, Username_Desc=4 over the same JoinedAt
+    /// column (recnet-runtime-decomp/GNLOJEONFIG.cs, NAHBJCGNJKA.cs).
+    /// Default puts the most privileged roles first, which is the order the
+    /// club page renders its roster in.</summary>
+    private static IEnumerable<MemberRow> SortMembers(IEnumerable<MemberRow> rows, int sortBy) => sortBy switch
+    {
+        1 => rows.OrderBy(r => r.Row.JoinedAt).ThenBy(r => r.Row.Id),
+        2 => rows.OrderByDescending(r => r.Row.JoinedAt).ThenByDescending(r => r.Row.Id),
+        3 => rows.OrderBy(r => r.Username, StringComparer.OrdinalIgnoreCase).ThenBy(r => r.Row.Id),
+        4 => rows.OrderByDescending(r => r.Username, StringComparer.OrdinalIgnoreCase).ThenBy(r => r.Row.Id),
+        _ => rows.OrderByDescending(r => r.MembershipType)
+                 .ThenBy(r => r.Row.JoinedAt)
+                 .ThenBy(r => r.Row.Id),
+    };
+
+    /// <summary>skip/take paging for the three bare-array lists. take=0 means
+    /// "unspecified" (the client omits the param), so it falls back to a
+    /// 100-row page rather than returning nothing.</summary>
+    private static List<MemberRow> Page(IEnumerable<MemberRow> rows, int skip, int take) => rows
+        .Skip(Math.Max(skip, 0))
+        .Take(take <= 0 ? 100 : Math.Clamp(take, 1, 500))
+        .ToList();
+
+    /// <summary>Continuation-token paging for the two search envelopes. The
+    /// token is opaque to the client (a String on the DTO), so it carries the
+    /// next row offset; an empty string means "no more pages", which is what
+    /// the sibling <c>club/search</c> envelope already returns.</summary>
+    private static (List<MemberRow> Page, string NextToken) Slice(
+        List<MemberRow> ordered, int offset, int? maxCount)
+    {
+        var start = Math.Clamp(offset, 0, ordered.Count);
+        var size = maxCount is int m && m > 0 ? Math.Clamp(m, 1, 500) : 30;
+        var page = ordered.Skip(start).Take(size).ToList();
+        var next = start + page.Count;
+        return (page, next < ordered.Count ? next.ToString() : string.Empty);
+    }
+
+    private static Dictionary<string, object?> PagedEnvelope(
+        string listKey, string totalKey, List<object> rows, int total, string continuationToken) =>
+        new()
+        {
+            [listKey] = rows,
+            ["Results"] = rows,
+            [totalKey] = total,
+            ["TotalResults"] = total,
+            ["ContinuationToken"] = continuationToken,
+        };
+
+    /// <summary>First non-empty value across a set of query-string aliases.
+    /// The 2023 client prefixes the search DTO's fields with
+    /// <c>parameters.</c>, which ASP.NET cannot bind to a plain property, so
+    /// these are read straight off the query collection.</summary>
+    private string? QueryValue(params string[] keys)
+    {
+        foreach (var key in keys)
+        {
+            var value = Request.Query[key].FirstOrDefault();
+            if (!string.IsNullOrWhiteSpace(value)) return value;
+        }
+        return null;
+    }
+
+    private int? QueryInt(params string[] keys) =>
+        int.TryParse(QueryValue(keys), out var parsed) ? parsed : null;
+
+    /// <summary><c>ICPNBOOIDLI</c> — the banned-list row. Three fields only
+    /// (recnet-runtime-decomp/ICPNBOOIDLI.cs): int AccountId, long ClubId,
+    /// DateTime. CreatedAt is the membership row's JoinedAt, which
+    /// <see cref="MemberBan"/> leaves at the original join time when it
+    /// stamps the ban marker onto an existing row.</summary>
+    private static object ToWireBan(ClubMembershipEntity row) => new
+    {
+        AccountId = (int)row.PlayerId,
+        ClubId = row.ClubId,
+        CreatedAt = row.JoinedAt,
+    };
+
+    /// <summary><c>AADIHDCMEDB</c> — the pending-request row. Field list from
+    /// recnet-runtime-decomp/AADIHDCMEDB.cs: long id, int AccountId, int?
+    /// inviter account id, long ClubId, MJOOBDNCHBO MembershipType,
+    /// MDFFODMAIGJ status, DateTime.
+    ///
+    /// Two fields the current perms model genuinely cannot fill, rather than
+    /// invent: the inviter is not recorded anywhere (invites and requests
+    /// both collapse to the single 128 marker on the target's own row) so it
+    /// is emitted as null — the DTO declares it nullable — and the status is
+    /// always Requested for the same reason. Nothing in the accept/deny flow
+    /// reads either field: those calls key off <c>accountId</c>.</summary>
+    private static object ToWireMemberRequest(ClubMembershipEntity row) => new
+    {
+        Id = row.Id,
+        RequestId = row.Id,
+        AccountId = (int)row.PlayerId,
+        InviterAccountId = (int?)null,
+        ClubId = row.ClubId,
+        MembershipType = ClubService.MembershipTypeFromPerms(row.Permissions),
+        Status = RequestStatusFor(row),
+        CreatedAt = row.JoinedAt,
+    };
+
+    /// <summary>MDFFODMAIGJ: Invited=0, Requested=1, Denied=2. Only Requested
+    /// is reachable — see <see cref="ToWireMemberRequest"/>.</summary>
+    private static int RequestStatusFor(ClubMembershipEntity row) => 1;
 
     // ── Member mutations (void / IPromise) ───────────────────────────
 
