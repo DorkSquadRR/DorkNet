@@ -363,12 +363,34 @@ public class MatchPlayerController(
         var pending = joinTimeouts.GetPending(playerId);
         if (pending is { DeferPresenceCommit: true })
         {
+            // Report the instance the player is joining — NOT null.
+            //
+            // Deferring the commit is about what everyone ELSE sees: presence
+            // stays uncommitted until the join is confirmed, so a failed join
+            // never leaves a ghost in the room. It was never meant to change
+            // what we tell the joining player about themselves.
+            //
+            // Returning null did exactly that, and the client treats it as the
+            // room vanishing mid-join: OnPresenceHeartbeatResponse XORs
+            // (cachedRoomInstance != null) against (serverRoomInstance != null),
+            // so a client holding the target while we say null fires
+            // "presence heartbeat response indicates local presence is
+            // out-of-sync", then "Attempting to go to Invalid RoomInstance"
+            // and cancels its own load ("OnPlayerPresenceUpdate is cancelling
+            // room load"). The join it aborted was the one we were waiting on,
+            // so it retried until a heartbeat happened to miss the window —
+            // entering a dorm took several attempts and looked like a load
+            // failure. The branch below documents this same XOR for the
+            // boot-race case; this one contradicted it.
+            //
+            // Echoing the pending target satisfies the XOR and matches what the
+            // client already has, while presence itself stays uncommitted.
             log.LogInformation(
-                "[player-heartbeat] player={PlayerId} pending deferred room={RoomId} instance={InstanceId}; returning null until join result",
+                "[player-heartbeat] player={PlayerId} pending deferred room={RoomId} instance={InstanceId}; echoing target until join result",
                 playerId,
                 pending.Value.TargetRoom.RoomId,
                 pending.Value.TargetRoom.RoomInstanceId);
-            return null;
+            return pending.Value.TargetRoom;
         }
 
         if (room is null)
