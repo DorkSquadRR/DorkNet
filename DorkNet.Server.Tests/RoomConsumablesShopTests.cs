@@ -95,7 +95,12 @@ public sealed class RoomConsumablesShopTests : IClassFixture<DorkNetServerFactor
                 "ExpectedPriceAndCurrency": { "Price": 5, "CurrencyId": null }
             }
             """);
-        Assert.Equal(6, badPrice.GetProperty("OperationResult").GetInt32()); // RequestedPriceDoesNotMatch
+        // OperationResult is an OBJECT { Status, InventoryItem } — the base type
+        // OKHNOPLBOFP holds a single BGHBAILNNJJ, which itself exposes the status
+        // enum plus the inventory row. The scalar token-operation enum lives in
+        // BalanceUpdateResult (Nullable<CABBDKFODEC>) on MJKFEHPIDME.
+        Assert.Equal(6, badPrice.GetProperty("BalanceUpdateResult").GetInt32()); // RequestedPriceDoesNotMatch
+        Assert.Equal(38, badPrice.GetProperty("OperationResult").GetProperty("Status").GetInt32());
         var balanceBefore = badPrice.GetProperty("TokenBalanceResponse").GetProperty("Balance").GetInt64();
 
         // ── Purchase (client stores NewConcurrencyCode locally) ──────────
@@ -106,7 +111,7 @@ public sealed class RoomConsumablesShopTests : IClassFixture<DorkNetServerFactor
                 "ExpectedPriceAndCurrency": { "Price": 10, "CurrencyId": null }
             }
             """);
-        Assert.Equal(0, purchase.GetProperty("OperationResult").GetInt32());
+        Assert.Equal(0, purchase.GetProperty("OperationResult").GetProperty("Status").GetInt32());
         var tokenBalance = purchase.GetProperty("TokenBalanceResponse");
         Assert.Equal(2, tokenBalance.GetProperty("CurrencyType").GetInt32());
         Assert.Equal(balanceBefore - 10, tokenBalance.GetProperty("Balance").GetInt64());

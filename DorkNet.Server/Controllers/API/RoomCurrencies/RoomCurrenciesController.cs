@@ -311,7 +311,11 @@ public class RoomCurrenciesController(DorkNetDbContext db, LevelService level) :
         if (offerIds.Count > 0) query = query.Where(x => offerIds.Contains(x.o.PublicId));
         if (currencyIds.Count > 0) query = query.Where(x => currencyIds.Contains(x.c.PublicId));
 
-        var rows = await query.Take(200).ToListAsync();
+        // The client reads an "Order" key (AALDCAANEMM.txt:550) but there is no
+        // column to persist it into yet, so ToOfferWire reports 0 for every pack
+        // and the client keeps the order it received them in — order by insertion
+        // id so that fallback is at least stable across fetches.
+        var rows = await query.OrderBy(x => x.o.Id).Take(200).ToListAsync();
 
         // The response is GROUPED: List<{CurrencyId, PurchaseOffers}> (formatter
         // LKBGCOELLIN.txt:215-258 reads only those two keys). A flat offer list
@@ -453,13 +457,13 @@ public class RoomCurrenciesController(DorkNetDbContext db, LevelService level) :
     {
         var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         foreach (var pair in Request.Query)
-            fields[pair.Key] = pair.Value.FirstOrDefault() ?? string.Empty;
+            fields[pair.Key] = Flatten(pair.Value);
 
         if (Request.HasFormContentType)
         {
             var form = await Request.ReadFormAsync();
             foreach (var pair in form)
-                fields[pair.Key] = pair.Value.FirstOrDefault() ?? string.Empty;
+                fields[pair.Key] = Flatten(pair.Value);
             return fields;
         }
 
@@ -488,6 +492,21 @@ public class RoomCurrenciesController(DorkNetDbContext db, LevelService level) :
 
         return fields;
     }
+
+    /// <summary>Collapses a multi-valued query/form key into the comma-joined form
+    /// <see cref="ReadGuidList"/>/<see cref="ReadLongList"/> already split on.
+    ///
+    /// getPurchaseOffersBatch pushes its currency-id list through the generic batch
+    /// param helper (<c>0x181F2DCD0</c> with <c>"ids"</c>,
+    /// MIHKAJFMIPE_NestedType_OBLJADOFIED.txt:228-230), which is the same helper
+    /// every other RecNet batch route uses to REPEAT the key once per id
+    /// (<c>?ids=a&amp;ids=b</c>). Taking only <c>FirstOrDefault()</c> silently
+    /// dropped every id after the first, so a multi-currency room fetched packs for
+    /// exactly one of its currencies.</summary>
+    private static string Flatten(Microsoft.Extensions.Primitives.StringValues values) =>
+        values.Count <= 1
+            ? values.FirstOrDefault() ?? string.Empty
+            : string.Join(",", values.Where(v => !string.IsNullOrWhiteSpace(v)));
 
     private async Task<string?> ReadJsonBodyAsync()
     {

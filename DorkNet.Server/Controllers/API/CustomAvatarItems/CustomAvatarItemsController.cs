@@ -21,6 +21,14 @@ public class CustomAvatarItemsController(
     IObjectStorage storage,
     ILogger<CustomAvatarItemsController> logger) : ControllerBase
 {
+    /// <summary>Floor price for a publicly listed custom item. The client
+    /// asks for this over the wire (<c>api/customAvatarItems/v1/minPriceForPublicItem</c>,
+    /// RecNet.Runtime/MPBLNLMCEDL.txt:6893) and then enforces it locally in the
+    /// designer, so the number the create/update paths clamp to and the number
+    /// served on that route have to be the same constant or the client's own
+    /// validation disagrees with the server's rejection.</summary>
+    private const int MinPublicItemPrice = 100;
+
     [HttpGet]
     [AllowAnonymous]
     public async Task<IActionResult> List(
@@ -529,7 +537,7 @@ public class CustomAvatarItemsController(
 
         item.Name = name;
         item.Description = description;
-        item.Price = Math.Max(100, req.Price ?? item.Price);
+        item.Price = Math.Max(MinPublicItemPrice, req.Price ?? item.Price);
         item.ItemType = req.ItemType ?? item.ItemType;
         item.BaseAvatarItemId = req.BaseAvatarItemId ?? item.BaseAvatarItemId;
         item.Color = Trim(req.Color, 64);
@@ -937,6 +945,30 @@ public class CustomAvatarItemsController(
     {
         public List<Guid>? Ids { get; set; }
         public List<Guid>? ItemIds { get; set; }
+    }
+
+    /// <summary>The designer's in-progress draft, as persisted to the
+    /// per-player <c>caidesign_p&lt;id&gt;.json</c> object (see
+    /// <see cref="LoadDesignAsync"/>). Mirrors the three payload properties of
+    /// the client's design DTOs — the metadata object GIOBJIGEMNG carries the
+    /// nullable base-item id and the "#RRGGBB" colour, and the texture arrives
+    /// as the separate "design" file part whose stored blob name lands in
+    /// <see cref="ImageName"/>.
+    ///
+    /// <see cref="Deleted"/> is the tombstone: <see cref="IObjectStorage"/>
+    /// exposes no delete operation, so DELETE design overwrites the record with
+    /// a deleted marker and LoadDesignAsync reports it as "no saved design".
+    /// Public properties with setters because the round-trip goes through
+    /// System.Text.Json.</summary>
+    public sealed class StoredDesign
+    {
+        public int? BaseAvatarItemId { get; set; }
+
+        public string Color { get; set; } = string.Empty;
+
+        public string ImageName { get; set; } = string.Empty;
+
+        public bool Deleted { get; set; }
     }
 
     public sealed class DesignRequest
