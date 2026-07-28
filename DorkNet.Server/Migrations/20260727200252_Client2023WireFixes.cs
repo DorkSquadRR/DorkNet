@@ -51,7 +51,7 @@ namespace DorkNet.Server.Migrations
                 table: "Playlists",
                 type: "INTEGER",
                 nullable: false,
-                defaultValue: false);
+                defaultValue: true);
 
             migrationBuilder.AddColumn<bool>(
                 name: "SupportsLevelVoting",
@@ -65,21 +65,21 @@ namespace DorkNet.Server.Migrations
                 table: "Playlists",
                 type: "INTEGER",
                 nullable: false,
-                defaultValue: false);
+                defaultValue: true);
 
             migrationBuilder.AddColumn<bool>(
                 name: "SupportsTeleportVR",
                 table: "Playlists",
                 type: "INTEGER",
                 nullable: false,
-                defaultValue: false);
+                defaultValue: true);
 
             migrationBuilder.AddColumn<bool>(
                 name: "SupportsWalkVR",
                 table: "Playlists",
                 type: "INTEGER",
                 nullable: false,
-                defaultValue: false);
+                defaultValue: true);
 
             migrationBuilder.AddColumn<int>(
                 name: "WarningMask",
