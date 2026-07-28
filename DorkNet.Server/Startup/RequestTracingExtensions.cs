@@ -264,7 +264,7 @@ public static class RequestTracingExtensions
     {
         var configured = Environment.GetEnvironmentVariable("Trace__SuccessBodyPaths");
         if (configured is null)
-            return ["/player", "/thread", "/clone"];
+            return ["/player", "/thread", "/clone", "/rooms/", "/matchmake/"];
 
         return configured
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
