@@ -1097,6 +1097,81 @@ public class AdminController(
         });
     }
 
+    /// <summary>GET <c>api/admin/v1/rooms/{id}/subrooms</c> — every sub-room of
+    /// a room with the settings that are adjustable per sub-room.
+    ///
+    /// Max players is genuinely per sub-room: the room's own
+    /// <see cref="RoomEntity.MaxCapacity"/> is what the room advertises and what
+    /// matchmaking hands to RoomInstance.MaxCapacity, while each sub-room caps
+    /// itself through <see cref="RoomSceneEntity.MaxPlayers"/>. In-game the
+    /// owner drives this from the "Max Player Count in This Subroom" slider
+    /// (PUT rooms/{id}/subrooms/{sub}/maxplayers); this is the same setting,
+    /// reachable for rooms an admin does not own.</summary>
+    [HttpGet("rooms/{id:long}/subrooms")]
+    public async Task<ActionResult> GetRoomSubRooms(long id)
+    {
+        if (!await db.Rooms.AnyAsync(r => r.Id == id)) return NotFound();
+
+        var scenes = await db.RoomScenes
+            .Where(s => s.RoomId == id)
+            .OrderBy(s => s.OrderIndex)
+            .ToListAsync();
+
+        return Ok(scenes.Select(s => new
+        {
+            // Ids go out as strings: the admin SPA is JavaScript and silently
+            // mangles integers past 2^53.
+            id = s.Id.ToString(),
+            subRoomId = s.OrderIndex,
+            name = s.Name,
+            maxPlayers = s.MaxPlayers,
+            canMatchmakeInto = s.CanMatchmakeInto,
+            isSandbox = s.IsSandbox,
+            dataBlobName = s.DataBlobName,
+            dataModifiedAt = s.DataModifiedAt,
+        }).ToList());
+    }
+
+    public sealed record SetSubRoomMaxPlayersRequest(int MaxPlayers);
+
+    /// <summary>PUT <c>api/admin/v1/rooms/{id}/subrooms/{subRoomId}/maxplayers</c>
+    /// — set one sub-room's player cap, addressed by its ORDER INDEX, which is
+    /// the sub-room id the client and the rest of the wire use (the row's own
+    /// primary key is an internal detail).
+    ///
+    /// Clamped to the same 1..80 range as the room-level capacity: 0 would make
+    /// a sub-room unjoinable, and the ceiling matches what the room props
+    /// endpoint already enforces so the two settings can't disagree about what
+    /// is a legal value.</summary>
+    [HttpPut("rooms/{id:long}/subrooms/{subRoomId:int}/maxplayers")]
+    [HttpPost("rooms/{id:long}/subrooms/{subRoomId:int}/maxplayers")]
+    public async Task<ActionResult> SetSubRoomMaxPlayers(
+        long id, int subRoomId, [FromBody] SetSubRoomMaxPlayersRequest body)
+    {
+        var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == id);
+        if (room is null) return NotFound();
+
+        var scene = await db.RoomScenes
+            .FirstOrDefaultAsync(s => s.RoomId == id && s.OrderIndex == subRoomId);
+        if (scene is null) return NotFound();
+
+        var previous = scene.MaxPlayers;
+        scene.MaxPlayers = Math.Clamp(body.MaxPlayers, 1, 80);
+        scene.DataModifiedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+
+        await LogAsync("update_subroom_maxplayers", "room", id,
+            $"subRoom={subRoomId} maxPlayers {previous} -> {scene.MaxPlayers}");
+
+        return Ok(new
+        {
+            id = scene.Id.ToString(),
+            subRoomId = scene.OrderIndex,
+            name = scene.Name,
+            maxPlayers = scene.MaxPlayers,
+        });
+    }
+
     public sealed record AddRoleRequest(long PlayerId, int Role, bool Accepted = true);
 
     /// <summary>POST <c>api/admin/v1/rooms/{id}/roles</c> — grant a

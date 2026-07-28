@@ -139,6 +139,46 @@ in S3 is modified. Toggle endpoint:
 `{"Disabled": bool}`. Clamped responses are served with a 60s edge TTL so
 flipping the toggle lands within a minute.
 
+## Per-sub-room max players (`/rooms` → room detail)
+
+Player caps are two separate settings, and conflating them is the easy
+mistake here:
+
+| Setting | Column | Scope |
+| --- | --- | --- |
+| `MaxCapacity` | `RoomEntity.MaxCapacity` | What the ROOM advertises; flows into `RoomInstance.MaxCapacity` for matchmaking and into the room-level `MaxPlayers` of the details payload. |
+| `MaxPlayers` | `RoomSceneEntity.MaxPlayers` | What ONE sub-room caps itself at; appears per entry in the details `SubRooms[]`. |
+
+The room-level figure must not be read off sub-room 0 — that collapses the
+two into one and makes an admin edit to a sub-room silently move the
+room's advertised capacity.
+
+Sub-room caps have two write paths onto the same column:
+
+- **In game** (room owner only) — the "Max Player Count in This Subroom"
+  slider issues `PUT rooms/{id}/subrooms/{sub}/maxplayers`. Unlike most of
+  its siblings this one does **not** form-encode: `NLDBPDCNNCF.MNBPCGJNLNP`
+  (`Int64, Int64, Int32`) builds a `BLNOGFGHIIF` whose single JSON key is
+  `maxPlayers`, with verb 3 = PUT. It reads the reply back as
+  `FGCPNAACHIK`, so the response is the full room-details shape and has to
+  carry the new value.
+- **Admin** (any room, ownership not required):
+  - `GET api/admin/v1/rooms/{id}/subrooms` — every sub-room with its cap,
+    matchmaking flag, sandbox flag and current data blob. Row ids go out as
+    **strings**; the SPA is JavaScript and mangles integers past 2^53.
+  - `PUT api/admin/v1/rooms/{id}/subrooms/{subRoomId}/maxplayers` with
+    `{"MaxPlayers": int}`. `subRoomId` is the sub-room's **order index** —
+    the id the client and the rest of the wire use — not the row's primary
+    key.
+
+Both paths clamp to 1..80, matching the room-level cap in
+`rooms/{id}/props`: 0 would make a sub-room unjoinable, and a shared range
+keeps the two settings from disagreeing about what is a legal value.
+
+Enforcement caveat carried over from `RoomEntity.MaxCapacity`: this is the
+advertised cap. The client never sets Photon `RoomOptions.MaxPlayers`, so
+hard enforcement still needs a ClientMod Photon patch.
+
 ## Build And Deploy
 
 The service Dockerfile builds the admin SPA for service images that need
