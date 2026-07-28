@@ -56,7 +56,7 @@ that outer check.
 |---|---|---|
 | Overview | `/` | Live ops dashboard, online players, active sessions, quick kick/ban/broadcast actions |
 | Moderation | `/players` | Player directory, bans, reports, per-player ban/grant/gift/password/avatar/account actions |
-| Activity | `/activity` | Admin audit log and per-player request logs |
+| Activity | `/activity` | Admin audit log, per-player request logs, QA test cases + GitHub issue linking |
 | Content | `/rooms`, `/rooms/:id`, `/import-room`, `/content` | Room list/detail, room import, instances, leaderboards, community board, loading tips, 3D Charades word lists |
 | Operations | `/broadcast`, `/settings` | Server broadcast, server toggles (signups, everyone-is-friends, profanity filter, imported-room version clamp), signup codes, weekly challenges, Play menu tags, Rec Center doors, game config values |
 
@@ -193,6 +193,12 @@ QA test cases can file and track GitHub issues. Configure with:
 endpoints answer `503` with the reason, and the background reconciler logs once
 and idles. A server with no GitHub credentials is a normal deployment.
 
+UI: **Activity → Test cases** (`/activity?tab=testcases`). File or unlink an
+issue per case, or reconcile them all. The buttons disable themselves with an
+explanation when GitHub is unconfigured rather than failing on click.
+
+Sub-room caps live on the room page: **Rooms → a room → Sub-rooms**.
+
 Endpoints (admin-gated — these are not part of the 2023 client's surface):
 
 - `POST api/testcasemanagement/v1/testcase/{id}/issue` — file and link.
@@ -206,6 +212,11 @@ Endpoints (admin-gated — these are not part of the 2023 client's surface):
 - `POST api/testcasemanagement/v1/issues/sync` — reconcile now. The background
   service runs the same code path on its interval, so manual and automatic
   cannot drift.
+- `GET api/admin/v1/testcases[?passId=&status=]` — the list the SPA renders,
+  with each case's issue number and link.
+
+Each of the three also answers under `/api/admin/v1/testcases/...`, because the
+admin SPA speaks that prefix exclusively.
 
 ### Where the link is stored
 

@@ -36,6 +36,47 @@ public class TestCaseIssuesController(
     private const int StatusFailed = 2;
     private const int StatusPassed = 3;
 
+
+    /// <summary>GET <c>api/admin/v1/testcases</c> — every test case with its
+    /// issue link, newest pass first. Optional <c>?passId=</c> narrows to one
+    /// test pass and <c>?status=</c> to one status.
+    ///
+    /// Exists because the admin SPA speaks <c>/api/admin/v1</c> exclusively and
+    /// the client-facing test-case routes are shaped for the in-game QA tab
+    /// (per-pass, no issue fields).</summary>
+    [HttpGet("api/admin/v1/testcases")]
+    public async Task<IActionResult> ListCases(
+        [FromQuery] uint? passId, [FromQuery] int? status, CancellationToken ct)
+    {
+        var query = db.TestCases.AsQueryable();
+        if (passId is uint pass) query = query.Where(c => c.TestPassId == pass);
+        if (status is int s) query = query.Where(c => c.Status == s);
+
+        var cases = await query
+            .OrderByDescending(c => c.TestPassId)
+            .ThenBy(c => c.Key)
+            .Take(500)
+            .ToListAsync(ct);
+
+        return Ok(new
+        {
+            githubConfigured = github.IsConfigured,
+            repository = github.Repository,
+            cases = cases.Select(c => new
+            {
+                c.Id,
+                c.Key,
+                c.Title,
+                c.RoomName,
+                c.Status,
+                c.TestPassId,
+                issueUrl = c.JiraBugUrl,
+                issueNumber = GitHubIssueService.IssueNumberFromUrl(c.JiraBugUrl),
+                c.UpdatedAt,
+            }).ToList(),
+        });
+    }
+
     /// <summary>POST <c>api/testcasemanagement/v1/testcase/{id}/issue</c> —
     /// file a GitHub issue for a test case and link it.
     ///
@@ -44,6 +85,7 @@ public class TestCaseIssuesController(
     /// pass is therefore safe, which is the whole point — the alternative is a
     /// tester filing the same bug on every run.</summary>
     [HttpPost("api/testcasemanagement/v1/testcase/{id}/issue")]
+    [HttpPost("api/admin/v1/testcases/{id}/issue")]
     public async Task<IActionResult> CreateIssue(string id, CancellationToken ct)
     {
         if (!github.IsConfigured)
@@ -81,6 +123,7 @@ public class TestCaseIssuesController(
     /// unlink, leaving the issue itself alone. Closing someone's issue as a
     /// side effect of tidying a QA link would be the wrong call.</summary>
     [HttpDelete("api/testcasemanagement/v1/testcase/{id}/issue")]
+    [HttpDelete("api/admin/v1/testcases/{id}/issue")]
     public async Task<IActionResult> UnlinkIssue(string id, CancellationToken ct)
     {
         var tc = await db.TestCases.FirstOrDefaultAsync(c => c.Id == id, ct);
@@ -112,6 +155,7 @@ public class TestCaseIssuesController(
     /// change, so a case a tester has Claimed, or one nobody has run yet, is
     /// never rewritten underneath them.</summary>
     [HttpPost("api/testcasemanagement/v1/issues/sync")]
+    [HttpPost("api/admin/v1/testcases/issues/sync")]
     public async Task<IActionResult> Sync(CancellationToken ct)
     {
         if (!github.IsConfigured)

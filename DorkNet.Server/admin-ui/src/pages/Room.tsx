@@ -17,7 +17,7 @@ import { ArrowLeft, RefreshCw, Trash } from '../components/Icons';
 // modals: general info edit, owner / co-owner / mod / host
 // management, live photon instances, recent visitors, danger zone.
 
-type Tab = 'general' | 'roles' | 'instances' | 'leaderboards' | 'visitors' | 'danger';
+type Tab = 'general' | 'roles' | 'subrooms' | 'instances' | 'leaderboards' | 'visitors' | 'danger';
 
 const ROLE_LABEL: Record<0 | 1 | 2, string> = {
   0: 'Co-owner',
@@ -67,7 +67,7 @@ export function Room() {
         <>
           <RoomHeaderCard room={room} />
           <div className="flex gap-1 mt-4 mb-3 overflow-x-auto border-b border-ink-800">
-            {(['general', 'roles', 'instances', 'leaderboards', 'visitors', 'danger'] as Tab[]).map(t => (
+            {(['general', 'roles', 'subrooms', 'instances', 'leaderboards', 'visitors', 'danger'] as Tab[]).map(t => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -79,6 +79,7 @@ export function Room() {
               >
                 {t === 'general' ? 'General' :
                  t === 'roles' ? 'Roles & ownership' :
+                 t === 'subrooms' ? 'Sub-rooms' :
                  t === 'instances' ? 'Live instances' :
                  t === 'leaderboards' ? 'Leaderboards' :
                  t === 'visitors' ? 'Recent visitors' :
@@ -89,6 +90,7 @@ export function Room() {
 
           {tab === 'general' && <GeneralTab room={room} onSaved={refresh} />}
           {tab === 'roles' && <RolesTab room={room} onChanged={refresh} />}
+          {tab === 'subrooms' && <SubRoomsTab roomId={room.id} roomCapacity={room.maxCapacity} />}
           {tab === 'instances' && <InstancesTab roomId={room.id} />}
           {tab === 'leaderboards' && <LeaderboardsTab roomId={room.id} />}
           {tab === 'visitors' && <VisitorsTab roomId={room.id} />}
@@ -552,6 +554,113 @@ function TransferOwnerModal({ room, onClose, onTransferred }: {
 }
 
 // ── Instances tab — live photon matches in this room ────────────────────
+
+interface SubRoom {
+  id: string;
+  subRoomId: number;
+  name: string;
+  maxPlayers: number;
+  canMatchmakeInto: boolean;
+  isSandbox: boolean;
+  dataBlobName: string;
+}
+
+// Per-sub-room player caps. Distinct from the room's own MaxCapacity, which is
+// what the ROOM advertises and what matchmaking hands to
+// RoomInstance.MaxCapacity — each sub-room caps itself separately, and the two
+// are easy to conflate. The same value is editable in game by the room owner
+// ("Max Player Count in This Subroom"); this reaches rooms an admin does not
+// own.
+function SubRoomsTab({ roomId, roomCapacity }: { roomId: number; roomCapacity: number }) {
+  const toast = useToast();
+  const { data, loading, error, refresh } = useApi<SubRoom[]>(`/rooms/${roomId}/subrooms`);
+  const [edits, setEdits] = useState<Record<number, string>>({});
+  const [saving, setSaving] = useState<number | null>(null);
+
+  const save = async (sub: SubRoom) => {
+    const raw = edits[sub.subRoomId];
+    const value = Number(raw);
+    if (!Number.isInteger(value) || value < 1 || value > 80) {
+      toast.push('Max players must be a whole number between 1 and 80', 'error');
+      return;
+    }
+    setSaving(sub.subRoomId);
+    try {
+      await api(`/rooms/${roomId}/subrooms/${sub.subRoomId}/maxplayers`, {
+        method: 'PUT',
+        body: { MaxPlayers: value },
+      });
+      toast.push(`${sub.name || `Sub-room ${sub.subRoomId}`} capped at ${value}`, 'success');
+      setEdits(prev => {
+        const next = { ...prev };
+        delete next[sub.subRoomId];
+        return next;
+      });
+      refresh();
+    } catch (e) {
+      toast.push((e as Error).message, 'error');
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  return (
+    <div className="card overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-ink-800">
+        <div className="text-xs text-ink-400">
+          Room advertises <span className="text-ink-200 font-medium">{roomCapacity}</span> — each
+          sub-room caps itself separately
+        </div>
+        <button onClick={refresh} className="btn-secondary text-xs" disabled={loading}>
+          <RefreshCw className={loading ? 'animate-spin' : ''} /> Refresh
+        </button>
+      </div>
+      {error && <div className="px-4 py-3 text-sm text-danger">{error}</div>}
+      {data && data.length === 0 && <Empty title="No sub-rooms" />}
+      {data && data.length > 0 && (
+        <ul className="divide-y divide-ink-800">
+          {data.map(sub => {
+            const pending = edits[sub.subRoomId];
+            const dirty = pending !== undefined && Number(pending) !== sub.maxPlayers;
+            return (
+              <li key={sub.id} className="px-4 py-3 flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-ink-50">{sub.name || '(unnamed)'}</span>
+                    <span className="badge-neutral">SubRoom {sub.subRoomId}</span>
+                    {sub.isSandbox && <span className="badge-neutral">Sandbox</span>}
+                    {!sub.canMatchmakeInto && <span className="badge-banned">No matchmaking</span>}
+                  </div>
+                  {sub.dataBlobName && (
+                    <div className="text-xs text-ink-500 font-mono truncate mt-0.5">{sub.dataBlobName}</div>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-ink-400">Max players</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={80}
+                    value={pending ?? String(sub.maxPlayers)}
+                    onChange={e => setEdits(prev => ({ ...prev, [sub.subRoomId]: e.target.value }))}
+                    className="input w-20 text-sm"
+                  />
+                  <button
+                    onClick={() => save(sub)}
+                    disabled={!dirty || saving === sub.subRoomId}
+                    className="btn-primary text-xs"
+                  >
+                    {saving === sub.subRoomId ? 'Saving…' : 'Save'}
+                  </button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
 
 function InstancesTab({ roomId }: { roomId: number }) {
   const toast = useToast();
