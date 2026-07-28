@@ -1144,6 +1144,222 @@ public class InventionsController(
         return Ok(new { Success = true, Message = string.Empty });
     }
 
+    // ── Rec Room Studio remote run ───────────────────────────────────────
+
+    /// <summary>One uploaded blob as the client describes it: three strings.
+    /// Wire keys are literal in the generated serializer — "Filename", "Hash",
+    /// "OwnershipProof" (FLELPHJDLNG.txt:255/274/290, with camelCase and
+    /// all-lowercase aliases registered alongside each). The backing type is
+    /// <c>CFPEPOJAMHH/IFIBBJDIHJH</c>, three <c>System.String</c> accessors
+    /// (CFPEPOJAMHH_NestedType_IFIBBJDIHJH.txt:3/25/47). Same triple the room
+    /// save commit sends on <c>rooms/{id}/subrooms/{id}/data</c>; declared here
+    /// so this controller binds its own body.</summary>
+    public sealed class StudioBlobRef
+    {
+        public string? Filename { get; set; }
+        public string? Hash { get; set; }
+        public string? OwnershipProof { get; set; }
+    }
+
+    /// <summary>Body of <c>remote-run/push-to-studio</c> — RecNet type
+    /// <c>FNAGBPCAGJD</c>. Field order/types come from the request builder
+    /// (EHIOLHBGODG.txt:045-070 writes +16 String, +24 Int64, +32 Int64,
+    /// +40 String, +48/+56 the two blob refs, +64 a <c>Nullable&lt;Int32&gt;</c>)
+    /// and the property accessors on FNAGBPCAGJD.txt:3-141. The JSON key for
+    /// each is literal in the generated serializer OFMNNCMPEPA.txt:535-698:
+    /// <c>SessionId, RoomId, SubRoomId, UnityAssetId, RoomData, SubRoomData,
+    /// SavedByAccountId</c> (camel/lower aliases registered too).</summary>
+    public sealed class PushToStudioRequest
+    {
+        public string? SessionId { get; set; }
+        public long RoomId { get; set; }
+        public long SubRoomId { get; set; }
+        public string? UnityAssetId { get; set; }
+        public StudioBlobRef? RoomData { get; set; }
+        public StudioBlobRef? SubRoomData { get; set; }
+        public int? SavedByAccountId { get; set; }
+    }
+
+    /// <summary>POST <c>remote-run/push-to-studio</c> — hands the room the
+    /// player just uploaded to the paired Rec Room Studio session, WITHOUT
+    /// committing it as the room's live save (that is the separate
+    /// <c>rooms/{id}/subrooms/{id}/data</c> path; the client's two flows are
+    /// sibling methods OGPDOMCNIFM.txt:271 vs :449).
+    ///
+    /// <para><b>Verb.</b> POST. The request builder at EHIOLHBGODG.txt:411-417
+    /// moves the route literal <c>"remote-run/push-to-studio"</c> into r9 and
+    /// <c>2</c> (BestHTTP HTTPMethods.Post) into rdx before
+    /// <c>BNDIAONDFFF..ctor(verb, host, route)</c>. No cmov — one verb only.
+    /// The body is RAW JSON, not form fields: :433 hands the serialized DTO to
+    /// <c>BNDIAONDFFF.FJLLPHFOOJJ</c> (RawJsonForm, <c>application/json</c>),
+    /// so this binds via <see cref="Binding.FormOrJsonModelBinder"/> — the
+    /// explicit [ModelBinder] is required or [ApiController] re-infers
+    /// [FromBody] and 415s a form-shaped caller.</para>
+    ///
+    /// <para><b>Response.</b> <c>FGLDKEJLAKB&lt;CEELGOLBHIL&gt;</c>
+    /// (EHIOLHBGODG.txt:217) — a single RemoteRunDetails object, EIGHT keys,
+    /// all literal in its generated reader PPHLKNGCGOE.txt:599-786:
+    /// <c>SessionId</c> (String), <c>RoomId</c> and <c>SubRoomId</c>
+    /// (<c>Nullable&lt;Int64&gt;</c> — CEELGOLBHIL.txt:25/51), then
+    /// <c>UnityAssetId, RoomDataFilename, RoomDataHash, SubRoomDataFilename,
+    /// SubRoomDataHash</c> (String). Note the response FLATTENS the two blob
+    /// refs the request nests, and drops OwnershipProof. A failed/malformed
+    /// reply surfaces the client's "Failed to push to Rec Room Studio" toast
+    /// (EHIOLHBGODG.txt:445).</para>
+    ///
+    /// <para><b>What it persists.</b> The pushed blobs were already stored by
+    /// <c>/upload</c> (every FileType there inserts a
+    /// <see cref="RoomDataBlobEntity"/>), so the push is a registration step:
+    /// it stamps the sub-room save blob with the room + sub-room it belongs to
+    /// — that is what makes it appear in the per-sub-room
+    /// <c>datahistory</c>/"Restore to old version" list, which the FileType=6
+    /// room-metadata upload path (RoomId=0, SubRoomId=null) cannot do on its
+    /// own — writes the session id into
+    /// <see cref="RoomEntity.StudioSessionId"/> (the column that exists for
+    /// exactly this and is echoed in room details), records the pushed Unity
+    /// asset id on the sub-room's <see cref="RoomSceneEntity"/>, and keeps the
+    /// whole push under <c>remoterun:{SessionId}</c> in
+    /// <see cref="PlayerSettingEntity"/> so the details survive for the paired
+    /// Studio session to resolve. <see cref="RoomEntity.IsRoomLinkedToRecRoomStudio"/>
+    /// is deliberately NOT flipped: it changes in-room MakerPen UI and the
+    /// client has no unlink call, so a push must not one-way-toggle it.</para>
+    ///
+    /// <para><b>Not implemented:</b> live relay of the details to a second
+    /// logged-in session. The client's receive side
+    /// (<c>EHIOLHBGODG.MCPBJLHFOBC(CEELGOLBHIL)</c> → the
+    /// <c>Action&lt;CEELGOLBHIL&gt;</c> that MBOJJFBIAGE.txt:366/978 subscribes)
+    /// has no call site anywhere in the IsilDump, so the notification id that
+    /// carries it cannot be established from the binary — inventing one would
+    /// be a guess. The HTTP round-trip is complete and the push is durable
+    /// either way.</para></summary>
+    [HttpPost("remote-run/push-to-studio")]
+    [HttpPost("roomserver/remote-run/push-to-studio")]
+    [Authorize]
+    public async Task<ActionResult> PushToStudio(
+        [ModelBinder(typeof(Binding.FormOrJsonModelBinder))] PushToStudioRequest req)
+    {
+        var pid = CurrentPlayerId;
+
+        var sessionId = Clamp((req.SessionId ?? string.Empty).Trim(), 100);
+        if (sessionId.Length == 0)
+            return BadRequest(new { Error = "missing SessionId" });
+
+        var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == req.RoomId);
+        if (room is null) return NotFound();
+
+        // Same gate the room-save upload uses (StorageController.UploadRoomSave):
+        // creator, admin, or an accepted CoOwner (Role 0).
+        var canPush = room.CreatorPlayerId == pid
+            || await db.Players.AnyAsync(p => p.Id == pid && p.IsAdmin)
+            || await db.RoomRoles.AnyAsync(r =>
+                r.RoomId == room.Id && r.PlayerId == pid && r.Accepted && r.Role == 0);
+        if (!canPush) return Forbid();
+
+        var subRoomId = req.SubRoomId;
+        var scene = await db.RoomScenes
+            .FirstOrDefaultAsync(s => s.RoomId == room.Id && s.OrderIndex == subRoomId);
+
+        var subRoomDataFilename = Clamp((req.SubRoomData?.Filename ?? string.Empty).Trim(), 128);
+        if (subRoomDataFilename.Length == 0)
+            return BadRequest(new { Error = "missing SubRoomData.Filename" });
+
+        // The push names blobs the client uploaded moments ago; if the row is
+        // absent the bytes are not on this server and Studio could never fetch
+        // them. Fail loudly rather than answering with a filename that 404s.
+        var subRoomBlob = await db.RoomDataBlobs
+            .FirstOrDefaultAsync(b => b.BlobName == subRoomDataFilename);
+        if (subRoomBlob is null)
+            return BadRequest(new { Error = "unknown SubRoomData.Filename" });
+        if (subRoomBlob.RoomId == 0) subRoomBlob.RoomId = room.Id;
+        subRoomBlob.SubRoomId ??= subRoomId;
+
+        var roomDataFilename = Clamp((req.RoomData?.Filename ?? string.Empty).Trim(), 128);
+        if (roomDataFilename.Length > 0)
+        {
+            // FileType=6 (RoomMetadata) uploads land with RoomId=0 — the push
+            // is the first point at which the owning room is known.
+            var roomBlob = await db.RoomDataBlobs
+                .FirstOrDefaultAsync(b => b.BlobName == roomDataFilename);
+            if (roomBlob is null)
+                return BadRequest(new { Error = "unknown RoomData.Filename" });
+            if (roomBlob.RoomId == 0) roomBlob.RoomId = room.Id;
+        }
+
+        var unityAssetId = Clamp((req.UnityAssetId ?? string.Empty).Trim(), 64);
+        if (unityAssetId.Length == 0)
+        {
+            unityAssetId = scene?.StudioUnityAssetId ?? string.Empty;
+        }
+        else if (scene is not null && scene.StudioUnityAssetId != unityAssetId)
+        {
+            scene.StudioUnityAssetId = unityAssetId;
+            scene.DataModifiedAt = DateTime.UtcNow;
+        }
+
+        var roomDataHash = Clamp((req.RoomData?.Hash ?? string.Empty).Trim(), 128);
+        var subRoomDataHash = Clamp((req.SubRoomData?.Hash ?? string.Empty).Trim(), 128);
+
+        room.StudioSessionId = sessionId;
+
+        var record = System.Text.Json.JsonSerializer.Serialize(new
+        {
+            RoomId = room.Id,
+            SubRoomId = subRoomId,
+            UnityAssetId = unityAssetId,
+            RoomDataFilename = roomDataFilename,
+            RoomDataHash = roomDataHash,
+            SubRoomDataFilename = subRoomDataFilename,
+            SubRoomDataHash = subRoomDataHash,
+            SavedByAccountId = req.SavedByAccountId ?? (int)pid,
+            PushedAt = DateTime.UtcNow,
+        });
+        if (record.Length > 1024)
+        {
+            // PlayerSettingEntity.Value is varchar(1024); truncating JSON would
+            // store an unparseable fragment, so drop the optional hashes first.
+            record = System.Text.Json.JsonSerializer.Serialize(new
+            {
+                RoomId = room.Id,
+                SubRoomId = subRoomId,
+                UnityAssetId = unityAssetId,
+                RoomDataFilename = roomDataFilename,
+                SubRoomDataFilename = subRoomDataFilename,
+                SavedByAccountId = req.SavedByAccountId ?? (int)pid,
+                PushedAt = DateTime.UtcNow,
+            });
+        }
+
+        var key = $"remoterun:{sessionId}";
+        var setting = await db.PlayerSettings
+            .FirstOrDefaultAsync(s => s.PlayerId == pid && s.Key == key);
+        if (setting is null)
+            db.PlayerSettings.Add(new PlayerSettingEntity
+            {
+                PlayerId = pid, Key = key, Value = record,
+            });
+        else
+            setting.Value = record;
+
+        await db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            SessionId = sessionId,
+            RoomId = (long?)room.Id,
+            SubRoomId = (long?)subRoomId,
+            UnityAssetId = unityAssetId,
+            RoomDataFilename = roomDataFilename,
+            RoomDataHash = roomDataHash,
+            SubRoomDataFilename = subRoomDataFilename,
+            SubRoomDataHash = subRoomDataHash,
+        });
+    }
+
+    /// <summary>Trim a wire string to a column's length. Every string that
+    /// reaches a MaxLength column here comes straight off the request.</summary>
+    private static string Clamp(string value, int max)
+        => value.Length <= max ? value : value[..max];
+
     // ── Wire serializers ─────────────────────────────────────────────────
 
     private static int ClampInventionPermission(int v) => v switch

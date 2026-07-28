@@ -33,7 +33,8 @@ namespace DorkNet.Server.Controllers.API.PlayerEvents;
 [Authorize]
 public class PlayerEventsController(
     DorkNetDbContext db,
-    NotificationService notifications) : ControllerBase
+    NotificationService notifications,
+    PlayerPresenceService presence) : ControllerBase
 {
     private long Me => this.RequireCurrentPlayerId();
 
@@ -349,6 +350,101 @@ public class PlayerEventsController(
             .Take(500)
             .ToListAsync();
         return Ok(rows.Select(ResponseWire).ToList());
+    }
+
+    // ── Event instance browser ───────────────────────────────────────────
+
+    /// <summary>GET <c>event/{eventId}/instances</c> — the "which instance of
+    /// this event are my friends in" browser behind the event card's join
+    /// button. Served from the MATCHMAKING-HOST root (no <c>api/</c> prefix),
+    /// which is why it lives on an absolute route here even though the feature
+    /// is a player-event one.
+    ///
+    /// Binary evidence: <c>Matchmaking+&lt;GetEventInstanceBrowser&gt;b__0</c>
+    /// (<c>Matchmaking_NestedType_CBMHJMNIHNN.txt:14</c>) formats the literal
+    /// <c>"event/{0}/instances"</c> at <c>:296</c> with <c>[rdi+16]</c> — the
+    /// PlayerEventId off the HPIOAGDJHDH the lambda closes over — then news up
+    /// BNDIAONDFFF with <c>rdx = 0</c> at <c>:124</c>, i.e.
+    /// <c>BestHTTP.HTTPMethods.Get</c>. The declared return type is
+    /// <c>FGLDKEJLAKB&lt;List&lt;PNDCMIMEJLD&gt;&gt;</c>, so the body is a BARE
+    /// JSON ARRAY. PNDCMIMEJLD's getters (<c>PNDCMIMEJLD.txt:3-197</c>) are, in
+    /// order, Int64/Int64/Int64/Boolean/DateTime/List&lt;Int32&gt;/String/Int32/
+    /// Boolean/String = RoomInstanceId, RoomId, SubRoomId, IsFull, CreatedAt,
+    /// PlayerIds, SubroomName, PlayerCount, HasModPresent, HashedInstanceId —
+    /// byte-for-byte the SimpleRoomInstance the <c>room/{id}/instances</c>
+    /// browser already returns (<c>Matchmaking.txt:14237</c> issues the room
+    /// variant through the identical BNDIAONDFFF/verb-0 sequence). The last
+    /// four are filled in locally on the watch and are not read back off the
+    /// wire, so we emit the same six camelCase keys
+    /// (<c>Controllers/Match/MatchController.cs:545-553</c>); the 2023 Utf8Json
+    /// formatters carry a camelCase variant per key, so both client
+    /// generations parse it.
+    ///
+    /// The event itself only supplies the room to browse: an event is pinned to
+    /// one RoomId, plus the SubRoomId the host picked in the v2 create/edit body
+    /// (persisted in <see cref="EventExtras"/>). Sub-room hops allocate their
+    /// own instance ids and photon rooms, so when the event names a sub-room we
+    /// only surface instances sitting in it.</summary>
+    [AllowAnonymous]
+    [HttpGet("/event/{eventId:long}/instances")]
+    public async Task<IActionResult> EventInstances(long eventId)
+    {
+        var evt = await db.PlayerEvents.FirstOrDefaultAsync(e => e.Id == eventId);
+        if (evt is null) return NotFound();
+
+        var extras = (await LoadExtrasAsync(new[] { evt }))[evt.Id];
+        var subRoomId = extras.SubRoomId is long sub && sub > 0 ? sub : (long?)null;
+
+        // Same sourcing as the room browser: presence rows are the live truth
+        // (one instance per distinct PhotonRoomId), and the caller's OWN private
+        // instances are merged in so the host can still see the instance they
+        // created before anyone has joined it. Another player's private
+        // PhotonRoomId is never listed.
+        var pid = this.CurrentPlayerId() ?? 0;
+        var privates = pid == 0
+            ? new List<PrivateInstanceEntity>()
+            : await db.PrivateInstances
+                .Where(p => p.RoomId == evt.RoomId && p.OwnerPlayerId == pid)
+                .ToListAsync();
+
+        var byKey = new Dictionary<string, object>(StringComparer.Ordinal);
+        foreach (var (room, playerIds) in presence.EnumerateActiveInstances(evt.RoomId))
+        {
+            if (string.IsNullOrEmpty(room.PhotonRoomId)) continue;
+            if (subRoomId is long want && room.SubRoomId != want) continue;
+            byKey[room.PhotonRoomId] = new
+            {
+                roomInstanceId = room.RoomInstanceId,
+                roomId = room.RoomId,
+                subRoomId = room.SubRoomId,
+                // MaxCapacity is the per-instance cap the matchmaker handed
+                // out, so this is a real answer rather than a constant false.
+                isFull = room.MaxCapacity > 0 && playerIds.Count >= room.MaxCapacity,
+                // Presence rows are a TTL cache with no creation timestamp —
+                // there is no stored "instance opened at" for a live instance,
+                // so report the observation time. Private-instance rows below
+                // do carry a real CreatedAt and use it.
+                createdAt = DateTime.UtcNow,
+                playerIds = playerIds.Select(p => (int)p).ToArray(),
+            };
+        }
+
+        foreach (var p in privates)
+        {
+            if (string.IsNullOrEmpty(p.PhotonRoomId) || byKey.ContainsKey(p.PhotonRoomId)) continue;
+            if (subRoomId is long want && p.SubRoomId != want) continue;
+            byKey[p.PhotonRoomId] = new
+            {
+                roomInstanceId = p.Id,
+                roomId = p.RoomId,
+                subRoomId = p.SubRoomId,
+                isFull = false,
+                createdAt = DateTime.SpecifyKind(p.CreatedAt, DateTimeKind.Utc),
+                playerIds = Array.Empty<int>(),
+            };
+        }
+
+        return Ok(byKey.Values.ToList());
     }
 
     // ── Wire shape ───────────────────────────────────────────────────────

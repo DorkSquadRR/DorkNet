@@ -19,27 +19,75 @@ public class KeepsakesController(DorkNetDbContext db, DomainConfig domain) : Con
 {
     private long Me => this.RequireCurrentPlayerId();
 
+    /// <summary>Marker category for collection rows; never surfaced as a keepsake instance.</summary>
+    private const string CollectionCategory = "collection";
+
+    /// <summary>
+    /// Mirrors <c>KeepsakeGlobalConfigDTO.SocialXpBoostEnabled</c> below. The collect handler has
+    /// to agree with what <c>globalconfig</c> advertises, so the flag lives in one place.
+    /// </summary>
+    private const bool SocialXpBoostEnabled = false;
+
+    private const int KeepsakeRoomLimit = 64;
+
     [HttpGet]
     public async Task<IActionResult> Mine()
     {
         await EnsureLoginKeepsakeAsync(Me);
         var rows = await db.Keepsakes
-            .Where(k => k.PlayerId == Me)
+            .Where(k => k.PlayerId == Me && k.Category != CollectionCategory)
             .OrderByDescending(k => k.EarnedAt)
             .ToListAsync();
         return Ok(rows.Select(ToWire));
     }
 
+    // KeepsakeCategoryConfigDTO = {KeepsakeCategoryId(enum), VisualId, LimitPerRoom, XpValue,
+    // IconOutlineImageName, IconFilledImageName} - dump.cs:1234842-1234878; the accepted wire key
+    // names are enumerated by its Utf8Json formatter (IsilDump/RecNet.Runtime/HIKOJENMDKE.txt:66-160
+    // - "KeepsakeCategoryId"/"VisualId"/"LimitPerRoom"/"XpValue" plus camel/lower aliases).
+    // KeepsakeCategoryId is the PIHCLHIKEPH enum (dump.cs:1199524: Explore=0, GreenPowerCore=1,
+    // Present=2, PurplePowerCore=3, UnnamedKeepsakeNumber1..5 = 4..8), and the client folds this
+    // list into a Dictionary<PIHCLHIKEPH, KeepsakeCategoryConfigDTO> (NCCLEJPIABA.DHMFBMMAGCL,
+    // NCCLEJPIABA.txt:4204) that every placed instance is looked up in. The previous three-entry
+    // list keyed by our internal account/event/room buckets covered ids 0-2 only, so six of the
+    // nine placeable categories had no config - and, since collect prices the reward from XpValue,
+    // no reward either.
+    private static readonly (int Id, string VisualId)[] CategoryConfigs =
+    [
+        (0, "Explore"),
+        (1, "GreenPowerCore"),
+        (2, "Present"),
+        (3, "PurplePowerCore"),
+        (4, "UnnamedKeepsakeNumber1"),
+        (5, "UnnamedKeepsakeNumber2"),
+        (6, "UnnamedKeepsakeNumber3"),
+        (7, "UnnamedKeepsakeNumber4"),
+        (8, "UnnamedKeepsakeNumber5"),
+    ];
+
+    /// <summary>
+    /// XP a single keepsake collection is worth. This is the one number both
+    /// <c>api/keepsakes/categories</c> (as <c>XpValue</c>) and
+    /// <c>api/keepsakes/{id}/collect</c> (as <c>TotalXp</c>) are derived from, so the toast the
+    /// client renders after a collect matches the config it already downloaded.
+    /// </summary>
+    private const int KeepsakeXpValue = 25;
+
     [HttpGet("categories")]
     [AllowAnonymous]
     public IActionResult Categories()
     {
-        var results = new[]
-        {
-            new { KeepsakeCategoryId = 0, VisualId = "account", LimitPerRoom = 0, XpValue = 0, IconOutlineImageName = string.Empty, IconFilledImageName = string.Empty },
-            new { KeepsakeCategoryId = 1, VisualId = "event", LimitPerRoom = 0, XpValue = 0, IconOutlineImageName = string.Empty, IconFilledImageName = string.Empty },
-            new { KeepsakeCategoryId = 2, VisualId = "room", LimitPerRoom = 64, XpValue = 0, IconOutlineImageName = string.Empty, IconFilledImageName = string.Empty },
-        };
+        var results = CategoryConfigs
+            .Select(c => new
+            {
+                KeepsakeCategoryId = c.Id,
+                c.VisualId,
+                LimitPerRoom = KeepsakeRoomLimit,
+                XpValue = KeepsakeXpValue,
+                IconOutlineImageName = string.Empty,
+                IconFilledImageName = string.Empty,
+            })
+            .ToArray();
         return Ok(new
         {
             Results = results,
@@ -81,10 +129,26 @@ public class KeepsakesController(DorkNetDbContext db, DomainConfig domain) : Con
         // Key names follow the same RecNet naming the room endpoint below already uses; the literal
         // JSON names live in Newtonsoft attribute metadata the dumps do not render, so they are
         // unverified - Json.NET matching is case-insensitive and ignores unknown members.
+        //
+        // CollectionRecords is what the CALLER has picked up, which is a different set from what the
+        // caller PLACED: it is fed by the collect handler below (Category=CollectionCategory rows).
+        var eventInstanceIds = rows
+            .Select(r => TryParseInstanceKey(r.EventKey, out _, out _, out _, out var id) ? id : StableKeepsakeInstanceId(r.Id))
+            .ToHashSet();
+        var collected = (await LoadMyCollectionsAsync())
+            .Where(c => eventInstanceIds.Contains(c.InstanceId))
+            .GroupBy(c => c.RoomId)
+            .Select(group => (object)new
+            {
+                RoomId = group.Key,
+                KeepsakeInstanceIds = group.Select(c => c.InstanceId).Distinct().Select(id => id.ToString("D")).ToList(),
+            })
+            .ToList();
+
         return Ok(new
         {
             Instances = GroupInstanceIdsByRoom(rows),
-            CollectionRecords = GroupInstanceIdsByRoom(rows.Where(r => r.PlayerId == Me)),
+            CollectionRecords = collected,
         });
     }
 
@@ -105,11 +169,126 @@ public class KeepsakesController(DorkNetDbContext db, DomainConfig domain) : Con
             .OrderByDescending(k => k.EarnedAt)
             .ToListAsync();
         var instances = rows.Select(row => ToRoomInstanceWire(row, roomId)).ToList();
+
+        // KeepsakeCollectionRecordDTO = {Int32 AccountId, Guid KeepsakeInstanceId, DateTime
+        // CollectedAt} - dump.cs:1234642-1234666, wire keys confirmed by its Utf8Json formatter
+        // (IsilDump/RecNet.Runtime/CNNAFLNKDCL.txt:48,75,99). Scoped to the caller: the DTO carries
+        // AccountId so the client can filter, but returning only the caller's rows is correct under
+        // either reading and keeps other players' pickups out of the payload.
+        var collectPrefix = $"collect:{roomIdText}:";
+        var me = Me;
+        var collectionRecords = await db.Keepsakes
+            .Where(k => k.PlayerId == me
+                && k.Category == CollectionCategory
+                && EF.Functions.Like(k.EventKey, collectPrefix + "%"))
+            .ToListAsync();
+
         return Ok(new
         {
             Instances = instances,
-            CollectionRecords = Array.Empty<object>(),
+            CollectionRecords = collectionRecords
+                .Where(k => TryParseCollectionKey(k.EventKey, out _, out _))
+                .Select(k =>
+                {
+                    TryParseCollectionKey(k.EventKey, out _, out var instanceId);
+                    return (object)new
+                    {
+                        AccountId = k.PlayerId is > 0 and <= int.MaxValue ? (int)k.PlayerId : 0,
+                        KeepsakeInstanceId = instanceId.ToString("D"),
+                        CollectedAt = k.EarnedAt,
+                    };
+                })
+                .ToList(),
             KeepsakeProgressionEventIds = Array.Empty<long>(),
+        });
+    }
+
+    /// <summary>
+    /// Removes a placed keepsake instance. The 2023 client issues
+    /// <c>DELETE api/keepsakes/{guid}</c> - <c>NCCLEJPIABA.JBKENCNIEPA(System.Guid)</c> builds
+    /// <c>String.Format("{0}/{1}", "api/keepsakes", guid)</c> and passes verb 4 (DELETE) to the
+    /// BNDIAONDFFF ctor (NCCLEJPIABA.txt:1544, 1687-1698 - <c>Move rdx, 4</c>). Its return type is
+    /// the non-generic <c>LDGADANDBIO</c> promise, so no response body is deserialised; a bare 200
+    /// is enough. Client-side the tool refuses unless the caller is at least a room co-owner
+    /// ("Must be at least a room co-owner to modify keepsakes.",
+    /// RecRoom.Keepsakes.Runtime/PDFJLLECNBE.txt:3363), which we re-check server-side.
+    /// </summary>
+    [HttpDelete("{keepsakeInstanceId:guid}")]
+    public async Task<IActionResult> Delete(Guid keepsakeInstanceId)
+    {
+        var instance = await FindInstanceAsync(keepsakeInstanceId);
+        if (instance is null) return NotFound();
+
+        var roomId = TryParseInstanceKey(instance.EventKey, out var parsedRoomId, out _, out _, out _)
+            ? parsedRoomId
+            : 0;
+        if (!await CanModifyInstanceAsync(instance, roomId, Me)) return Forbid();
+
+        // Drop the collection rows for this instance too, or they linger as records pointing at a
+        // keepsake nobody can see and keep suppressing a future re-placement's collect.
+        var suffix = keepsakeInstanceId.ToString("N");
+        var orphanedCollections = await db.Keepsakes
+            .Where(k => k.Category == CollectionCategory && EF.Functions.Like(k.EventKey, $"%:{suffix}"))
+            .ToListAsync();
+
+        db.Keepsakes.Remove(instance);
+        db.Keepsakes.RemoveRange(orphanedCollections
+            .Where(k => TryParseCollectionKey(k.EventKey, out _, out var id) && id == keepsakeInstanceId));
+        await db.SaveChangesAsync();
+        return Ok();
+    }
+
+    /// <summary>
+    /// Records that the caller picked up a placed keepsake and reports the XP it was worth. The
+    /// 2023 client issues <c>POST api/keepsakes/{guid}/collect</c> -
+    /// <c>NCCLEJPIABA.HFGKFAHFELM(System.Guid)</c> formats <c>"{0}/{1}/collect"</c> over
+    /// "api/keepsakes" and passes verb 2 (POST) (NCCLEJPIABA.txt:1738, 1963-1974 -
+    /// <c>Move rdx, 2</c>), with no request body. The response type is
+    /// <c>FGLDKEJLAKB&lt;DHNBKMHDANK&gt;</c>; DHNBKMHDANK is a two-Int32 object whose Utf8Json
+    /// formatter writes "TotalXp" and "SocialBoostXp" (RecNet.Runtime/PKCMBJFBHBO.txt:42,69,100,121
+    /// - reader also accepts totalXp/socialBoostXp). The consumer computes
+    /// <c>TotalXp - SocialBoostXp</c> for the base figure and shows the boost separately
+    /// (PDFJLLECNBE_NestedType_LKIPMJFEAFK.txt:82-99), so TotalXp is the whole award, boost
+    /// included - not a running account total.
+    /// </summary>
+    [HttpPost("{keepsakeInstanceId:guid}/collect")]
+    public async Task<IActionResult> Collect(Guid keepsakeInstanceId)
+    {
+        var instance = await FindInstanceAsync(keepsakeInstanceId);
+        if (instance is null) return NotFound();
+
+        var parsed = TryParseInstanceKey(instance.EventKey, out var roomId, out _, out var categoryConfigId, out _);
+        if (!parsed)
+        {
+            roomId = 0;
+            categoryConfigId = CategoryId(instance.Category);
+        }
+
+        var me = Me;
+        var collectKey = BuildCollectionKey(roomId, keepsakeInstanceId);
+        var alreadyCollected = await db.Keepsakes
+            .AnyAsync(k => k.PlayerId == me && k.Category == CollectionCategory && k.EventKey == collectKey);
+
+        // Re-collecting is a no-op award rather than an error: the client only ever renders the two
+        // numbers, and paying out twice for one instance would be a fabricated reward.
+        if (alreadyCollected) return Ok(new { TotalXp = 0, SocialBoostXp = 0 });
+
+        db.Keepsakes.Add(new KeepsakeEntity
+        {
+            PlayerId = me,
+            Category = CollectionCategory,
+            EventKey = collectKey,
+            EarnedAt = DateTime.UtcNow,
+        });
+        await db.SaveChangesAsync();
+
+        return Ok(new
+        {
+            TotalXp = XpValueFor(categoryConfigId),
+            // SocialBoostXp is the boost slice *of* TotalXp - the client renders
+            // TotalXp - SocialBoostXp as the base figure - and globalconfig above advertises
+            // SocialXpBoostEnabled=false, so there is no slice and the whole award is base XP.
+            SocialBoostXp = 0,
         });
     }
 
@@ -118,8 +297,8 @@ public class KeepsakesController(DorkNetDbContext db, DomainConfig domain) : Con
     public IActionResult GlobalConfig() => Ok(new
     {
         KeepsakeFeatureEnabled = true,
-        KeepsakeRoomLimit = 64,
-        SocialXpBoostEnabled = false,
+        KeepsakeRoomLimit,
+        SocialXpBoostEnabled,
     });
 
     [HttpPost]
@@ -352,6 +531,100 @@ public class KeepsakesController(DorkNetDbContext db, DomainConfig domain) : Con
         if (!int.TryParse(parts[i + 2], NumberStyles.Integer, CultureInfo.InvariantCulture, out categoryConfigId)) categoryConfigId = 0;
         return true;
     }
+
+    // A collection record is stored as its own keepsake row so no schema change is needed:
+    //   Category = "collection", EventKey = "collect:{roomId}:{instanceGuid:N}"
+    // The room id is baked in so the room endpoint can filter by prefix and the event endpoint can
+    // group by room without re-reading the instance rows. "collect:" shares no prefix with the
+    // "room:"/"event:" instance keys, so collection rows never leak into an instance query, and
+    // Mine() filters the category out of the legacy keepsake list.
+    private static string BuildCollectionKey(long roomId, Guid instanceId)
+        => $"collect:{roomId.ToString(CultureInfo.InvariantCulture)}:{instanceId:N}";
+
+    private static bool TryParseCollectionKey(string? eventKey, out long roomId, out Guid instanceId)
+    {
+        roomId = 0;
+        instanceId = Guid.Empty;
+        var parts = (eventKey ?? string.Empty).Split(':');
+        if (parts.Length != 3 || !string.Equals(parts[0], "collect", StringComparison.OrdinalIgnoreCase)) return false;
+        if (!long.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out roomId)) return false;
+        return Guid.TryParseExact(parts[2], "N", out instanceId);
+    }
+
+    private async Task<List<(long RoomId, Guid InstanceId)>> LoadMyCollectionsAsync()
+    {
+        var me = Me;
+        var rows = await db.Keepsakes
+            .Where(k => k.PlayerId == me && k.Category == CollectionCategory)
+            .Select(k => k.EventKey)
+            .ToListAsync();
+        var results = new List<(long RoomId, Guid InstanceId)>(rows.Count);
+        foreach (var key in rows)
+        {
+            if (TryParseCollectionKey(key, out var roomId, out var instanceId))
+                results.Add((roomId, instanceId));
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// Resolves the guid the client holds (from <c>api/keepsakes/rooms/{roomId}</c>, or the guid
+    /// this server handed back from POST <c>api/keepsakes</c>) to the row that encodes it.
+    /// </summary>
+    private async Task<KeepsakeEntity?> FindInstanceAsync(Guid keepsakeInstanceId)
+    {
+        var suffix = keepsakeInstanceId.ToString("N");
+        var candidates = await db.Keepsakes
+            .Where(k => (k.Category == "room" || k.Category == "event")
+                && EF.Functions.Like(k.EventKey, $"%:{suffix}"))
+            .ToListAsync();
+        var match = candidates.FirstOrDefault(k =>
+            TryParseInstanceKey(k.EventKey, out _, out _, out _, out var id) && id == keepsakeInstanceId);
+        if (match is not null) return match;
+
+        // Rows written before the instance id was encoded into EventKey are reported to the client
+        // with the MD5-derived StableKeepsakeInstanceId, which no LIKE can match. Resolve those by
+        // id only - the projection keeps it to one column over the short-key rows.
+        var legacyIds = await db.Keepsakes
+            .Where(k => (k.Category == "room" || k.Category == "event")
+                && !EF.Functions.Like(k.EventKey, "%:%:%:%"))
+            .Select(k => k.Id)
+            .ToListAsync();
+        var legacyId = legacyIds.FirstOrDefault(id => StableKeepsakeInstanceId(id) == keepsakeInstanceId);
+        return legacyId == 0 ? null : await db.Keepsakes.FirstOrDefaultAsync(k => k.Id == legacyId);
+    }
+
+    /// <summary>
+    /// Placement and removal are gated client-side on room co-ownership
+    /// ("Must be at least a room co-owner to modify keepsakes.", PDFJLLECNBE.txt:3363); the placer
+    /// and server admins are allowed through as well.
+    /// </summary>
+    private async Task<bool> CanModifyInstanceAsync(KeepsakeEntity instance, long roomId, long playerId)
+    {
+        if (instance.PlayerId == playerId) return true;
+
+        if (roomId > 0)
+        {
+            var creatorId = await db.Rooms.AsNoTracking()
+                .Where(r => r.Id == roomId)
+                .Select(r => (long?)r.CreatorPlayerId)
+                .FirstOrDefaultAsync();
+            if (creatorId == playerId) return true;
+
+            var isCoOwner = await db.RoomRoles.AnyAsync(r =>
+                r.RoomId == roomId && r.PlayerId == playerId && r.Role == 0 && r.Accepted);
+            if (isCoOwner) return true;
+        }
+
+        return await db.Players
+            .Where(p => p.Id == playerId)
+            .Select(p => p.IsAdmin)
+            .FirstOrDefaultAsync();
+    }
+
+    private static int XpValueFor(int keepsakeCategoryConfigId)
+        => CategoryConfigs.Any(c => c.Id == keepsakeCategoryConfigId) ? KeepsakeXpValue : 0;
 
     private static int CategoryId(string? category) =>
         string.Equals(category, "event", StringComparison.OrdinalIgnoreCase) ? 1 :

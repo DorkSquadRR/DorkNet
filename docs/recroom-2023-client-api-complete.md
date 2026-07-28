@@ -1557,17 +1557,17 @@ Of 65 real client routes: ~17 fully work. 20 routes are entirely MISSING (all cl
 | PUT | `comments/read/{0}/{1}` | none | status-only ('Failed to update latest read comment'). MISSING on server |
 | GET | `comments/unreadcounts` | roomIds (repeated Int64 list). Verb is dynamic: GET when <100 room ids (query), POST with form body when >=100 (verb = count<100 ? 0 : 2 — cmovl at instr 059-061). Server registers | JSON object mapping roomId (stringified Int64 key) -> unread count (UInt32) |
 | GET | `members/bulk` | query: id (repeated, one per account). clubId is NOT transmitted — it is only the client-side cache key (response handler NJNJEOFNJIG(clubId, List<FCKGOFHNDNJ>) at IKMMOCKDKAF.txt: | JSON array; FCKGOFHNDNJ CLR: int AccountId, MJOOBDNCHBO MembershipType |
-| GET | `thread/club/{0}` | query: maxCount (int), mode (int, semantics UNKNOWN). Chat host (GJDLNNLKDIJ.Chat=8) | JSON array of chat threads. JNMKLHDFPOJ CLR (recnet-runtime-decomp/JNMKLHDFPOJ.cs): 2 longs (thread id + ?), List<ChatMessage> messages, ChatMessage latest, List<int> playerIds, string name, DateTime? snoozedUntil, long  |
-| PUT | `thread/message/{0}/moderate` | form-urlencoded: moderationState (byte enum: Active=0,Junior_Pending=11,Moderation_Pending=100,Moderation_Closed=101,Moderation_Banned=102) | chat-result enum MGGNHLHPHOF (Success=0,InvalidArguments,ThreadNotFound,MembershipNotFound,PlayerAlreadyOnThread,CannotMessagePlayer,InvalidCharacters,RecentlyLeftThread,ThreadTooLarge) — bare value. MISSING on server |
+| GET | `thread/club/{0}` | query: maxCount (int, default 10), mode (int, semantics UNKNOWN — client always sends 0). Chat host (GJDLNNLKDIJ.Chat=8) | JSON array of chat threads. The thread reader (EKEFFNBIOHJ.txt instrs 082/109/133/149/173/197/221/245/269) takes exactly nine keys in three casings: ChatThreadId, LastReadMessageId, Messages, LatestMessage, PlayerIds, ChatThreadName, SnoozedUntil, IsFavorited, ClubId. IMPLEMENTED: `ChatController.GetClubThreads` — one `club:{clubId}` thread per club, roster-gated, returned as a one-element array |
+| PUT | `thread/message/{0}/moderate` | form-urlencoded: moderationState (byte enum: Active=0,Junior_Pending=11,Moderation_Pending=100,Moderation_Closed=101,Moderation_Banned=102) | chat-result enum MGGNHLHPHOF (Success=0,InvalidArguments,ThreadNotFound,MembershipNotFound,PlayerAlreadyOnThread,CannotMessagePlayer,InvalidCharacters,RecentlyLeftThread,ThreadTooLarge) — bare value (`Action<MGGNHLHPHOF>` at DLDKCILCKNA.txt instr 101). STILL MISSING on server — blocked on a `ChatMessageEntity.ModerationState` column |
 | POST | `thread/withmembers` | form-urlencoded: ids (repeated Int32 list), messageCount (int). Server has a form-reading variant (ChatController.cs:438-446) — matches | single thread object (get-or-create DM/group with these members) |
 | GET | `thread/{0}` | query: messageCount (int) | single thread object with messages |
 | POST | `thread/{0}` | form-urlencoded: messageContents = JSON string of DLDKCILCKNA.MessageJson with PRESERVED field names {Type (int: Text=0,PartyInvite=1), Version (int), Data (string)} (recnet-runtim | ANDECIOOJNB: {ChatMessage, chat-result enum}. Server's validated keys: chatMessage, chatResult; message keys: chatMessageId, chatThreadId, senderPlayerId, timeSent, contents (ChatController.cs:792-810) |
-| PUT | `thread/{0}/favorite` | form-urlencoded: favorite (bool) | chat-result enum. MISSING on server |
+| PUT | `thread/{0}/favorite` | form-urlencoded: favorite (bool) | NOT a bare enum — the continuation is `Func<GLIKNMPPEHL, MGGNHLHPHOF>` (DLDKCILCKNA.txt instr 142), so the body is the wrapper object GLIKNMPPEHL, read by OGCMIDEFOEE.txt (instrs 042/069) with exactly two keys in three casings: ChatResult, IsFavorited. IMPLEMENTED: `ChatController.Favorite` — flag persisted in PlayerSettings under `chat.favorite:<threadKey>` and echoed back in the thread DTO's IsFavorited |
 | POST | `thread/{0}/leave` | none | chat-result enum. VERB MISMATCH: server registers HttpDelete only (ChatController.cs:337) → 405 for this client's POST |
 | POST | `thread/{0}/member/{1}` | none (both ids in path) | chat-result enum (PlayerAlreadyOnThread etc.). Server POST exists (ChatController.cs:673) |
 | GET | `thread/{0}/message` | query: messageCount (int), mode (int, semantics UNKNOWN), referenceMessageId (Int64) | JSON array of ChatMessage. CLR (recnet-runtime-decomp/RecNet/ChatMessage.cs): long MessageId, long ThreadId, int SenderAccountId, DateTime SentAt, string contents, MOFGOGFEHNN moderation state, MessageJson parsed content |
 | POST | `thread/{0}/message/{1}/read` | none | chat-result enum. Server accepts POST+PUT (ChatController.cs:268-269) — OK |
-| POST | `thread/{0}/rename` | form-urlencoded: name (string) | chat-result enum. MISMATCH: server registers PUT only with [FromBody] JSON (ChatController.cs:355-356) → 405/415 for this client's form POST |
+| POST | `thread/{0}/rename` | form-urlencoded: name (string) | chat-result enum, bare value (`Action<MGGNHLHPHOF>` at DLDKCILCKNA.txt instr 162). FIXED: `ChatController.Rename` now registers PUT+POST and binds via FormOrJsonModelBinder |
 | POST | `thread/{0}/snooze` | form-urlencoded: snooze (bool) | chat-result enum. ENCODING MISMATCH: server POST exists but binds [FromBody] SnoozeRequest JSON (ChatController.cs:307-308) → 415 on form content-type |
 
 #### Not HTTP routes
@@ -1586,29 +1586,23 @@ Handler: `DorkNet.Server/Controllers/Clubs/ClubsController.cs:338`
 
 **Fix.** In BuildDetailsResponseAsync emit each *Permissions key as an object {ClubId, MembershipType, approveMember, banUnban, createEvent, editDetails, editPermissionSettings, postAnnouncement} (key casing of the 6 bools per the PUT permissions request closure; response casing UNKNOWN — mirror request casing and validate live). Applies to all 8 envelope-returning handlers at once.
 
-##### `PUT club/home/me` — MISSING (breaks-gameplay)
+##### `PUT club/home/me` — FIXED
 
-Only HttpGet is registered for /club/home/me (ClubsController.cs:44); a PUT gets 405. The 2023 client's 'Set Home Clubhouse Room' sends PUT with form-urlencoded clubId and fails every time.
+`ClubsController.HomeMeSet` reads the form-urlencoded `clubId` (query fallback) and stores it through `ClubService.SetHomeClubAsync`, which persists into the general-purpose `PlayerSettings` key/value bag under key `club.home` — no new column needed. Returns an empty 200; the client's `LDGADANDBIO JOPMBFIFFBB(Nullable<Int64>)` parses no DTO. `HomeClubAsync` now prefers the stored pick and only falls back to most-recently-joined when nothing is stored or the stored club was disbanded.
 
-**Fix.** Add [HttpPut("/club/home/me")] reading Request.Form["clubId"] (long), persist a HomeClubId on the player (new column/service method), return 200 empty (client parses no DTO).
+##### `DELETE club/home/me` — FIXED
 
-##### `DELETE club/home/me` — MISSING (breaks-gameplay)
+`ClubsController.HomeMeClear` removes the `club.home` `PlayerSettings` row (idempotent) and returns an empty 200.
 
-No HttpDelete registered → 405. 'Remove Home Clubhouse Room' fails.
+##### `DELETE club/{0}` — FIXED
 
-**Fix.** Add [HttpDelete("/club/home/me")] clearing the stored home club; return 200 empty.
+`ClubsController.ClubDelete` → `ClubService.DisbandAsync`: owner-only (co-owners/moderators are rejected, unlike `ModifyAsync`), soft delete stamping `State = 1000` (`IACDINKNHKB.MarkedForDelete`). Every read path here filters `State == 0`, so the club disappears from browse/mine/details while its announcements and membership rows survive for moderation. Returns an empty 200.
 
-##### `DELETE club/{0}` — MISSING (breaks-gameplay)
+##### `PUT club/{0}/clubChatEnabled` — MISSING (breaks-gameplay) — BLOCKED ON SCHEMA
 
-Only GET /club/{clubId:long} exists → DELETE 405. 'Delete Club' (disband) always fails.
+No route → 404. Club-chat toggle in settings fails. Verified from the binary: `MEPEAAJOGLP(Int64, Boolean)` at IKMMOCKDKAF.txt:25601, route literal :25779, verb ordinal 3 (PUT) at :25802, form key `clubChatEnabled` (IKMMOCKDKAF_NestedType_BLCIHIILJNE.txt:67), response is the `LCLFBBPEMIH` details envelope. Deliberately NOT stubbed: a handler that accepted the toggle and dropped it would make the settings screen lie, and `GET club/{0}/hasDisabledClubChat` (now served) would keep answering `false`.
 
-**Fix.** Add [HttpDelete("/club/{clubId:long}")]: owner-only, set State=1000 (MarkedForDelete) or hard-delete club + membership rows; return 200 empty (status-only on client).
-
-##### `PUT club/{0}/clubChatEnabled` — MISSING (breaks-gameplay)
-
-No route anywhere in the server (grep for clubChatEnabled: zero hits) → 404. Club-chat toggle in settings fails.
-
-**Fix.** Add [HttpPut("/club/{clubId:long}/clubChatEnabled")] reading form key clubChatEnabled (bool), persist a ClubChatEnabled column on ClubEntity, return the details envelope.
+**Fix.** Needs `ClubEntity.ClubChatEnabled` (bool, default true). Once the column exists: `[HttpPut("/club/{clubId:long}/clubChatEnabled")]` reading the form `clubChatEnabled` through `FormOrJsonModelBinder`, write via `ModifyAsync`, return `BuildDetailsResponseAsync`, and update BOTH `ToWireClub`'s `ClubChatEnabled = true` literal and `ClubsController.ClubHasDisabledChat`'s `false`.
 
 ##### `PUT club/{0}/clubhouse` — SHAPE_MISMATCH (breaks-gameplay)
 
@@ -1626,11 +1620,9 @@ Handler: `DorkNet.Server/Controllers/Clubs/ClubsController.cs:258`
 
 **Fix.** Emit MMOCDPPONNG-shaped objects for the three permission keys (see club/create finding); persist CustomTags/AdditionalImages later.
 
-##### `GET club/{0}/hasDisabledClubChat` — MISSING (breaks-gameplay)
+##### `GET club/{0}/hasDisabledClubChat` — FIXED (pending schema)
 
-No route (grep zero hits) → 404. The club chat thread open path checks this first, so club chat cannot open even after thread/club/{id} is added.
-
-**Fix.** Add [HttpGet("/club/{clubId:long}/hasDisabledClubChat")] returning a bare JSON boolean (false, or !ClubChatEnabled once persisted).
+`ClubsController.ClubHasDisabledChat` 404s an unknown/disbanded club and otherwise answers a bare JSON `false` (the issuing method is `FGLDKEJLAKB<System.Boolean> OFOJAHBKMOJ(Int64)` — a bare boolean body, not an object). `false` is the *true* answer today: the value is the negation of the Club wire field `ClubChatEnabled`, which has no `ClubEntity` column and whose setter (`PUT club/{0}/clubChatEnabled`) is therefore still unimplemented, so no club can be in the disabled state. When the column lands, this handler and `ToWireClub`'s `ClubChatEnabled` literal must change together.
 
 ##### `PUT club/{0}/mainimage` — SHAPE_MISMATCH (breaks-gameplay)
 
@@ -1640,11 +1632,9 @@ Handler: `DorkNet.Server/Controllers/Clubs/ClubsController.cs:396`
 
 **Fix.** Read Request.Form["imageName"] when HasFormContentType (mirror ReadCreateClubRequestAsync pattern), keep JSON path for other callers.
 
-##### `GET club/{0}/members` — MISSING (breaks-gameplay)
+##### `GET club/{0}/members` — FIXED
 
-Only /club/{clubId}/members/{playerId:long} exists; 'members' with query params has no matching template (sub-literals like 'banned' fail the :long constraint too) → 404. The club page member list never loads.
-
-**Fix.** Add [HttpGet("/club/{clubId:long}/members")] with query membershipType/sortBy/skip/take, returning a JSON array of {AccountId:int, ClubId:long, MembershipType:int, CreatedAt} rows (reuse ToWireMembership, ClubsController.cs:828-834).
+`ClubsController.ClubMembers` binds `membershipType`/`sortBy`/`skip`/`take` and returns the bare `List<CADEIMCFIIG>` array via the existing `ToWireMembership` projection. `membershipType` is compared as the MJOOBDNCHBO wire value (after `MembershipTypeFromPerms`), not the stored perms int; with no filter the roster is real members only, so ban markers (256) and pending rows (128) stay in their own endpoints. `sortBy` implements GNLOJEONFIG (Default=privileged-first, JoinDate_Asc/Desc, Username_Asc/Desc) — usernames are joined in from `Players` once per request.
 
 ##### `POST club/{0}/members/acceptrequest` — SHAPE_MISMATCH (breaks-gameplay)
 
@@ -1758,11 +1748,11 @@ Handler: `DorkNet.Server/Controllers/Clubs/ClubsController.cs:697`
 
 **Fix.** Accept repeated 'id' query params; when clubId is absent, return each account's membership without club scoping (e.g. highest/most-relevant membership per account) or infer from context — response stays [{AccountId, MembershipType}].
 
-##### `GET thread/club/{0}` — MISSING (breaks-gameplay)
+##### `GET thread/club/{0}` — FIXED (was breaks-gameplay)
 
-'thread/club/123' (3 segments) matches no template — thread/{chatThreadId} is 2 segments — → 404. The club chat tab cannot open at all.
+'thread/club/123' (3 segments) matched no template — thread/{chatThreadId} is 2 segments — → 404. The club chat tab could not open at all.
 
-**Fix.** Add [HttpGet("/thread/club/{clubId:long}")] in ChatController: get-or-create a club thread key (e.g. "club:{clubId}"), honor query maxCount, and return a JSON ARRAY of ToWireThread objects (client expects List<JNMKLHDFPOJ>) with ClubId included in the thread wire object; extend ThreadKey routing helpers (ResolveThreadKeyAsync, participant loading, send fan-out to club members) to understand club: keys so thread/{id} POST/GET work on it.
+**Fixed.** `ChatController.GetClubThreads` — `[HttpGet("/thread/club/{clubId:long}")]`, get-or-creates the `club:{clubId}` thread (named after the club on first materialisation), honours `maxCount`, accepts and ignores `mode`, and returns a one-element JSON ARRAY of ToWireThread objects. Non-roster callers and unknown clubs get `[]` (the client deserialises the body before it looks at the status). The thread helpers now understand `club:` keys: `LoadParticipantsAsync` resolves participants from ClubMemberships (pending 128 / banned 256 excluded), `ThreadRecipientsAsync` fans new messages out over the roster, `IsThreadMemberAsync` gates rename/favorite on roster membership, `Leave` refuses club threads, and `GetThreads` lists club channels that have messages. ToWireThread now also emits the two keys the 2023 reader wants and the 2020 DTO lacked: `isFavorited` and `clubId`.
 
 ##### `POST thread/{0}/leave` — VERB_MISMATCH (breaks-gameplay)
 
@@ -1780,55 +1770,47 @@ Handler: `DorkNet.Server/Controllers/Clubs/ClubsController.cs:417`
 
 **Fix.** Persist additional image slots (new AdditionalImages storage keyed clubId+slot), read Request.Form["imageName"] when HasFormContentType, echo them in the envelope's AdditionalImages as [{imageName,slot}] per HIKCHBLAMLP.
 
-##### `DELETE club/{0}/additionalimage/{1}` — MISSING (degraded)
+##### `DELETE club/{0}/additionalimage/{1}` — MISSING (degraded) — BLOCKED ON SCHEMA
 
-Only POST/PUT registered (ClubsController.cs:417-418) → DELETE 405. 'Remove Additional Club Image' fails.
+Only POST/PUT registered → DELETE 405. 'Remove Additional Club Image' fails. Verified from the binary: `AKJJLMLPBKN(Int64, Int32 slot, String imageName)` at IKMMOCKDKAF.txt:16054 branches on the captured imageName (:16219) — verb ordinal 4 with no body when null (description "Remove Additional Club Image", :16229-16234), verb 3 with the form field otherwise (:16256-16260) — and both branches parse the `LCLFBBPEMIH` details envelope.
 
-**Fix.** Add [HttpDelete("/club/{clubId:long}/additionalimage/{slot:int}")] clearing the slot, return details envelope.
+Deliberately NOT registered: the PUT twin is already an admitted stub that persists nothing, so a DELETE would have nothing to clear. Registering it would only convert a visible 405 into a silent success while the gallery stays blank.
 
-##### `DELETE club/{0}/mainimage` — MISSING (degraded)
+**Fix.** Needs the additional-image store the PUT twin also wants: a `ClubAdditionalImageEntity` keyed (ClubId, Slot) with an ImageName column. Then register `[HttpDelete("/club/{clubId:long}/additionalimage/{slot:int}")]`, delete the row, and have `BuildDetailsResponseAsync` project the rows into the envelope's `AdditionalImages` as `HIKCHBLAMLP` {imageName, slot} instead of the current `Array.Empty<object>()`.
 
-Only POST/PUT registered (:396-397) → DELETE 405. 'Remove Club Image' fails.
+##### `DELETE club/{0}/mainimage` — FIXED
 
-**Fix.** Add [HttpDelete("/club/{clubId:long}/mainimage")] setting ImageName='' and returning the details envelope.
+`ClubsController.ClubMainImageDelete` is its own action (NOT a third verb binding on the POST/PUT setter — aliasing an edit verb onto a destructive handler is exactly what made `PUT /announcements/club/{c}/{a}` delete posts). Clears `ImageName` through `ModifyAsync` and returns the full `LCLFBBPEMIH` details envelope, which is what `IBAKMFKEEDJ` parses on both branches of `BLEDOCHHHJM` — the DELETE branch is *not* status-only.
 
-##### `GET club/{0}/members/banned` — MISSING (degraded)
+##### `GET club/{0}/members/banned` — FIXED
 
-No route → 404 ('banned' fails the {playerId:long} constraint of the single-member route). Banned list screen empty-errors.
+`ClubsController.ClubMembersBanned` returns the bare `List<ICPNBOOIDLI>` array — three fields only ({AccountId:int, ClubId:long, CreatedAt}; ICPNBOOIDLI has no MembershipType) — over rows carrying the perms 256 ban marker, with `sortBy`/`skip`/`take`. Moderator-gated (`CanManageAsync`): the ban list is staff-only information.
 
-**Fix.** Add [HttpGet("/club/{clubId:long}/members/banned")] (sortBy/skip/take query) returning array of {AccountId:int, ClubId:long, CreatedAt} for rows with perms ban marker 256 (ICPNBOOIDLI layout).
+##### `GET club/{0}/members/requests` — FIXED
 
-##### `GET club/{0}/members/requests` — MISSING (degraded)
+`ClubsController.ClubMemberRequests` returns the bare `List<AADIHDCMEDB>` array over rows with the 128 pending marker (and without the 256 ban marker), `skip`/`take`, moderator-gated. Two fields are still un-fillable rather than invented: `InviterAccountId` is emitted as null (the DTO declares it nullable; invites and requests both collapse to the single 128 marker on the target's own row, so no inviter is recorded) and `Status` is always Requested for the same reason. Neither is read by the accept/deny flow, which keys off `accountId`. Persisting invited-vs-requested would let `Status` be filled properly.
 
-No route → 404. Pending-join-requests screen fails ('Failed to get pending club member requests').
+##### `GET club/{0}/members/requests/search` — FIXED
 
-**Fix.** Add [HttpGet("/club/{clubId:long}/members/requests")] (skip/take) returning array of AADIHDCMEDB-layout rows (request id, AccountId, inviter id?, ClubId, MembershipType, status Invited=0/Requested=1/Denied=2, CreatedAt). Response key casing UNKNOWN — dual-case via Dictionary per the camelCase-serializer memory, then validate live. Note: current perms model collapses invited vs requested (MembershipTypeFromPerms returns Requested for any 128 row, ClubService.cs:354) — persist the distinction to fill status correctly.
+`ClubsController.ClubMemberRequestsSearch` reads the dot-prefixed keys straight off `Request.Query` (`parameters.name`, `parameters.sortBy`, `parameters.maxCount`, `parameters.status`, plus the unprefixed `continuationToken`) and returns the `EDFOCLNECPM` paged envelope. `continuationToken` is an opaque row offset (String on the DTO); an empty string means no further pages, matching the `club/search` envelope. NAHBJCGNJKA's RequestDate_Asc/Desc index the same JoinedAt column GNLOJEONFIG's JoinDate_Asc/Desc do, so both enums share one comparator. Envelope key names remain unverified (DataMember blobs are not in the ISIL/decompile), so it emits the entity-named pair validated on the sibling `club/search` envelope — `Requests`/`TotalRequests` — alongside `Results`/`TotalResults`; Json.NET ignores whichever pair the DTO doesn't declare.
 
-##### `GET club/{0}/members/requests/search` — MISSING (degraded)
+##### `GET club/{0}/members/search` — FIXED
 
-No route → 404. Request-search box fails.
+`ClubsController.ClubMembersSearch`, same treatment: `parameters.name`/`parameters.type`/`parameters.sortBy`/`parameters.maxCount` + `continuationToken` off `Request.Query`, returning the `MBMNHFAPFCJ` paged envelope with `Members`/`TotalMembers` plus `Results`/`TotalResults` and `ContinuationToken`.
 
-**Fix.** Add [HttpGet("/club/{clubId:long}/members/requests/search")] binding query keys 'parameters.name', 'parameters.sortBy', 'parameters.maxCount', 'parameters.status', 'continuationToken' (bind via Request.Query, not [FromQuery] props, because of the dotted prefix) and return a paged envelope {list of AADIHDCMEDB rows, total int, continuationToken} — envelope key casing UNKNOWN, validate live.
+##### `PUT club/{0}/minlevel` — MISSING (degraded) — BLOCKED ON SCHEMA
 
-##### `GET club/{0}/members/search` — MISSING (degraded)
+No club minlevel route (only Rooms.MinLevel exists) → 404. 'Min Level to Join' setting fails. Verified from the binary: `AOAFDLMFCGB(Int64, Int32)` at IKMMOCKDKAF.txt:16448, route literal :16561, verb ordinal 3 (PUT) at :16584, form key `minLevel` (IKMMOCKDKAF_NestedType_AOOCOABJPDN.txt:67), response is the `LCLFBBPEMIH` details envelope via IBAKMFKEEDJ.
 
-No route → 404. Member-list search box fails ('SearchMembers failed').
-
-**Fix.** Add [HttpGet("/club/{clubId:long}/members/search")] binding 'parameters.name'/'parameters.type'/'parameters.sortBy'/'parameters.maxCount'/'continuationToken' from Request.Query; return paged envelope of membership rows (CADEIMCFIIG layout) — envelope casing UNKNOWN, validate live.
-
-##### `PUT club/{0}/minlevel` — MISSING (degraded)
-
-No club minlevel route (only Rooms.MinLevel exists) → 404. 'Min Level to Join' setting fails.
-
-**Fix.** Add [HttpPut("/club/{clubId:long}/minlevel")] reading form minLevel (int), persist MinLevel on ClubEntity, return details envelope.
+**Fix.** Needs `ClubEntity.MinLevel` (int, default 0). Once the column exists: `[HttpPut("/club/{clubId:long}/minlevel")]` reading the form `minLevel` through `FormOrJsonModelBinder`, write via `ModifyAsync`, return `BuildDetailsResponseAsync`, and swap `ToWireClub`'s `MinLevel = 0` literal for the column.
 
 ##### `PUT club/{0}/permissions/{1}` — MISSING (degraded)
 
-Only HttpGet is registered → PUT 405. Per-role permission checklist saves fail. (The GET's bare-int response is a separate 2023 mismatch but the 2023 client doesn't call GET here.)
+Only HttpGet is registered → PUT 405. Per-role permission checklist saves fail. BLOCKED ON SCHEMA. Verified from the binary: `HDDNEPNKCIK(MMOCDPPONNG)` at IKMMOCKDKAF.txt:17537 formats the route from the DTO's own ClubId + MembershipType (:17671-17689), verb ordinal 3 (PUT) at :17709, description "Modify Club Permissions", response is the `LCLFBBPEMIH` details envelope. Form keys are the 6 bools `editDetails`/`approveMember`/`createEvent`/`postAnnouncement`/`editPermissionSettings`/`banUnban` (IKMMOCKDKAF_NestedType_BOIMHOCCOEI.txt:173-253), matching the response-side reader BPHCOIBNCDP.txt:638-758.
 
-Handler: `DorkNet.Server/Controllers/Clubs/ClubsController.cs:290 (GET only)`
+Deliberately NOT stubbed: `PermissionsForRole` derives the six bools from the role with a fixed default policy and there is nowhere to store an override, so a handler would accept the checklist and silently discard it — the screen would appear to save and revert on reload.
 
-**Fix.** Add [HttpPut("/club/{clubId:long}/permissions/{role:int}")] reading the 6 form bools (approveMember/banUnban/createEvent/editDetails/editPermissionSettings/postAnnouncement), persist per-role permission rows, return the details envelope with object-shaped permissions.
+**Fix.** Needs a per-role permission table (ClubId, MembershipType, the 6 bools). Then register `[HttpPut("/club/{clubId:long}/permissions/{role:int}")]` binding those 6 form keys through `FormOrJsonModelBinder`, upsert the row owner-only, and have `PermissionsForRole` read the stored row (falling back to the current derived default when absent) so `BuildDetailsResponseAsync` reflects the save.
 
 ##### `POST comments/create/{0}` — MISSING (degraded)
 
@@ -1848,19 +1830,21 @@ No route → 404. Room-details comment list never loads ('Failed to get room com
 
 **Fix.** Add [HttpGet("/comments/get/{roomId:long}")] with query count (int) + minId (long), returning JSON array of RoomComment.
 
-##### `PUT thread/message/{0}/moderate` — MISSING (degraded)
+##### `PUT thread/message/{0}/moderate` — MISSING (degraded) — BLOCKED ON SCHEMA
 
 4-segment path matches no thread template → 404. Chat moderation (hide/flag) fails.
 
-**Fix.** Add [HttpPut("/thread/message/{messageId:long}/moderate")] reading form moderationState (int), persist a ModerationState column on ChatMessageEntity, return bare int 0 (MGGNHLHPHOF.Success).
+Verb + shape re-verified from the binary: DLDKCILCKNA.txt `PLBCHNGAEML(ChatMessage, MOFGOGFEHNN)`, instr 065 `Move rcx, "thread/message/{0}/moderate"`, verb `Move rdx, 3` at instr 075 (PUT), host `Move r8, 8` (Chat), single form field `moderationState` at instr 087, response consumed by `Action<MGGNHLHPHOF>` at instr 101 = bare int.
 
-##### `POST thread/{0}/rename` — VERB_MISMATCH (degraded)
+**Fix.** Add `ChatMessageEntity.ModerationState` (int, default 0 = Active) + migration, emit it as the `ModerationState` key in `ChatController.ToWireMessage` (the ChatMessage reader CBKDKACJDOF.txt reads ChatMessageId / ChatThreadId / SenderPlayerId / TimeSent / Contents / ModerationState), then add `[HttpPut("/thread/message/{messageId:long}/moderate")]` reading form `moderationState` and returning bare int 0. Deliberately NOT stubbed: without the column the handler could only discard the request, which hides the gap behind a 200.
 
-Server registers PUT only with [FromBody] RenameRequest JSON; the client sends POST with form 'name' → 405 (and would 415 even as PUT). Renaming a group chat fails.
+##### `POST thread/{0}/rename` — FIXED (was verb_mismatch, degraded)
 
-Handler: `DorkNet.Server/Controllers/Chat/ChatController.cs:355`
+Server registered PUT only with [FromBody] RenameRequest JSON; the client sends POST with form 'name' → 405 (and would 415 even as PUT). Renaming a group chat failed.
 
-**Fix.** Add [HttpPost] on the route plus a form-content branch reading Request.Form["name"]; keep returning bare int 0.
+Handler: `DorkNet.Server/Controllers/Chat/ChatController.cs` — `ChatController.Rename`
+
+**Fixed.** Route now carries both `[HttpPut]` and `[HttpPost]`; `RenameRequest` became a plain class with a parameterless ctor bound by `[ModelBinder(typeof(FormOrJsonModelBinder))]`, so the client's form `name` and the admin SPA's JSON both bind. Still returns the bare int (`Action<MGGNHLHPHOF>` at DLDKCILCKNA.txt instr 162). Membership is now checked through `IsThreadMemberAsync`, which also understands club threads.
 
 ##### `POST thread/{0}/snooze` — SHAPE_MISMATCH (degraded)
 
@@ -1884,11 +1868,11 @@ Handler: `DorkNet.Server/Controllers/API/Comments/CommentsController.cs:40`
 
 **Fix.** Once comments/read persists per-player read state, compute real counts (max comment id per room vs player's last-read).
 
-##### `PUT thread/{0}/favorite` — MISSING (cosmetic)
+##### `PUT thread/{0}/favorite` — FIXED (was cosmetic)
 
-No route → 404. Starring a thread fails.
+No route → 404. Starring a thread failed.
 
-**Fix.** Add [HttpPut("/thread/{chatThreadId}/favorite")] reading form favorite (bool), persist Favorited on ChatThreadMemberEntity, return bare int 0.
+**Fixed.** `ChatController.Favorite` — `[HttpPut]`+`[HttpPost]` on `/thread/{chatThreadId}/favorite`, form field `favorite` bound with FormOrJsonModelBinder. The response is NOT a bare int as previously recorded: the client's continuation is `Func<GLIKNMPPEHL, MGGNHLHPHOF>` (DLDKCILCKNA.txt instr 142), i.e. a client-side projection off a wrapper object, so the handler returns `{chatResult, isFavorited}` (reader OGCMIDEFOEE.txt, both keys casing-tolerant). The flag is per-(player, thread) and there is no column for it, so it is persisted in the generic PlayerSettings table under `chat.favorite:<threadKey>` and read back into every thread DTO's `IsFavorited` via `LoadFavoritesAsync`. Unknown threads answer ThreadNotFound(2), non-members MembershipNotFound(3).
 
 ### Relationships, friends and messaging
 
@@ -2322,17 +2306,19 @@ Handler: `DorkNet.Server/Controllers/API/Keepsakes/KeepsakesController.cs:117`
 
 **Fix.** Bind {RoomId,SubRoomId,KeepsakeCategory}, store a real KeepsakeInstance row (guid id, room, subroom, category, placer), and return the bare Guid as the JSON body.
 
-##### `DELETE api/keepsakes/{keepsakeInstanceId:guid}` — MISSING (breaks-gameplay)
+##### `DELETE api/keepsakes/{keepsakeInstanceId:guid}` — FIXED
 
-No DELETE route under api/keepsakes at all; a GUID path segment matches no template in KeepsakesController -> 404. Removing a placed keepsake fails.
+Was: no DELETE route under api/keepsakes at all; a GUID path segment matched no template in KeepsakesController -> 404, so removing a placed keepsake failed.
 
-**Fix.** Add [HttpDelete("{keepsakeInstanceId:guid}")] removing the instance (owner/placer gated), 200 with no body.
+**Fixed.** `KeepsakesController.Delete` ([HttpDelete("{keepsakeInstanceId:guid}")]) resolves the guid back to the row whose EventKey encodes it, gates on placer / room creator / accepted co-owner (RoomRoles.Role==0) / admin, deletes the instance plus any collection rows pointing at it, and returns a bodiless 200 — the client's issuing method returns the non-generic `LDGADANDBIO` promise (NCCLEJPIABA.JBKENCNIEPA, NCCLEJPIABA.txt:1544 + `Move rdx, 4`@1698) so no body is read.
 
-##### `POST api/keepsakes/{keepsakeInstanceId:guid}/collect` — MISSING (breaks-gameplay)
+##### `POST api/keepsakes/{keepsakeInstanceId:guid}/collect` — FIXED
 
-Route not registered -> 404. Collecting a keepsake in-room fails; client expects {"TotalXp":int,"SocialBoostXp":int}.
+Was: route not registered -> 404, so collecting a keepsake in-room failed.
 
-**Fix.** Add [HttpPost("{keepsakeInstanceId:guid}/collect")] recording a collection row and returning {TotalXp,SocialBoostXp} (SocialBoostXp 0 while SocialXpBoostEnabled=false).
+**Fixed.** `KeepsakesController.Collect` ([HttpPost("{keepsakeInstanceId:guid}/collect")]) writes a collection row (`Category="collection"`, `EventKey="collect:{roomId}:{instanceGuid:N}"` — no schema change) and returns `{"TotalXp":int,"SocialBoostXp":int}` (DHNBKMHDANK; keys from its Utf8Json formatter, RecNet.Runtime/PKCMBJFBHBO.txt:42,69). TotalXp is the whole award — the client renders `TotalXp - SocialBoostXp` as the base figure (PDFJLLECNBE_NestedType_LKIPMJFEAFK.txt:82-99) — and is priced from the same category `XpValue` that `api/keepsakes/categories` serves. SocialBoostXp is 0 while SocialXpBoostEnabled=false. Re-collecting the same instance is idempotent and awards 0.
+
+Two supporting corrections in the same controller: `api/keepsakes/categories` now emits the full `PIHCLHIKEPH` id set (0-8, dump.cs:1199524) instead of three entries keyed by DorkNet's internal account/event/room buckets — the client folds the list into a `Dictionary<PIHCLHIKEPH, KeepsakeCategoryConfigDTO>` that every placed instance is looked up in — and `api/keepsakes/rooms/{roomId}` now returns real `CollectionRecords` (`{AccountId, KeepsakeInstanceId, CollectedAt}`, dump.cs:1234642 / CNNAFLNKDCL.txt:48,75,99) scoped to the caller instead of an empty array.
 
 ##### `GET api/keepsakes/events/{progressionEventId}` — SHAPE_MISMATCH (breaks-gameplay)
 
@@ -2348,11 +2334,15 @@ Route not registered anywhere -> 404. Claiming a reward chest on the progression
 
 **Fix.** Add [HttpPost("api/progressionEvents/collect/{eventId:long}/{rewardIndex:int}")] that increments the player's RewardsCollected and returns a GiftDrop object (reuse the gifts/generate wire builder).
 
-##### `GET event/{0}/instances` — MISSING (breaks-gameplay)
+##### `GET event/{0}/instances` — FIXED
 
-Only /room/{roomId:long}/instances exists (MatchController.cs:418); no event/{eventId}/instances is registered anywhere -> 404 and the 'join' instance browser for multi-instance events never populates. Client wants List<{RoomInstanceId,RoomId,SubRoomId,IsFull,CreatedAt,PlayerIds}> — the 2023 Utf8Json reader accepts the camelCase keys the room variant already emits (MatchController.cs:478-486).
+Was: only /room/{roomId:long}/instances existed; no event/{eventId}/instances was registered anywhere -> 404 and the 'join' instance browser for multi-instance events never populated. Client wants List<{RoomInstanceId,RoomId,SubRoomId,IsFull,CreatedAt,PlayerIds}> — the 2023 Utf8Json reader accepts the camelCase keys the room variant already emits.
 
-**Fix.** Add [HttpGet("/event/{eventId:long}/instances")] in MatchController: resolve the event's RoomId (and SubRoomId when set) then reuse the RoomInstances enumeration/wire code.
+Verb/shape ground truth: `Matchmaking+<GetEventInstanceBrowser>b__0` (Matchmaking_NestedType_CBMHJMNIHNN.txt:14) formats `"event/{0}/instances"` at :296 with the PlayerEventId ([rdi+16] of the HPIOAGDJHDH it closes over) and news up BNDIAONDFFF with rdx=0 at :124 = HTTPMethods.Get. Return type `FGLDKEJLAKB<List<PNDCMIMEJLD>>` = bare JSON array; PNDCMIMEJLD's getters (PNDCMIMEJLD.txt:3-197) are Int64/Int64/Int64/Boolean/DateTime/List\<Int32\>/String/Int32/Boolean/String, i.e. the same SimpleRoomInstance the room browser returns (Matchmaking.txt:14237 uses an identical BNDIAONDFFF/verb-0 sequence). The trailing SubroomName/PlayerCount/HasModPresent/HashedInstanceId are populated locally on the watch and are not read off the wire.
+
+**Fixed.** `[HttpGet("/event/{eventId:long}/instances")]` now lives on `PlayerEventsController.EventInstances` (the route is a matchmaking-host-root path but the data is a player-event one): it resolves the event's RoomId plus the SubRoomId persisted in the event's extras blob, then enumerates PlayerPresenceService instances for that room (filtered to the sub-room when the event names one) and merges in the caller's own PrivateInstances rows, emitting the same six camelCase keys as `room/{id}/instances`. `isFull` is computed from the instance's MaxCapacity vs its presenced player count.
+
+Handler: `DorkNet.Server/Controllers/API/PlayerEvents/PlayerEventsController.cs` (`EventInstances`)
 
 ##### `GET api/playerevents/v1/{0}` — SHAPE_MISMATCH (degraded)
 
@@ -2617,6 +2607,8 @@ Only bare GET api/images/v6 (query ?name=) is registered. api/images/v6/123 fall
 
 **Fix.** Add [HttpGet("api/images/v6/{id:long}")] to ImagesController resolving db.Photos by Id (public or owned) and returning BuildImageInfo(photo, photo.UploaderPlayerId) — BuildImageInfo already carries all 12 LGLCPNPJCEC keys (Id, ImageName, PlayerId, RoomId, PlayerEventId, Accessibility, AccessibilityLocked, Type, CreatedAt, TaggedPlayerIds, CheerCount, CommentCount).
 
+**Status: FIXED.** `ImagesController.ImageByIdV6` (`[HttpGet("api/images/v6/{id:long}")]`, anonymous, public-or-owner) returns a single BuildImageInfo object. Key list re-confirmed against the generated serializer `IBILPLGNAJE.txt:819-1078`.
+
 ##### `GET api/images/v5/bulk` — SHAPE_MISMATCH (degraded)
 
 Two defects. (1) Response: items are BuildImageInfo objects but the client deserializes ICOFKEGOGOD whose keys are SavedImageId / SavedImageType / ClubId / Description — the builder sends Id and Type instead of SavedImageId and SavedImageType and has no ClubId, so the client's photo id reads as default 0 (or the strict reader throws on the missing non-nullable Int64 — throw-vs-default UNKNOWN); every downstream per-photo action (cheer, detail, delete) then targets id 0. (2) POST fallback (>=100 ids): client posts FORM field "ids", but the action binds [FromBody] JSON → ASP.NET returns 415 for form content.
@@ -2632,6 +2624,8 @@ Registered POST-only. The client sends GET with query field "id" whenever the id
 Handler: `DorkNet.Server\Controllers\API\Images\ImagesController.cs:539`
 
 **Fix.** Add [HttpGet("api/images/v5/cheered/bulk")] (and v4) parsing ids from Request.Query["id"] (comma-split all values); on POST also accept Request.Form["id"].
+
+**Status: FIXED.** `ImagesController.CheeredBulk` is now registered GET+POST on v4 and v5 and takes no bound parameter at all — ids come from `ReadCheerBulkIdsAsync`, which reads query values, then form values when the body is form-encoded, then a JSON body (array or object) otherwise. Dropping `[FromBody]` is what removes the 415 on the >=100-id form POST.
 
 ##### `GET api/images/v1/slideshow` — SHAPE_MISMATCH (degraded)
 
@@ -2662,6 +2656,8 @@ Handler: `DorkNet.Server\Controllers\API\Images\ImagesController.cs:440`
 No route matches; the request lands in the api/images/{*path} catch-all and 404s. The client fires-and-forgets so the UI doesn't visibly break, but every photo report is silently lost — a moderation-integrity defect on a multi-tenant server.
 
 **Fix.** Add [HttpPost("api/images/v1/{id:long}/report")] [Authorize] that inserts a ReportEntity (ReporterPlayerId = caller, TargetPhotoId = id, TargetPlayerId = photo.UploaderPlayerId) and returns 200 with any body.
+
+**Status: FIXED.** `ImagesController.ReportPhoto`. ReportEntity has no TargetPhotoId column and this round adds no schema, so the photo id + blob name ride in `Message` as `[photo {id} {blobName}] …` (the same convention `ClubService.AddClubReportAsync` uses for `[club {id}]`); TargetPlayerId = uploader, RoomId = the photo's room, Category = 5 (Other — the wire carries no category). Adding a `TargetPhotoId` column later would let the admin queue link straight to the image.
 
 ##### `GET api/inventions/v1/update` — SHAPE_MISMATCH (degraded)
 
@@ -2831,11 +2827,17 @@ Handler: `DorkNet.Server\Controllers\API\Inventions\InventionsController.cs:388`
 
 **Fix.** Return Ok(new { IsCheering = await db.Cheers.AnyAsync(c => c.FromPlayerId == pid && c.TargetInventionId == id), Invention = ToWire(i), CanEdit = ... }) — extra keys harmless.
 
-##### `GET showcase/{accountId}` — MISSING (degraded)
+##### `GET showcase/{accountId}` — FIXED
 
-No route anywhere in the server (grep across all controllers) for the rooms-service client's showcase list. The client expects a bare JSON array of Int64 room ids; a 404 means the profile 'showcase' room list never loads for any player.
+Was missing everywhere (404), so the profile 'Showcase Rooms' carousel (`RoomListModel.JMGLGEKHHAK.PlayerShowcaseRooms = 7`, fed by `AccountModelController.RoomsShowcaseLinkImpl`) never loaded for any player.
 
-**Fix.** Add GET showcase/{accountId:int} (RoomsController area, same host as rooms/*): return the account's showcased room ids — interim implementation: the player's public created rooms' ids as long[]; proper implementation: a ShowcaseRoomEntity ordering table with a set endpoint when the client's write path is traced.
+Now served by `RoomsController.RoomsShowcase` on both `showcase/{accountId:long}` and `roomserver/showcase/{accountId:long}` (the issuing client NLDBPDCNNCF carries the `roomserver/` prefix in this deployment).
+
+Verb GET is the ordinal 0 moved into rdx before the dispatch call at `NLDBPDCNNCF.txt:4494`, with the literal at ISIL 021 `:4484`; no cmov, so GET only. The response is a **bare JSON array of Int64 room ids** — the issuing method returns `Task<List<System.Int64>>` (`NLDBPDCNNCF.txt:4422`). Room objects are a client-side projection: `IBEOONPEELF.EJPNHLIJNPM` (`IBEOONPEELF.txt:8952`) resolves the ids through the room cache into `FGLDKEJLAKB<IReadOnlyList<NEMINAEBALC>>`, and the cache entry `<GetRoomsShowcase>b__0` is typed `Task<IReadOnlyList<Int64>>` (`IBEOONPEELF_NestedType_HHDHJPIJBJB.txt:14`).
+
+Backing data: `showcase/{0}` is the only showcase literal in the binary — the client reads the list but never writes it — so curation is stored in the existing player-settings table under the key `rooms:showcase` (CSV of room ids), writable via `PUT /settings/v1/{accountId}` with no new schema. Curated ids are re-validated against Rooms on each read (archived/privatised rooms drop out) and returned in the curated order; a player who never curated one falls back to the rooms they created, ordered by HotScore/VisitCount/UpdatedAt. Public rooms only, except the owner viewing their own profile.
+
+Handler: `DorkNet.Server\Controllers\API\Rooms\V2\RoomsController.cs` (`RoomsShowcase`)
 
 ##### `GET unity_assets/{0}/{1}/{2}` — SHAPE_MISMATCH (degraded)
 
@@ -2869,11 +2871,15 @@ Handler: `DorkNet.Server\Controllers\API\Inventions\InventionsController.cs:720`
 
 **Fix.** Return Ok(new { Success = true, Message = string.Empty }).
 
-##### `POST remote-run/push-to-studio` — MISSING (none)
+##### `POST remote-run/push-to-studio` — IMPLEMENTED
 
-Not registered anywhere (grep). This is the Rec Room Studio dev-flow push (paired with the 'rrs.pushtodevice' notification topic); normal gameplay never issues it, so a 404 only affects a Studio-connected developer session.
+Handler: `DorkNet.Server\Controllers\API\Inventions\InventionsController.cs` → `PushToStudio`, routed at both `remote-run/push-to-studio` and `roomserver/remote-run/push-to-studio`.
 
-**Fix.** If Studio pairing is ever in scope: add POST remote-run/push-to-studio accepting FNAGBPCAGJD {SessionId, RoomId, SubRoomId, UnityAssetId, RoomData{Filename,Hash,OwnershipProof}, SubRoomData{...}, SavedByAccountId?} and returning CEELGOLBHIL {SessionId, RoomId, SubRoomId, UnityAssetId, RoomDataFilename, RoomDataHash, SubRoomDataFilename, SubRoomDataHash}; otherwise scope it out explicitly in docs.
+Verb POST from EHIOLHBGODG.txt:411-417 (route literal into r9, `Move rdx, 2` = HTTPMethods.Post, no cmov). Body is a RAW JSON document — :433 passes the serialized DTO to `BNDIAONDFFF.FJLLPHFOOJJ` (RawJsonForm, `application/json`) — bound through `FormOrJsonModelBinder`. Request FNAGBPCAGJD keys are literal in the generated serializer OFMNNCMPEPA.txt:535-698: `SessionId, RoomId, SubRoomId, UnityAssetId, RoomData, SubRoomData, SavedByAccountId`; each blob ref is `{Filename, Hash, OwnershipProof}` (FLELPHJDLNG.txt:255/274/290). Response is a single CEELGOLBHIL — eight keys, literal in its reader PPHLKNGCGOE.txt:599-786: `SessionId, RoomId, SubRoomId, UnityAssetId, RoomDataFilename, RoomDataHash, SubRoomDataFilename, SubRoomDataHash`; RoomId/SubRoomId are `Nullable<Int64>` (CEELGOLBHIL.txt:25/51) and the two blob refs are FLATTENED (OwnershipProof is not echoed). A non-2xx or malformed reply shows the client's "Failed to push to Rec Room Studio" toast (EHIOLHBGODG.txt:445).
+
+This is the Studio remote-run handoff, a sibling of the normal save commit, not a replacement for it (client-side: OGPDOMCNIFM.txt:271 `rooms/{id}/subrooms/{id}/data` vs :449 push) — so the server does NOT touch `RoomEntity.CurrentDataBlobName`. It authorizes the caller like a room save (creator / admin / accepted CoOwner), requires both pushed filenames to resolve to real `RoomDataBlobEntity` rows (the client uploads them immediately beforehand), stamps the sub-room save blob with its `RoomId`/`SubRoomId` so it shows up in that sub-room's `datahistory`, records the pushed `UnityAssetId` on the `RoomSceneEntity`, writes `SessionId` into `RoomEntity.StudioSessionId`, and keeps the full push under `remoterun:{SessionId}` in `PlayerSettingEntity`. `IsRoomLinkedToRecRoomStudio` is intentionally left alone (it changes in-room MakerPen UI and the client has no unlink call).
+
+**Still out of scope:** live relay of the details to a second logged-in session. The client's receive side (`EHIOLHBGODG.MCPBJLHFOBC(CEELGOLBHIL)` → the `Action<CEELGOLBHIL>` subscribed at MBOJJFBIAGE.txt:366/978) has no call site anywhere in the IsilDump, so the notification id carrying it cannot be established from the binary; `PushNotificationId` gets no invented member for it.
 
 ### Storefront, purchases and subscriptions
 
@@ -2963,9 +2969,11 @@ Handler: `DorkNet.Server/Controllers/API/Inventions/InventionsController.cs:345`
 
 **Fix.** Accept the form field (e.g. [FromForm] long inventionId with [FromQuery] fallback) and return { Status = <success enum>, Invention = ToWire(i), InventionVersion = <latest version wire> }.
 
-##### `POST subscription/{accountId:int}` — MISSING (breaks-gameplay)
+##### `POST subscription/{accountId:int}` — FIXED (was MISSING, breaks-gameplay)
 
-No handler accepts POST or DELETE on subscription/{accountId} anywhere in the server (verified by grepping all HttpPost/HttpDelete attributes under subscription/: only /subscription/v1/* POSTs exist, whose literal 'v1' segment cannot match a numeric account id; the follow-graph mutations live at api/playersubscriptions/v1/subscribe/{targetId} which the 2023 client never calls). The client's subscribe (POST, form field roomId:Int64, omitted when -1) and unsubscribe (DELETE, no body) both 404 → 'Failed to subscribe to {0}' / 'Failed to unsubscribe from {0}' toasts; creator-club subscribing is entirely broken from the 2023 client.
+Implemented in `DorkNet.Server/Controllers/API/Subscriptions/SubscriptionsController.cs`: `[HttpPost("/subscription/{accountId:long}")]` binds the optional `roomId` form field through `FormOrJsonModelBinder` and `[HttpDelete("/subscription/{accountId:long}")]` takes no body. Both write/remove the canonical player→player `Subscriptions` row AND mirror into `ClubSubscriptions` for the target's creator club (oldest club they own, the same resolution `subscription/details` reports as `ClubId`) so the client's post-write refresh of `subscription/mine/member` actually shows the subscription. Both are idempotent and return a bare 200 (the client parses no body). `roomId` is attribution only — no column exists for it, so it is logged rather than persisted.
+
+Original finding: No handler accepts POST or DELETE on subscription/{accountId} anywhere in the server (verified by grepping all HttpPost/HttpDelete attributes under subscription/: only /subscription/v1/* POSTs exist, whose literal 'v1' segment cannot match a numeric account id; the follow-graph mutations live at api/playersubscriptions/v1/subscribe/{targetId} which the 2023 client never calls). The client's subscribe (POST, form field roomId:Int64, omitted when -1) and unsubscribe (DELETE, no body) both 404 → 'Failed to subscribe to {0}' / 'Failed to unsubscribe from {0}' toasts; creator-club subscribing is entirely broken from the 2023 client.
 
 **Fix.** Add to PlayerSubscriptionsController (or ClubsController): [HttpPost("/subscription/{accountId:long}")] reading optional form field roomId and creating the subscription row (same semantics as Subscribe), and [HttpDelete("/subscription/{accountId:long}")] removing it. Return 200 with empty/any body (client ignores it, then refreshes via subscription/mine/member). Keep the row source consistent with what subscription/mine/member reads (ClubSubscriptions vs Subscriptions — currently mine/member reads ClubSubscriptions while the playersubscriptions endpoints write Subscriptions; the new handlers must write the table mine/member reads, or the subscribe will never show up).
 
@@ -3089,13 +3097,13 @@ Handler: `DorkNet.Server/Controllers/API/PlayerSubscriptions/PlayerSubscriptions
 
 **Fix.** Join each top AccountId to its creator club (db.Clubs by CreatorPlayerId) and add ClubId/clubId to the per-row dictionary.
 
-##### `POST api/AppIntegrity/v1/iosproducts` — VERB_MISMATCH (none)
+##### `POST api/AppIntegrity/v1/iosproducts` — FIXED (was VERB_MISMATCH)
 
-Server registers GET only; client POSTs a JSON product array and expects {Success:Boolean,Message:String} (PHMHCPEMABG). A POST would 405, and even the GET body (list of {ProductId,Price,CurrencyType,Name}) is not the expected shape. iOS-only StoreKit check — never fired by the PC build.
+Server registered GET only; the client POSTs a raw JSON product array (verb `rdx=2` at GAAPALMODOL.txt:106, route literal :104, raw-JSON body via BNDIAONDFFF.FJLLPHFOOJJ :138) and expects {Success:Boolean,Message:String} (PHMHCPEMABG.txt:3/23, keys GBPDOLJBABB.txt:191-218). The POST 405'd, and the GET body (list of {ProductId,Price,CurrencyType,Name}) is not the expected shape either. iOS-only StoreKit report — never fired by the PC build.
 
-Handler: `DorkNet.Server/Controllers/API/AppIntegrity/AppIntegrityController.cs:13`
+Handler: `DorkNet.Server/Controllers/API/Compatibility/CompatibilityFeatureController.cs` (POST) — the pre-existing GET at `DorkNet.Server/Controllers/API/AppIntegrity/AppIntegrityController.cs:13` is left in place; the two verb constraints are disjoint so they do not collide.
 
-**Fix.** In AppIntegrityController.cs change to [HttpPost("api/AppIntegrity/v1/iosproducts")], read (and ignore) the JSON body, return Ok(new { Success = true, Message = "" }).
+**Fixed.** The POST reads the top-level array of {Name:String,Price:Single,ProductId:String} (GAAPALMODOL/KOLPHINEHDD, key table KAONMCEONPF.txt:255-306) and stores the reported StoreKit catalogue as the caller's `appintegrity:iosproducts` PlayerSettings row (`{productId}={price}` pairs, entries dropped once the 1024-char column budget is spent), replacing any earlier report. Returns {Success:true, Message:""}; a malformed body returns Success=false with Message `malformed_product_list`.
 
 ### Progression, quests, leaderboards and misc
 
@@ -3332,7 +3340,7 @@ DESERIALIZATION: every DTO has a generated formatter that registers each JSON ke
 
 KEY 2023-vs-2020 DELTA: api/config/v2 reader (CONDPLKKBPI via CDEDNEPPPND) reads ONLY LevelProgressionMaps/DailyObjectives/ServerMaintenance/AutoMicMutingConfig/StorefrontConfig/RoomKeyConfig/RoomCurrencyConfig/ShareBaseUrl. The 2020-era keys DorkNet also sends (MessageOfTheDay, CdnBaseUri, PhotonConfig, MatchmakingParams, ConfigTable, ServiceUrls) are ignored by the 2023 client. New nested key: LevelProgressionMaps[].GiftDropId (Int32?).
 
-SERVER GAPS FOUND (routes the 2023 client can hit that DorkNet does not register, per the server's reflected route table): (1) POST actionlink, GET actionlink/{code}, POST actionlink/{code}/consume — Link host; (2) PUT datalink, GET datalink/{code} — Link host; (3) POST feed/query — Discovery host (the existing GET "feed" is api/photos/v1/feed, unrelated); (4) GET announcements/mine and GET announcements/subscription/mine — Clubs host; (5) POST announcements/club/{clubId} (create at collection URL — ClubsController only registers POST at .../{announcementId}); (6) POST api/testcasemanagement/v1/testcase/{id}/comment. Also verify announcements/v2/*/unread handlers honor ?sendAnnouncements=true by embedding Announcements arrays.
+SERVER GAPS FOUND (routes the 2023 client can hit that DorkNet does not register, per the server's reflected route table): (1) POST actionlink, GET actionlink/{code}, POST actionlink/{code}/consume — Link host [NOW FIXED, LinkController.cs]; (2) PUT datalink, GET datalink/{code} — Link host [NOW FIXED, LinkController.cs]; (3) POST feed/query — Discovery host (the existing GET "feed" is api/photos/v1/feed, unrelated); (4) GET announcements/mine and GET announcements/subscription/mine — Clubs host; (5) POST announcements/club/{clubId} (create at collection URL — ClubsController only registers POST at .../{announcementId}); (6) POST api/testcasemanagement/v1/testcase/{id}/comment. Also verify announcements/v2/*/unread handlers honor ?sendAnnouncements=true by embedding Announcements arrays.
 
 SERVER SHAPE MISMATCHES (working but lossy): api/config/v1/azurespeech — client key is "Key", server sends "SubscriptionKey" (client gets null Key); api/config/v1/amplitude — client also reads RudderStackKey/UseRudderStack/StatSigKey; api/config/v1/backtrace — client's 9 keys (ANRThresholdMs, CaptureNativeCrashes, FilterType, LogLineCount, MessageCount, MessageRegex, ReportBudget, SampleRate, VersionRegex) are mostly absent from the server response (only SampleRate/ReportBudget present); all fields silently default today.
 
@@ -3445,17 +3453,13 @@ Handler: `DorkNet.Server\Controllers\Clubs\ClubsController.cs:737-742`
 
 **Fix.** Make AnnouncementsForClub return one object: Ok(new { ClubId = clubId, LastReadAnnouncementId = <caller's last-read id or 0>, Announcements = rows.OrderByDescending(CreatedAt).Select(ToWireAnnouncement) }) — always an object, never an array, LastReadAnnouncementId always a number.
 
-##### `GET announcements/mine` — MISSING (degraded)
+##### `GET announcements/mine` — FIXED
 
-Not registered (server-routes.json has no announcements/mine; ClubsController's only 'mine' announcement routes are the v2 unread pair). Client expects a bare JSON array of JDPPAFLFNBD announcement objects for all of the player's own clubs; 404 rejects the promise and the aggregated club-announcements surface on the watch fails.
+`ClubsController.AnnouncementsMine` → `ClubService.AnnouncementsForMemberClubsAsync`. Flat `List<JDPPAFLFNBD>` of `ToWireAnnouncement` rows, newest first — no per-club envelope and no unread filter (the issuing method is `FGLDKEJLAKB<List<JDPPAFLFNBD>> IOCFHCFLIMJ()` at IKMMOCKDKAF.txt:996, described in-binary as "get all announcements for clubs I'm in"). Membership rows carrying the pending (128) or ban (256) marker are excluded so a pending/banned account never sees a club's board, and disbanded clubs are re-filtered on State.
 
-**Fix.** Add [HttpGet("/announcements/mine")] [Authorize] in ClubsController returning a flat array of ToWireAnnouncement rows for every club the caller is a member of (reuse ClubService queries), newest first.
+##### `GET announcements/subscription/mine` — FIXED
 
-##### `GET announcements/subscription/mine` — MISSING (degraded)
-
-Same as announcements/mine but scoped to clubs the player is subscribed to; not registered, 404s.
-
-**Fix.** Add [HttpGet("/announcements/subscription/mine")] [Authorize] in ClubsController returning a flat array of ToWireAnnouncement rows for subscribed clubs (clubs.UnreadSubscriptionAsync's underlying subscription query, without the unread filter).
+`ClubsController.AnnouncementsSubscriptionMine` → `ClubService.AnnouncementsForSubscribedClubsAsync`: same flat shape (`IIOMOLFOLPD` at IKMMOCKDKAF.txt:1083, route literal :1162), scoped to `ClubSubscriptions` rather than memberships.
 
 ##### `GET announcements/v2/mine/unread (+ announcements/v2/subscription/mine/unread, with and without ?sendAnnouncements=true)` — SHAPE_MISMATCH (degraded)
 
@@ -3465,35 +3469,35 @@ Handler: `DorkNet.Server\Controllers\Clubs\ClubsController.cs:151-167 (rows buil
 
 **Fix.** In ClubsController.GroupByClub emit LastAnnouncementId = ordered.First().Id and LastReadAnnouncementId = <caller's read-marker or 0L> (a number, never null). Key casing is already fine (tri-cased reader).
 
-##### `GET actionlink/{code}` — MISSING (degraded)
+##### `GET actionlink/{code}` — FIXED
 
-No actionlink route exists anywhere in the server (repo-wide grep; PageviewController.cs:28-32 explicitly documents actionlink/* as out-of-scope). Client expects {CreatorPlayerId:Int32, Data:String, IsValid:Boolean} (NBAFGFFIOLK). Looking up a share/promo/invite code 404s.
+Was unrouted (PageviewController.cs:28-32 documented actionlink/* as out-of-scope). Now `DorkNet.Server\Controllers\Link\LinkController.cs` — `[HttpGet("/actionlink/{code}")]`, `[AllowAnonymous]` because `ActionCode.ModifyPreAuthLaunchTarget` resolves an inbound deep link during BootSequence, before the player holds a token. Verb from CKBKHENHCAN.txt:793 (`045 Move rdx, 0`), host 11 at :798. Response is the camelCase anonymous object `{creatorPlayerId, data, isValid}`, which the tri-cased generated formatter DPIECEMDKPL accepts (:267/:278/:286 CreatorPlayerId, :294/:302 Data, :310/:318/:326 IsValid). Unknown/expired codes answer 200 with `IsValid:false` (never 404) so the promise resolves. Reading a code does not spend a use.
 
-**Fix.** Add an ActionLinkController (Link host): GET /actionlink/{code} returning {CreatorPlayerId, Data, IsValid} from a new action-link table (IsValid:false for unknown codes rather than 404, so the client gets a parseable body).
+##### `POST actionlink` — FIXED
 
-##### `POST actionlink` — MISSING (degraded)
+Now `LinkController.ActionLinkCreate` — `[HttpPost("/actionlink")]`, `[Authorize]`. Verb from CKBKHENHCAN.txt:1226 (`106 Move rdx, 2`), host `105 Move r8, 11` at :1225. Form fields bound through `FormOrJsonModelBinder`: data (:1234), validHours (:1249), maxCount (:1261), codeType (:1273), extraDataId (:1287). Return type is `FGLDKEJLAKB<System.String>` (:860) so the body is a bare JSON string — emitted with `Content(JsonSerializer.Serialize(code), "application/json")`, because `Ok(string)` goes out as unquoted text/plain via StringOutputFormatter.
 
-Create-code endpoint absent. Client sends url-encoded form fields data/validHours/maxCount/codeType/extraDataId (maxCount and extraDataId omitted when null) and deserializes a BARE JSON string (the generated code). 404 breaks creating share/invite codes.
+Codes are 8 characters from the unambiguous alphabet `23456789ABCDEFGHJKLMNPQRSTUVWXYZ` (no O/0/I/1 — players re-type these into ActionCodeConsumptionModel), reserved with a global uniqueness check before insert.
 
-**Fix.** Same ActionLinkController: POST /actionlink reading the five form fields, generating a short unique code, persisting {code, data, creatorPlayerId, expiry=now+validHours, maxCount, codeType, extraDataId}, and returning the code serialized as a JSON string (e.g. return Ok(code) with string result → "ABC123").
+##### `POST actionlink/{code}/consume` — FIXED
 
-##### `POST actionlink/{code}/consume` — MISSING (degraded)
+Now `LinkController.ActionLinkConsume` — `[HttpPost("/actionlink/{code}/consume")]`, `[AllowAnonymous]` (can fire from the pre-auth launch-target path). Verb from CKBKHENHCAN.txt:1675 (`077 Move rdx, 2`); path built by `String.Concat("actionlink/", WebUtility.UrlEncode(code), "/consume")` at :1665-1669. Form fields: id (:1684), validHours (:1692), codeType (:1720), newPlayer (:1732), newInstall (:1745).
 
-Redeem endpoint absent. Client POSTs form fields id/validHours/codeType/newPlayer/newInstall to actionlink/{urlencoded code}/consume and expects {CreatorPlayerId, Data, IsValid}. 404 breaks code redemption (entered codes / deeplinks).
+Semantics established from the call sites: `validHours` is the creating ActionCode's `Configuration.AutoRenewHours`, loaded immediately before dispatch (`043 Call Configuration.get_AutoRenewHours`, RoomCode_NestedType_IBLIEDEHMPI.txt:168; ClubCode_NestedType_EAGCMJOEANN.txt:78) and null when AutoRenew is off — so a present value renews the code's expiry instead of letting it age out. `codeType` is verified against the stored type (CBKKGBIJHAL: Unknown=-1, Friend=0, Referral=1, Meetup=2, Club=3, PlayerEvent=4, Room=5, Influencer=6, Photo=7; RoomCode passes 5 at IBLIEDEHMPI.txt:175, ClubCode passes 3 at EAGCMJOEANN.txt:85) so a room payload cannot be handed to the club handler. Expiry and maxCount are enforced; a successful redeem increments the use counter.
 
-**Fix.** Same ActionLinkController: POST /actionlink/{code}/consume — look up the code, enforce expiry/maxCount, return {CreatorPlayerId, Data, IsValid} (IsValid:false when invalid/expired).
+Referral codes are the only type with no other server touchpoint — ReferralCode has no HTTP routes of its own and `IncentivizedReferralsController` counts `referral:credited:{inviterId}:{inviteeId}` rows that nothing wrote. Consuming a Referral code as a signed-in `newPlayer` now writes that row (on the invitee, matching the `externalinvite:redeemed:*` convention), so incentivized-referral progress is no longer permanently zero.
 
-##### `GET datalink/{code}` — MISSING (degraded)
+##### `GET datalink/{code}` — FIXED
 
-Absent. Client expects {Data:String} (LBBKBMPAEIO via IKBPJACLIHH, tri-cased). 404 breaks fetching share payload blobs.
+Now `DorkNet.Server\Controllers\Link\LinkController.cs` — `[HttpGet("/datalink/{code}")]`, `[AllowAnonymous]` (resolved from a cold-boot deep link). Verb from CKBKHENHCAN.txt:352 (`045 Move rdx, 0`), literal `"datalink/"` at :345. Response is `{data}`; the generated formatter IKBPJACLIHH registers a single member Data (:139) plus the camelCase alias (:150). An unknown code returns an empty Data rather than 404 so the strict reader still gets an object.
 
-**Fix.** Add DataLinkController (Link host): GET /datalink/{code} returning {Data:"..."} from a datalink table.
+##### `PUT datalink` — FIXED
 
-##### `PUT datalink` — MISSING (degraded)
+Now `LinkController.DataLinkCreate` — `[HttpPut("/datalink")]`, `[Authorize]`. Verb from CKBKHENHCAN.txt:560 (`033 Move rdx, 3` = PUT), literal `"datalink"` at :558, sole form field `data` at :569, bound through `FormOrJsonModelBinder`. Return type `FGLDKEJLAKB<System.String>` (:419) — bare JSON string, emitted with `Content(JsonSerializer.Serialize(code), "application/json")`. Codes here are 10 characters (nobody types a datalink code; it only travels inside a URL).
 
-Absent. Client PUTs form field data=String and deserializes a BARE JSON string (the generated code). 404 breaks storing share payloads (share flows that pair with datalink/{code}).
+##### Link-host storage note
 
-**Fix.** Same DataLinkController: PUT /datalink reading form field 'data', persisting under a generated short code, returning the code as a JSON string.
+All five link routes persist in `PlayerSettings` — the server's existing general-purpose per-player key/value table already used for ban-appeal codes and external friend invites — under `actionlink:{CODE}` / `datalink:{CODE}` keys owned by the creator's row, so codes survive restarts without a new table. Action-link rows pack `{d:data, e:expiry, m:maxCount, u:uses, t:codeType, x:extraDataId}` into the single Value column with one-character keys; because `PlayerSettingEntity.Value` is `[MaxLength(1024)]` (a real `varchar(1024)` on Postgres), both create routes reject over-long payloads with a logged 400 instead of blowing up at SaveChanges.
 
 ##### `POST api/testcasemanagement/v1/testcase/{id}/status` — SHAPE_MISMATCH (degraded)
 
