@@ -20,11 +20,16 @@ namespace DorkNet.Server.Tests;
 public sealed class ClientRouteCoverageTests
 {
     /// <summary>Client routes with no handler yet. Each entry is
-    /// <c>VERB route</c> exactly as it appears in the inventory file.</summary>
-    private static readonly HashSet<string> KnownGaps = new(StringComparer.OrdinalIgnoreCase)
-    {
-        // (populated from the current gap report; remove as they are implemented)
-    };
+    /// <c>VERB route</c> exactly as it appears in the inventory file.
+    ///
+    /// This is EMPTY, and that is the point: every request the 2023-03-21
+    /// client can issue reaches a handler under the verb it actually uses. Do
+    /// not add an entry to make a red build green — an entry here is a promise
+    /// that the client gets a 404 or 405 in the wild. Implement the route, or
+    /// if the inventory itself is wrong (a literal that is really a cache key,
+    /// a deeplink, or a base the client concatenates onto), fix the inventory
+    /// so the claim stays honest.</summary>
+    private static readonly HashSet<string> KnownGaps = new(StringComparer.OrdinalIgnoreCase);
 
     [Fact]
     public void Every_client_route_has_a_handler()

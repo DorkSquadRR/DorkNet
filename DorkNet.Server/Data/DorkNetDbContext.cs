@@ -38,6 +38,8 @@ public class DorkNetDbContext(DbContextOptions<DorkNetDbContext> options) : DbCo
     public DbSet<BugReportEntity> BugReports => Set<BugReportEntity>();
     public DbSet<ClubEntity> Clubs => Set<ClubEntity>();
     public DbSet<ClubMembershipEntity> ClubMemberships => Set<ClubMembershipEntity>();
+    public DbSet<ClubRolePermissionEntity> ClubRolePermissions => Set<ClubRolePermissionEntity>();
+    public DbSet<ClubAdditionalImageEntity> ClubAdditionalImages => Set<ClubAdditionalImageEntity>();
     public DbSet<RoyaleMatchEntity> RoyaleMatches => Set<RoyaleMatchEntity>();
     public DbSet<RoyaleMatchPlayerEntity> RoyaleMatchPlayers => Set<RoyaleMatchPlayerEntity>();
     public DbSet<RoyalePlayerProgressEntity> RoyalePlayerProgress => Set<RoyalePlayerProgressEntity>();
@@ -121,6 +123,21 @@ public class DorkNetDbContext(DbContextOptions<DorkNetDbContext> options) : DbCo
         {
             e.HasKey(s => s.Id);
             e.HasIndex(s => new { s.PlayerId, s.Key }).IsUnique();
+        });
+
+        // One permission row per (club, role) and one image per (club, slot);
+        // both are upserted by their PUT handlers, so the uniqueness is what
+        // keeps a repeated write from stacking duplicate rows.
+        modelBuilder.Entity<ClubRolePermissionEntity>(e =>
+        {
+            e.HasKey(p => p.Id);
+            e.HasIndex(p => new { p.ClubId, p.MembershipType }).IsUnique();
+        });
+
+        modelBuilder.Entity<ClubAdditionalImageEntity>(e =>
+        {
+            e.HasKey(i => i.Id);
+            e.HasIndex(i => new { i.ClubId, i.Slot }).IsUnique();
         });
 
         modelBuilder.Entity<RoomEntity>(e =>
