@@ -2158,15 +2158,21 @@ public class RoomsController(
             // already answered 200 to. Kept last so the additions are visible
             // against the reader's own list; key ORDER does not matter to a
             // name-keyed reader, presence does.
-            // Must be the SAME blob sub-room 0 resolves to, override included.
-            // A dorm's data is per-player (dorm_p{id}_v*.dat) and arrives here
-            // as overrideDataBlobName; the room-level name is per-ROOM
-            // (room_116_*), so reporting that instead hands the client another
-            // player's dorm — or one that was never written — and it rejects
-            // the load outright with "the data in the room you are trying to
-            // load is corrupt".
-            DataBlob = subRooms.Length > 0 ? primarySubRoomDataBlob : dataBlobName,
-            DataBlobHash = (string?)null,
+            // DataBlob / DataBlobHash are deliberately NOT sent at room level,
+            // even though the reader registers them.
+            //
+            // The room a player actually loads is chosen per INSTANCE: the
+            // matchmake response carries the blob (a dorm's is per-player,
+            // dorm_p{id}_v*.dat), and each sub-room carries its own. Adding a
+            // room-level name on top gave the client a second, room-scoped
+            // answer for the same question, and it loaded that one — a file
+            // that for a dorm was never written — then rejected the room with
+            // "the data in the room you are trying to load is corrupt".
+            //
+            // A registered slot does NOT oblige us to fill it: Newtonsoft
+            // leaves an absent key at its default, which is the state every
+            // room loaded fine in. Sending it is what broke the dorm, so the
+            // absence here is the fix, not an omission to tidy up later.
             // The room-level cap is the room's own advertised capacity, which is
             // what RoomEntity.MaxCapacity exists for and what matchmaking hands
             // to RoomInstance.MaxCapacity. Each sub-room carries its own
