@@ -2,6 +2,9 @@ using System.Net.Http.Headers;
 using System.Text.Json;
 using DorkNet.Server.Data;
 using DorkNet.Server.Data.Entities;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using DorkNet.Server.Services;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace DorkNet.Server.Tests;
@@ -97,6 +100,107 @@ public sealed class RoomCloneShapeTests : IClassFixture<DorkNetServerFactory>
 
              clone keys: {string.Join(", ", actual.Order(StringComparer.Ordinal))}
              """);
+    }
+
+    /// <summary>A clone must own its save data. Cloning used to be a shallow
+    /// copy — the new room's scenes kept pointing at the SOURCE's blob until
+    /// someone saved over them — so every copy of a room shared one object and
+    /// cloning RecCenter produced rooms whose data blob was literally
+    /// <c>room_100_v1.dat</c>. A clone that references another room's blob is
+    /// the bug, whatever the name.</summary>
+    [Fact]
+    public async Task Clone_does_not_reference_the_source_rooms_blob()
+    {
+        // The suite runs with S3 unconfigured, where there is nothing to copy
+        // and the clone deliberately keeps the shallow reference. Swap in a
+        // real (in-memory) store so this exercises the copy path itself.
+        var store = new InMemoryObjectStorage();
+        using var factory = _factory.WithWebHostBuilder(builder =>
+            builder.ConfigureServices(services =>
+            {
+                services.RemoveAll<IObjectStorage>();
+                services.AddSingleton<IObjectStorage>(store);
+            }));
+
+        using var client = factory.CreateClient(new() { AllowAutoRedirect = false });
+        client.BaseAddress = new Uri($"http://rooms.{_factory.ApexDomain}");
+        var session = await GameClientSessionFactory.CreateAsync(client, _factory.ApexDomain);
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", session.AccessToken);
+
+        var sourceId = 9_500_000 + Random.Shared.Next(1, 99_999);
+        var sourceBlob = $"room_{sourceId}_v1.dat";
+        var sourceBytes = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
+        var (srcBucket, srcKey) = BlobRouter.Route(sourceBlob);
+        await store.PutAsync(srcBucket, srcKey, sourceBytes, "application/octet-stream");
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<DorkNetDbContext>();
+            db.Rooms.Add(new RoomEntity
+            {
+                Id = sourceId,
+                Name = $"BlobSrc{Guid.NewGuid():N}"[..20],
+                CreatorPlayerId = session.PlayerId,
+                CloningAllowed = true,
+                CurrentDataBlobName = sourceBlob,
+            });
+            db.RoomScenes.Add(new RoomSceneEntity
+            {
+                RoomId = sourceId,
+                Name = "Home",
+                OrderIndex = 0,
+                DataBlobName = sourceBlob,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var clone = await ReadJsonAsync(client, HttpMethod.Post, $"/rooms/{sourceId}/clone",
+            new FormUrlEncodedContent([new KeyValuePair<string, string>("name", $"Copy{Guid.NewGuid():N}"[..20])]));
+        var cloneId = clone.GetProperty("RoomId").GetInt64();
+
+        await using (var scope = factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<DorkNetDbContext>();
+            var room = await db.Rooms.FirstAsync(r => r.Id == cloneId);
+            var scenes = await db.RoomScenes.Where(s => s.RoomId == cloneId).ToListAsync();
+
+            Assert.False(room.CurrentDataBlobName == sourceBlob,
+                $"the clone's room row still points at the source's blob ({sourceBlob})");
+            foreach (var scene in scenes)
+                Assert.False(scene.DataBlobName == sourceBlob,
+                    $"cloned sub-room {scene.OrderIndex} still points at the source's blob ({sourceBlob})");
+
+            // It must be a real copy, not just a cleared reference — the point
+            // is that the player's content comes along.
+            Assert.False(string.IsNullOrEmpty(room.CurrentDataBlobName),
+                "the clone has no blob at all; the source's data should have been copied, not dropped");
+            var (dstBucket, dstKey) = BlobRouter.Route(room.CurrentDataBlobName);
+            Assert.Equal(sourceBytes, await store.GetAsync(dstBucket, dstKey));
+        }
+    }
+
+    /// <summary>Minimal in-memory <see cref="IObjectStorage"/>. The suite runs
+    /// with S3 unconfigured, so without this the clone's copy path short-circuits
+    /// and never gets exercised.</summary>
+    private sealed class InMemoryObjectStorage : IObjectStorage
+    {
+        private readonly Dictionary<string, byte[]> _objects = new(StringComparer.Ordinal);
+
+        public bool IsS3Configured => true;
+
+        public Task<long> PutAsync(
+            string bucket, string key, byte[] bytes, string contentType, CancellationToken ct = default)
+        {
+            _objects[$"{bucket}/{key}"] = bytes;
+            return Task.FromResult((long)bytes.Length);
+        }
+
+        public Task<byte[]?> GetAsync(string bucket, string key, CancellationToken ct = default) =>
+            Task.FromResult(_objects.TryGetValue($"{bucket}/{key}", out var bytes) ? bytes : null);
+
+        public Task<bool> ExistsAsync(string bucket, string key, CancellationToken ct = default) =>
+            Task.FromResult(_objects.ContainsKey($"{bucket}/{key}"));
     }
 
     private static async Task<JsonElement> ReadJsonAsync(

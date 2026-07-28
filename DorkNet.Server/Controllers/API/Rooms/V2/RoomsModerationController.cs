@@ -22,7 +22,10 @@ namespace DorkNet.Server.Controllers.API.Rooms.V2;
 /// </summary>
 [ApiController]
 [Authorize]
-public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
+public class RoomsModerationController(
+    DorkNetDbContext db,
+    IObjectStorage storage,
+    ILogger<RoomsModerationController> logger) : ControllerBase
 {
     private const int PublicAccessibility = 1;
     private const long CanUseShareCamPermission = 1L << 18;
@@ -1507,6 +1510,8 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
             await db.SaveChangesAsync();
         }
 
+        await GiveCloneItsOwnBlobsAsync(clone, sourceScenes, clonedScenes, Me);
+
         // The 2023 client's clone (RecNet.Runtime NLDBPDCNNCF.GDHIIAHCBMN)
         // deserializes the response as the FULL room-details object
         // (FGCPNAACHIK — the same type get-by-id / rename return on the
@@ -1518,6 +1523,144 @@ public class RoomsModerationController(DorkNetDbContext db) : ControllerBase
         // room".
         return Ok(RoomsController.BuildRoomServerDetails(clone, clonedScenes));
     }
+    /// <summary>Give a freshly-cloned room its OWN copy of the source's save
+    /// data instead of pointing its scenes at the source's blob.
+    ///
+    /// The shallow copy this replaces relied on copy-on-write: the clone
+    /// referenced <c>room_&lt;source&gt;_*.dat</c> until someone saved over it.
+    /// That left every clone of a room sharing one object, so a clone read as
+    /// "already has content" while owning none of it, and the room a player
+    /// copied stayed load-bearing for their copy forever. Cloning RecCenter
+    /// produced rooms whose data blob was literally <c>room_100_v1.dat</c>.
+    ///
+    /// Each sub-room's bytes are copied to a name derived from the CLONE's id,
+    /// so <see cref="BlobRouter"/> files them under that room's own prefix.
+    /// Sub-room 0 takes the canonical default name, which matters because the
+    /// details builder falls back to exactly that name when a room has no
+    /// recorded blob — writing the copy there means both paths resolve to real
+    /// content.
+    ///
+    /// A missing source object is not fatal: the clone keeps an empty blob name
+    /// and behaves like a fresh room, which is the same outcome as cloning a
+    /// room that never had a save. Failing the whole clone would be worse — the
+    /// room and its sub-rooms are already committed by this point.</summary>
+    private async Task GiveCloneItsOwnBlobsAsync(
+        RoomEntity clone,
+        List<RoomSceneEntity> sourceScenes,
+        List<RoomSceneEntity> clonedScenes,
+        long callerId)
+    {
+        // With no object store there are no objects to copy, and a blob name is
+        // only a reference. Clearing it would throw away the player's edits —
+        // strictly worse than the shared reference — so leave the shallow copy
+        // alone and let copy-on-write handle it, exactly as before.
+        if (!storage.IsS3Configured)
+        {
+            logger.LogInformation(
+                "[room-clone] no object store configured; room {Room} keeps the source's blob references",
+                clone.Id);
+            return;
+        }
+
+        string? subRoomZeroBlob = null;
+
+        for (var i = 0; i < clonedScenes.Count; i++)
+        {
+            var target = clonedScenes[i];
+            // The scene was created as a shallow copy, so its DataBlobName is
+            // currently the SOURCE's. Either a copy replaces it or it gets
+            // cleared — it must never survive as-is.
+            var copied = await CopyBlobForCloneAsync(
+                sourceScenes[i].DataBlobName, clone.Id, target.OrderIndex, callerId);
+
+            target.DataBlobName = copied ?? string.Empty;
+            target.DataModifiedAt = DateTime.UtcNow;
+            if (target.OrderIndex == 0) subRoomZeroBlob = copied;
+        }
+
+        // Same rule for the room row, which carries its own inherited copy of
+        // the name. Sub-room 0 is the room's current save, so prefer whatever
+        // that produced; with no sub-room 0 at all, copy the room-level blob
+        // directly. Anything that can't be copied is cleared rather than left
+        // pointing into another room.
+        if (clonedScenes.Any(s => s.OrderIndex == 0))
+        {
+            clone.CurrentDataBlobName = subRoomZeroBlob ?? string.Empty;
+        }
+        else
+        {
+            clone.CurrentDataBlobName =
+                await CopyBlobForCloneAsync(clone.CurrentDataBlobName, clone.Id, 0, callerId)
+                ?? string.Empty;
+        }
+
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Copy one blob into the clone's own namespace. Returns the new
+    /// name, or null when there was nothing to copy or the source object could
+    /// not be read — in which case the caller clears the reference.
+    ///
+    /// A missing source is not fatal: the clone then behaves like a room that
+    /// was never saved, which is also what cloning an unsaved room does. The
+    /// room and its sub-rooms are already committed by this point, so failing
+    /// the request outright would leave a half-made room behind.</summary>
+    private async Task<string?> CopyBlobForCloneAsync(
+        string? sourceBlob, long cloneId, int orderIndex, long callerId)
+    {
+        // A first-party template deliberately starts empty (see
+        // CurrentDataBlobName in BareClone), and a sub-room may simply never
+        // have been saved.
+        if (string.IsNullOrWhiteSpace(sourceBlob)) return null;
+
+        byte[]? bytes;
+        try
+        {
+            var (srcBucket, srcKey) = BlobRouter.Route(sourceBlob);
+            bytes = await storage.GetAsync(srcBucket, srcKey);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex,
+                "[room-clone] could not read source blob {Blob}; room {Room} sub-room {Sub} starts empty",
+                sourceBlob, cloneId, orderIndex);
+            return null;
+        }
+
+        if (bytes is null || bytes.Length == 0)
+        {
+            logger.LogWarning(
+                "[room-clone] source blob {Blob} is missing from storage; room {Room} sub-room {Sub} "
+                + "starts empty", sourceBlob, cloneId, orderIndex);
+            return null;
+        }
+
+        var newBlob = CloneBlobName(cloneId, orderIndex);
+        var (dstBucket, dstKey) = BlobRouter.Route(newBlob);
+        await storage.PutAsync(dstBucket, dstKey, bytes, "application/octet-stream");
+
+        db.RoomDataBlobs.Add(new RoomDataBlobEntity
+        {
+            RoomId = cloneId,
+            BlobName = newBlob,
+            SubRoomId = orderIndex,
+            UploadedByPlayerId = callerId,
+            UploadedAt = DateTime.UtcNow,
+        });
+
+        logger.LogInformation(
+            "[room-clone] copied {Bytes} bytes {From} → {To} (room {Room} sub-room {Sub})",
+            bytes.Length, sourceBlob, newBlob, cloneId, orderIndex);
+        return newBlob;
+    }
+
+    /// <summary>Blob name for a cloned sub-room, keyed by the CLONE's room id so
+    /// BlobRouter files it under that room rather than the source's.</summary>
+    private static string CloneBlobName(long roomId, int orderIndex) =>
+        orderIndex == 0
+            ? RoomService.SyntheticDefaultRoomDataBlobName(roomId)
+            : $"room_{roomId}_dorknet_v8_sub{orderIndex}.dat";
+
     /// <summary>A seeded first-party RRO template (RecCenter, the games):
     /// AG-flagged AND owned by the system account. User clones inherit the
     /// AG flag but are owned by the player, so they don't match.</summary>
