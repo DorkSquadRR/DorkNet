@@ -91,6 +91,65 @@ public sealed class ClientDtoParityTests : IClassFixture<DorkNetServerFactory>
         AssertKeyParity(ChatThreadReader, body, "POST thread/withmembers");
     }
 
+    /// <summary>The room-level DataBlob must be the SAME file sub-room 0 points
+    /// at. The client loads a room from one blob, and if the two disagree it
+    /// fetches a file that was never written and rejects the whole room with
+    /// "the data in the room you are trying to load is corrupt" — which reads
+    /// like a broken save rather than a mismatched payload.
+    ///
+    /// A dorm is where this bites: its data is per-PLAYER
+    /// (<c>dorm_p{id}_v*.dat</c>) and reaches the builder as an override, while
+    /// the room-level name is per-ROOM (<c>room_116_*</c>). Reporting the
+    /// room-level one hands the client another player's dorm.</summary>
+    [Fact]
+    public async Task Room_level_data_blob_matches_sub_room_zero()
+    {
+        using var client = RoomsClient();
+        var session = await GameClientSessionFactory.CreateAsync(client, _factory.ApexDomain);
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", session.AccessToken);
+
+        var roomId = 9_900_000 + Random.Shared.Next(1, 99_999);
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<DorkNetDbContext>();
+            db.Rooms.Add(new RoomEntity
+            {
+                Id = roomId,
+                Name = $"Blob{Guid.NewGuid():N}"[..18],
+                CreatorPlayerId = session.PlayerId,
+                CurrentDataBlobName = $"room_{roomId}_v1.dat",
+            });
+            db.RoomScenes.Add(new RoomSceneEntity
+            {
+                RoomId = roomId,
+                Name = "Home",
+                OrderIndex = 0,
+                DataBlobName = $"room_{roomId}_home_v3.dat",
+            });
+            await db.SaveChangesAsync();
+        }
+
+        using var response = await client.GetAsync($"/rooms/{roomId}");
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.True(response.IsSuccessStatusCode, $"GET /rooms/{roomId} -> {(int)response.StatusCode}: {body}");
+
+        var details = JsonDocument.Parse(body).RootElement;
+        var roomLevel = details.GetProperty("DataBlob").GetString();
+        var subRoomZero = details.GetProperty("SubRooms").EnumerateArray()
+            .First(e => e.GetProperty("SubRoomId").GetInt64() == 0)
+            .GetProperty("DataBlob").GetString();
+
+        Assert.True(roomLevel == subRoomZero,
+            $"""
+             The room reports one data blob and sub-room 0 reports another, so
+             which file the client loads depends on which key it reads first:
+
+               room level : {roomLevel}
+               sub-room 0 : {subRoomZero}
+             """);
+    }
+
     /// <summary>Compare one response object's keys against the reader's set.
     /// Matching is case-insensitive because the readers register three spellings
     /// per field (Pascal, camel, lower) and accept any of them — casing is the
