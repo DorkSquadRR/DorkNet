@@ -151,7 +151,19 @@ public class ChatController(
             .OrderByDescending(c => c.SentAt)
             .Take(take)
             .ToListAsync();
-        if (rows.Count == 0) return NotFound();
+
+        // An empty thread is NOT a missing thread. Starting a chat with someone
+        // goes POST thread/withmembers (which creates the thread) and then
+        // immediately GET thread/{id} — at that moment it has no messages yet.
+        // 404-ing on message count meant a brand-new conversation could never be
+        // opened: the client got "not found" for the thread it had just been
+        // handed. Only 404 when nothing actually records the thread.
+        if (rows.Count == 0)
+        {
+            var exists = await db.ChatThreads.AnyAsync(t => t.ThreadKey == key)
+                         || await db.ChatThreadMembers.AnyAsync(m => m.ThreadKey == key);
+            if (!exists) return NotFound();
+        }
         var meta = (await EnsureThreadRowsAsync(new[] { key }))[key];
         var member = await db.ChatThreadMembers
             .FirstOrDefaultAsync(m => m.ThreadKey == key && m.PlayerId == Me);
