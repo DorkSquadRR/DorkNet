@@ -2143,9 +2143,12 @@ public class RoomsController(
             // name-keyed reader, presence does.
             DataBlob = dataBlobName,
             DataBlobHash = (string?)null,
-            // Room-level cap mirrors sub-room 0, which is where the client
-            // reads it from for a single-sub-room room.
-            MaxPlayers = sceneRows is { Count: > 0 } ? sceneRows[0].MaxPlayers : 8,
+            // The room-level cap is the room's own advertised capacity, which is
+            // what RoomEntity.MaxCapacity exists for and what matchmaking hands
+            // to RoomInstance.MaxCapacity. Each sub-room carries its own
+            // MaxPlayers in the SubRooms array — they are separate settings, so
+            // this must not be read off sub-room 0.
+            MaxPlayers = room.MaxCapacity,
             // ToxMod is Rec Room's hosted voice moderation. There is no such
             // service here, so it is off — the client only uses this to decide
             // whether to show the indicator.
