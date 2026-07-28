@@ -1460,15 +1460,20 @@ public class RoomsModerationController(
             // badge, and quest-instance logic can boot the player). Match
             // RoomService.CloneAsync and tag it "community".
             TagsCsv = "community",
-            // First-party RRO templates (AG rooms owned by the system
-            // account — RecCenter and friends) keep their content in baked
-            // client geometry; any blob on the row is a MakerPen OVERLAY
-            // save made against the shared template. A clone must start
-            // from the pristine baked scene with a fresh (empty) blob, not
-            // inherit that overlay. Scoped to system-owned templates so
-            // copying a USER's RRO-derived room (IsAGRoom inherited) still
-            // carries their MakerPen edits along.
-            CurrentDataBlobName = IsFirstPartyTemplate(source) ? string.Empty : source.CurrentDataBlobName,
+            // Carry the source's blob NAME here; GiveCloneItsOwnBlobsAsync
+            // below replaces it with a copy under the clone's own name, so
+            // nothing ends up shared.
+            //
+            // First-party RRO templates (RecCenter and friends) used to be
+            // emptied here on the reasoning that their content is baked client
+            // geometry and any blob is just a MakerPen overlay. That left the
+            // clone with no data at all: the CDN synthesises a ~1.8 KB stub for
+            // a name it has nothing stored under, the client fetches it through
+            // GetRoomData ("/room/{blob}") as part of the copy, and rejects it.
+            // A clone that kept real content joined fine. Since the blob is now
+            // copied rather than referenced, the original worry — inheriting an
+            // overlay on a SHARED template — no longer applies.
+            CurrentDataBlobName = source.CurrentDataBlobName,
         };
         db.Rooms.Add(clone);
         await db.SaveChangesAsync();
@@ -1493,9 +1498,9 @@ public class RoomsModerationController(
             OrderIndex = s.OrderIndex,
             Name = s.Name,
             RoomSceneLocationId = s.RoomSceneLocationId,
-            // Fresh blob when cloning a first-party template — see
-            // CurrentDataBlobName above.
-            DataBlobName = IsFirstPartyTemplate(source) ? string.Empty : s.DataBlobName,
+            // See CurrentDataBlobName above: copied under the clone's own
+            // name by GiveCloneItsOwnBlobsAsync, never shared.
+            DataBlobName = s.DataBlobName,
             StudioSubRoomDataSaveId = s.StudioSubRoomDataSaveId,
             StudioUnityAssetId = s.StudioUnityAssetId,
             StudioAssetBundleNamesCsv = s.StudioAssetBundleNamesCsv,
@@ -1661,11 +1666,6 @@ public class RoomsModerationController(
             ? RoomService.SyntheticDefaultRoomDataBlobName(roomId)
             : $"room_{roomId}_dorknet_v8_sub{orderIndex}.dat";
 
-    /// <summary>A seeded first-party RRO template (RecCenter, the games):
-    /// AG-flagged AND owned by the system account. User clones inherit the
-    /// AG flag but are owned by the player, so they don't match.</summary>
-    private static bool IsFirstPartyTemplate(RoomEntity room)
-        => room.IsAGRoom && room.CreatorPlayerId == PlayerService.SystemAccountId;
 
     private async Task<string> ReadCloneNameAsync()
     {

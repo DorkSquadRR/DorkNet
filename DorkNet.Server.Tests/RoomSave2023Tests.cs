@@ -198,8 +198,22 @@ public sealed class RoomSave2023Tests : IClassFixture<DorkNetServerFactory>
         var firstCloneId = await CloneAndAssertAsync(
             roomsClient, roomId, "FirstClone", pathPrefix: "/roomserver");
         Assert.NotEqual(roomId, firstCloneId);
-        await AssertBlobsAsync(firstCloneId, expectEmpty: true,
-            "first-party template blob must not be copied onto the clone");
+        // A clone of a first-party template used to be left with NO blob, on
+        // the reasoning that its content is baked client geometry. That left
+        // the copy with nothing to load: the CDN synthesises a ~1.8 KB stub for
+        // a name it has nothing stored under, and the client fetches exactly
+        // that through GetRoomData ("/room/{blob}") while copying, then rejects
+        // it. Clones that carried real content joined fine.
+        //
+        // The content now comes across. Sharing the SOURCE's object is still
+        // wrong, but that is prevented by copying it under the clone's own name
+        // rather than by having no blob at all — see
+        // RoomCloneShapeTests.Clone_does_not_reference_the_source_rooms_blob,
+        // which runs with a real object store. This suite has none, so the
+        // copy deliberately falls back to keeping the reference and only the
+        // "has content" half is checkable here.
+        await AssertBlobsAsync(firstCloneId, expectEmpty: false,
+            "a clone of a first-party template must carry its content");
 
         // Simulate the player saving MakerPen edits into their clone.
         var editedBlob = $"room_{firstCloneId}_edit_{Guid.NewGuid():N}.dat";
