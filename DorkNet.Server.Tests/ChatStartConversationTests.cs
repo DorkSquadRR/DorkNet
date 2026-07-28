@@ -70,6 +70,11 @@ public sealed class ChatStartConversationTests : IClassFixture<DorkNetServerFact
              cannot be opened until someone has already sent a message, which is
              impossible to do first.
              """);
+        Console.WriteLine("=== WITHMEMBERS ===");
+        Console.WriteLine(createBody);
+        Console.WriteLine("=== GET THREAD ===");
+        Console.WriteLine(openBody);
+
         Assert.True(openResponse.IsSuccessStatusCode,
             $"GET /thread/{threadId} -> {(int)openResponse.StatusCode}: {openBody}");
     }
