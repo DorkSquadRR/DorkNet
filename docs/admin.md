@@ -179,6 +179,59 @@ Enforcement caveat carried over from `RoomEntity.MaxCapacity`: this is the
 advertised cap. The client never sets Photon `RoomOptions.MaxPlayers`, so
 hard enforcement still needs a ClientMod Photon patch.
 
+## Test cases ↔ GitHub issues
+
+QA test cases can file and track GitHub issues. Configure with:
+
+| Key | Meaning |
+| --- | --- |
+| `GitHub:Token` | PAT with `issues:write` on the target repo |
+| `GitHub:Repository` | `owner/name`, e.g. `DorkSquadRR/DorkNet` |
+| `GitHub:ReconcileIntervalMinutes` | Sweep interval, default 15; `0` disables sweeps but leaves the manual endpoint working |
+
+**Without a token nothing breaks.** `IGitHubIssues.IsConfigured` is false, the
+endpoints answer `503` with the reason, and the background reconciler logs once
+and idles. A server with no GitHub credentials is a normal deployment.
+
+Endpoints (admin-gated — these are not part of the 2023 client's surface):
+
+- `POST api/testcasemanagement/v1/testcase/{id}/issue` — file and link.
+  **Idempotent**: a case already carrying a live issue returns that issue
+  instead of filing a duplicate, so sweeping a failing pass repeatedly is safe.
+  The issue body carries the description, key, room, test pass and tester
+  comments; labels are `qa` plus the case's own tags.
+- `DELETE api/testcasemanagement/v1/testcase/{id}/issue` — unlink only. The
+  issue itself is left alone; closing someone's issue as a side effect of
+  tidying a QA link would be the wrong call.
+- `POST api/testcasemanagement/v1/issues/sync` — reconcile now. The background
+  service runs the same code path on its interval, so manual and automatic
+  cannot drift.
+
+### Where the link is stored
+
+In `TestCaseEntity.JiraBugUrl` — the field Rec Room's own QA tooling used for
+the bug filed against a failing case. Reusing it means **no migration**, which
+matters more here than the name: the Postgres path is `EnsureCreated`-only and
+never replays migrations, so a new column has to be added twice (migration *and*
+an idempotent `Ensure*` patch) or it is simply missing in production. A field
+that already exists everywhere has neither problem, and the admin UI renders it
+already. A leftover genuine Jira link is ignored rather than misparsed — the
+issue number is only read from a URL matching the GitHub issue shape.
+
+### What the reconciler will and won't change
+
+| Issue | Case status | Result |
+| --- | --- | --- |
+| Closed | Failed | → NotYetTested |
+| Open | NotYetTested | → Failed |
+| anything | Claimed / Passed | untouched |
+
+A closed issue does **not** mark the case Passed: closing is a developer's claim
+that the fix landed, not a tester's observation that the case passes, so it goes
+back in the queue for another run. And only those two states are the
+reconciler's to move — a case a tester has Claimed, or marked Passed after
+verifying the fix, is never dragged back underneath them.
+
 ## Build And Deploy
 
 The service Dockerfile builds the admin SPA for service images that need
