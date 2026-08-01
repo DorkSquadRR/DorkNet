@@ -24,4 +24,9 @@
     <Using Include="Xunit" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Recovered client route inventory read by ClientRouteCoverageTests. -->
+    <Content Include="data\**" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

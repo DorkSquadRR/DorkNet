@@ -98,12 +98,14 @@ public class EconController(DorkNetDbContext db, LevelService level) : Controlle
         });
     }
 
+    /// <summary>The client reads this body as a BARE integer — the issuing
+    /// method is <c>FGLDKEJLAKB&lt;System.Int32&gt; KPOENLDFAJD()</c>
+    /// (RecNet.Runtime/MPBLNLMCEDL.txt:2881, route literal on :2955).
+    /// Returning a JSON object made the deserialize throw, so the ownership-cap
+    /// check that runs before a custom-shirt purchase always errored out.</summary>
     [HttpGet("/econ/customAvatarItems/v1/itemOwnershipLimit")]
-    public IActionResult CustomAvatarItemOwnershipLimit() => Ok(new
-    {
-        Limit = 1000,
-        ItemOwnershipLimit = 1000,
-    });
+    public IActionResult CustomAvatarItemOwnershipLimit()
+        => Content("1000", "application/json");
 
     private static object ToCustomAvatarItemWire(DorkNet.Server.Data.Entities.CustomAvatarItemEntity i) => new
     {

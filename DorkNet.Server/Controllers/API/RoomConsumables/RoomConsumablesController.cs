@@ -18,9 +18,15 @@ namespace DorkNet.Server.Controllers.API.RoomConsumables;
 /// LPFAFIGAIOE / HJOKFJKKEJM / IDBFKCFEAHM / PECGEJAAMHB / DPNLANKOHON):
 ///
 ///   desc      = { RoomConsumableId, RoomId, Name, Description, ImageName,
-///                 PriceAndCurrency: { Price, CurrencyId } }
+///                 Price, PurchaseCurrencyId, ModifiedAt }
 ///   inventory = { RoomConsumableId, AccountId, Count, ConcurrencyCode,
 ///                 ModifiedAt, Consumable: desc }
+///
+/// The desc price is FLAT on the way OUT even though it is NESTED on the way
+/// IN. The response formatter FCIBLPCOODP's key map is exactly the eight keys
+/// above — Price at index 5, PurchaseCurrencyId at 6, ModifiedAt at 7, and no
+/// PriceAndCurrency key at all (FCIBLPCOODP.txt:670/686/710). See ToDescWire.
+/// The inventory key map is likewise exact (CICEHLNDLDE.txt:447-562).
 ///
 /// <c>Consumable</c> must never be null on an inventory row — the
 /// client's RoomConsumablesManager dereferences it unconditionally while
@@ -31,8 +37,13 @@ namespace DorkNet.Server.Controllers.API.RoomConsumables;
 /// Purchase requests carry the client-generated inventory concurrency
 /// token: { ConcurrencyCodes: { CurrentConcurrencyCode,
 /// NewConcurrencyCode }, ExpectedPriceAndCurrency: { Price, CurrencyId } }.
-/// The purchase response has no inventory item — the client applies
-/// NewConcurrencyCode locally, so the server must store it verbatim.
+/// The server must store NewConcurrencyCode verbatim, because the client
+/// adopts the code it sent regardless of what comes back — anything else
+/// makes the next consume fail with ConcurrencyCodeMismatch.
+///
+/// Both purchase responses derive from the same base DTO (OKHNOPLBOFP),
+/// whose sole field <c>OperationResult</c> is the object
+/// <c>{ Status, InventoryItem }</c> — see TokenResponse below.
 /// </summary>
 [ApiController]
 public class RoomConsumablesController(DorkNetDbContext db, LevelService level) : ControllerBase
@@ -54,7 +65,12 @@ public class RoomConsumablesController(DorkNetDbContext db, LevelService level) 
         public const int DescriptionTooLong = 27;
         public const int ConcurrencyCodeMismatch = 32;
         public const int PlayerDoesNotOwnConsumable = 33;
+        public const int PurchaseFailed = 35;
         public const int RoomNotFound = 36;
+        public const int RequestedPriceDoesNotMatch = 38;
+        public const int RequestedCurrencyDoesNotMatch = 39;
+        public const int ConsumableCannotBePurchasedWithRoomCurrency = 40;
+        public const int ConsumableCannotBePurchasedWithTokens = 41;
     }
 
     /// <summary>Token-purchase OperationResult (client enum CABBDKFODEC).</summary>
@@ -223,29 +239,40 @@ public class RoomConsumablesController(DorkNetDbContext db, LevelService level) 
         return StatusBody(Status.Success);
     }
 
-    /// <summary>POST <c>api/roomconsumables/v1/roomconsumable/{id}/purchase/tokens</c>
+    /// <summary>PUT <c>api/roomconsumables/v1/roomconsumable/{id}/purchase/tokens</c>
     /// — buy one stack unit with tokens. Response is
-    /// <c>{ OperationResult, BalanceUpdateResult, TokenBalanceResponse:
-    /// { CurrencyType, Balance, Platform } }</c>.</summary>
+    /// <c>{ OperationResult: { Status, InventoryItem }, BalanceUpdateResult,
+    /// TokenBalanceResponse: { CurrencyType, Balance, Platform } }</c>.</summary>
+    // The 2023-03-21 client PUTs this (verb literal 3 = PUT, at the route
+    // construction in RecNet.Runtime/DCFKEFHJAGC.txt instrs 097-108), so a
+    // POST-only mapping returned 405 and token-priced consumables were
+    // unbuyable. Both verbs are accepted now.
+    [HttpPut("api/roomconsumables/v1/roomconsumable/{publicId:guid}/purchase/tokens")]
     [HttpPost("api/roomconsumables/v1/roomconsumable/{publicId:guid}/purchase/tokens")]
     [Authorize]
     public async Task<IActionResult> PurchaseTokens(Guid publicId)
     {
         var me = this.RequireCurrentPlayerId();
         var item = await FindAsync(publicId);
-        if (item is null) return NotFound();
+        // Failures answer 200 + the DTO rather than a bare status code: the
+        // client only ever parses this route's body through HJOKFJKKEJM, so a
+        // 404/400 surfaces as the opaque "Failed to purchase room consumable".
+        if (item is null) return Ok(TokenResponse(null, Status.RoomConsumableNotFound, 0));
 
         var body = await ReadBodyAsync();
-        var (price, currencyId, hasPrice) = ReadPriceAndCurrency(body, "ExpectedPriceAndCurrency");
+        var (price, _, hasPrice) = ReadPriceAndCurrency(body, "ExpectedPriceAndCurrency");
         var newCode = ReadConcurrency(body).NewCode;
         var balance = await level.GetBalanceAsync(me, TokenCurrencyType);
 
         // A token purchase is only valid for a token-priced item at the
         // price the client showed the buyer.
-        if (item.CurrencyId is not null || !hasPrice || price != item.Price)
-            return Ok(TokenResponse(TokenOp.RequestedPriceDoesNotMatch, balance));
+        if (item.CurrencyId is not null)
+            return Ok(TokenResponse(null, Status.ConsumableCannotBePurchasedWithTokens, balance));
+        if (!hasPrice || price != item.Price)
+            return Ok(TokenResponse(
+                TokenOp.RequestedPriceDoesNotMatch, Status.RequestedPriceDoesNotMatch, balance));
         if (balance < item.Price)
-            return Ok(TokenResponse(TokenOp.NotEnoughCredit, balance));
+            return Ok(TokenResponse(TokenOp.NotEnoughCredit, Status.PurchaseFailed, balance));
 
         var newBalance = item.Price == 0
             ? balance
@@ -254,56 +281,78 @@ public class RoomConsumablesController(DorkNetDbContext db, LevelService level) 
             await level.GrantCurrencyAsync(item.CreatorPlayerId, TokenCurrencyType, item.Price,
                 $"sellRoomConsumable:{item.PublicId}");
 
-        await AddToInventoryAsync(me, item, newCode);
+        var own = await AddToInventoryAsync(me, item, newCode);
         await db.SaveChangesAsync();
-        return Ok(TokenResponse(TokenOp.OK, newBalance));
+        return Ok(TokenResponse(TokenOp.OK, Status.Success, newBalance, ToInventoryWire(own, item)));
     }
 
-    /// <summary>POST <c>api/roomconsumables/v1/roomconsumable/{id}/purchase/currency</c>
-    /// — buy with a room currency. Response is <c>{ OperationResult,
-    /// BalanceUpdateResult, CurrencyBalanceResponse: { AccountId,
-    /// CurrencyId, Balance, ModifiedAt } }</c>.</summary>
+    /// <summary>PUT <c>api/roomconsumables/v1/roomconsumable/{id}/purchase/currency</c>
+    /// — buy with a room currency. Response is
+    /// <c>{ OperationResult: { Status, InventoryItem }, BalanceUpdateResult,
+    /// CurrencyBalanceResponse: { AccountId, CurrencyId, Balance,
+    /// ModifiedAt } }</c>.</summary>
+    // PUT per the client (verb literal 3 at DCFKEFHJAGC.txt instrs 112-123);
+    // POST-only returned 405 and currency-priced consumables were unbuyable.
+    [HttpPut("api/roomconsumables/v1/roomconsumable/{publicId:guid}/purchase/currency")]
     [HttpPost("api/roomconsumables/v1/roomconsumable/{publicId:guid}/purchase/currency")]
     [Authorize]
     public async Task<IActionResult> PurchaseCurrency(Guid publicId)
     {
         var me = this.RequireCurrentPlayerId();
         var item = await FindAsync(publicId);
-        if (item is null) return NotFound();
-        if (item.CurrencyId is not Guid currencyPublicId) return BadRequest("not_currency_priced");
+        // As with the token route, every rejection is a 200 + DTO carrying a
+        // real RoomConsumableStatus; the old BadRequest("price_mismatch")
+        // bodies were not DTOs at all, so the client could only report the
+        // generic purchase failure.
+        if (item is null)
+            return Ok(CurrencyResponse(null, Status.RoomConsumableNotFound, me, Guid.Empty, 0));
+        if (item.CurrencyId is not Guid currencyPublicId)
+            return Ok(CurrencyResponse(
+                null, Status.ConsumableCannotBePurchasedWithRoomCurrency, me, Guid.Empty, 0));
 
         var currency = await db.RoomCurrencies
             .FirstOrDefaultAsync(c => c.PublicId == currencyPublicId && !c.IsDeleted);
-        if (currency is null) return BadRequest("currency_not_found");
+        if (currency is null)
+            return Ok(CurrencyResponse(null, Status.CurrencyNotFound, me, currencyPublicId, 0));
 
         var body = await ReadBodyAsync();
         var (price, requestedCurrency, hasPrice) = ReadPriceAndCurrency(body, "ExpectedPriceAndCurrency");
         var newCode = ReadConcurrency(body).NewCode;
-        if (!hasPrice || price != item.Price
-            || (requestedCurrency is Guid reqCur && reqCur != currencyPublicId))
-            return BadRequest("price_mismatch");
 
         var balanceRow = await db.RoomCurrencyBalances
             .FirstOrDefaultAsync(b => b.PlayerId == me && b.RoomCurrencyId == currency.Id);
         var balance = balanceRow?.Balance ?? 0;
+
+        if (!hasPrice || price != item.Price)
+            return Ok(CurrencyResponse(
+                null, Status.RequestedPriceDoesNotMatch, me, currencyPublicId, balance));
+        if (requestedCurrency is Guid reqCur && reqCur != currencyPublicId)
+            return Ok(CurrencyResponse(
+                null, Status.RequestedCurrencyDoesNotMatch, me, currencyPublicId, balance));
         if (balance < item.Price)
-            return Ok(CurrencyResponse(CurrencyOp.NotEnoughCredit, me, currencyPublicId, balance));
+            return Ok(CurrencyResponse(
+                CurrencyOp.NotEnoughCredit, Status.PurchaseFailed, me, currencyPublicId, balance));
 
         if (item.Price > 0)
         {
             balanceRow!.Balance -= item.Price;
             balanceRow.UpdatedAt = DateTime.UtcNow;
         }
-        await AddToInventoryAsync(me, item, newCode);
+        var own = await AddToInventoryAsync(me, item, newCode);
         await db.SaveChangesAsync();
-        return Ok(CurrencyResponse(CurrencyOp.Success, me, currencyPublicId, balanceRow?.Balance ?? 0));
+        return Ok(CurrencyResponse(CurrencyOp.Success, Status.Success, me, currencyPublicId,
+            balanceRow?.Balance ?? 0, ToInventoryWire(own, item)));
     }
 
-    /// <summary>POST <c>api/roomconsumables/v1/roomConsumable/{id}/consume</c>
+    /// <summary>PUT <c>api/roomconsumables/v1/roomConsumable/{id}/consume</c>
     /// — spend one unit. Body is <c>{ CurrentConcurrencyCode,
     /// NewConcurrencyCode }</c>; response <c>{ Status, InventoryItem }</c>.
     /// On a code mismatch the current row is returned so the client can
     /// resync.</summary>
+    // PUT per the client (route format "{0}/v1/roomConsumable/{1}/consume"
+    // with verb literal 3 at RecNet.Runtime/LPNHMEFDAAG.txt:1449-1460);
+    // POST-only returned 405, so no consumable could ever be consumed.
+    [HttpPut("api/roomconsumables/v1/roomConsumable/{publicId:guid}/consume")]
     [HttpPost("api/roomconsumables/v1/roomConsumable/{publicId:guid}/consume")]
     [Authorize]
     public async Task<IActionResult> Consume(Guid publicId)
@@ -335,7 +384,10 @@ public class RoomConsumablesController(DorkNetDbContext db, LevelService level) 
     private async Task<RoomConsumableEntity?> FindAsync(Guid publicId) =>
         await db.RoomConsumables.FirstOrDefaultAsync(c => c.PublicId == publicId && !c.IsDeleted);
 
-    private async Task AddToInventoryAsync(long playerId, RoomConsumableEntity item, Guid? newCode)
+    /// <summary>Grant one unit and hand back the row, so the purchase
+    /// responses can embed it as <c>OperationResult.InventoryItem</c>.</summary>
+    private async Task<RoomConsumableOwnershipEntity> AddToInventoryAsync(
+        long playerId, RoomConsumableEntity item, Guid? newCode)
     {
         var own = await db.RoomConsumableOwnership
             .FirstOrDefaultAsync(o => o.PlayerId == playerId && o.RoomConsumableId == item.Id);
@@ -345,11 +397,12 @@ public class RoomConsumablesController(DorkNetDbContext db, LevelService level) 
             db.RoomConsumableOwnership.Add(own);
         }
         own.Count += 1;
-        // The purchase response carries no inventory row, so the client
-        // adopts the NewConcurrencyCode it sent — store it verbatim or
-        // the next consume hits ConcurrencyCodeMismatch.
+        // The client adopts the NewConcurrencyCode it sent regardless of what
+        // the response echoes back — store it verbatim or the next consume
+        // hits ConcurrencyCodeMismatch.
         if (newCode is Guid code && code != Guid.Empty) own.ConcurrencyCode = code;
         own.ModifiedAt = DateTime.UtcNow;
+        return own;
     }
 
     private async Task<bool> CanManageRoomAsync(RoomEntity room, long playerId)
@@ -379,10 +432,32 @@ public class RoomConsumablesController(DorkNetDbContext db, LevelService level) 
         Consumable = item is null ? null : ToDescWire(item),
     };
 
-    private static object TokenResponse(int operationResult, long balance) => new
+    /// <summary>Token-purchase response (client type MJKFEHPIDME, formatter
+    /// HJOKFJKKEJM).
+    ///
+    /// <c>OperationResult</c> is an OBJECT, not a scalar. MJKFEHPIDME only
+    /// declares BalanceUpdateResult (+24) and TokenBalanceResponse (+32)
+    /// itself (MJKFEHPIDME.txt:3,23); OperationResult (+16) comes from its
+    /// base OKHNOPLBOFP, whose single field is typed BGHBAILNNJJ
+    /// (OKHNOPLBOFP.txt:3) — the same <c>{ Status, InventoryItem }</c> pair
+    /// the consume route returns (BGHBAILNNJJ.txt:3,83). HJOKFJKKEJM's key
+    /// map puts "OperationResult" at index 2 (HJOKFJKKEJM.txt:330) and its
+    /// reader resolves index 2 through JECENNBIMEI&lt;BGHBAILNNJJ&gt;
+    /// (HJOKFJKKEJM.txt:1104). A bare int there made the generated reader
+    /// hit a number where it verifies '{', faulting the whole request with
+    /// "Failed to purchase room consumable" (DCFKEFHJAGC.txt:8294) — so
+    /// purchases were dead even once the PUT verb was accepted.
+    ///
+    /// The scalar operation enum belongs in <c>BalanceUpdateResult</c>
+    /// (Nullable&lt;CABBDKFODEC&gt;, index 0) — that is what the client turns
+    /// into the "Not enough …" / "The price for this … has changed" toast
+    /// (DCFKEFHJAGC.txt:12735-12760). It is null when the balance was never
+    /// touched.</summary>
+    private static object TokenResponse(
+        int? balanceUpdateResult, int status, long balance, object? inventoryItem = null) => new
     {
-        OperationResult = operationResult,
-        BalanceUpdateResult = operationResult,
+        OperationResult = new { Status = status, InventoryItem = inventoryItem },
+        BalanceUpdateResult = balanceUpdateResult,
         TokenBalanceResponse = new
         {
             CurrencyType = TokenCurrencyType,
@@ -391,10 +466,20 @@ public class RoomConsumablesController(DorkNetDbContext db, LevelService level) 
         },
     };
 
-    private static object CurrencyResponse(int operationResult, long playerId, Guid currencyId, long balance) => new
+    /// <summary>Currency-purchase response (client type DEILBLCDNEA,
+    /// formatter IDBFKCFEAHM). Same base type as the token response, so
+    /// <c>OperationResult</c> is the same <c>{ Status, InventoryItem }</c>
+    /// object; index 2 resolves through JECENNBIMEI&lt;BGHBAILNNJJ&gt;
+    /// (IDBFKCFEAHM.txt:330 key map, :1161 reader). BalanceUpdateResult is
+    /// Nullable&lt;GACBLALELBP&gt; — an enum with only Success=0 and
+    /// NotEnoughCredit=1, so every other failure has to be reported through
+    /// OperationResult.Status and leave this null.</summary>
+    private static object CurrencyResponse(
+        int? balanceUpdateResult, int status, long playerId, Guid currencyId, long balance,
+        object? inventoryItem = null) => new
     {
-        OperationResult = operationResult,
-        BalanceUpdateResult = operationResult,
+        OperationResult = new { Status = status, InventoryItem = inventoryItem },
+        BalanceUpdateResult = balanceUpdateResult,
         CurrencyBalanceResponse = new
         {
             AccountId = (int)playerId,
@@ -404,6 +489,18 @@ public class RoomConsumablesController(DorkNetDbContext db, LevelService level) 
         },
     };
 
+    /// <summary>Consumable descriptor as the client READS it.
+    ///
+    /// The price is FLAT here — the client's response formatter FCIBLPCOODP
+    /// reads <c>Price</c>, <c>PurchaseCurrencyId</c> and <c>ModifiedAt</c>
+    /// directly off the descriptor (RecNet.Runtime/FCIBLPCOODP.txt:670-710).
+    /// Emitting a nested <c>PriceAndCurrency</c> object left every item in
+    /// every room shop reading back Price=0 with a null currency, so the whole
+    /// catalogue looked token-priced and free.
+    ///
+    /// Note the asymmetry: REQUEST bodies really do nest PriceAndCurrency, and
+    /// ReadBodyAsync below still flattens that on the way in. Only the response
+    /// shape changed.</summary>
     private static object ToDescWire(RoomConsumableEntity c) => new
     {
         RoomConsumableId = c.PublicId,
@@ -411,7 +508,9 @@ public class RoomConsumablesController(DorkNetDbContext db, LevelService level) 
         c.Name,
         c.Description,
         c.ImageName,
-        PriceAndCurrency = new { c.Price, c.CurrencyId },
+        c.Price,
+        PurchaseCurrencyId = c.CurrencyId,
+        ModifiedAt = DateTime.SpecifyKind(c.UpdatedAt, DateTimeKind.Utc),
     };
 
     private static object ToInventoryWire(RoomConsumableOwnershipEntity own, RoomConsumableEntity item) => new

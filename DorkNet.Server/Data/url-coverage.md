@@ -161,6 +161,7 @@ Note: counts are approximate because several client URLs (`api/avatar/v3/saved`,
 | GET  | `api/inventions/v3/saved` | REAL | `InventionsController.Saved` — caller's own creations (SAVED list) |
 | POST | `api/inventions/v3/save` | REAL | `InventionsController.Save` — creates a new `InventionEntity` (initial save) |
 | POST | `api/inventions/v3/addversion` | REAL | `InventionsController.AddVersion` — appends `InventionVersionEntity`, bumps `CurrentVersionNumber` |
+| POST | `remote-run/push-to-studio` | REAL | `InventionsController.PushToStudio` (also `roomserver/` alias) — Rec Room Studio remote-run handoff. Raw-JSON body `{SessionId, RoomId, SubRoomId, UnityAssetId, RoomData:{Filename,Hash,OwnershipProof}, SubRoomData:{…}, SavedByAccountId}`; stamps the pushed `RoomDataBlobEntity` with its room/sub-room, records `UnityAssetId` on the `RoomScene`, sets `Rooms.StudioSessionId`, keeps the push under `remoterun:{SessionId}` in `PlayerSettings`. Does NOT commit the live save (that stays `rooms/{id}/subrooms/{id}/data`). Replies with the flattened `RemoteRunDetails` |
 
 ### `api/Leaderboard/`
 

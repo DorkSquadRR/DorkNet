@@ -61,7 +61,9 @@ public class ClubEntity
     public int Visibility { get; set; } = 0;
 
     /// <summary>Club joinability enum on the wire (<c>Joinability</c>).
-    /// 0=Open, 1=RequestToJoin, 2=InviteOnly.</summary>
+    /// 0=Open, 1=InviteOnly, 2=AskToJoin — confirmed from the 2023 dump
+    /// (enum FEHIHCMDOLN). This comment previously had 1 and 2 swapped, which
+    /// is the reading the requesttojoin handler was fixed away from.</summary>
     public int Joinability { get; set; } = 0;
 
     /// <summary>Drives the wire <c>AllowJuniors</c> bool. True means
@@ -82,6 +84,15 @@ public class ClubEntity
     /// 2020.12 watch uses it to sort featured clubs to the top of
     /// browse.</summary>
     public int ClubType { get; set; } = 0;
+
+    /// <summary>Minimum account level required to join, surfaced as the wire
+    /// <c>MinLevel</c> and set by <c>PUT club/{id}/minlevel</c>. 0 = no gate.</summary>
+    public int MinLevel { get; set; } = 0;
+
+    /// <summary>Whether the club's chat channel is available. Drives the wire
+    /// <c>ClubChatEnabled</c> and is the negation of what
+    /// <c>GET club/{id}/hasDisabledClubChat</c> answers.</summary>
+    public bool ClubChatEnabled { get; set; } = true;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

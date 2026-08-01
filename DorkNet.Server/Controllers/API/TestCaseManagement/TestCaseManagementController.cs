@@ -141,6 +141,74 @@ public class TestCaseManagementController(DorkNetDbContext db) : ControllerBase
         return Ok(ToWireCase(tc));
     }
 
+    /// <summary>POST <c>api/testcasemanagement/v1/testcase/{id}/comment</c> —
+    /// attach a QA note to a test case.
+    ///
+    /// The client builds the URL by concatenating
+    /// <c>"api/testcasemanagement/v1/testcase/"</c> + id + <c>"/comment"</c>
+    /// (RecNet.Runtime/FLODOBMEJAO.txt:660, :658) and posts it with verb
+    /// ordinal 2 (<c>Move rdx, 2</c> at :673). The issuing method is
+    /// <c>LDGADANDBIO KNDOKAKBLCC(String, String)</c> (:575) — a status-only
+    /// promise, so the client parses no response DTO and only needs a 2xx.
+    ///
+    /// Comments append to a JSON list on the case rather than overwriting, so
+    /// a second tester's note never erases the first.</summary>
+    [HttpPost("api/testcasemanagement/v1/testcase/{id}/comment")]
+    [Authorize]
+    [Consumes("application/json", "application/x-www-form-urlencoded", "multipart/form-data")]
+    public async Task<IActionResult> AddComment(string id)
+    {
+        var tc = await db.TestCases.FirstOrDefaultAsync(c => c.Id == id);
+        if (tc is null) return NotFound();
+
+        var text = (await ReadCommentAsync())?.Trim();
+        if (string.IsNullOrEmpty(text)) return BadRequest("missing comment");
+        if (text.Length > 2000) text = text[..2000];
+
+        var comments = ParseStringList(tc.CommentsJson);
+        comments.Add($"{this.RequireCurrentPlayerId()}|{DateTime.UtcNow:O}|{text.Replace('|', '/')}");
+        tc.CommentsJson = JsonSerializer.Serialize(comments);
+        tc.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return Ok();
+    }
+
+    /// <summary>The comment text, from a form field, the query string, a JSON
+    /// object, or a bare JSON string body — the exact spelling is not
+    /// recoverable from the ISIL, so every plausible carrier is accepted.</summary>
+    private async Task<string?> ReadCommentAsync()
+    {
+        string[] names = ["comment", "Comment", "text", "Text", "body", "Body", "message", "Message"];
+
+        if (Request.HasFormContentType)
+        {
+            var form = await Request.ReadFormAsync();
+            foreach (var n in names)
+                if (form.TryGetValue(n, out var v) && v.Count > 0) return v.ToString();
+        }
+        foreach (var n in names)
+            if (Request.Query.TryGetValue(n, out var q) && q.Count > 0) return q.ToString();
+
+        if (!Request.HasFormContentType)
+        {
+            try
+            {
+                Request.EnableBuffering();
+                Request.Body.Position = 0;
+                using var doc = await JsonDocument.ParseAsync(Request.Body);
+                Request.Body.Position = 0;
+                var root = doc.RootElement;
+                if (root.ValueKind == JsonValueKind.String) return root.GetString();
+                if (root.ValueKind == JsonValueKind.Object)
+                    foreach (var n in names)
+                        if (root.TryGetProperty(n, out var v) && v.ValueKind == JsonValueKind.String)
+                            return v.GetString();
+            }
+            catch (JsonException) { /* no usable body */ }
+        }
+        return null;
+    }
+
     // ── Helpers ──────────────────────────────────────────────────────────
 
     private static List<int> ParseIntList(string? json)

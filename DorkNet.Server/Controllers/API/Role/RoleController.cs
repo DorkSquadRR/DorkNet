@@ -72,6 +72,30 @@ public class RoleController(DorkNetDbContext db) : ControllerBase
         return Ok(isAdmin ?? false);
     }
 
+    /// <summary>The March-2023 client probes this one in addition to
+    /// <c>role/developer</c>. Both calls funnel through the same helper
+    /// (<c>OPMAPIOEIFG.ILHILCFCNFF</c>, which formats <c>"role/{0}/{1}"</c>
+    /// and issues it with HTTPMethods.GET); the two call sites differ only
+    /// in the role literal they pass — <c>"developer"</c> at
+    /// RecNet.Runtime/OPMAPIOEIFG.txt:9402 and <c>"moderator"</c> at
+    /// :9471. The 2020 build never referenced the moderator probe, so it
+    /// used to 404 for every remote player on the 2023 client.
+    ///
+    /// DorkNet has no dedicated moderator bit, so admins and community-team
+    /// members answer true — they are the accounts that actually hold
+    /// moderation powers here.</summary>
+    [HttpGet("/role/moderator/{accountId:long}")]
+    [HttpGet("/api/role/moderator/{accountId:long}")]
+    [AllowAnonymous]
+    public async Task<ActionResult<bool>> IsModerator(long accountId)
+    {
+        var isMod = await db.Players
+            .Where(p => p.Id == accountId)
+            .Select(p => (bool?)(p.IsAdmin || p.IsCommunityTeam))
+            .FirstOrDefaultAsync();
+        return Ok(isMod ?? false);
+    }
+
     /// <summary>Future-proofing for a hypothetical
     /// <c>role/communityteam/{id}</c> probe — not referenced by the 2020
     /// build, but mirrors the developer shape so a patched watch can

@@ -40,6 +40,7 @@ namespace DorkNet.Server.Hubs;
 [Authorize]
 public class NotifyHub(
     OnlinePresenceService presence,
+    PlayerPresenceService playerRooms,
     NotificationService notifications,
     DorkNetDbContext db,
     ServerSettingsService serverSettings,
@@ -95,10 +96,30 @@ public class NotifyHub(
             }
 
             await Groups.AddToGroupAsync(Context.ConnectionId, GroupForPlayer(id));
-            await presence.AddConnectionAsync(id, Context.ConnectionId);
+            var cameOnline = await presence.AddConnectionAsync(id, Context.ConnectionId);
             logger.LogInformation(
-                "[hub] connected player={PlayerId} conn={ConnectionId} group={Group}",
-                id, Context.ConnectionId, GroupForPlayer(id));
+                "[hub] connected player={PlayerId} conn={ConnectionId} group={Group} cameOnline={CameOnline}",
+                id, Context.ConnectionId, GroupForPlayer(id), cameOnline);
+
+            // Tell friends they're back. OnDisconnectedAsync pushes
+            // PlayerWentOffline, but nothing used to push the opposite
+            // transition, so the pair was asymmetric: a SignalR reconnect
+            // (network blip, replica restart) greyed the player out on every
+            // friend's list for the rest of the session even though they were
+            // still playing.
+            //
+            // Only push when a room is already known. The presence payload
+            // derives isOnline from roomInstance being non-null, so a push with
+            // no room reads as OFFLINE — worse than staying quiet. On a fresh
+            // boot there is no room yet and the /goto that follows sends the
+            // real presence anyway; this branch is for reconnects, where the
+            // cached room is exactly what friends need to see again.
+            if (cameOnline && playerRooms.GetRoom(id) is { } room)
+            {
+                var friendIds = await RelationshipQueries.EffectiveFriendIdsAsync(db, serverSettings, id);
+                if (friendIds.Count > 0)
+                    await notifications.PlayerCameOnline(friendIds, id, room);
+            }
         }
         else
         {

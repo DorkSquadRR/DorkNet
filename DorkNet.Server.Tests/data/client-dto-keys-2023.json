@@ -1,0 +1,2815 @@
+{
+  "AALDCAANEMM": [
+    "CurrencyPurchaseOfferId",
+    "CurrencyId",
+    "Order",
+    "Name",
+    "CurrencyAmount",
+    "Price",
+    "ModifiedAt"
+  ],
+  "ABJLKAFOPMP": [
+    "GiftDropIds",
+    "Message",
+    "SubscriptionPurchase"
+  ],
+  "ACKNGEEHHAE": [
+    "RoomId",
+    "SubRoomId",
+    "ClubId",
+    "Name",
+    "Description",
+    "Tags",
+    "ImageName",
+    "StartTime",
+    "EndTime",
+    "Accessibility",
+    "IsMultiInstance",
+    "SupportMultiInstanceRoomChat",
+    "DefaultBroadcastPermissions",
+    "CanRequestBroadcastPermissions"
+  ],
+  "ADAFNGNADFH": [
+    "InviteeAccountId",
+    "CreatedAt",
+    "VerifiedAt"
+  ],
+  "ADDGMGGOLHM": [
+    "BlobName",
+    "Title",
+    "Description",
+    "ThumbnailBlobName",
+    "SourceUrl"
+  ],
+  "ADMGGPDGKCE": [
+    "Msg",
+    "Id"
+  ],
+  "AECJMONHBHM": [
+    "ClubId",
+    "LastReadAnnouncementId",
+    "Announcements"
+  ],
+  "AEGADMDIKNE": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "AEGCKMKICFG": [
+    "AccountId",
+    "UserName",
+    "DisplayName",
+    "DisplayEmoji",
+    "ProfileImage",
+    "BannerImage",
+    "TreatAsJunior",
+    "HasBirthday",
+    "PersonalPronouns",
+    "IdentityFlags",
+    "CreatedAt",
+    "IsJunior"
+  ],
+  "AEHFGHPLNDO": [
+    "AccountId",
+    "LastVisitedAt"
+  ],
+  "AFHCKGCJNFM": [
+    "Msg",
+    "Id"
+  ],
+  "AFJDLEFKNFP": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "AHJKILCAGML": [
+    "ChallengeId",
+    "Name",
+    "Config",
+    "Description",
+    "Tooltip",
+    "Complete"
+  ],
+  "AIEJFLGKIGN": [
+    "BalanceUpdates",
+    "Balance",
+    "CurrencyType",
+    "Platform"
+  ],
+  "AJEDJLBJLFA": [
+    "AccountId",
+    "ClubId",
+    "MembershipType",
+    "CreatedAt"
+  ],
+  "AKDFPANIAFL": [
+    "AnnouncementId",
+    "AnnouncementType",
+    "Title",
+    "Body",
+    "ImageName",
+    "LinkType",
+    "LinkName",
+    "LinkButtonLabel",
+    "LinkUri",
+    "Platform",
+    "CreatedAt"
+  ],
+  "AKKPACEJJFK": [
+    "Msg",
+    "Id"
+  ],
+  "ALGKCAKCFAJ": [
+    "BalanceUpdates",
+    "Balance",
+    "CurrencyType",
+    "Platform"
+  ],
+  "ALJPHDEAHBK": [
+    "Result",
+    "Tags"
+  ],
+  "AMPFGJPKHOD": [
+    "Device_code",
+    "User_code",
+    "Verification_uri",
+    "Verification_uri_complete",
+    "Expires_in",
+    "Interval"
+  ],
+  "ANHGLIFGACE": [
+    "RoomKeyId",
+    "ReplicationId",
+    "RoomId",
+    "Name",
+    "Description",
+    "Price",
+    "PurchaseCurrencyId",
+    "CreatedAt",
+    "ImageName"
+  ],
+  "ANNOJCNMHIG": [
+    "CustomAvatarItemId",
+    "CreatorAccountId",
+    "Name",
+    "Description",
+    "Price",
+    "Accessibility",
+    "IsFeatured",
+    "BaseAvatarItemId",
+    "BaseAvatarItemColor",
+    "DesignFilename",
+    "ThumbnailImageFilename",
+    "CreatedAt",
+    "ModifiedAt"
+  ],
+  "ANPJKOOEEBB": [
+    "Identifier",
+    "Genuine",
+    "GenuineCheckAvailable"
+  ],
+  "AOAACMFGAGK": [
+    "ChallengeMapId",
+    "ChallengeThemeString",
+    "Challenges",
+    "Gift",
+    "FallbackGiftName",
+    "StartAt",
+    "EndAt",
+    "ServerTime",
+    "CompletedRequired"
+  ],
+  "APOJHADGCNA": [
+    "Ids",
+    "CreatedAts",
+    "ConsumableItemDesc",
+    "Count",
+    "InitialCount",
+    "IsActive",
+    "ActiveDurationMinutes",
+    "IsTransferable"
+  ],
+  "BAEBDMPPKKE": [
+    "Take",
+    "ContinuationToken",
+    "InjectedFeedItems",
+    "FeedInstanceId"
+  ],
+  "BBACJMOPFPE": [
+    "ProgressionEventRewardId",
+    "GiftDropId",
+    "ImageName",
+    "Xp",
+    "RewardIndex",
+    "IsBonus"
+  ],
+  "BBEFAELEANL": [
+    "BalanceUpdates",
+    "Balance",
+    "CurrencyType",
+    "Platform"
+  ],
+  "BBFGGPEMLLE": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "BBMJLKMGFGA": [
+    "Msg",
+    "Id"
+  ],
+  "BCEJDGGBBHC": [
+    "Price",
+    "CurrencyId"
+  ],
+  "BCMOCNHAJCL": [
+    "Status",
+    "Consumable"
+  ],
+  "BGFBJCIOIFP": [
+    "SkuId",
+    "Name",
+    "Description",
+    "ImageName",
+    "Price",
+    "OculusSkuId",
+    "AppleProductId",
+    "PsnProductLabel",
+    "XboxProductId",
+    "XboxStoreId",
+    "GooglePlaySkuId",
+    "PicoSkuId",
+    "IsSingleUse",
+    "ShouldAppearInTokenStore",
+    "Data"
+  ],
+  "BIMHOENEGII": [
+    "Group",
+    "IsCompleted",
+    "ClearedAt"
+  ],
+  "BJHOKILBIML": [
+    "FeedItemType",
+    "FeedItemId"
+  ],
+  "BKCOBJILFEI": [
+    "KeepsakeFeatureEnabled",
+    "KeepsakeRoomLimit",
+    "SocialXpBoostEnabled"
+  ],
+  "BKFOGBGPLFP": [
+    "SavedImageId",
+    "ImageName",
+    "Username",
+    "PlayerId",
+    "RoomName",
+    "RoomId"
+  ],
+  "BLADEIPEPOH": [
+    "SavedImageId",
+    "ImageName",
+    "PlayerId",
+    "RoomId",
+    "PlayerEventId",
+    "ClubId",
+    "Description",
+    "Accessibility",
+    "AccessibilityLocked",
+    "SavedImageType",
+    "CreatedAt",
+    "CheerCount",
+    "CommentCount"
+  ],
+  "BLIBJIHOENF": [
+    "ClubId",
+    "Name",
+    "Description",
+    "MainImageName",
+    "State",
+    "CreatorAccountId",
+    "Category",
+    "Visibility",
+    "Joinability",
+    "AllowJuniors",
+    "MinLevel",
+    "MemberCount",
+    "IsRRO",
+    "ClubChatEnabled",
+    "ClubhouseRoomId",
+    "ClubType"
+  ],
+  "BLPIIBBPOJM": [
+    "Action",
+    "Reason",
+    "Error"
+  ],
+  "BLPNLMALDAC": [
+    "AccountId",
+    "Bio"
+  ],
+  "BPAPIKPFDAH": [
+    "Difficulty",
+    "EN_US"
+  ],
+  "BPHCOIBNCDP": [
+    "ClubId",
+    "Type",
+    "EditDetails",
+    "ApproveMember",
+    "CreateEvent",
+    "PostAnnouncement",
+    "EditPermissionSettings",
+    "BanUnban"
+  ],
+  "CAAJPHFCIPK": [
+    "ReportCategory",
+    "Reason"
+  ],
+  "CAEHDIMCGLD": [
+    "Msg",
+    "Id"
+  ],
+  "CAKCKAMAAPP": [
+    "ClubId",
+    "LastAnnouncementId",
+    "LastReadAnnouncementId",
+    "Announcements"
+  ],
+  "CBKDKACJDOF": [
+    "ChatMessageId",
+    "ChatThreadId",
+    "SenderPlayerId",
+    "TimeSent",
+    "Contents",
+    "ModerationState"
+  ],
+  "CBNEDELBFAJ": [
+    "Clubs",
+    "TotalClubs",
+    "ContinuationToken"
+  ],
+  "CCAGOJFGLLO": [
+    "FeedItemType",
+    "FeedItemId",
+    "FeedAlgorithmVersion"
+  ],
+  "CCKEEAMMHPJ": [
+    "UnityAssetId",
+    "CreatedByAccountId",
+    "BakedUnityAssets"
+  ],
+  "CDEDNEPPPND": [
+    "LevelProgressionMaps",
+    "DailyObjectives",
+    "ServerMaintenance",
+    "AutoMicMutingConfig",
+    "StorefrontConfig",
+    "RoomKeyConfig",
+    "RoomCurrencyConfig",
+    "ShareBaseUrl"
+  ],
+  "CEAMINNJFGO": [
+    "Left",
+    "Right",
+    "Spine",
+    "Pelvis",
+    "Root",
+    "Torso",
+    "Body",
+    "Hips",
+    "Neck",
+    "Chest",
+    "Head",
+    "Arm",
+    "Hand",
+    "Wrist",
+    "Elbow",
+    "Palm",
+    "Leg",
+    "Thigh",
+    "Calf",
+    "Femur",
+    "Knee",
+    "Foot",
+    "Ankle",
+    "Hip",
+    "Tail",
+    "Eye",
+    "Dummy",
+    "Collar",
+    "Clavicle",
+    "Finger",
+    "Index",
+    "Mid",
+    "Pinky",
+    "Thumb",
+    "Adjust",
+    "Twist",
+    "Toe",
+    "Lid",
+    "Brow",
+    "Lash"
+  ],
+  "CENEMCMGDKG": [
+    "Tags",
+    "PlayerEventId",
+    "CreatorPlayerId",
+    "RoomId",
+    "SubRoomId",
+    "ClubId",
+    "Name",
+    "Description",
+    "ImageName",
+    "StartTime",
+    "EndTime",
+    "AttendeeCount",
+    "Accessibility",
+    "IsMultiInstance",
+    "SupportMultiInstanceRoomChat",
+    "DefaultBroadcastPermissions",
+    "CanRequestBroadcastPermissions",
+    "BroadcastingRoomInstanceId"
+  ],
+  "CGACOKHBJCB": [
+    "Msg",
+    "Id"
+  ],
+  "CGCKIMIEHNM": [
+    "Name",
+    "Description",
+    "ImageName",
+    "WarningMask",
+    "CustomWarning",
+    "CreatorAccountId",
+    "State",
+    "Accessibility",
+    "SupportsLevelVoting",
+    "IsRRO",
+    "SupportsScreens",
+    "SupportsWalkVR",
+    "SupportsTeleportVR",
+    "SupportsVRLow",
+    "SupportsQuest2",
+    "SupportsMobile",
+    "SupportsJuniors",
+    "MinLevel",
+    "CreatedAt",
+    "Stats",
+    "RankingContext"
+  ],
+  "CHEMHPGCJBM": [
+    "PlayerId",
+    "Score",
+    "Rank"
+  ],
+  "CHKOLCGMCKJ": [
+    "ReportBudget",
+    "FilterType",
+    "SampleRate",
+    "LogLineCount",
+    "CaptureNativeCrashes",
+    "ANRThresholdMs",
+    "MessageCount",
+    "MessageRegex",
+    "VersionRegex"
+  ],
+  "CICAKEDCJLA": [
+    "Email",
+    "Phone",
+    "Birthday",
+    "JuniorState",
+    "ParentAccountId",
+    "AvailableUsernameChanges",
+    "AccountId",
+    "UserName",
+    "DisplayName",
+    "DisplayEmoji",
+    "ProfileImage",
+    "BannerImage",
+    "TreatAsJunior",
+    "HasBirthday",
+    "PersonalPronouns",
+    "IdentityFlags",
+    "CreatedAt",
+    "IsJunior"
+  ],
+  "CICEHLNDLDE": [
+    "RoomConsumableId",
+    "AccountId",
+    "Count",
+    "ConcurrencyCode",
+    "ModifiedAt",
+    "Consumable"
+  ],
+  "CIKAJCJMOFJ": [
+    "MembershipRequestId",
+    "AccountId",
+    "InviterAccountId",
+    "ClubId",
+    "MembershipType",
+    "MembershipStatus",
+    "CreatedAt"
+  ],
+  "CJPKAAJBLAJ": [
+    "Id",
+    "Name",
+    "Description",
+    "StartDate",
+    "EndDate",
+    "WasManuallyClosed",
+    "TestCases",
+    "Tags",
+    "NumTestCases",
+    "NumPassedTestCases",
+    "NumFailedTestCases"
+  ],
+  "CLHBPPNOLHP": [
+    "Version",
+    "ButtonNumber",
+    "Override",
+    "CustomRoomName",
+    "CustomTitle",
+    "CustomDescription",
+    "DefaultRoomName",
+    "DefaultTitle",
+    "DefaultDescription"
+  ],
+  "CLIANCNHNIE": [
+    "AvatarItemType",
+    "AvatarItemDesc",
+    "FriendlyName",
+    "Tooltip",
+    "Rarity",
+    "TagList",
+    "AvatarItemId",
+    "IsBaseAvatarItem"
+  ],
+  "CMBHBADOOAF": [
+    "Msg",
+    "Id"
+  ],
+  "CMHEJKENPBH": [
+    "TriggerType",
+    "TriggerId",
+    "TriggeredAt"
+  ],
+  "CMLNDGCIPIH": [
+    "Index",
+    "Group",
+    "Progress",
+    "VisualProgress",
+    "IsCompleted",
+    "HasClaimedReward"
+  ],
+  "CNFFPECMOHE": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "CNNAFLNKDCL": [
+    "AccountId",
+    "KeepsakeInstanceId",
+    "CollectedAt"
+  ],
+  "CNNEAFEIMPP": [
+    "Msg",
+    "Id"
+  ],
+  "COIELAHKALG": [
+    "Enabled",
+    "Key",
+    "Region"
+  ],
+  "DCECPNPOEFG": [
+    "Msg",
+    "Id"
+  ],
+  "DDDLCGDEPNH": [
+    "PlayerEventResponseId",
+    "PlayerEventId",
+    "PlayerId",
+    "CreatedAt",
+    "Type"
+  ],
+  "DDFBPFOBIAO": [
+    "ImageName",
+    "Accessibility"
+  ],
+  "DDFNNBDLBKF": [
+    "AccountId",
+    "ClubId",
+    "SubscriberCount"
+  ],
+  "DEIDIGKKLHE": [
+    "Results",
+    "TotalResults"
+  ],
+  "DFKDBJMNKCO": [
+    "Event",
+    "NewSubscription"
+  ],
+  "DHAPGKPJDKH": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "DHMKNFOLCGM": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "DICIOFKDIEE": [
+    "Season",
+    "Name",
+    "StartAt",
+    "EndAt",
+    "CurrencyType",
+    "EliteUpgrade",
+    "Tiers",
+    "PersonalDetails",
+    "StorefrontType",
+    "NextUpdate",
+    "NewUntil"
+  ],
+  "DIEEOOKELHG": [
+    "AccountId",
+    "IsRecentHistoryVisible"
+  ],
+  "DILNAKMDJOF": [
+    "RoomId",
+    "SubRoomId",
+    "KeepsakeCategory"
+  ],
+  "DJCLNEEBAJP": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "DJFEOAGKKAK": [
+    "FreshnessSeconds",
+    "Url"
+  ],
+  "DJFIAOIFLDI": [
+    "Memberships",
+    "TotalMemberships",
+    "ContinuationToken"
+  ],
+  "DJHIABKJLBD": [
+    "RoomInstanceId",
+    "PhotonAccessToken",
+    "Permissions"
+  ],
+  "DKHBLLDMDHB": [
+    "Msg",
+    "Id"
+  ],
+  "DKMBKPLABAG": [
+    "Type",
+    "Score"
+  ],
+  "DKNKIEOODHK": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "DLJCLHBGADL": [
+    "Msg",
+    "Id"
+  ],
+  "DNBAAJILMPE": [
+    "RoomId",
+    "ClubId",
+    "PlayerCount"
+  ],
+  "DOINHLNFOCP": [
+    "Msg",
+    "Id"
+  ],
+  "DOJEJNECAAI": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "DOMOBFDIAJA": [
+    "AccountId",
+    "CheeredAt"
+  ],
+  "DPHFOPBAAPN": [
+    "PlayerId",
+    "StatChannel",
+    "RoomId",
+    "FilterType",
+    "SortAscending"
+  ],
+  "DPIECEMDKPL": [
+    "CreatorPlayerId",
+    "Data",
+    "IsValid"
+  ],
+  "DPKHIGPMCIP": [
+    "InviteId",
+    "Name"
+  ],
+  "DPNLANKOHON": [
+    "AccountId",
+    "CurrencyId",
+    "Balance",
+    "ModifiedAt"
+  ],
+  "DatatypeImplementation": [
+    "ENTITIES",
+    "ENTITY",
+    "ID",
+    "IDREF",
+    "IDREFS",
+    "NMTOKEN",
+    "NMTOKENS",
+    "NOTATION"
+  ],
+  "EACKMEGHIGM": [
+    "AccountId",
+    "ClubId",
+    "CreatedAt"
+  ],
+  "ECEBBLBCFKO": [
+    "AccountId",
+    "BannedByAccountId",
+    "BanStartTime"
+  ],
+  "ECHJAKNMEEC": [
+    "KeepsakeRoomListId",
+    "ProgressionEventId",
+    "UnlockItemAvatarItemId",
+    "UnlockItemGiftDropId",
+    "UnlockItemLockDurationTicks",
+    "RoomUnlockStartOffsetTicks",
+    "RoomUnlockIntervalTicks",
+    "RoomUnlockBatchSize",
+    "RoomType",
+    "KeepsakeRooms"
+  ],
+  "ECIINMENOGP": [
+    "BalanceAddType",
+    "Delta",
+    "Balance",
+    "Platform",
+    "CurrencyType"
+  ],
+  "EDMKBBPGJAB": [
+    "Balance",
+    "RoomKeyResponse"
+  ],
+  "EEAAGIJHLOJ": [
+    "PlayerEvent",
+    "Result",
+    "TagModifyResult"
+  ],
+  "EHFKGCIDOFL": [
+    "Results",
+    "TotalResults"
+  ],
+  "EHKEOCKBCDH": [
+    "Items",
+    "FeedInstanceId",
+    "FeedContext",
+    "FeedAlgorithmVersion"
+  ],
+  "EIFIAMHKFAG": [
+    "PurchaseReminderId",
+    "SkuId",
+    "TokenPrice",
+    "Title",
+    "Description",
+    "ImageName",
+    "EndDate",
+    "BonusGiftDrops"
+  ],
+  "EJEJHJPCBOE": [
+    "KeepsakeRoomId",
+    "RoomId",
+    "KeepsakeRoomListId",
+    "Type",
+    "Order"
+  ],
+  "EJIHDJDKKEC": [
+    "AccountId",
+    "RoomKeyId"
+  ],
+  "EJNFJPNOFFO": [
+    "Msg",
+    "Id"
+  ],
+  "EKEFFNBIOHJ": [
+    "ChatThreadId",
+    "LastReadMessageId",
+    "Messages",
+    "LatestMessage",
+    "PlayerIds",
+    "ChatThreadName",
+    "SnoozedUntil",
+    "IsFavorited",
+    "ClubId"
+  ],
+  "EKHJKDNHOPB": [
+    "OutfitSelections",
+    "OutfitSelectionsV2",
+    "FaceFeatures",
+    "SkinColor",
+    "HairColor",
+    "CustomAvatarItems"
+  ],
+  "EKMLNNNABAD": [
+    "UnityAssetId",
+    "RoomData",
+    "SubRoomData",
+    "InventionUsage",
+    "PersistenceVersion",
+    "Description",
+    "AutoPublish"
+  ],
+  "EMBCEDNHFLB": [
+    "GiftDropId",
+    "FriendlyName",
+    "Tooltip",
+    "TagList",
+    "ConsumableItemDesc",
+    "AvatarItemDesc",
+    "AvatarItemType",
+    "EquipmentPrefabName",
+    "EquipmentModificationGuid",
+    "IsQuery",
+    "Unique",
+    "SubscribersOnly",
+    "Rarity",
+    "AvatarItemId",
+    "CurrencyType",
+    "Currency",
+    "Context",
+    "ItemSetId",
+    "ItemSetFriendlyName"
+  ],
+  "EMJAJEHCIFN": [
+    "MarketingEmails",
+    "InviteEmails",
+    "GameClientTextInvites",
+    "FriendRequestEmails",
+    "CreatorPublishedNewRoomEmails",
+    "MyRoomSummaryEmails",
+    "NewPhotoTagEmails",
+    "PlayerEventInviteEmails",
+    "PlayerEventReminderEmails"
+  ],
+  "ENJDEONHNMO": [
+    "Created",
+    "Responses"
+  ],
+  "EOFEKNIHNNC": [
+    "PlayerEventId",
+    "BroadcastRoomInstanceId"
+  ],
+  "EOILOIMIJLJ": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "EOIMIBBJBCB": [
+    "ImageName",
+    "Title",
+    "Subtitle"
+  ],
+  "EPPPACFECMH": [
+    "Type",
+    "Reference"
+  ],
+  "EncodingTable": [
+    "Big5",
+    "GB2312",
+    "IBM850",
+    "IBM852",
+    "IBM857",
+    "IBM861",
+    "IBM869"
+  ],
+  "FAMGNALGHPN": [
+    "Msg",
+    "Id"
+  ],
+  "FBNOJCDDBJK": [
+    "XPAwardStrings",
+    "TotalXPAwarded",
+    "NewProgress"
+  ],
+  "FCIBLPCOODP": [
+    "RoomConsumableId",
+    "RoomId",
+    "Name",
+    "Description",
+    "ImageName",
+    "Price",
+    "PurchaseCurrencyId",
+    "ModifiedAt"
+  ],
+  "FCJNIBGKHDM": [
+    "ClubId",
+    "MembershipType"
+  ],
+  "FDPFICCCJNM": [
+    "Msg",
+    "Id"
+  ],
+  "FEJOMKJBOOE": [
+    "RoomId",
+    "EarningsDistributionMapping",
+    "EarningsDistributionMethod"
+  ],
+  "FIFFMMLKKCJ": [
+    "PlayerId",
+    "Level",
+    "XP"
+  ],
+  "FJJIJOGNMCP": [
+    "ReferralRewardTierId",
+    "RequiredReferralCount",
+    "RewardSelectionCount"
+  ],
+  "FJNBDGFCLOF": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "FKANCKLCCDI": [
+    "Id",
+    "FromPlayerId",
+    "ConsumableItemDesc",
+    "AvatarItemType",
+    "AvatarItemDesc",
+    "EquipmentPrefabName",
+    "EquipmentModificationGuid",
+    "CurrencyType",
+    "Currency",
+    "Xp",
+    "GiftContext",
+    "GiftRarity",
+    "Message",
+    "Platform",
+    "PlatformsToSpawnOn",
+    "BalanceType"
+  ],
+  "FKPPDBLFKHJ": [
+    "Msg",
+    "Id"
+  ],
+  "FLEDNKHKIND": [
+    "InfluencerIds",
+    "ContinuationToken"
+  ],
+  "FLELPHJDLNG": [
+    "Filename",
+    "Hash",
+    "OwnershipProof"
+  ],
+  "FLMCOHEGJEI": [
+    "RequiresEliteUpgrade",
+    "GiftDrop",
+    "SeasonXpBoost"
+  ],
+  "FMIDLABJCLM": [
+    "Strings",
+    "StringPackageVersion"
+  ],
+  "FMKALNIKMKF": [
+    "AccountId",
+    "MembershipType"
+  ],
+  "FMNDPHMOIIH": [
+    "Msg",
+    "Id"
+  ],
+  "FNDBGOGAIFL": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "FNIDAIDJBBO": [
+    "PlayerID",
+    "RelationshipType",
+    "Muted",
+    "Ignored",
+    "Favorited"
+  ],
+  "FNNAJDFFICN": [
+    "ReportId",
+    "Client"
+  ],
+  "FOIMFMEEGDI": [
+    "SupportsJoinInProgress",
+    "UseLevelBasedMatchmaking",
+    "UseAgeBasedMatchmaking",
+    "UseRecRoyaleMatchmaking",
+    "SubRoomId",
+    "RoomId",
+    "UnitySceneId",
+    "Name",
+    "UnityAssetId",
+    "UnityAsset",
+    "UnityAssetHash",
+    "DataBlob",
+    "DataBlobHash",
+    "DataSavedAt",
+    "IsSandbox",
+    "MaxPlayers",
+    "Accessibility"
+  ],
+  "FOKKDBJEFOO": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "FOOOKJCPBKC": [
+    "Msg",
+    "Id"
+  ],
+  "FPGBBCLENDA": [
+    "StorefrontType",
+    "NextUpdate",
+    "NewUntil"
+  ],
+  "FPLGJGDJIJG": [
+    "StorefrontType",
+    "PurchasableItemId",
+    "CurrencyType",
+    "RequestedPrice",
+    "CouponConsumablePlayerMappingId",
+    "Gift"
+  ],
+  "FPNMHECOPPF": [
+    "UpdateResponse",
+    "Data"
+  ],
+  "FPNOOOFJBJF": [
+    "RankStart",
+    "RankEnd",
+    "PlayerId",
+    "StatChannel",
+    "RoomId",
+    "FilterType",
+    "SortAscending"
+  ],
+  "FastDualShock4GamepadHID": [
+    "Dpad",
+    "Square",
+    "Cross",
+    "Circle",
+    "Triangle"
+  ],
+  "FastKeyboard": [
+    "AnyKey",
+    "Escape",
+    "Space",
+    "Enter",
+    "Tab",
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "I",
+    "J",
+    "K",
+    "L",
+    "M",
+    "N",
+    "O",
+    "P",
+    "Q",
+    "R",
+    "S",
+    "T",
+    "U",
+    "V",
+    "W",
+    "X",
+    "Y",
+    "Z",
+    "Shift",
+    "Alt",
+    "Backspace",
+    "Home",
+    "End",
+    "Insert",
+    "Delete",
+    "F1",
+    "F2",
+    "F3",
+    "F4",
+    "F5",
+    "F6",
+    "F7",
+    "F8",
+    "F9",
+    "F10",
+    "F11",
+    "F12"
+  ],
+  "FastMouse": [
+    "Pressure",
+    "Radius",
+    "Position",
+    "Delta",
+    "Scroll",
+    "Press"
+  ],
+  "FastTouchscreen": [
+    "Pressure",
+    "Radius",
+    "Position",
+    "Delta",
+    "Press"
+  ],
+  "GACOLGJKHBI": [
+    "VersionStatus",
+    "UpdateNotificationStage"
+  ],
+  "GAGIJHJGFJD": [
+    "AccountId",
+    "CurrencyId",
+    "Balance",
+    "AmountAwarded",
+    "AwardedAt"
+  ],
+  "GAODOHODBDE": [
+    "FailedInvites",
+    "Result"
+  ],
+  "GBPDOLJBABB": [
+    "Success",
+    "Message"
+  ],
+  "GBPHFPMCGHH": [
+    "Subscription",
+    "PlatformAccountSubscribedPlayerId"
+  ],
+  "GCKGIDLDBNH": [
+    "Error",
+    "Error_description",
+    "Access_token",
+    "Refresh_token",
+    "Key"
+  ],
+  "GDGCOAMMCIH": [
+    "MicSpamVolumeThreshold",
+    "MicVolumeSampleInterval",
+    "MicVolumeSampleRollingWindowLength",
+    "MicSpamSamplePercentageForWarning",
+    "MicSpamSamplePercentageForWarningToEnd",
+    "MicSpamSamplePercentageForForceMute",
+    "MicSpamSamplePercentageForForceMuteToEnd",
+    "MicSpamWarningStateVolumeMultiplier"
+  ],
+  "GEEKOKDMAHG": [
+    "AccountId",
+    "ApiKey"
+  ],
+  "GEGADPCDGBO": [
+    "Tag",
+    "Type"
+  ],
+  "GEMBOCLPFGE": [
+    "AccountId",
+    "FavoritedAt"
+  ],
+  "GFCIGEIEPGH": [
+    "Msg",
+    "Id"
+  ],
+  "GFGBAAADKEL": [
+    "Msg",
+    "Id"
+  ],
+  "GFGKDCENJMB": [
+    "AccountId",
+    "Xp",
+    "GameMinutesToday",
+    "RewardsCollected",
+    "BonusRewardsCollected",
+    "XpBoostLastPurchasedAt"
+  ],
+  "GFHNJMMBHFD": [
+    "PlayerEventId",
+    "Type"
+  ],
+  "GFIHPOOFHLC": [
+    "AnnouncementId",
+    "CreatorAccountId",
+    "ClubId",
+    "Title",
+    "Body",
+    "ImageName",
+    "CreatedAt",
+    "Meta"
+  ],
+  "GFKKOADFJKC": [
+    "CurrencyId",
+    "RecipientId",
+    "Amount",
+    "TransactionId"
+  ],
+  "GFMOBMCIOJI": [
+    "AccountId",
+    "IsCheerful",
+    "SelectedCheer",
+    "CheerCredit",
+    "CheerGeneral",
+    "CheerHelpful",
+    "CheerCreative",
+    "CheerGreatHost",
+    "CheerSportsman"
+  ],
+  "GGFHKCDELJH": [
+    "Id",
+    "Link"
+  ],
+  "GHBIGGJKPFI": [
+    "Events",
+    "ContinuationToken"
+  ],
+  "GIFNHCGDNEM": [
+    "Platform",
+    "PlatformId",
+    "AccountId",
+    "LastLoginTime",
+    "RequirePassword",
+    "RefreshToken"
+  ],
+  "GIJCKEDKGLH": [
+    "ReportCategory",
+    "PlayerEventId",
+    "Details"
+  ],
+  "GJGLBNABMNL": [
+    "CreatorAccountId",
+    "ClubId",
+    "MembershipType"
+  ],
+  "GKFBDCHILOD": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "GLEGPFFPDBE": [
+    "DataBlob",
+    "DataBlobHash",
+    "SubRooms",
+    "Roles",
+    "Tags",
+    "LoadScreens",
+    "PromoImages",
+    "PromoExternalContent",
+    "RoomId",
+    "IsDorm",
+    "MaxPlayerCalculationMode",
+    "MaxPlayers",
+    "PersistenceVersion",
+    "CloningAllowed",
+    "DisableMicAutoMute",
+    "DisableRoomComments",
+    "EncryptVoiceChat",
+    "ToxmodEnabled",
+    "LoadScreenLocked",
+    "IsDeveloperOwned",
+    "Name",
+    "Description",
+    "ImageName",
+    "WarningMask",
+    "CustomWarning",
+    "CreatorAccountId",
+    "State",
+    "Accessibility",
+    "SupportsLevelVoting",
+    "IsRRO",
+    "SupportsScreens",
+    "SupportsWalkVR",
+    "SupportsTeleportVR",
+    "SupportsVRLow",
+    "SupportsQuest2",
+    "SupportsMobile",
+    "SupportsJuniors",
+    "MinLevel",
+    "CreatedAt",
+    "Stats",
+    "RankingContext"
+  ],
+  "GLENKGBDMAO": [
+    "Result",
+    "Code",
+    "Url",
+    "RedemptionUrl"
+  ],
+  "GMBGBPNMGBA": [
+    "Status",
+    "Invention",
+    "InventionVersion"
+  ],
+  "GMDIDJMOEBB": [
+    "Objectives",
+    "ObjectiveGroups"
+  ],
+  "GMFJIAMOIEO": [
+    "SubscriptionId",
+    "RecNetPlayerId",
+    "PlatformType",
+    "PlatformId",
+    "PlatformPurchaseId",
+    "Level",
+    "Period",
+    "ExpirationDate",
+    "IsAutoRenewing",
+    "CreatedAt",
+    "ModifiedAt"
+  ],
+  "GMNMHECGEGD": [
+    "CurrencyType",
+    "BalanceAdds"
+  ],
+  "GNIPAKCCOOE": [
+    "ProgressionEventId",
+    "Name",
+    "Rewards",
+    "KeepsakeRoomLists",
+    "StartTime",
+    "EndTime",
+    "CollectionEndTime",
+    "UsesBoost",
+    "BoostDailyGameplayMinutesLimit",
+    "BoostXpMultiplier",
+    "PurchasableXpBoostId",
+    "ActiveExperiment",
+    "ChallengesIconImageName",
+    "RewardsPipImageName",
+    "EventInfoImageName"
+  ],
+  "GNMDEJJAHCJ": [
+    "SubscriberDiscountPercent",
+    "StorefrontType",
+    "NextUpdate",
+    "NewUntil",
+    "StoreItems"
+  ],
+  "GOHGJADGDJF": [
+    "ReplicationId",
+    "DataBlob",
+    "SubRooms",
+    "Tags",
+    "UnityAssets",
+    "RoomId",
+    "IsDorm",
+    "MaxPlayerCalculationMode",
+    "MaxPlayers",
+    "PersistenceVersion",
+    "CloningAllowed",
+    "DisableMicAutoMute",
+    "DisableRoomComments",
+    "EncryptVoiceChat",
+    "ToxmodEnabled",
+    "LoadScreenLocked",
+    "IsDeveloperOwned",
+    "Name",
+    "Description",
+    "ImageName",
+    "WarningMask",
+    "CustomWarning",
+    "CreatorAccountId",
+    "State",
+    "Accessibility",
+    "SupportsLevelVoting",
+    "IsRRO",
+    "SupportsScreens",
+    "SupportsWalkVR",
+    "SupportsTeleportVR",
+    "SupportsVRLow",
+    "SupportsQuest2",
+    "SupportsMobile",
+    "SupportsJuniors",
+    "MinLevel",
+    "CreatedAt",
+    "Stats",
+    "RankingContext"
+  ],
+  "GUISkin": [
+    "HorizontalSliderThumbExtent",
+    "VerticalSliderThumbExtent"
+  ],
+  "HADOHMCCLEO": [
+    "Msg",
+    "Id"
+  ],
+  "HBKAFCAEFCC": [
+    "CreatedAt",
+    "Comment"
+  ],
+  "HDLOMAGLILM": [
+    "Msg",
+    "Id"
+  ],
+  "HDOJMEBCAGP": [
+    "Permission",
+    "Role",
+    "Override",
+    "Type",
+    "Value"
+  ],
+  "HECILPKCKMK": [
+    "FeaturedRoomGroupId",
+    "Name",
+    "Rooms"
+  ],
+  "HEIPMIFEFEE": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "HEKMOMJFFGJ": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "HFHNOHAODOF": [
+    "ValidTill",
+    "Images"
+  ],
+  "HFODJDLIJPG": [
+    "TargetPlayerId",
+    "RoomName",
+    "ActionCode"
+  ],
+  "HGJDGKFIOCK": [
+    "Msg",
+    "Id"
+  ],
+  "HHJLCKPJOIA": [
+    "PlayerId",
+    "StatusVisibility",
+    "DeviceClass",
+    "VrMovementMode",
+    "RoomInstance",
+    "IsOnline",
+    "AppVersion",
+    "ClientJoinData"
+  ],
+  "HHOJLJGGNKN": [
+    "Msg",
+    "Id"
+  ],
+  "HIKOJENMDKE": [
+    "KeepsakeCategoryId",
+    "VisualId",
+    "LimitPerRoom",
+    "XpValue",
+    "IconOutlineImageName",
+    "IconFilledImageName"
+  ],
+  "HIOJNFKGAOK": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "HIOPBEPNFOO": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "HJKLIIPPPEM": [
+    "PlayerEvent",
+    "PlayerEventResponse"
+  ],
+  "HJOIJBMAIPO": [
+    "PlaylistId",
+    "Name",
+    "Description",
+    "ImageName",
+    "WarningMask",
+    "CustomWarning",
+    "CreatorAccountId",
+    "State",
+    "Accessibility",
+    "SupportsLevelVoting",
+    "IsRRO",
+    "SupportsScreens",
+    "SupportsWalkVR",
+    "SupportsTeleportVR",
+    "SupportsVRLow",
+    "SupportsQuest2",
+    "SupportsMobile",
+    "SupportsJuniors",
+    "MinLevel",
+    "CreatedAt",
+    "Stats",
+    "RankingContext"
+  ],
+  "HJOKFJKKEJM": [
+    "BalanceUpdateResult",
+    "TokenBalanceResponse",
+    "OperationResult"
+  ],
+  "HJPEABLEEKL": [
+    "RoomConsumableId",
+    "RoomId",
+    "Name",
+    "Description",
+    "ImageName",
+    "PriceAndCurrency"
+  ],
+  "HKAGNIGNBOJ": [
+    "Msg",
+    "Id"
+  ],
+  "HKIJINJGBGD": [
+    "Type",
+    "User_id",
+    "Identifiers",
+    "Ip",
+    "Gameplay_session_id",
+    "Transaction_id"
+  ],
+  "HKPKGOPHLHE": [
+    "RoomInstanceCount",
+    "PlayerCount"
+  ],
+  "HLDLKOPNDPF": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "HMDONHHKKGA": [
+    "PinnedFilters",
+    "PopularFilters",
+    "TrendingFilters"
+  ],
+  "HMGHGBMGNJG": [
+    "Msg",
+    "Id"
+  ],
+  "HMKMGPNMHBM": [
+    "Instances",
+    "CollectionRecords",
+    "KeepsakeProgressionEventIds"
+  ],
+  "HMMFNEEAFGP": [
+    "Results",
+    "TotalResults"
+  ],
+  "HNLGHDMNMDB": [
+    "UpdateResponse",
+    "Data"
+  ],
+  "HOGIMIPDDGP": [
+    "ImageName",
+    "ImageUrl"
+  ],
+  "HPAKKJFOFDF": [
+    "Msg",
+    "Id"
+  ],
+  "HPEGLGGMNMC": [
+    "ChatThread",
+    "ChatResult"
+  ],
+  "HPMMKFGDAEC": [
+    "PlayerEventId",
+    "CreatorPlayerId",
+    "RoomId",
+    "SubRoomId",
+    "ClubId",
+    "Name",
+    "Description",
+    "ImageName",
+    "StartTime",
+    "EndTime",
+    "AttendeeCount",
+    "Accessibility",
+    "IsMultiInstance",
+    "SupportMultiInstanceRoomChat",
+    "DefaultBroadcastPermissions",
+    "CanRequestBroadcastPermissions",
+    "BroadcastingRoomInstanceId"
+  ],
+  "IACBFJEMJMJ": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "IAPMDDFENDD": [
+    "PurchasableItemId",
+    "CouponConsumablePlayerMappingId",
+    "Count",
+    "CreatorPlayerId",
+    "RequestedPrice"
+  ],
+  "IBAPHBCOBHL": [
+    "BalanceUpdates",
+    "Balance",
+    "CurrencyType",
+    "Platform"
+  ],
+  "IBILPLGNAJE": [
+    "Id",
+    "ImageName",
+    "PlayerId",
+    "RoomId",
+    "PlayerEventId",
+    "Accessibility",
+    "AccessibilityLocked",
+    "Type",
+    "CreatedAt",
+    "TaggedPlayerIds",
+    "CheerCount",
+    "CommentCount"
+  ],
+  "ICMBGNCJMJG": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "ICNLODNGFJJ": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "IDBFKCFEAHM": [
+    "BalanceUpdateResult",
+    "CurrencyBalanceResponse",
+    "OperationResult"
+  ],
+  "IDBLMMAGACO": [
+    "Key",
+    "Value"
+  ],
+  "IDFEIMCEMCC": [
+    "Level",
+    "Period",
+    "IsAutoRenewing"
+  ],
+  "IEIKHFIPDMD": [
+    "CurrencyType",
+    "Price",
+    "StorefrontSaleData"
+  ],
+  "IFFEHJEPKOH": [
+    "ReferralsVerifiedCount",
+    "PlayerReferralRewards"
+  ],
+  "IFLDEEGLKFG": [
+    "Level",
+    "RequiredXp",
+    "GiftDropId"
+  ],
+  "IGMCJEFBJCF": [
+    "ServerTime",
+    "PlayerId",
+    "StatusVisibility",
+    "DeviceClass",
+    "VrMovementMode",
+    "RoomInstance",
+    "IsOnline",
+    "AppVersion",
+    "ClientJoinData"
+  ],
+  "IGNECOJDECH": [
+    "Info",
+    "ReferrerId"
+  ],
+  "IHGDKHPLIGH": [
+    "RoomId",
+    "RoomName",
+    "ImageName"
+  ],
+  "IJFKOMJBJMI": [
+    "StatChannel",
+    "RoomId",
+    "StatValue",
+    "CurrentStatValue"
+  ],
+  "ILAHMLLJDLE": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "ILEHDPADJJF": [
+    "Nouns",
+    "Adjectives"
+  ],
+  "ILJOBJDPBNJ": [
+    "Name",
+    "Description",
+    "Price",
+    "BaseAvatarItemId",
+    "BaseAvatarItemColor",
+    "Accessibility"
+  ],
+  "IMMOJHBENFI": [
+    "Slot",
+    "PreviewImageName",
+    "OutfitSelections",
+    "OutfitSelectionsV2",
+    "FaceFeatures",
+    "SkinColor",
+    "HairColor",
+    "CustomAvatarItems"
+  ],
+  "INLPIKBODME": [
+    "CreatorAccountId",
+    "BaseAvatarItemId",
+    "DesignFilename",
+    "BaseAvatarItemColor"
+  ],
+  "IOEPPCKGBFL": [
+    "InventionId",
+    "ReplicationId",
+    "CreatorPlayerId",
+    "Name",
+    "Description",
+    "ImageName",
+    "CurrentVersionNumber",
+    "Accessibility",
+    "ModifiedAt",
+    "CreatedAt",
+    "FirstPublishedAt",
+    "CreationRoomId",
+    "NumPlayersHaveUsedInRoom",
+    "NumDownloads",
+    "CheerCount",
+    "CreatorPermission",
+    "GeneralPermission",
+    "IsAGInvention",
+    "IsCertifiedInvention",
+    "AllowTrial",
+    "Price",
+    "HideFromPlayer"
+  ],
+  "IPMGNJMIONC": [
+    "Revenue_currency",
+    "Revenue_amount",
+    "Revenue_type",
+    "Type",
+    "User_id",
+    "Identifiers",
+    "Ip",
+    "Gameplay_session_id",
+    "Transaction_id"
+  ],
+  "JAFDEPHGOAF": [
+    "Title",
+    "Message",
+    "ImageName",
+    "ActiveExperiments",
+    "Context",
+    "InputType",
+    "Visibility",
+    "AllowCycling",
+    "PlatformMask",
+    "RestrictToNewUsers",
+    "RoomNames"
+  ],
+  "JAHJGFHFKIB": [
+    "Club",
+    "CustomTags",
+    "AdditionalImages",
+    "CoownerPermissions",
+    "ModeratorPermissions",
+    "MemberPermissions",
+    "MyMembershipType"
+  ],
+  "JBGKGCLPCHP": [
+    "Results",
+    "TotalResults"
+  ],
+  "JBIEJIKHBMG": [
+    "SeedRoom",
+    "Rooms"
+  ],
+  "JCPFCOEEELK": [
+    "AccountId",
+    "CurrencyId",
+    "Success",
+    "Error",
+    "Response"
+  ],
+  "JDEKAFDPGBE": [
+    "ReplicationId",
+    "PersistenceVersion",
+    "SupportsJoinInProgress",
+    "UseLevelBasedMatchmaking",
+    "UseAgeBasedMatchmaking",
+    "UseRecRoyaleMatchmaking",
+    "SubRoomId",
+    "RoomId",
+    "UnitySceneId",
+    "Name",
+    "UnityAssetId",
+    "UnityAsset",
+    "UnityAssetHash",
+    "DataBlob",
+    "DataBlobHash",
+    "DataSavedAt",
+    "IsSandbox",
+    "MaxPlayers",
+    "Accessibility"
+  ],
+  "JEBCHNDADKK": [
+    "ConcurrencyCodes",
+    "ExpectedPriceAndCurrency"
+  ],
+  "JFEKPNOKFBP": [
+    "Msg",
+    "Id"
+  ],
+  "JGJFCFAFGCM": [
+    "TotalXP",
+    "Level",
+    "RankIdx",
+    "RankName",
+    "CurrentLevelXPThreshold",
+    "NextLevelXPThreshold",
+    "NextLevelAcornReward"
+  ],
+  "JHNAJMDHFKH": [
+    "Msg",
+    "Id"
+  ],
+  "JICIOMDBPDO": [
+    "Id",
+    "ConsumableItemDesc",
+    "Count",
+    "InitialCount",
+    "CreatedAt",
+    "ActiveDurationMinutes",
+    "IsActive",
+    "IsTransferable"
+  ],
+  "JIOEIEENGNO": [
+    "Msg",
+    "Id"
+  ],
+  "JJEKBGHDCEG": [
+    "Tier",
+    "Rewards",
+    "PurchasableItemId",
+    "Type",
+    "Prices",
+    "SubscriberPrices",
+    "IsFeatured",
+    "AvailableAt",
+    "AvailableUntil",
+    "NewUntil"
+  ],
+  "JJGEJHCFEJH": [
+    "GiftDropId",
+    "ConsumableItemDesc",
+    "AvatarItemDesc",
+    "AvatarItemType",
+    "EquipmentPrefabName",
+    "EquipmentModificationGuid",
+    "StorefrontType",
+    "Xp",
+    "Level",
+    "GiftContext",
+    "GiftRarity"
+  ],
+  "JKJHOAKNOCF": [
+    "CurrentConcurrencyCode",
+    "NewConcurrencyCode"
+  ],
+  "JLIBBFMMLFF": [
+    "CurrencyType",
+    "BalanceAddType",
+    "BaseAward",
+    "BonusAwardMin",
+    "BonusAwardMax",
+    "RateLimitType",
+    "IgnorePartialMultiplier",
+    "MaxPartialMultiplier",
+    "RateLimit",
+    "BalanceInGiftBox"
+  ],
+  "JLNFEFHNFBP": [
+    "Title",
+    "Description"
+  ],
+  "JLNKMODEKKM": [
+    "BaseAvatarItemId",
+    "BaseAvatarItemColor"
+  ],
+  "JMJLMOJCBCK": [
+    "UpdateResponse",
+    "Data"
+  ],
+  "JNFDPPCIPHG": [
+    "CategoryId",
+    "Importance",
+    "Name",
+    "Description",
+    "IsMuteable"
+  ],
+  "JOMMALIPDGI": [
+    "RoomId",
+    "IsDorm",
+    "MaxPlayerCalculationMode",
+    "MaxPlayers",
+    "PersistenceVersion",
+    "CloningAllowed",
+    "DisableMicAutoMute",
+    "DisableRoomComments",
+    "EncryptVoiceChat",
+    "ToxmodEnabled",
+    "LoadScreenLocked",
+    "IsDeveloperOwned",
+    "Name",
+    "Description",
+    "ImageName",
+    "WarningMask",
+    "CustomWarning",
+    "CreatorAccountId",
+    "State",
+    "Accessibility",
+    "SupportsLevelVoting",
+    "IsRRO",
+    "SupportsScreens",
+    "SupportsWalkVR",
+    "SupportsTeleportVR",
+    "SupportsVRLow",
+    "SupportsQuest2",
+    "SupportsMobile",
+    "SupportsJuniors",
+    "MinLevel",
+    "CreatedAt",
+    "Stats",
+    "RankingContext"
+  ],
+  "JPKBLKGJNCA": [
+    "Msg",
+    "Id"
+  ],
+  "JPLIIMKJAEL": [
+    "AccountId",
+    "DisallowInAppPurchases"
+  ],
+  "JPNMBICAMEE": [
+    "RoomInstanceId",
+    "RoomId",
+    "SubRoomId",
+    "IsFull",
+    "CreatedAt",
+    "PlayerIds"
+  ],
+  "JsonParser_NestedType_JsonValue": [
+    "False",
+    "True"
+  ],
+  "KAONMCEONPF": [
+    "Name",
+    "Price",
+    "ProductId"
+  ],
+  "KBHFIPFPCMN": [
+    "Msg",
+    "Id"
+  ],
+  "KBLOCDGCGFA": [
+    "Msg",
+    "Id"
+  ],
+  "KBMAAKAIPLE": [
+    "UpdateResponse",
+    "Data"
+  ],
+  "KCMDEFMLDJF": [
+    "Balance",
+    "CurrencyType",
+    "BalanceType",
+    "Data"
+  ],
+  "KDAHIOHGPBN": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "KDJILJAIDFG": [
+    "RoomId",
+    "Count"
+  ],
+  "KEOLHAONMIF": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "KFAOOJLFCGC": [
+    "Msg",
+    "Id"
+  ],
+  "KFPHOKPEMOF": [
+    "ItemType",
+    "ItemId",
+    "Name",
+    "Description",
+    "ImageName",
+    "RoomId",
+    "Price",
+    "PurchaseCurrencyId",
+    "CreatedAt",
+    "ModifiedAt"
+  ],
+  "KGNFNBHMAFL": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "KHBGNAMFAHK": [
+    "Msg",
+    "Id"
+  ],
+  "KHFKIJEGPDG": [
+    "AccountId",
+    "RoomKeyId",
+    "DoesPlayerOwnRoomKey"
+  ],
+  "KIANAKFJGCP": [
+    "FeaturedPlayer",
+    "FeaturedRoomGroup",
+    "CurrentAnnouncement",
+    "InstagramImages",
+    "Videos"
+  ],
+  "KILGEFOENFN": [
+    "BalanceUpdates",
+    "Balance",
+    "CurrencyType",
+    "Platform"
+  ],
+  "KJEIGGBIIHP": [
+    "SavedImageId",
+    "IsCheered"
+  ],
+  "KKOHONLGIHL": [
+    "Id",
+    "FromPlayerId",
+    "SentTime",
+    "Type",
+    "Data",
+    "RoomId",
+    "PlayerEventId"
+  ],
+  "KLHCKBPJKPF_NestedType_DHKPMMHMIJF_NestedType_KKNKAJBPNPC": [
+    "SerializeUnsafe",
+    "ToJsonString"
+  ],
+  "KMBHAKAHNGH": [
+    "Room",
+    "SubRoomDataSave"
+  ],
+  "KMHNOGNHDLO": [
+    "SubscriptionSeasonMilestoneId",
+    "SeasonId",
+    "StartAt",
+    "GiftDrops"
+  ],
+  "KNGMIABFJHK": [
+    "CurrencyBalanceResponse",
+    "TokenBalanceResponse"
+  ],
+  "KOEEACLMAFE": [
+    "Referrals",
+    "ContinuationToken"
+  ],
+  "KPEIHOCIGGE": [
+    "Msg",
+    "Id"
+  ],
+  "KPMMGJELBPP": [
+    "WindowSize",
+    "PlayerId",
+    "StatChannel",
+    "RoomId",
+    "FilterType",
+    "SortAscending"
+  ],
+  "KPNBKKKCOCA": [
+    "UnlockedAt",
+    "ClaimedAt",
+    "Status",
+    "ReferralRewardTier",
+    "IsCurrentTier"
+  ],
+  "KPPINBHEKHE": [
+    "Products",
+    "Identifier",
+    "Genuine",
+    "GenuineCheckAvailable"
+  ],
+  "LAIJIAIHGCO": [
+    "ReportCategory",
+    "Duration",
+    "GameSessionId",
+    "IsHostKick",
+    "Message",
+    "PlayerIdReporter",
+    "IsBan",
+    "IsVoiceModAutoban",
+    "IsWarning",
+    "VoteKickReason",
+    "TimeoutStartedAt"
+  ],
+  "LBOGFNBPIKJ": [
+    "SubRoomId",
+    "RoomId",
+    "UnitySceneId",
+    "Name",
+    "UnityAssetId",
+    "UnityAsset",
+    "UnityAssetHash",
+    "DataBlob",
+    "DataBlobHash",
+    "DataSavedAt",
+    "IsSandbox",
+    "MaxPlayers",
+    "Accessibility"
+  ],
+  "LDGHHCCJAMC": [
+    "Status",
+    "RoomKey"
+  ],
+  "LEEAJGDIOHI": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "LEINHCHGFON": [
+    "Msg",
+    "Id"
+  ],
+  "LEMIBENHABD": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "LIJHBNDJKNP": [
+    "RewardSelectionId",
+    "RewardType",
+    "Message",
+    "GiftContext",
+    "GiftDrop1",
+    "GiftDrop2",
+    "GiftDrop3",
+    "Subscriber_GiftDrop3",
+    "CreatedAt"
+  ],
+  "LIODMDILCAJ": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "LKBGCOELLIN": [
+    "CurrencyId",
+    "PurchaseOffers"
+  ],
+  "LKJLPNENINM": [
+    "RoomKeyResponse",
+    "BalanceUpdateResponse"
+  ],
+  "LKJPKMBEPCG": [
+    "PrefabName",
+    "ModificationGuid",
+    "FriendlyName",
+    "Tooltip",
+    "Rarity",
+    "Favorited"
+  ],
+  "LKLKHEEHEBC": [
+    "UnityAssetId",
+    "Target",
+    "Version",
+    "Filename",
+    "Hash"
+  ],
+  "LKMEPPOFHLK": [
+    "Msg",
+    "Id"
+  ],
+  "LMCCNLLHLCJ": [
+    "Success",
+    "Error"
+  ],
+  "LMEECKCCPHG": [
+    "AccountId",
+    "Role",
+    "LastChangedByAccountId",
+    "InvitedRole"
+  ],
+  "LMHKHIJIDEO": [
+    "SavedImageId",
+    "Cheer"
+  ],
+  "LNMAMOCCBAK": [
+    "Filename",
+    "UnityAssetId",
+    "CreatedByAccountId",
+    "BakedUnityAssets"
+  ],
+  "LOEHGGMCKAM": [
+    "ChatResult",
+    "SnoozedUntil"
+  ],
+  "LOOLOADLJPG": [
+    "SubscriptionSeasonId",
+    "Name",
+    "ImageName",
+    "StartAt",
+    "NextSeasonStart",
+    "Milestones"
+  ],
+  "LPAEOGFPGBD": [
+    "UnitySceneId",
+    "Name",
+    "MaxPlayers",
+    "SupportsVRLow",
+    "SupportsQuest2",
+    "SupportsMobile"
+  ],
+  "LPFAFIGAIOE": [
+    "Status",
+    "InventoryItem"
+  ],
+  "MACBLLENLFD": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "MADLMAFINGF": [
+    "KeepsakeInstanceId",
+    "KeepsakeCategoryConfigId",
+    "PlacedByAccountId",
+    "RoomId",
+    "SubRoomId"
+  ],
+  "MAHHAAEGEEP": [
+    "InventionResponse",
+    "BalanceUpdateResponse"
+  ],
+  "MBFADJPOGDI": [
+    "Msg",
+    "Id"
+  ],
+  "MCDADMNCDEI": [
+    "WishlistItemId",
+    "AccountId",
+    "PurchasableItemId",
+    "CreatedAt"
+  ],
+  "MCMPJPNBJBI": [
+    "Msg",
+    "Id"
+  ],
+  "MEBAFOGDHBB": [
+    "PurchaseCampaignId",
+    "PurchaseReminder",
+    "Name",
+    "TriggerFlags",
+    "LastShown",
+    "ShowCount",
+    "DaysBetweenPopups",
+    "MaxPopups"
+  ],
+  "MEEAEDNAPGI": [
+    "CommentId",
+    "RoomId",
+    "SubRoomId",
+    "AccountId",
+    "CreatedAt",
+    "Message",
+    "Style",
+    "Unread",
+    "PositionX",
+    "PositionY",
+    "PositionZ"
+  ],
+  "MFNBIPCHKHC": [
+    "MembershipRequests",
+    "TotalMembershipRequests",
+    "ContinuationToken"
+  ],
+  "MGOLBEMMNDA": [
+    "BalanceAddType",
+    "BaseAward",
+    "BonusAward",
+    "RateLimit",
+    "CurrentCount",
+    "Total",
+    "Platform",
+    "BalanceInGiftBox"
+  ],
+  "MIFGPMGEMEK": [
+    "RefreshesAt",
+    "RefreshIntervalMinutes",
+    "Room"
+  ],
+  "MIHDILLIAFE": [
+    "Instances",
+    "CollectionRecords"
+  ],
+  "MIHJPKMLADF": [
+    "Msg",
+    "Id"
+  ],
+  "MIHKAJFMIPE": [
+    "RoomId",
+    "CurrencyId"
+  ],
+  "MJGHCJDOJLH": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "MJJDCIAIDKI": [
+    "HasEliteUpgrade",
+    "HasEliteUpgradePlatformMask",
+    "CurrentSeasonTier",
+    "ModifiedAt"
+  ],
+  "MJKDDBKGNOP": [
+    "ContactDetail",
+    "AccountId",
+    "UserName",
+    "DisplayName",
+    "DisplayEmoji",
+    "ProfileImage",
+    "BannerImage",
+    "TreatAsJunior",
+    "HasBirthday",
+    "PersonalPronouns",
+    "IdentityFlags",
+    "CreatedAt",
+    "IsJunior"
+  ],
+  "MJNABIBJDMO": [
+    "Order",
+    "Objective",
+    "Count"
+  ],
+  "MKAIABAJIAJ": [
+    "CustomAvatarItemId",
+    "BodyPart"
+  ],
+  "MKBLHNGJOBA": [
+    "Msg",
+    "Id"
+  ],
+  "MLHBPDKBABN": [
+    "CheerCount",
+    "FavoriteCount",
+    "VisitorCount",
+    "VisitCount"
+  ],
+  "MMDMDIJLIEH": [
+    "Msg",
+    "Id"
+  ],
+  "MMFCMCPCAJP": [
+    "ChatMessage",
+    "ChatResult"
+  ],
+  "MMPLMIAEBLE": [
+    "Msg",
+    "Id"
+  ],
+  "MOJLGDKFECO": [
+    "InvitedPlayerId",
+    "Result"
+  ],
+  "MOLNFPGNEGP": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "MOMDMDMGEOA": [
+    "ItemType",
+    "ItemId"
+  ],
+  "Matchmaking": [
+    "PlayerId",
+    "RoomInstanceId"
+  ],
+  "NAGNGCMPGOP": [
+    "RoomId",
+    "KeepsakeInstanceIds"
+  ],
+  "NAPOKFHELLC": [
+    "Multiplier",
+    "BalanceAddType"
+  ],
+  "NBGPICODFEE": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "NCBBKAMCPBC": [
+    "Msg",
+    "Id"
+  ],
+  "NCHBANKEJMP": [
+    "Results",
+    "TotalResults"
+  ],
+  "NDIIFIGNAAM": [
+    "Error",
+    "Identifier",
+    "Genuine",
+    "GenuineCheckAvailable"
+  ],
+  "NEJOPOKDPKE": [
+    "Msg",
+    "Id"
+  ],
+  "NEKEOJFNCCJ": [
+    "UpdateResponse",
+    "Data"
+  ],
+  "NFBJOAGJHME": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "NGCPIKDINEI": [
+    "Provider",
+    "Data"
+  ],
+  "NHGOFGABJIN": [
+    "RoomInstanceId",
+    "RoomId",
+    "SubRoomId",
+    "Location",
+    "EventId",
+    "ClubId",
+    "RoomCode",
+    "PhotonRegionId",
+    "PhotonRoomId",
+    "Name",
+    "MaxCapacity",
+    "IsFull",
+    "IsPrivate",
+    "IsInProgress",
+    "EncryptVoiceChat",
+    "RoomInstanceType"
+  ],
+  "NIJPNDPJICF": [
+    "Id",
+    "Key",
+    "Title",
+    "Description",
+    "RoomName",
+    "Status",
+    "AssignedPlayerNames",
+    "Tags",
+    "JiraUrl",
+    "Comments"
+  ],
+  "NKMEHOHCKOH": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "NLIAAGLJBNN": [
+    "Results",
+    "TotalResults"
+  ],
+  "NMGHOIMEJIK": [
+    "Name",
+    "Description",
+    "Price",
+    "Accessibility"
+  ],
+  "NNAGOPNGJFE": [
+    "AmplitudeKey",
+    "RudderStackKey",
+    "UseRudderStack",
+    "StatSigKey"
+  ],
+  "OANOOFEPJCI": [
+    "Rooms",
+    "Tags",
+    "PlaylistId",
+    "Name",
+    "Description",
+    "ImageName",
+    "WarningMask",
+    "CustomWarning",
+    "CreatorAccountId",
+    "State",
+    "Accessibility",
+    "SupportsLevelVoting",
+    "IsRRO",
+    "SupportsScreens",
+    "SupportsWalkVR",
+    "SupportsTeleportVR",
+    "SupportsVRLow",
+    "SupportsQuest2",
+    "SupportsMobile",
+    "SupportsJuniors",
+    "MinLevel",
+    "CreatedAt",
+    "Stats",
+    "RankingContext"
+  ],
+  "OBACBEGPKAK": [
+    "ReportCategory",
+    "Details",
+    "ReportedPlayerId"
+  ],
+  "OBGIGMCOMDE": [
+    "AdCarouselItemId",
+    "ImageName",
+    "Title",
+    "Description",
+    "PurchasableItemIds",
+    "PurchaseReminderId"
+  ],
+  "OBIBPCLDPGA": [
+    "Message",
+    "MoreInfoUrl"
+  ],
+  "OCFNOBAONAP": [
+    "Cheered",
+    "Favorited",
+    "LastVisitedAt"
+  ],
+  "OCGICPIMNEB": [
+    "ErrorCode",
+    "RoomInstance"
+  ],
+  "ODNKLIIJIOH": [
+    "Msg",
+    "Id"
+  ],
+  "OEHMNIAOAOH": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "OFGIPBHIAGF": [
+    "ProgressionEventPurchasableXpBoostId",
+    "Cost",
+    "XpMultiplier",
+    "XpCap",
+    "LookbackDurationTicks",
+    "CooldownDurationTicks"
+  ],
+  "OFMNNCMPEPA": [
+    "SessionId",
+    "RoomId",
+    "SubRoomId",
+    "UnityAssetId",
+    "RoomData",
+    "SubRoomData",
+    "SavedByAccountId"
+  ],
+  "OGCMIDEFOEE": [
+    "ChatResult",
+    "IsFavorited"
+  ],
+  "OGEDLCFDDIO": [
+    "Msg",
+    "Id"
+  ],
+  "OHNEMFHCBIJ": [
+    "Value",
+    "Success",
+    "Error"
+  ],
+  "OKHGCKDIILD": [
+    "ImageName",
+    "Index"
+  ],
+  "OLACHOEDKFB": [
+    "ReportCategory",
+    "YesVotes",
+    "NoVotes",
+    "PlayerIdReported"
+  ],
+  "OLIHBGPDPHF": [
+    "Balance",
+    "CurrencyType",
+    "BalanceType",
+    "Data"
+  ],
+  "OLKCALBDDOI": [
+    "Msg",
+    "Id"
+  ],
+  "OLPHKLCPFEF": [
+    "InventionId",
+    "ReplicationId",
+    "VersionNumber",
+    "InstantiationCost",
+    "LightsCost",
+    "ChipsCost",
+    "CloudVariablesCost",
+    "BlobName",
+    "BlobHash"
+  ],
+  "OMAPLLOIDNA": [
+    "ToPlayerIds",
+    "Message",
+    "GiftContext"
+  ],
+  "ONGJBLFBHGC": [
+    "PurchasableItemId",
+    "Type",
+    "Prices",
+    "SubscriberPrices",
+    "IsFeatured",
+    "AvailableAt",
+    "AvailableUntil",
+    "NewUntil"
+  ],
+  "OOGKPMKKJBE": [
+    "SalePercent",
+    "SaleStartDate",
+    "SaleEndDate"
+  ],
+  "PAKGKIKFGAE": [
+    "Id",
+    "TitleOverride",
+    "UrlOverride"
+  ],
+  "PCBAACNNDBH": [
+    "FriendlyImageName",
+    "ImageName",
+    "StartTime",
+    "EndTime"
+  ],
+  "PCMLHLIBLNJ": [
+    "Tag",
+    "Type"
+  ],
+  "PCODFCJECKL": [
+    "Msg",
+    "Id"
+  ],
+  "PCPOMPIAFMA": [
+    "Key",
+    "Value",
+    "StartTime",
+    "EndTime"
+  ],
+  "PDGENCNGCJI": [
+    "RoomId",
+    "Ids"
+  ],
+  "PDIFGFKAMBG": [
+    "PlayerCount",
+    "IsFull",
+    "PlayerEventId",
+    "CreatorPlayerId",
+    "RoomId",
+    "SubRoomId",
+    "ClubId",
+    "Name",
+    "Description",
+    "ImageName",
+    "StartTime",
+    "EndTime",
+    "AttendeeCount",
+    "Accessibility",
+    "IsMultiInstance",
+    "SupportMultiInstanceRoomChat",
+    "DefaultBroadcastPermissions",
+    "CanRequestBroadcastPermissions",
+    "BroadcastingRoomInstanceId"
+  ],
+  "PECGEJAAMHB": [
+    "Balance",
+    "CurrencyType",
+    "Platform"
+  ],
+  "PELEHJLMKJO": [
+    "SubRoomDataSaveId",
+    "SubRoomId",
+    "UnityAssetId",
+    "DataBlob",
+    "DataBlobHash",
+    "SavedByAccountId",
+    "SavedOnPlatform",
+    "SavedOnDeviceClass",
+    "Description",
+    "CreatedAt"
+  ],
+  "PEOAOMGOMGC": [
+    "CurrencyId",
+    "RoomId",
+    "Name",
+    "Description",
+    "CurrencyType",
+    "Limit",
+    "ImageName",
+    "CreatedAt",
+    "ModifiedAt"
+  ],
+  "PGACEMBEGJF": [
+    "ToPlayerId",
+    "Message",
+    "Anonymous",
+    "GiftContext"
+  ],
+  "PJPBJKLDMNA": [
+    "Results",
+    "TotalResults"
+  ],
+  "PKCMBJFBHBO": [
+    "TotalXp",
+    "SocialBoostXp"
+  ],
+  "PLLNLPADHCN": [
+    "Resolution",
+    "Language",
+    "Timezone",
+    "Platform"
+  ],
+  "POGBAGAHGIA": [
+    "GiftDrop",
+    "PurchasableItemId",
+    "Type",
+    "Prices",
+    "SubscriberPrices",
+    "IsFeatured",
+    "AvailableAt",
+    "AvailableUntil",
+    "NewUntil"
+  ],
+  "PPHLKNGCGOE": [
+    "SessionId",
+    "RoomId",
+    "SubRoomId",
+    "UnityAssetId",
+    "RoomDataFilename",
+    "RoomDataHash",
+    "SubRoomDataFilename",
+    "SubRoomDataHash"
+  ],
+  "PlayerInput": [
+    "OnPlayerLeft",
+    "OnDeviceLost",
+    "OnDeviceRegained",
+    "OnControlsChanged"
+  ],
+  "PlayerInputManager": [
+    "OnPlayerJoined",
+    "OnPlayerLeft"
+  ],
+  "StringHelpers": [
+    "Mouse",
+    "Mice",
+    "Axis",
+    "Axes"
+  ],
+  "X509Name": [
+    "C",
+    "O",
+    "T",
+    "OU",
+    "CN",
+    "L",
+    "ST",
+    "SERIALNUMBER",
+    "E",
+    "DC",
+    "UID",
+    "STREET",
+    "SURNAME",
+    "GIVENNAME",
+    "INITIALS",
+    "GENERATION",
+    "UniqueIdentifier",
+    "DN",
+    "Pseudonym",
+    "PostalAddress",
+    "CountryOfCitizenship",
+    "CountryOfResidence",
+    "Gender",
+    "PlaceOfBirth",
+    "DateOfBirth",
+    "PostalCode",
+    "BusinessCategory",
+    "TelephoneNumber"
+  ],
+  "XSDSchema": [
+    "True",
+    "False",
+    "Name"
+  ],
+  "XmlTreeGen": [
+    "Namespace",
+    "Unique",
+    "Attribute"
+  ]
+}

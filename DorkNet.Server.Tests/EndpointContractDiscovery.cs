@@ -36,7 +36,20 @@ public static partial class EndpointContractDiscovery
         {
             var httpAttrs = method.GetCustomAttributes(inherit: true)
                 .OfType<HttpMethodAttribute>()
+                .Cast<IRouteTemplateProvider>()
                 .ToArray();
+
+            // An action can carry a bare [Route("...")] with no [HttpGet]/[HttpPost],
+            // which routes ALL verbs — the CDN's unity_assets handler is the live
+            // example. Skipping those made the discovered table under-report the
+            // server, so route-coverage checks saw phantom gaps.
+            if (httpAttrs.Length == 0)
+            {
+                httpAttrs = method.GetCustomAttributes(inherit: true)
+                    .OfType<IRouteTemplateProvider>()
+                    .Where(a => !string.IsNullOrWhiteSpace(a.Template))
+                    .ToArray();
+            }
             if (httpAttrs.Length == 0)
             {
                 continue;
@@ -44,8 +57,8 @@ public static partial class EndpointContractDiscovery
 
             foreach (var attr in httpAttrs)
             {
-                var attrMethods = attr.HttpMethods.Any()
-                    ? attr.HttpMethods
+                var attrMethods = attr is HttpMethodAttribute { HttpMethods: var verbs } && verbs.Any()
+                    ? verbs
                     : new[] { "ANY" };
 
                 foreach (var httpMethod in attrMethods)
