@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router';
 import { Header } from './components/Header';
 import { Home } from './pages/Home';
 import { Feed } from './pages/Feed';
@@ -43,6 +43,6 @@ export function App() {
 }
 
 // Small redirect shims so old #/p/123 / #/u/45 links keep working.
-import { useParams } from 'react-router-dom';
+import { useParams } from 'react-router';
 function RedirectPhoto()  { const { id } = useParams(); return <Navigate to={`/photo/${id}`}  replace />; }
 function RedirectPlayer() { const { id } = useParams(); return <Navigate to={`/players/${id}`} replace />; }
