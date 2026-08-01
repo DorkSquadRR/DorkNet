@@ -153,22 +153,30 @@ public class CommentsController(DorkNetDbContext db) : ControllerBase
         var me = Me;
         var lastRead = await LastReadAsync(me);
 
-        // Key + owner only: the payload column is irrelevant to counting.
-        var keys = await db.PlayerSettings
-            .Where(s => s.Key.StartsWith(CommentPrefix))
-            .Select(s => new { s.Key, s.PlayerId })
-            .ToListAsync();
-
         var counts = new Dictionary<long, uint>();
         foreach (var id in roomIds) counts[id] = 0u;
 
-        foreach (var k in keys)
+        // One bounded query per requested room instead of materialising the
+        // entire comment keyspace: the room filter and the "your own notes
+        // are never unread" filter both run in SQL; only the numeric
+        // comment-id suffix still needs parsing here. Key + owner only: the
+        // payload column is irrelevant to counting.
+        foreach (var id in roomIds)
         {
-            if (!TrySplitCommentKey(k.Key, out var roomId, out var commentId)) continue;
-            if (!counts.ContainsKey(roomId)) continue;
-            if (k.PlayerId == me) continue;                       // your own notes are never unread
-            if (commentId <= lastRead.GetValueOrDefault(roomId)) continue;
-            counts[roomId]++;
+            var prefix = $"{CommentPrefix}{id}:";
+            var keys = await db.PlayerSettings
+                .Where(s => s.Key.StartsWith(prefix) && s.PlayerId != me)
+                .Select(s => s.Key)
+                .ToListAsync();
+
+            var floor = lastRead.GetValueOrDefault(id);
+            foreach (var key in keys)
+            {
+                if (!TrySplitCommentKey(key, out var roomId, out var commentId)) continue;
+                if (roomId != id) continue;
+                if (commentId <= floor) continue;
+                counts[id]++;
+            }
         }
 
         var result = roomIds

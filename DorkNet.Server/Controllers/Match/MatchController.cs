@@ -396,14 +396,19 @@ public class MatchController(
                 .Select(p => new { p.Id, p.OwnerPlayerId })
                 .FirstOrDefaultAsync();
 
-            // forceChange only lets a host reclaim a code from one of their OWN
-            // instances; another player's code is never stolen. On refusal the
-            // client just re-reads whatever code we echo back, so we fall
-            // through to the read path instead of erroring.
-            var blocked = clash is not null
-                && (clash.OwnerPlayerId != pid || forceChange != true);
-
             var row = await db.PrivateInstances.FirstOrDefaultAsync(p => p.Id == instanceId);
+
+            // Only the instance's owner may set its code (same guard as
+            // MarkPrivate), otherwise any player could plant or relocate a
+            // code onto someone else's instance. forceChange only lets a host
+            // reclaim a code from one of their OWN instances; another
+            // player's code is never stolen. On refusal the client just
+            // re-reads whatever code we echo back, so we fall through to the
+            // read path instead of erroring.
+            var blocked = row is null || row.OwnerPlayerId != pid
+                || (clash is not null
+                    && (clash.OwnerPlayerId != pid || forceChange != true));
+
             if (!blocked && row is not null)
             {
                 if (clash is not null)

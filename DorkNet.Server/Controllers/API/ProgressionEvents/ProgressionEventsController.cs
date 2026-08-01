@@ -226,6 +226,11 @@ public class ProgressionEventsController(
             IsValid = true,
             SupportsCurrentPlatform = true,
         };
+        // The sentinel key needs the generated gift id, so this takes two
+        // saves — but they must commit together: a crash between them would
+        // leave a gift with no sentinel, and the next Collect would mint the
+        // reward a second time.
+        await using var tx = await db.Database.BeginTransactionAsync();
         db.GiftPackages.Add(gift);
         await db.SaveChangesAsync();
 
@@ -237,6 +242,7 @@ public class ProgressionEventsController(
             ClearedAt = DateTime.UtcNow,
         });
         await db.SaveChangesAsync();
+        await tx.CommitAsync();
 
         return Ok(global::DorkNet.Server.Controllers.API.Avatar.V2.AvatarGiftsController.ToWire(gift));
     }

@@ -263,8 +263,13 @@ public static class RequestTracingExtensions
     private static string[] ResolveSuccessBodyPaths()
     {
         var configured = Environment.GetEnvironmentVariable("Trace__SuccessBodyPaths");
+        // "/thread" is deliberately absent from the defaults: successful
+        // thread payloads carry private chat messages, which RedactSecrets
+        // does not touch, and they would land in application logs and
+        // PlayerLogEntry rows. Opt in explicitly via Trace__SuccessBodyPaths
+        // for a short-lived diagnosis instead.
         if (configured is null)
-            return ["/player", "/thread", "/clone", "/rooms/", "/matchmake/"];
+            return ["/player", "/clone", "/rooms/", "/matchmake/"];
 
         return configured
             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)

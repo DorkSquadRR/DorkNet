@@ -906,10 +906,24 @@ public static class DatabaseBootstrap
             @"ALTER TABLE ""Clubs"" ADD COLUMN ""ClubChatEnabled"" INTEGER NOT NULL DEFAULT 1;",
             @"ALTER TABLE ""ChatMessages"" ADD COLUMN ""ModerationState"" INTEGER NOT NULL DEFAULT 0;",
             @"ALTER TABLE ""TestCases"" ADD COLUMN ""CommentsJson"" TEXT NOT NULL DEFAULT '[]';",
+            // Repair rows created while the ClubPermissionsGalleryAndModeration
+            // migration carried defaultValue: "" — the empty string is not
+            // valid JSON and made the comment reader throw. Idempotent: ''
+            // is never a legitimate value for this column.
+            @"UPDATE ""TestCases"" SET ""CommentsJson"" = '[]' WHERE ""CommentsJson"" = '';",
         };
         foreach (var sql in sqlite)
         {
-            try { await db.Database.ExecuteSqlRawAsync(sql); } catch { }
+            // Only the duplicate-column error is expected (the column already
+            // exists via Migrate() or a previous boot). Anything else — locked
+            // database, missing table, malformed schema — must fail startup
+            // here rather than as a 500 on the first endpoint that needs the
+            // column.
+            try { await db.Database.ExecuteSqlRawAsync(sql); }
+            catch (Exception ex) when (
+                ex.Message.Contains("duplicate column name", StringComparison.OrdinalIgnoreCase))
+            {
+            }
         }
 
         var sqliteTables = new[]
@@ -940,9 +954,11 @@ public static class DatabaseBootstrap
             """,
             @"CREATE UNIQUE INDEX IF NOT EXISTS ""IX_ClubAdditionalImages_ClubId_Slot"" ON ""ClubAdditionalImages"" (""ClubId"", ""Slot"");",
         };
+        // CREATE ... IF NOT EXISTS is already idempotent; a failure here is a
+        // real problem and must fail startup.
         foreach (var sql in sqliteTables)
         {
-            try { await db.Database.ExecuteSqlRawAsync(sql); } catch { }
+            await db.Database.ExecuteSqlRawAsync(sql);
         }
     }
 

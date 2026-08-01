@@ -654,13 +654,28 @@ public class StorefrontsBuyController(
                 $"buyPurchaseReminder:{item.Slug}");
         var giftId = await GrantWithGiftBoxAsync(pid, item, currencyType);
 
-        db.ObjectiveProgress.Add(new ObjectiveProgressEntity
+        // Upsert: (PlayerId, Key) is unique and the same reminder can be
+        // bought again — a blind Add threw "UNIQUE constraint failed" and
+        // turned the second purchase into a 500 AFTER the currency had
+        // already been taken and the gift saved.
+        var progressKey = $"purchaseReminder:{req.PurchaseReminderId}";
+        var progress = await db.ObjectiveProgress
+            .FirstOrDefaultAsync(o => o.PlayerId == pid && o.Key == progressKey);
+        if (progress is null)
         {
-            PlayerId = pid,
-            Key = $"purchaseReminder:{req.PurchaseReminderId}",
-            IsCompleted = true,
-            ClearedAt = DateTime.UtcNow,
-        });
+            db.ObjectiveProgress.Add(new ObjectiveProgressEntity
+            {
+                PlayerId = pid,
+                Key = progressKey,
+                IsCompleted = true,
+                ClearedAt = DateTime.UtcNow,
+            });
+        }
+        else
+        {
+            progress.IsCompleted = true;
+            progress.ClearedAt = DateTime.UtcNow;
+        }
         await db.SaveChangesAsync();
 
         return Ok(PurchaseReminderResponse(newBalance, currencyType, item.Slug, giftId));
