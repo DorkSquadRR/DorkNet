@@ -21,6 +21,9 @@ public class PlayersController(PlayerService playerService, NotificationService 
         return Ok(PlayerService.ToProfile(player));
     }
 
+    // The 2023 client PUTs this right after setting an email; GET-only meant a
+    // 405 on every contact-preferences write.
+    [HttpPut("/api/players/v4/current/contact")]
     [HttpGet("/api/players/v4/current/contact")]
     public async Task<IActionResult> CurrentContact()
     {

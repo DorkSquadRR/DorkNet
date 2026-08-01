@@ -325,6 +325,9 @@ public class AuthController(
         return Ok(results);
     }
 
+    // Sign-out / "forget this account" sends DELETE (LBNJFPOLCDL.txt:4190,
+    // verb 4); GET-only returned 405 and the forget-account promise rejected.
+    [HttpDelete("/cachedlogin/current")]
     [HttpGet("/cachedlogin/current")]
     public async Task<IActionResult> CurrentCachedLogin()
     {

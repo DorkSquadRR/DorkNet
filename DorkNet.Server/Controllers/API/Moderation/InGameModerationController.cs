@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -105,9 +106,23 @@ public class InGameModerationController(
 
     // ── /v1/instantKick — admin one-shot ─────────────────────────────
     /// <summary>
-    /// Admin/dev one-shot kick. The watch posts either
+    /// Admin/dev one-shot kick. The 2020.12 watch posts either
     /// <c>?playerId=N</c> for a single target (PlayerReporting.txt:3417)
-    /// or a list body for bulk kicks (3590). Either form lands here.
+    /// or a list body for bulk kicks (3590).
+    ///
+    /// The 2023-03-21 client posts neither: it serialises a
+    /// <c>RecNet.KickPlayerDTO</c> with <c>JsonUtility.ToJson</c> and sends it
+    /// as a RAW JSON body (RecNet.Runtime/FPIBGPIAOBI.txt:5012 JsonUtility.ToJson,
+    /// :5018 BNDIAONDFFF.FJLLPHFOOJJ raw-body setter, :5034 verb rdx=2).
+    /// KickPlayerDTO's fields are not obfuscated — <c>public long GameSessionId</c>
+    /// and <c>public List&lt;int&gt; PlayerIds</c> — so the body is exactly
+    /// <c>{"GameSessionId":123,"PlayerIds":[456]}</c>. Unity's JsonUtility emits
+    /// field names verbatim.
+    ///
+    /// None of the query/form parameters bound against that body, so the target
+    /// list came back empty and every 2023 instant-kick returned
+    /// "missing_target" and kicked nobody.
+    ///
     /// Gated to <see cref="PlayerEntity.IsAdmin"/> /
     /// <see cref="PlayerEntity.IsDeveloper"/>.
     /// </summary>
@@ -130,6 +145,7 @@ public class InGameModerationController(
             foreach (var part in formIds.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                 if (long.TryParse(part, out var v) && v > 0) ids.Add(v);
         }
+        ids.AddRange(await ReadKickPlayerDtoIdsAsync());
         ids = ids.Distinct().ToList();
         if (ids.Count == 0) return Ok(new { success = false, error = "missing_target" });
 
@@ -141,6 +157,47 @@ public class InGameModerationController(
             await notifications.KickPlayerAsync(target, "Instant kick by moderator.");
         }
         return Ok(new { success = true, error = "" });
+    }
+
+    /// <summary>Read the 2023 client's raw <c>KickPlayerDTO</c> JSON body.
+    /// Returns an empty list for a form post or an unparseable body so the
+    /// older query/form paths are unaffected.</summary>
+    private async Task<List<long>> ReadKickPlayerDtoIdsAsync()
+    {
+        var ids = new List<long>();
+        if (Request.HasFormContentType) return ids;
+
+        try
+        {
+            Request.EnableBuffering();
+            Request.Body.Position = 0;
+            using var doc = await JsonDocument.ParseAsync(Request.Body);
+            Request.Body.Position = 0;
+            if (doc.RootElement.ValueKind != JsonValueKind.Object) return ids;
+
+            foreach (var name in new[] { "PlayerIds", "playerIds" })
+            {
+                if (!doc.RootElement.TryGetProperty(name, out var arr) ||
+                    arr.ValueKind != JsonValueKind.Array) continue;
+                foreach (var el in arr.EnumerateArray())
+                    if (el.ValueKind == JsonValueKind.Number && el.TryGetInt64(out var v) && v > 0)
+                        ids.Add(v);
+                break;
+            }
+
+            foreach (var name in new[] { "PlayerId", "playerId" })
+            {
+                if (doc.RootElement.TryGetProperty(name, out var one) &&
+                    one.ValueKind == JsonValueKind.Number &&
+                    one.TryGetInt64(out var v) && v > 0)
+                {
+                    ids.Add(v);
+                    break;
+                }
+            }
+        }
+        catch (JsonException) { /* not a JSON body */ }
+        return ids;
     }
 
     // ── /v1/deviceId — log mismatched device id ──────────────────────
@@ -192,11 +249,21 @@ public class InGameModerationController(
             "[mod] ban by {Caller}: target={Target} reason={Reason} until={Until} display={Display}",
             caller, target, reason, p.BannedUntil, displayReason);
 
-        // Push a ModerationRoomBan notification so the target watch
-        // shows the ban dialog and disconnects (PlayerReporting.txt:2253).
-        await notifications.NotifyAsync(
+        // Push the ban as a ModerationKick (22) with IsBan set, NOT as
+        // ModerationRoomBan (24): the 2023-03-21 client's moderation manager
+        // registers only 22, "ModerationUnkick" and 23
+        // (RecNet.Runtime/FPIBGPIAOBI.txt:310, :323, :335) — there is no handler
+        // for 24, so that push landed nowhere and the banned player kept playing
+        // until their next login. The 22 handler reads Msg.Reason as a
+        // ModerationBlockDetail, which ModerationKickPayload already produces.
+        await notifications.KickPlayerAsync(
             target,
-            Models.Notification.PushNotificationId.ModerationRoomBan);
+            // `reason` is the numeric report category; DisplayReason is the
+            // moderator's text and is what the ban dialog shows.
+            string.IsNullOrWhiteSpace(displayReason)
+                ? "You have been banned from this room."
+                : displayReason.Trim(),
+            isBan: true);
         return Ok(new { success = true, error = "" });
     }
 

@@ -86,31 +86,41 @@ public class NotificationService(
     ///         concrete example: <c>GiftPackageReceived</c> registers
     ///         <c>"30"</c> and <c>GiftPackageReceivedImmediate</c>
     ///         registers <c>"31"</c>; sending the enum name misses.</item>
-    /// </list></summary>
+    /// </list>
+    ///
+    /// <para><b>The default is numeric, and that matters.</b> Both enum
+    /// overloads of the client's <c>RegisterHandler</c>
+    /// (<c>OMHPBIEHOHN.PNDNMHHDOOJ</c>) call <c>Int32.ToString()</c> on the id
+    /// and register ONLY that numeric string —
+    /// <c>RecNet.Runtime/OMHPBIEHOHN.txt:662</c> and <c>:733</c>. There is no
+    /// enum-name companion key. The dispatcher does a plain case-sensitive
+    /// <c>Dictionary.TryGetValue</c> on the envelope's <c>Id</c> and returns
+    /// silently on a miss (<c>OMHPBIEHOHN.txt:4052-4237</c>), so a wrong key is
+    /// not an error anywhere — the push simply never arrives.</para>
+    ///
+    /// <para>This used to default to <c>id.ToString()</c> (the enum NAME), which
+    /// silently dropped every enum-registered push that wasn't explicitly listed:
+    /// friend-request add/accept/remove and the RelationshipsInvalid refresh,
+    /// forced logout, maintenance broadcasts, live token-balance updates after a
+    /// level-up or purchase, consumable inventory changes, and invention
+    /// moderation state. Only the six ids below are genuinely string-keyed;
+    /// everything else must go out as a number. Verify against the binary before
+    /// adding an entry here — guessing wrong fails silently in both directions.</para>
+    /// </summary>
     private static string WireName(PushNotificationId id) => id switch
     {
-        // Custom short names — registered under a bespoke string,
-        // no integer companion in the dispatch dict.
+        // The ONLY ids registered under a bespoke string. Everything else is
+        // numeric — see the note below for why the default flipped.
+        PushNotificationId.SubscriptionUpdateProfile     => "AccountUpdate",
         PushNotificationId.SubscriptionUpdatePresence    => "PresenceUpdate",
         PushNotificationId.SubscriptionUpdateGameSession => "RoomInstanceUpdate",
-        PushNotificationId.SubscriptionUpdateProfile     => "AccountUpdate",
-        // Int-only registrations — sending the enum name misses.
-        PushNotificationId.MessageReceived               => "2",
-        PushNotificationId.MessageDeleted                => "3",
-        PushNotificationId.ModerationKick                => "22",
-        PushNotificationId.ModerationKickAttemptFailed   => "23",
-        PushNotificationId.ModerationRoomBan             => "24",
-        PushNotificationId.GiftPackageReceived           => "30",
-        PushNotificationId.GiftPackageReceivedImmediate  => "31",
-        PushNotificationId.PlayerEventCreated            => "80",
-        PushNotificationId.PlayerEventUpdated            => "81",
-        PushNotificationId.PlayerEventDeleted            => "82",
-        PushNotificationId.PlayerEventResponseChanged    => "83",
-        PushNotificationId.PlayerEventResponseDeleted    => "84",
-        PushNotificationId.PlayerEventStateChanged       => "85",
-        // Everything else: enum.ToString() matches because the watch's
-        // enum-overload RegisterHandler registers both forms.
-        _                                                => id.ToString(),
+        PushNotificationId.SubscriptionUpdateRoom        => "RoomUpdate",
+        PushNotificationId.ChatMessageReceived           => "ChatMessageReceived",
+        PushNotificationId.CommunityBoardUpdate          => "CommunityBoardUpdate",
+
+        // Numeric, because the client registered these through the enum
+        // overload. This is the default for a reason — see below.
+        _                                                => ((int)id).ToString(),
     };
 
     private static string Serialize(PushNotificationId id, object? msg) =>
