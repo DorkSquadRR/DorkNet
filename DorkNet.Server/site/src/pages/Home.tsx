@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { get } from '../lib/api';
 import type { SitePhoto, SiteStats } from '../lib/types';
 import { PhotoCard } from '../components/PhotoCard';

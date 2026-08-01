@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import type { SitePhoto } from '../lib/types';
 import { PlayerAvatar } from './PlayerAvatar';
 import { num, relativeTime } from '../lib/format';

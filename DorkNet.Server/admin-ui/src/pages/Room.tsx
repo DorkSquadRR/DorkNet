@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams } from 'react-router';
 import { api } from '../lib/api';
 import type { Player, RoomDetail, RoomInstance, RoomRoleGrant } from '../lib/types';
 import { profileImageUrl } from '../lib/types';

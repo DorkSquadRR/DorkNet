@@ -1,4 +1,4 @@
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 
 // Shared horizontal tab strip — the same underlined-button style the
 // per-player modal and the old Bans page already used inline, pulled
