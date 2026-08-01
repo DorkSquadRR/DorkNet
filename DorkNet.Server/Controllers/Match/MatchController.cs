@@ -323,6 +323,10 @@ public class MatchController(
     /// PrivateInstance row. The watch only needs a RecNet result
     /// wrapper, but the server persists the privacy state so later
     /// invite joins are enforced by <see cref="PrivateInstanceService"/>.</summary>
+    // The 2023-03-21 client sends PUT (verb constant 3 at
+    // RecNet/Matchmaking.txt:15483 and :15774) with an empty body. POST-only
+    // returned 405, so a host could never close a public instance to private.
+    [HttpPut("/roominstance/{instanceId:long}/markprivate")]
     [HttpPost("/roominstance/{instanceId:long}/markprivate")]
     public async Task<IActionResult> MarkPrivate(long instanceId)
     {
@@ -357,14 +361,77 @@ public class MatchController(
         return Ok(new { Success = true, Error = string.Empty });
     }
 
-    /// <summary>GET/POST <c>/roominstance/{id}/roomcode</c> — raw
-    /// JSON string room code shown by the watch. Codes are stable for
-    /// an instance id and do not expose the numeric id directly.</summary>
+    /// <summary>GET/POST/PUT <c>/roominstance/{id}/roomcode</c> — the room code
+    /// shown by the watch, as a raw JSON string.
+    ///
+    /// GET returns the instance's code. The 2023-03-21 client also PUTs here to
+    /// SET a custom code, sending form fields <c>roomCode</c> and
+    /// <c>forceChange</c> (verb 3 at RecNet/Matchmaking.txt:16234). PUT was not
+    /// registered, so custom room codes 405'd; and because the handler always
+    /// regenerated the deterministic code, a submitted one would have been
+    /// discarded anyway. A submitted code is now validated, claimed and
+    /// persisted, and the accepted code is echoed back.
+    ///
+    /// <c>forceChange</c> lets the host take a code already claimed by one of
+    /// their own instances; it never steals another player's code.</summary>
     [HttpGet("/roominstance/{instanceId:long}/roomcode")]
     [HttpPost("/roominstance/{instanceId:long}/roomcode")]
-    public IActionResult RoomCode(long instanceId)
+    [HttpPut("/roominstance/{instanceId:long}/roomcode")]
+    public async Task<IActionResult> RoomCode(
+        long instanceId,
+        [FromForm(Name = "roomCode")] string? roomCode,
+        [FromForm(Name = "forceChange")] bool? forceChange)
     {
-        var code = RoomCodeService.Generate(instanceId);
+        // Same normalisation the join path applies (GoToController.GoToCode →
+        // RoomCodeService.Normalize), so a code typed with dashes/lowercase on
+        // the watch still matches what we persist.
+        var normalized = RoomCodeService.Normalize(
+            roomCode ?? Request.Query["roomCode"].FirstOrDefault());
+
+        if (normalized.Length > 0)
+        {
+            var pid = this.RequireCurrentPlayerId();
+            var clash = await db.PrivateInstances
+                .Where(p => p.RoomCode == normalized && p.Id != instanceId)
+                .Select(p => new { p.Id, p.OwnerPlayerId })
+                .FirstOrDefaultAsync();
+
+            // forceChange only lets a host reclaim a code from one of their OWN
+            // instances; another player's code is never stolen. On refusal the
+            // client just re-reads whatever code we echo back, so we fall
+            // through to the read path instead of erroring.
+            var blocked = clash is not null
+                && (clash.OwnerPlayerId != pid || forceChange != true);
+
+            var row = await db.PrivateInstances.FirstOrDefaultAsync(p => p.Id == instanceId);
+            if (!blocked && row is not null)
+            {
+                if (clash is not null)
+                {
+                    // Release the caller's older claim first, as its own
+                    // statement, so the two rows never hold the code at once.
+                    await db.PrivateInstances
+                        .Where(p => p.Id == clash.Id)
+                        .ExecuteUpdateAsync(s => s.SetProperty(p => p.RoomCode, string.Empty));
+                }
+                row.RoomCode = normalized;
+                await db.SaveChangesAsync();
+                logger.LogInformation(
+                    "[roomcode] player={Player} instance={Instance} code={Code} force={Force}",
+                    pid, instanceId, normalized, forceChange == true);
+                return Content(JsonSerializer.Serialize(normalized), "application/json");
+            }
+
+            logger.LogWarning(
+                "[roomcode] player={Player} instance={Instance} refused code={Code} taken={Taken} known={Known}",
+                pid, instanceId, normalized, clash is not null, row is not null);
+        }
+
+        var stored = await db.PrivateInstances
+            .Where(p => p.Id == instanceId)
+            .Select(p => p.RoomCode)
+            .FirstOrDefaultAsync();
+        var code = string.IsNullOrEmpty(stored) ? RoomCodeService.Generate(instanceId) : stored;
         return Content(JsonSerializer.Serialize(code), "application/json");
     }
 

@@ -186,18 +186,40 @@ public class ClubService(DorkNetDbContext db)
     }
 
     /// <summary>
+    /// Per-player settings key holding the explicitly chosen home club.
+    /// <see cref="PlayerSettingEntity"/> is the server's general-purpose
+    /// per-player key/value bag (the same store <c>MatchPlayerController</c>
+    /// and <c>RoomsController</c> use for stateful scalars), so the 2023
+    /// client's PUT/DELETE <c>club/home/me</c> pair persists here rather
+    /// than needing a new column on <see cref="PlayerEntity"/>.
+    /// </summary>
+    public const string HomeClubSettingKey = "club.home";
+
+    /// <summary>
     /// Composite home-tab payload for <c>GET /club/home/me</c>. The
     /// watch's deserialiser for this endpoint expects a single
     /// <c>RecNet.Club</c> object (<c>typeof(System.Action`1&lt;PLILLKHMNDA&gt;)</c>
     /// per ISIL) — typically the player's "home club" (set via
-    /// <c>SetMyHomeClub</c>) rendered as the headline card. We pick the
-    /// first club the player is a member of, ordered by membership
-    /// recency. Returns null when the player has no club memberships
-    /// — the controller turns that into <see cref="Microsoft.AspNetCore.Mvc.NoContentResult"/>
-    /// so the watch knows to render the "join a club" empty state.
+    /// <c>SetMyHomeClub</c>) rendered as the headline card. An explicit
+    /// pick made through <see cref="SetHomeClubAsync"/> always wins; when
+    /// nothing is stored (or the stored club has since been disbanded) we
+    /// fall back to the most recently joined club so the tab is never
+    /// blank for an existing member. Returns null when the player has no
+    /// club memberships at all — the controller turns that into the
+    /// ClubId=0 sentinel the watch renders as "no home club".
     /// </summary>
     public async Task<ClubEntity?> HomeClubAsync(long playerId)
     {
+        var stored = await db.PlayerSettings.AsNoTracking()
+            .Where(s => s.PlayerId == playerId && s.Key == HomeClubSettingKey)
+            .Select(s => s.Value)
+            .FirstOrDefaultAsync();
+        if (long.TryParse(stored, out var storedId) && storedId > 0)
+        {
+            var chosen = await db.Clubs.FirstOrDefaultAsync(c => c.Id == storedId && c.State == 0);
+            if (chosen is not null) return chosen;
+        }
+
         // Most-recent-joined club wins. Owners are members too (the
         // /create flow inserts an owner-permissions=127 membership
         // row), so a brand-new club creator sees their fresh club here.
@@ -207,6 +229,112 @@ public class ClubService(DorkNetDbContext db)
                           orderby m.JoinedAt descending
                           select c).FirstOrDefaultAsync();
         return pick;
+    }
+
+    /// <summary>Persist the player's explicit home-club pick. Returns false
+    /// when the club id doesn't resolve to a live club so the caller can 404
+    /// instead of storing a dangling id.</summary>
+    public async Task<bool> SetHomeClubAsync(long playerId, long clubId)
+    {
+        if (!await db.Clubs.AnyAsync(c => c.Id == clubId && c.State == 0)) return false;
+        var row = await db.PlayerSettings
+            .FirstOrDefaultAsync(s => s.PlayerId == playerId && s.Key == HomeClubSettingKey);
+        if (row is null)
+        {
+            db.PlayerSettings.Add(new PlayerSettingEntity
+            {
+                PlayerId = playerId,
+                Key = HomeClubSettingKey,
+                Value = clubId.ToString(),
+            });
+        }
+        else
+        {
+            row.Value = clubId.ToString();
+        }
+        await db.SaveChangesAsync();
+        return true;
+    }
+
+    /// <summary>Drop the player's explicit home-club pick. Idempotent —
+    /// missing row is a no-op, matching the client's fire-and-forget
+    /// "Remove Home Clubhouse Room" call.</summary>
+    public async Task ClearHomeClubAsync(long playerId)
+    {
+        var row = await db.PlayerSettings
+            .FirstOrDefaultAsync(s => s.PlayerId == playerId && s.Key == HomeClubSettingKey);
+        if (row is null) return;
+        db.PlayerSettings.Remove(row);
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Disband a club — the client's "Delete Club" action. Owner-only
+    /// (unlike <see cref="ModifyAsync"/>, which co-owners and moderators
+    /// can drive), and a soft delete: State is stamped with the client's
+    /// <c>IACDINKNHKB.MarkedForDelete</c> = 1000 so every read path here
+    /// (all of which filter <c>State == 0</c>) stops surfacing it while
+    /// announcements / memberships stay intact for moderation review.
+    /// Returns null when the club doesn't exist; throws
+    /// <see cref="UnauthorizedAccessException"/> when the caller isn't the
+    /// creator.
+    /// </summary>
+    public async Task<ClubEntity?> DisbandAsync(long clubId, long callerId)
+    {
+        var club = await db.Clubs.FirstOrDefaultAsync(c => c.Id == clubId && c.State == 0);
+        if (club is null) return null;
+        if (club.CreatorPlayerId != callerId) throw new UnauthorizedAccessException();
+        club.State = 1000; // IACDINKNHKB.MarkedForDelete
+        club.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return club;
+    }
+
+    /// <summary>Every announcement across the clubs the player is a real
+    /// member of (pending invites/requests = 128 and ban markers = 256 are
+    /// excluded — they must not leak a club's board). Backs the flat
+    /// <c>GET /announcements/mine</c> list, which is a different wire shape
+    /// from the per-club unread rollup.</summary>
+    public async Task<List<ClubAnnouncementEntity>> AnnouncementsForMemberClubsAsync(
+        long playerId, int take = 100)
+    {
+        var clubIds = await db.ClubMemberships
+            .Where(m => m.PlayerId == playerId && (m.Permissions & 384) == 0)
+            .Select(m => m.ClubId)
+            .ToListAsync();
+        return await AnnouncementsAcrossClubsAsync(clubIds, take);
+    }
+
+    /// <summary>Every announcement across the clubs the player subscribes
+    /// to. Backs the flat <c>GET /announcements/subscription/mine</c>
+    /// list.</summary>
+    public async Task<List<ClubAnnouncementEntity>> AnnouncementsForSubscribedClubsAsync(
+        long playerId, int take = 100)
+    {
+        var clubIds = await db.ClubSubscriptions
+            .Where(s => s.PlayerId == playerId)
+            .Select(s => s.ClubId)
+            .ToListAsync();
+        return await AnnouncementsAcrossClubsAsync(clubIds, take);
+    }
+
+    private async Task<List<ClubAnnouncementEntity>> AnnouncementsAcrossClubsAsync(
+        List<long> clubIds, int take)
+    {
+        if (clubIds.Count == 0) return new List<ClubAnnouncementEntity>();
+        // Disbanded clubs keep their rows but must not surface on the
+        // aggregated feed, so the club set is re-filtered on State.
+        var live = await db.Clubs
+            .Where(c => clubIds.Contains(c.Id) && c.State == 0)
+            .Select(c => c.Id)
+            .ToListAsync();
+        if (live.Count == 0) return new List<ClubAnnouncementEntity>();
+        return await db.ClubAnnouncements
+            .Where(a => live.Contains(a.ClubId))
+            .OrderByDescending(a => a.CreatedAt)
+            .ThenByDescending(a => a.Id)
+            .Take(Math.Clamp(take, 1, 500))
+            .ToListAsync();
     }
 
     /// <summary>
@@ -521,6 +649,50 @@ public class ClubService(DorkNetDbContext db)
     /// 404 cleanly.</summary>
     public Task<ClubAnnouncementEntity?> AnnouncementAsync(long clubId, long announcementId) =>
         db.ClubAnnouncements.FirstOrDefaultAsync(a => a.Id == announcementId && a.ClubId == clubId);
+
+    /// <summary>Create a club announcement. Returns the new row's id, or null
+    /// when the caller may not manage the club.</summary>
+    public async Task<long?> CreateAnnouncementAsync(
+        long clubId, long callerId, string title, string body, string imageName)
+    {
+        if (!await CanManageAsync(clubId, callerId)) return null;
+        var row = new ClubAnnouncementEntity
+        {
+            ClubId = clubId,
+            AuthorPlayerId = callerId,
+            Title = Truncate(title, 200),
+            Body = Truncate(body, 4000),
+            ImageName = Truncate(imageName, 256),
+        };
+        db.ClubAnnouncements.Add(row);
+        await db.SaveChangesAsync();
+        return row.Id;
+    }
+
+    /// <summary>Edit an existing announcement in place. Null arguments leave
+    /// the corresponding field untouched. Returns false when the caller may
+    /// not manage the club or the row is unknown.</summary>
+    public async Task<bool> UpdateAnnouncementAsync(
+        long clubId, long announcementId, long callerId,
+        string? title, string? body, string? imageName)
+    {
+        if (!await CanManageAsync(clubId, callerId)) return false;
+        var row = await db.ClubAnnouncements
+            .FirstOrDefaultAsync(a => a.Id == announcementId && a.ClubId == clubId);
+        if (row is null) return false;
+        if (title is not null) row.Title = Truncate(title, 200);
+        if (body is not null) row.Body = Truncate(body, 4000);
+        if (imageName is not null) row.ImageName = Truncate(imageName, 256);
+        row.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return true;
+    }
+
+    private static string Truncate(string? value, int max)
+    {
+        value = (value ?? string.Empty).Trim();
+        return value.Length <= max ? value : value[..max];
+    }
 
     /// <summary>Delete an announcement after verifying the caller can
     /// manage the club. Idempotent: missing row → no-op.</summary>

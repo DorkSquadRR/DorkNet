@@ -30,6 +30,12 @@ public class ChatMessageEntity
 
     public DateTime SentAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>Per-message moderation state, set by
+    /// <c>PUT thread/message/{id}/moderate</c> (form field
+    /// <c>moderationState</c>). 0 = normal; a non-zero value means a moderator
+    /// has actioned the message and it should not be re-served verbatim.</summary>
+    public int ModerationState { get; set; } = 0;
+
     /// <summary>Build the canonical DM thread key for two players.
     /// Order-independent so both sides hit the same row.</summary>
     public static string DmKey(long a, long b) =>

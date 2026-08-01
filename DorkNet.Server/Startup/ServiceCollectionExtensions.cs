@@ -210,6 +210,13 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<RoomBlobNormalizerService>();
         services.AddHttpClient();
         services.AddSingleton<HtrAssetMirrorService>();
+        // QA test cases ↔ GitHub issues. Singleton because it holds only
+        // configuration; the reconciler makes its own scope for the DbContext.
+        // Both are registered unconditionally — the service reports
+        // IsConfigured=false without a token and the reconciler then idles,
+        // so a deployment with no GitHub credentials behaves normally.
+        services.AddSingleton<IGitHubIssues, GitHubIssueService>();
+        services.AddHostedService<TestCaseIssueReconciler>();
         // Scoped (per-request) — these services hold DbContext references and
         // must share the request's scope to participate in the request's
         // transaction lifecycle. Pre-PR-3 they were Singleton with in-process

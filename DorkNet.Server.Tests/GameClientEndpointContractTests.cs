@@ -18,7 +18,9 @@ public sealed class GameClientEndpointContractTests :
     [Fact]
     public async Task Game_client_contract_probe_reaches_every_controller_route()
     {
-        var routes = EndpointContractDiscovery.Discover();
+        var routes = EndpointContractDiscovery.Discover()
+            .Where(r => !DestroysTheProbeSession(r))
+            .ToList();
         Assert.NotEmpty(routes);
 
         using var client = _factory.CreateClient(new()
@@ -46,6 +48,26 @@ public sealed class GameClientEndpointContractTests :
             failures.Count == 0,
             $"Endpoint contract failures ({failures.Count}/{routes.Count}):{Environment.NewLine}"
             + string.Join(Environment.NewLine, failures));
+    }
+
+    /// <summary>Routes this probe must not call, because they destroy the very
+    /// session it authenticates with.
+    ///
+    /// The probe walks every route in order using one test player. Account
+    /// deletion is a genuine, correctly-guarded purge — but once it runs, that
+    /// player row is gone, so every later probe fails on a foreign-key
+    /// violation or a 401. Excluding these keeps the failure list meaningful
+    /// instead of one real event cascading into dozens of phantom failures.
+    ///
+    /// This is deliberately narrow: only self-destruct routes belong here, not
+    /// anything merely inconvenient.</summary>
+    private static bool DestroysTheProbeSession(EndpointContract route)
+    {
+        if (!string.Equals(route.Method, "DELETE", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var template = route.Template.Trim('/');
+        return template is "account/me" or "account/v1/me" or "account/v2/me";
     }
 
     private static async Task<EndpointProbeResult> ProbeAsync(

@@ -127,7 +127,13 @@ public static class RequestTracingExtensions
                 var safeResponse = RedactSecrets(responseBody) ?? "";
                 var trimmedRequest = safeRequest is null ? null
                     : (safeRequest.Length > 200 ? safeRequest[..200] + "..." : safeRequest);
-                var trimmedResponse = safeResponse.Length > 300 ? safeResponse[..300] + "..." : safeResponse;
+                // 300 chars is plenty to identify an error, but a room-details
+                // payload is a few KB and the whole point of capturing it is to
+                // see which key is missing — a truncated one answers nothing.
+                var responseCap = IsSuccessBodyPath(path) ? 8000 : 300;
+                var trimmedResponse = safeResponse.Length > responseCap
+                    ? safeResponse[..responseCap] + "..."
+                    : safeResponse;
                 var authPresence = DescribeAuthPresence(ctx.Request);
                 var level = thrown is not null || status >= 500 ? LogLevel.Error
                           : status >= 400 ? LogLevel.Warning
@@ -241,12 +247,38 @@ public static class RequestTracingExtensions
             || ext.Equals(".log", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>Paths whose SUCCESS bodies are logged as well as their failures.
+    ///
+    /// Worth stating why this list has to exist: when the client rejects a
+    /// response it answers 200 and the client throws while reading it, so the
+    /// server log shows a clean 200 and the client shows a bare "Failed to …"
+    /// with no URL. Neither side records the payload, and without it every
+    /// diagnosis is guesswork about which key the strict reader tripped on.
+    ///
+    /// Override with <c>Trace__SuccessBodyPaths</c> (comma-separated substrings,
+    /// empty to disable). Bodies are still redacted and capped at 300 chars by
+    /// the caller.</summary>
+    private static readonly string[] SuccessBodyPaths = ResolveSuccessBodyPaths();
+
+    private static string[] ResolveSuccessBodyPaths()
+    {
+        var configured = Environment.GetEnvironmentVariable("Trace__SuccessBodyPaths");
+        if (configured is null)
+            return ["/player", "/thread", "/clone", "/rooms/", "/matchmake/"];
+
+        return configured
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .ToArray();
+    }
+
+    private static bool IsSuccessBodyPath(string path) =>
+        SuccessBodyPaths.Any(p => path.Contains(p, StringComparison.OrdinalIgnoreCase));
+
     private static bool ShouldReadResponseBody(string? contentType, int status, string path)
     {
-        // TEMP diagnostic: always read the /player roster body (even 200s) so
-        // [presence-debug] can dump the exact online payload the watch renders.
-        var isPresence = path.Equals("/player", StringComparison.OrdinalIgnoreCase);
-        if (status < 400 && !isPresence) return false;
+        // Failures are always read; successes only for the paths above, because
+        // a rejected-but-200 response is invisible otherwise.
+        if (status < 400 && !IsSuccessBodyPath(path)) return false;
         if (string.IsNullOrWhiteSpace(contentType)) return true;
         return contentType.StartsWith("application/json", StringComparison.OrdinalIgnoreCase)
             || contentType.StartsWith("text/", StringComparison.OrdinalIgnoreCase);

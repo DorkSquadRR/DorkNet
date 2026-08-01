@@ -53,14 +53,48 @@ public class RoomsController(
         [FromQuery] string? tags)
         => Ok((await rooms.HotAsync(tags)).Select(RoomService.ToWireRoom).ToList());
 
+    /// <summary>GET <c>rooms/hot</c> — the room-server "hot rooms" list.
+    /// Response is the PAGED wrapper: the 2023 client's issuing method
+    /// <c>NLDBPDCNNCF.FANOAMOPHBE</c> returns <c>Task&lt;FFCPFGBNLHN&gt;</c>
+    /// (NLDBPDCNNCF.txt:2865 + literal at :2983) and FFCPFGBNLHN's reader
+    /// requires <c>Results</c> + <c>TotalResults</c>
+    /// (PJPBJKLDMNA.txt ISIL 040/059).</summary>
+    // The roomserver/ twin is mandatory: FANOAMOPHBE lives on the same
+    // NLDBPDCNNCF client whose requests all arrive with the roomserver/
+    // prefix in this deployment (docs/recroom-2023-room-save.md:83-93), so
+    // the bare-only registration 404'd for the 2023 client.
     [HttpGet("rooms/hot")]
+    [HttpGet("roomserver/rooms/hot")]
     public async Task<IActionResult> HotRoomServer(
-        [FromQuery] string? tag,
-        [FromQuery] string? tags,
         [FromQuery] int skip = 0,
         [FromQuery] int take = 100)
     {
-        var all = await rooms.HotAsync(tag ?? tags, take: 200);
+        // The tag filter is a REPEATED query field (`tag=a&tag=b`) — the
+        // client's IFLHPHIPFNC closure adds one entry per selected chip —
+        // so a `[FromQuery] string? tag` binding silently dropped every tag
+        // past the first. Read the raw collection and union the per-tag hits.
+        var tagFilters = Request.Query["tag"]
+            .Concat(Request.Query["tags"])
+            .SelectMany(v => (v ?? string.Empty).Split(',',
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        List<RoomEntity> all;
+        if (tagFilters.Count == 0)
+        {
+            all = await rooms.HotAsync(null, take: 200);
+        }
+        else
+        {
+            var merged = new List<RoomEntity>();
+            var seen = new HashSet<long>();
+            foreach (var filter in tagFilters)
+                foreach (var room in await rooms.HotAsync(filter, take: 200))
+                    if (seen.Add(room.Id)) merged.Add(room);
+            all = merged.OrderByDescending(r => r.HotScore).ToList();
+        }
+
         var page = all
             .Skip(Math.Max(skip, 0))
             .Take(Math.Clamp(take, 1, 100))
@@ -151,16 +185,37 @@ public class RoomsController(
         return Ok(await BuildRoomServerListAsync(rows));
     }
 
+    /// <summary>GET <c>rooms/magic_door</c> — the Magic Door destination.
+    /// The response is a WRAPPER, not the bare room: the client's
+    /// <c>MOOCMPOIIGM</c> returns <c>Task&lt;GAPJAGDNFEO&gt;</c>
+    /// (NLDBPDCNNCF.txt:4503) and that reader requires the keys
+    /// <c>RefreshesAt</c>, <c>RefreshIntervalMinutes</c> and <c>Room</c>
+    /// (MIFGPMGEMEK.txt ISIL 046/073/097). Returning the room object
+    /// directly left <c>Room</c> null and MagicDoorManager with no
+    /// destination. The <c>partySize</c> query param is accepted and
+    /// ignored — we have no party-size-aware curation.</summary>
     [HttpGet("rooms/magic_door")]
     [HttpGet("roomserver/rooms/magic_door")]
-    public async Task<IActionResult> MagicDoor()
+    public async Task<IActionResult> MagicDoor([FromQuery] int? partySize)
     {
         var room = await PublicRoomQuery()
             .OrderByDescending(r => r.HotScore)
             .ThenBy(r => r.Id)
             .FirstOrDefaultAsync();
         if (room is null) return NotFound();
-        return Ok((await BuildRoomServerListAsync(new[] { room })).First());
+
+        // The door re-rolls its destination on the client every
+        // RefreshIntervalMinutes; RefreshesAt is when the current pick
+        // expires. Keep the two consistent so the client's local timer
+        // and its next fetch line up.
+        const int refreshIntervalMinutes = 10;
+        return Ok(new
+        {
+            Room = (await BuildRoomServerListAsync(new[] { room })).First(),
+            RefreshesAt = DateTime.UtcNow.AddMinutes(refreshIntervalMinutes)
+                .ToString("yyyy-MM-ddTHH:mm:ssZ"),
+            RefreshIntervalMinutes = refreshIntervalMinutes,
+        });
     }
 
     /// <summary>
@@ -263,8 +318,14 @@ public class RoomsController(
     /// Unlike the <c>api/rooms/v*</c> variants (flat <c>List&lt;Room&gt;</c>),
     /// this one's client contract is a PAGED wrapper object
     /// <c>{ Results, TotalResults }</c> (IDLBPALJJDJ : PagedResult&lt;Room&gt;);
-    /// returning a bare array crashes the watch's key-based reader.</summary>
+    /// returning a bare array crashes the watch's key-based reader.
+    /// Confirmed for 2023 too: <c>NLDBPDCNNCF.MOBJJDBNBMF</c> returns
+    /// <c>Task&lt;FFCPFGBNLHN&gt;</c> (NLDBPDCNNCF.txt:2733) whose reader
+    /// requires Results/TotalResults (PJPBJKLDMNA.txt ISIL 040/059).</summary>
+    // roomserver/ twin: the 2023 caller is on NLDBPDCNNCF, whose requests all
+    // carry the roomserver/ prefix (docs/recroom-2023-room-save.md:83-93).
     [HttpGet("rooms/search")]
+    [HttpGet("roomserver/rooms/search")]
     public async Task<IActionResult> SearchRoomServer(
         [FromQuery(Name = "query")] string? query,
         [FromQuery(Name = "value")] string? value,
@@ -304,7 +365,11 @@ public class RoomsController(
     /// </summary>
     [HttpGet("api/rooms/v2/baserooms")]
     [HttpGet("api/rooms/v3/baserooms")]
+    // The 2023 client issues this from NLDBPDCNNCF, whose requests all carry
+    // the roomserver/ prefix in this deployment — without the twin the base/AG
+    // room list 404s and the room browser's base section is empty.
     [HttpGet("rooms/base")]
+    [HttpGet("roomserver/rooms/base")]
     public async Task<IActionResult> BaseRooms()
     {
         var names = await serverSettings.GetBaseRoomNamesAsync();
@@ -408,6 +473,46 @@ public class RoomsController(
             roles: roles,
             unityAssetTarget: unityAssetTarget,
             unityAssetVersion: unityAssetVersion));
+    }
+
+    /// <summary>DELETE <c>rooms/{roomId}</c> — the owner's "delete room"
+    /// button. Client method <c>NLDBPDCNNCF.FPDBNHOHIAO</c> formats
+    /// <c>"rooms/{0}"</c> and moves verb ordinal 4 (= DELETE) into r8
+    /// (NLDBPDCNNCF.txt ISIL 021/030 around :4897); its return type is the
+    /// body-less promise <c>LDGADANDBIO</c> (CAOCJPMJMDB.txt:339), so the
+    /// response payload is never parsed.
+    ///
+    /// <para>The only DELETE for <c>rooms/{id}</c> in the codebase lived on
+    /// AdminController, which is rooted at <c>api/admin/v1</c> — the game
+    /// path therefore 405'd on the bare route and 404'd on the roomserver/
+    /// one, so owners could not delete their rooms at all.</para>
+    ///
+    /// <para>Soft-archive (<c>State = 1</c>) exactly like
+    /// <c>AdminController.DeleteRoom</c>: a hard delete would orphan the
+    /// room's saves, visits, bookmarks and role rows. Archived rooms drop
+    /// out of every browse/search query (all of which filter
+    /// <c>State == 0</c>).</para></summary>
+    [HttpDelete("rooms/{roomId:long}")]
+    [HttpDelete("roomserver/rooms/{roomId:long}")]
+    [Authorize]
+    public async Task<IActionResult> DeleteRoom(long roomId)
+    {
+        var me = this.RequireCurrentPlayerId();
+        var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
+        if (room is null) return NotFound();
+        if (room.CreatorPlayerId != me)
+        {
+            // Co-owners (Role 0) can delete too — same gate the rename path uses.
+            var coOwner = await db.RoomRoles.AnyAsync(rr =>
+                rr.RoomId == roomId && rr.PlayerId == me && rr.Accepted && rr.Role == 0);
+            if (!coOwner) return Forbid();
+        }
+
+        room.State = 1; // Archived
+        room.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        logger.LogInformation("[room-delete] room={Room} by={By}", roomId, me);
+        return Ok(new { Result = 0, room.Id, room.State });
     }
 
     // ── RoomDetails (the boot-critical one) ─────────────────────────────
@@ -1690,7 +1795,6 @@ public class RoomsController(
                 {
                     Type = RoomTagTypeForWire(t),
                     Tag = t,
-                    IsPrimaryGenre = false,
                 })
                 .ToArray();
 
@@ -1850,6 +1954,20 @@ public class RoomsController(
         var updatedAt = (room.UpdatedAt == default ? DateTime.UtcNow : room.UpdatedAt)
             .ToString("yyyy-MM-ddTHH:mm:ssZ");
 
+        // The blob the room actually loads from: sub-room 0's, override and
+        // all. `dataBlobName` above is the per-ROOM name, which is the wrong
+        // answer whenever a caller passes an override — a dorm's data is
+        // per-PLAYER (dorm_p{id}_v*.dat) and arrives that way.
+        var primarySubRoom = sceneRows is { Count: > 0 }
+            ? sceneRows.FirstOrDefault(s => s.OrderIndex == 0) ?? sceneRows[0]
+            : null;
+        var primarySubRoomDataBlob =
+            !string.IsNullOrWhiteSpace(overrideDataBlobName) && (sceneRows?.Count ?? 0) <= 1
+                ? overrideDataBlobName!
+                : primarySubRoom is not null
+                    ? SceneOrSyntheticDataBlobName(room, primarySubRoom.DataBlobName, dataBlobName)
+                    : dataBlobName;
+
         object[] subRooms = sceneRows is { Count: > 0 }
             ? sceneRows.Select(s =>
             {
@@ -1887,7 +2005,6 @@ public class RoomsController(
                     RoomId = room.Id,
                     Name = s.Name,
                     UnityAssetId = s.StudioUnityAssetId,
-                    SubRoomUnityAssetId = s.StudioUnityAssetId,
                     UnityAsset = unityAsset?.Filename ?? string.Empty,
                     UnityAssetHash = string.Empty,
                     DataBlob = dataBlob,
@@ -1898,36 +2015,6 @@ public class RoomsController(
                     MaxPlayers = s.MaxPlayers,
                     Accessibility = room.Accessibility,
                     UnitySceneId = s.RoomSceneLocationId,
-                    CurrentSave = new
-                    {
-                        SubRoomDataSaveId = s.StudioSubRoomDataSaveId ?? 0L,
-                        SubRoomId = (long)s.OrderIndex,
-                        UnityAssetId = s.StudioUnityAssetId,
-                        SubRoomUnityAssetId = s.StudioUnityAssetId,
-                        CreatedByAccountId = room.CreatorPlayerId,
-                        ReferencedUnityAssetIds = Array.Empty<string>(),
-                        DataBlob = dataBlob,
-                        DataBlobHash = (string?)null,
-                        PersistenceVersion = saveVersion,
-                        OMVersion = 0,
-                        SavedByAccountId = room.CreatorPlayerId,
-                        SavedOnPlatform = 0,
-                        SavedOnDeviceClass = 2,
-                        Description = string.Empty,
-                        ModerationState = 0,
-                        CreatedAt = (s.DataModifiedAt == default ? DateTime.UtcNow : s.DataModifiedAt)
-                            .ToString("yyyy-MM-ddTHH:mm:ssZ"),
-                        UgcSubVersion = saveVersion,
-                        UnityAssetHash = string.Empty,
-                        UnityAsset = unityAssetParent,
-                        UnityAssetFilename = unityAsset?.Filename ?? string.Empty,
-                        BakedUnityAssets = bakedAssets,
-                        UnitySubAssets = Array.Empty<object>(),
-                    },
-                    LastModeratedSaveModerationState = 0,
-                    DefaultMatchmakingPolicy = 0,
-                    ShouldAutoStageSaves = true,
-                    StagedSubRoomDataSaveId = (long?)null,
                 };
             }).ToArray()
             : new object[]
@@ -1944,25 +2031,18 @@ public class RoomsController(
                     RoomId = room.Id,
                     Name = "Home",
                     UnityAssetId = string.Empty,
-                    SubRoomUnityAssetId = string.Empty,
                     UnityAsset = string.Empty,
                     UnityAssetHash = string.Empty,
-                    DataBlob = dataBlobName,
+                    // Same rule as the populated branch: honour the override,
+                    // so a dorm with no scene rows still points at that
+                    // player's own save rather than a per-room name.
+                    DataBlob = primarySubRoomDataBlob,
                     DataBlobHash = (string?)null,
                     DataSavedAt = updatedAt,
                     IsSandbox = false,
                     MaxPlayers = 8,
                     Accessibility = room.Accessibility,
                     UnitySceneId = room.LocationReplicationId,
-                    CurrentSave = new
-                    {
-                        SubRoomDataSaveId = 0L,
-                        SubRoomId = 0L,
-                        UnityAssetId = string.Empty,
-                        SubRoomUnityAssetId = string.Empty,
-                        ReferencedUnityAssetIds = Array.Empty<string>(),
-                        DataBlob = dataBlobName,
-                    },
                 },
             };
 
@@ -1980,7 +2060,6 @@ public class RoomsController(
                 {
                     Type = RoomTagTypeForWire(t),
                     Tag = t,
-                    IsPrimaryGenre = false,
                 })
                 .ToArray();
 
@@ -2004,8 +2083,6 @@ public class RoomsController(
             SupportsQuest2 = true,
             SupportsMobile = room.SupportsMobile,
             SupportsJuniors = room.AllowsJuniors,
-            AllowNewUsers = room.AllowNewUsers,
-            AllowsNewUsers = room.AllowNewUsers,
             MinLevel = room.MinLevel,
             CreatedAt = (room.CreatedAt == default ? DateTime.UtcNow : room.CreatedAt)
                 .ToString("yyyy-MM-ddTHH:mm:ssZ"),
@@ -2017,39 +2094,13 @@ public class RoomsController(
                 VisitCount = room.VisitCount,
             },
             IsDorm = room.IsDormRoom,
-            IsStudioRoom = room.IsStudioRoom,
-            IsRoomLinkedToRecRoomStudio = room.IsRoomLinkedToRecRoomStudio,
-            StudioSessionId = room.StudioSessionId,
             CloningAllowed = room.CloningAllowed,
             DisableMicAutoMute = room.DisableMicAutoMute,
             DisableRoomComments = false,
             EncryptVoiceChat = false,
             LoadScreenLocked = false,
-            // Studio/UGC version family. The 2023 client reads UgcVersion to
-            // decide the asset-bundle version it requests
-            // (unity_assets/{id}/{target}/{UgcVersion}) and PersistenceVersion
-            // to recognise a baked Studio room at all. Matches the real
-            // RecRocks room.json (UgcVersion=1, PersistenceVersion=41). For a
-            // non-Studio room these stay at the legacy 0 so behaviour is
-            // unchanged.
             PersistenceVersion = room.IsStudioRoom ? StudioPersistenceVersion : 0,
-            UgcVersion = room.IsStudioRoom ? StudioUgcVersion : 0,
-            UgcSubVersion = room.IsStudioRoom ? StudioPersistenceVersion : 0,
-            MinUgcSubVersion = room.IsStudioRoom ? StudioPersistenceVersion : 0,
             IsDeveloperOwned = room.IsStudioRoom || HasRoomTag(room, "developer"),
-            IsJuniorCreated = false,
-            IsRecRoomApproved = false,
-            ExcludeFromLists = false,
-            BoostCount = 0,
-            RestrictedCircuitsAllowListNames = Array.Empty<string>(),
-            PublishStateAvailability = new
-            {
-                CanSaveAsBeta = false,
-                CanSaveAsUpdate = true,
-                AvailableUpdateTokenCount = 3,
-                NextAvailableUpdateDateTimeUtc = (string?)null,
-            },
-            PublishState = 0,
             MaxPlayerCalculationMode = room.MaxPlayerCalculationMode,
             SubRooms = subRooms,
             Roles = wireRoles,
@@ -2057,6 +2108,39 @@ public class RoomsController(
             PromoImages = JsonStringArrayOrEmpty(room.PromoImagesJson),
             PromoExternalContent = JsonArrayOrEmpty(room.PromoExternalContentJson),
             Tags = tags,
+            // The client's room-details reader (GLEGPFFPDBE) registers these
+            // five alongside the rest. A registered slot wants a value, and
+            // leaving one absent is not the same as sending null — it is what
+            // makes the reader throw mid-deserialise on a response the server
+            // already answered 200 to. Kept last so the additions are visible
+            // against the reader's own list; key ORDER does not matter to a
+            // name-keyed reader, presence does.
+            // DataBlob / DataBlobHash are deliberately NOT sent at room level,
+            // even though the reader registers them.
+            //
+            // The room a player actually loads is chosen per INSTANCE: the
+            // matchmake response carries the blob (a dorm's is per-player,
+            // dorm_p{id}_v*.dat), and each sub-room carries its own. Adding a
+            // room-level name on top gave the client a second, room-scoped
+            // answer for the same question, and it loaded that one — a file
+            // that for a dorm was never written — then rejected the room with
+            // "the data in the room you are trying to load is corrupt".
+            //
+            // A registered slot does NOT oblige us to fill it: Newtonsoft
+            // leaves an absent key at its default, which is the state every
+            // room loaded fine in. Sending it is what broke the dorm, so the
+            // absence here is the fix, not an omission to tidy up later.
+            // The room-level cap is the room's own advertised capacity, which is
+            // what RoomEntity.MaxCapacity exists for and what matchmaking hands
+            // to RoomInstance.MaxCapacity. Each sub-room carries its own
+            // MaxPlayers in the SubRooms array — they are separate settings, so
+            // this must not be read off sub-room 0.
+            MaxPlayers = room.MaxCapacity,
+            // ToxMod is Rec Room's hosted voice moderation. There is no such
+            // service here, so it is off — the client only uses this to decide
+            // whether to show the indicator.
+            ToxmodEnabled = false,
+            RankingContext = (object?)null,
         };
     }
 
@@ -2186,6 +2270,109 @@ public class RoomsController(
     public async Task<IActionResult> CreatedByOther(long otherPlayerId)
         => Ok((await rooms.CreatedByAsync(otherPlayerId)).Select(RoomService.ToWireRoom).ToList());
 
+    /// <summary>Per-player showcase curation, stored in the existing generic
+    /// player-settings table as a CSV of room ids. Colon-namespaced to match
+    /// the other server-owned keys (<c>settings:partyinvite</c>).</summary>
+    private const string ShowcaseSettingKey = "rooms:showcase";
+    private const int ShowcaseMaxRooms = 50;
+
+    /// <summary>GET <c>showcase/{accountId}</c> — the profile "Showcase Rooms"
+    /// carousel (<c>RoomListModel.JMGLGEKHHAK.PlayerShowcaseRooms = 7</c>,
+    /// dump.cs:2042498, driven by
+    /// <c>AccountModelController.RoomsShowcaseLinkImpl</c> at dump.cs:2113041).
+    /// Distinct from <c>PlayerCreatedRooms = 5</c>, which is the
+    /// <c>rooms/createdby/{id}</c> list above.
+    ///
+    /// <para><b>Verb.</b> <c>NLDBPDCNNCF.EJPNHLIJNPM</c> formats the literal
+    /// <c>"showcase/{0}"</c> (NLDBPDCNNCF.txt ISIL 021 at :4484) and moves the
+    /// HTTPMethods ordinal <c>0</c> (= GET) into rdx immediately before the
+    /// dispatch call (ISIL 031/032 at :4494-4495). No cmov, so GET is the only
+    /// verb. The path arg is boxed as <c>System.Int32</c> (ISIL 017) — the
+    /// account id.</para>
+    ///
+    /// <para><b>Response shape.</b> The issuing method's return type is the
+    /// contract: <c>Task&lt;List&lt;System.Int64&gt;&gt;</c>
+    /// (NLDBPDCNNCF.txt:4422) — a BARE JSON array of room ids, not Room
+    /// objects and not a <c>{Results,TotalResults}</c> container. The Rooms the
+    /// UI renders are a purely client-side projection: the cache entry
+    /// <c>&lt;GetRoomsShowcase&gt;b__0</c> is typed
+    /// <c>Task&lt;IReadOnlyList&lt;Int64&gt;&gt;</c>
+    /// (IBEOONPEELF_NestedType_HHDHJPIJBJB.txt:14) and the outer
+    /// <c>IBEOONPEELF.EJPNHLIJNPM</c> resolves those ids through the room cache
+    /// to <c>FGLDKEJLAKB&lt;IReadOnlyList&lt;NEMINAEBALC&gt;&gt;</c>
+    /// (IBEOONPEELF.txt:8952) before <c>RoomListModel</c> consumes it
+    /// (RoomListModel.txt ISIL 742 at :5819).</para>
+    ///
+    /// <para><b>Backing data.</b> <c>showcase/{0}</c> is the only showcase
+    /// literal in the binary — the 2023 client can read the list but never
+    /// writes it (curation lived on the website), so the curated order is kept
+    /// in the existing per-player settings store under
+    /// <see cref="ShowcaseSettingKey"/> and is writable through
+    /// <c>PUT /settings/v1/{accountId}</c> with no new schema. Curated ids are
+    /// re-validated against Rooms on every read so a room that has since been
+    /// archived or privatised drops off the profile, and the curated order is
+    /// preserved. A player who never curated one falls back to the rooms they
+    /// actually created, most prominent first — the showcase the carousel is
+    /// there to display.</para>
+    ///
+    /// <para>Unauthenticated on purpose: this is another player's profile
+    /// surface, and the sibling <c>rooms/createdby/{id}</c> is open too. The
+    /// owner viewing their own profile additionally sees their non-public
+    /// picks; everyone else sees public rooms only.</para></summary>
+    [HttpGet("showcase/{accountId:long}")]
+    // roomserver/ twin: EJPNHLIJNPM lives on NLDBPDCNNCF, whose requests all
+    // arrive with the roomserver/ prefix in this deployment
+    // (docs/recroom-2023-room-save.md:83-93) — same reason every other
+    // NLDBPDCNNCF route in this file is registered twice.
+    [HttpGet("roomserver/showcase/{accountId:long}")]
+    public async Task<IActionResult> RoomsShowcase(long accountId)
+    {
+        var viewerIsOwner = CurrentPlayerId == accountId;
+
+        var curatedCsv = await db.PlayerSettings.AsNoTracking()
+            .Where(s => s.PlayerId == accountId && s.Key == ShowcaseSettingKey)
+            .Select(s => s.Value)
+            .FirstOrDefaultAsync();
+
+        var curatedIds = (curatedCsv ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(v => long.TryParse(v, out var id) ? id : 0L)
+            .Where(id => id > 0)
+            .Distinct()
+            .Take(ShowcaseMaxRooms)
+            .ToList();
+
+        if (curatedIds.Count > 0)
+        {
+            var visible = await db.Rooms.AsNoTracking()
+                .Where(r => curatedIds.Contains(r.Id)
+                         && r.State == 0
+                         && !r.IsDormRoom
+                         && !r.HiddenFromBrowse
+                         && (r.Accessibility == 1 || viewerIsOwner))
+                .Select(r => r.Id)
+                .ToListAsync();
+            var visibleSet = visible.ToHashSet();
+            // Curated order is the display order — filter, don't re-sort.
+            var ordered = curatedIds.Where(visibleSet.Contains).ToList();
+            if (ordered.Count > 0) return Ok(ordered);
+        }
+
+        var fallback = await db.Rooms.AsNoTracking()
+            .Where(r => r.CreatorPlayerId == accountId
+                     && r.State == 0
+                     && !r.IsDormRoom
+                     && !r.HiddenFromBrowse
+                     && (r.Accessibility == 1 || viewerIsOwner))
+            .OrderByDescending(r => r.HotScore)
+            .ThenByDescending(r => r.VisitCount)
+            .ThenByDescending(r => r.UpdatedAt)
+            .Select(r => r.Id)
+            .Take(ShowcaseMaxRooms)
+            .ToListAsync();
+        return Ok(fallback);
+    }
+
     [HttpGet("api/rooms/v1/visitedby/me")]
     [HttpGet("api/rooms/v2/visitedby/me")]
     [HttpGet("api/rooms/v3/visitedby/me")]
@@ -2304,8 +2491,31 @@ public class RoomsController(
     [HttpGet("api/rooms/v2/myrecent")]
     public IActionResult MyOtherTabs() => Ok(Array.Empty<object>());
 
+    /// <summary>Per-(player, room) persistence blob, base64. Lives in the
+    /// generic <see cref="PlayerSettingEntity"/> key/value table — the same
+    /// "no schema change needed" trick MatchPlayerController uses for its
+    /// matchmaking prefs (MatchPlayerController.cs:213-217). The Value column
+    /// is declared <c>MaxLength(1024)</c> but SQLite stores it as unconstrained
+    /// TEXT and EF Core does not run DataAnnotations validation on SaveChanges,
+    /// so oversized blobs round-trip intact.</summary>
+    private static string PlayerRoomDataKey(long roomId) => $"roomplayerdata:{roomId}";
+
+    /// <summary>Fallback blob handed to a player who has never saved anything
+    /// in this room. <c>CAE=</c> is a one-field protobuf the client parses as
+    /// "empty, version 1"; a truly empty string makes the 2023 reader throw.</summary>
+    private const string DefaultPlayerRoomData = "CAE=";
+
+    /// <summary>GET <c>rooms/{roomId}/playerdata/me</c> — the per-room player
+    /// blob (CircuitsV2 "player persistence"). Client contract is
+    /// <c>Task&lt;ILKMFMCOPPO&gt;</c> whose reader requires the key
+    /// <c>Data</c> (OPNPNPMKLGI.txt ISIL 034/060); the request is issued from
+    /// NLDBPDCNNCF (NLDBPDCNNCF_NestedType_IGENGEIMGMJ.txt:169), so it arrives
+    /// with the <c>roomserver/</c> prefix — the bare-only registration 404'd.
+    /// This used to return a hardcoded <c>CAE=</c> for everyone; it now returns
+    /// whatever <see cref="SavePlayerDataForMe"/> last stored.</summary>
     [HttpGet("player_room_data/{roomId:long}")]
     [HttpGet("rooms/{roomId:long}/playerdata/me")]
+    [HttpGet("roomserver/rooms/{roomId:long}/playerdata/me")]
     [Authorize]
     public async Task<IActionResult> PlayerDataForMe(long roomId)
     {
@@ -2326,9 +2536,15 @@ public class RoomsController(
             .Select(v => new { v.VisitCount, v.FirstVisitAt, v.LastVisitAt })
             .FirstOrDefaultAsync();
 
+        var key = PlayerRoomDataKey(roomId);
+        var stored = await db.PlayerSettings.AsNoTracking()
+            .Where(s => s.PlayerId == pid.Value && s.Key == key)
+            .Select(s => s.Value)
+            .FirstOrDefaultAsync();
+
         return Ok(new
         {
-            Data = "CAE=",
+            Data = string.IsNullOrEmpty(stored) ? DefaultPlayerRoomData : stored,
             RoomId = room?.Id ?? roomId,
             PlayerId = pid.Value,
             Favorite = favorited,
@@ -2348,6 +2564,71 @@ public class RoomsController(
         });
     }
 
+    public sealed class PlayerRoomDataRequest { public string? Data { get; set; } }
+
+    /// <summary>PUT <c>rooms/{roomId}/playerdata/me</c> — persist the caller's
+    /// per-room blob. Client method <c>NLDBPDCNNCF.LIHFBBCDAGO(long, string)</c>
+    /// ("save player room data") moves verb ordinal 3 = PUT into r8 and posts a
+    /// single form field <c>data</c>
+    /// (NLDBPDCNNCF.txt ISIL 045/061/065 around :2566-2586; form key at
+    /// NLDBPDCNNCF_NestedType_ANPKFGHOOAJ.txt ISIL 015). Its return type is the
+    /// non-generic <c>Task</c>, so no response body is parsed.
+    ///
+    /// <para>Only the GET was registered before, so every save 405'd and per-room
+    /// player state never persisted.</para></summary>
+    [HttpPut("rooms/{roomId:long}/playerdata/me")]
+    [HttpPost("rooms/{roomId:long}/playerdata/me")]
+    [HttpPut("roomserver/rooms/{roomId:long}/playerdata/me")]
+    [HttpPost("roomserver/rooms/{roomId:long}/playerdata/me")]
+    [HttpPut("player_room_data/{roomId:long}")]
+    [Authorize]
+    public async Task<IActionResult> SavePlayerDataForMe(
+        long roomId,
+        [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] PlayerRoomDataRequest req)
+    {
+        var pid = CurrentPlayerId;
+        if (pid is null) return Unauthorized();
+
+        var data = req.Data ?? string.Empty;
+        var key = PlayerRoomDataKey(roomId);
+        var row = await db.PlayerSettings
+            .FirstOrDefaultAsync(s => s.PlayerId == pid.Value && s.Key == key);
+        if (row is null)
+        {
+            db.PlayerSettings.Add(new PlayerSettingEntity
+            {
+                PlayerId = pid.Value, Key = key, Value = data,
+            });
+        }
+        else
+        {
+            row.Value = data;
+        }
+        await db.SaveChangesAsync();
+
+        // The client ignores the body (non-generic Task); the echo is for
+        // curl/admin debugging only.
+        return Ok(new { Result = 0, RoomId = roomId, PlayerId = pid.Value, Data = data });
+    }
+
+    /// <summary>GET <c>rooms/requiring/{restriction}</c> — the restricted-rooms
+    /// list. The path segment is <c>mode.ToString().ToLower()</c>
+    /// (Matchmaking.txt ISIL 067-072 around :21263, concat onto the literal
+    /// <c>"rooms/requiring/"</c> at :21264).
+    ///
+    /// <para><b>Element type is String, not Int64 — verified, do not "fix" this
+    /// to room ids.</b> The issuing method
+    /// <c>Matchmaking.POIMPHMONON(IOCOJFJEDCM)</c> (Matchmaking.txt:21030)
+    /// resolves its promise as <c>FGLDKEJLAKB&lt;List&lt;String&gt;&gt;</c>
+    /// (typeof load at Matchmaking.txt:21327, continuation delegate
+    /// <c>Action&lt;List&lt;String&gt;&gt;</c> at :21315) and hands the payload to
+    /// <c>&lt;RequestRoomRestrictions&gt;b__2(List&lt;String&gt; rooms)</c>
+    /// (Matchmaking_NestedType_PMNEOAMKLJL.txt:14), which forwards it to
+    /// <c>Matchmaking.IINEGHJJBAN(IEnumerable&lt;String&gt;, IOCOJFJEDCM)</c>
+    /// (:20758) where the strings become the KEYS of the restriction map
+    /// (<c>List&lt;IOCOJFJEDCM&gt;</c> per key, ISIL 069-079 at :20963-20974).
+    /// So a bare array of room NAMES is the correct wire shape. Failures log
+    /// "Failed to get restricted rooms list: " (Matchmaking.txt:21306).</para></summary>
     [HttpGet("rooms/requiring/{restriction}")]
     [HttpGet("roomserver/rooms/requiring/{restriction}")]
     [Authorize]
@@ -2507,8 +2788,13 @@ public class RoomsController(
     /// <summary>GET <c>api/rooms/v1/agRoomIds</c> — list of every
     /// seeded AG / RR-Original room id. Used by the watch to bias the
     /// room browser toward official rooms first.</summary>
+    // Bare array of Int64 — the 2023 issuing method GBONEKLGFFK returns
+    // Task<List<Int64>> (NLDBPDCNNCF.txt:1886, literal at :1929). The
+    // roomserver/ twin is what that client actually requests (same prefix
+    // rule as rooms/base, docs/recroom-2023-room-save.md:83-93).
     [HttpGet("api/rooms/v1/agRoomIds")]
     [HttpGet("rooms/rro_ids")]
+    [HttpGet("roomserver/rooms/rro_ids")]
     public async Task<IActionResult> AgRoomIds() =>
         Ok(await rooms.AgRoomIdsAsync());
 
@@ -2532,7 +2818,9 @@ public class RoomsController(
     /// <c>api/rooms/v3/featured</c>). Returning the
     /// <see cref="Featured"/> shape here throws KeyNotFoundException on
     /// the watch's group-id lookup.</summary>
+    // Same roomserver/ prefix requirement as rooms/base.
     [HttpGet("featuredrooms/current")]
+    [HttpGet("roomserver/featuredrooms/current")]
     public async Task<IActionResult> FeaturedRoomsCurrent()
     {
         var ids = await rooms.FeaturedAgRoomIdsAsync(12);
@@ -2540,10 +2828,22 @@ public class RoomsController(
             .Where(r => ids.Contains(r.Id))
             .ToListAsync();
         var byId = featuredRooms.ToDictionary(r => r.Id);
+        // The featured-tile reader looks for RoomName, which ToWireRoom does not
+        // emit — every tile's caption came back null. Re-project the wire object
+        // into a dictionary so the extra key sits alongside the real ones rather
+        // than nesting them.
         var wireRooms = ids
-            .Select(id => byId.TryGetValue(id, out var room) ? RoomService.ToWireRoom(room) : null)
-            .Where(room => room is not null)
-            .Cast<object>()
+            .Where(byId.ContainsKey)
+            .Select(id =>
+            {
+                var room = byId[id];
+                var wire = RoomService.ToWireRoom(room);
+                var map = new Dictionary<string, object?>();
+                foreach (var prop in wire.GetType().GetProperties())
+                    map[prop.Name] = prop.GetValue(wire);
+                map["RoomName"] = room.Name;
+                return (object)map;
+            })
             .ToList();
         return Ok(new
         {
@@ -2584,19 +2884,31 @@ public class RoomsController(
     /// <para>We accept both POST and PUT because the watch's ISIL
     /// doesn't expose the explicit HTTPMethod literal at this call
     /// site — covering both is cheap and means we can't get bitten
-    /// by the wrong one.</para></summary>
+    /// by the wrong one.</para>
+    ///
+    /// <para><b>2023 client:</b> <c>NLDBPDCNNCF.LHNDKOJNKBE</c>
+    /// ("change room name", NLDBPDCNNCF.txt:5069) moves verb ordinal 3 = PUT,
+    /// sends the lowercase form key <c>name</c>
+    /// (NLDBPDCNNCF_NestedType_LMADOAEHOPP.txt ISIL 015) and returns
+    /// <c>Task&lt;FGCPNAACHIK&gt;</c> — the FULL room-details object, not a
+    /// status wrapper. It also carries the <c>roomserver/</c> prefix like every
+    /// other room mutation from that client
+    /// (docs/recroom-2023-room-save.md:83-93), so the bare-only routes 404'd.
+    /// The old signature mixed <c>[FromForm]</c> with a <c>[FromBody]</c>
+    /// parameter, which under <c>[ApiController]</c> makes the form PUT 415
+    /// before the handler runs — hence the shared FormOrJsonModelBinder.</para></summary>
     public sealed class RenameBody { public string? Name { get; set; } }
 
     [HttpPost("rooms/{roomId:long}/name")]
     [HttpPut("rooms/{roomId:long}/name")]
+    [HttpPost("roomserver/rooms/{roomId:long}/name")]
+    [HttpPut("roomserver/rooms/{roomId:long}/name")]
     [Authorize]
     public async Task<IActionResult> RenameRoom(
         long roomId,
-        [FromForm(Name = "Name")] string? nameForm,
-        [FromForm(Name = "name")] string? nameFormLower,
-        [FromBody] RenameBody? body)
+        [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] RenameBody body)
     {
-        var newName = nameForm ?? nameFormLower ?? body?.Name;
+        var newName = body?.Name;
         if (string.IsNullOrWhiteSpace(newName))
             return BadRequest(new { Result = 1, error = "empty_name" });
         newName = newName.Trim();
@@ -2624,35 +2936,24 @@ public class RoomsController(
         await db.SaveChangesAsync();
         logger.LogInformation("[room-rename] room={Room} by={By} → '{Name}'", roomId, me, newName);
 
-        // Return the full updated Room DTO. The watch's
-        // <c>PPENFJMFPNE</c> deserialiser inherits from
-        // <c>KLCOGEIGEBJ</c> (the standard Room shape) so we can
-        // forward to the same v3-details payload builder by re-reading.
-        // BuildRoomDetailsV3Async is too heavy here — just return the
-        // minimal mutated subset; the watch UI re-fetches details
-        // shortly after for the room-info screen.
-        return Ok(new
-        {
-            Result = 0,
-            RoomId = room.Id,
-            Name = room.Name,
-            Description = room.Description,
-            ImageName = room.ImageName,
-            CreatorPlayerId = room.CreatorPlayerId,
-            CreatorAccountId = room.CreatorPlayerId,
-            State = room.State,
-            Accessibility = room.Accessibility,
-            IsAGRoom = room.IsAGRoom,
-            IsRRO = false,
-            IsDormRoom = room.IsDormRoom,
-        });
+        // Full room details, not the old minimal {Result,RoomId,Name,…} object:
+        // the 2023 issuing method returns Task<FGCPNAACHIK> (NLDBPDCNNCF.txt:5069)
+        // and that reader needs Room/Scenes/CoOwners/Stats — the trimmed payload
+        // made a successful rename surface as a parse failure in the client.
+        return Ok(await BuildRoomServerDetailsWithRolesAsync(roomId));
     }
 
     /// <summary>POST <c>rooms/{roomId}/subrooms/{subRoomId}/name</c> —
     /// rename a scene/sub-room within a multi-scene room. Watch path:
     /// <c>EJDCNGBEICB.PAENPJCDLNJ(long roomId, long subRoomId, string newName)</c>.
     /// Updates the matching <see cref="RoomSceneEntity.Name"/> after
-    /// verifying ownership and intra-room uniqueness.</summary>
+    /// verifying ownership and intra-room uniqueness.
+    ///
+    /// <para><b>2023 client:</b> <c>NLDBPDCNNCF.EJOHFBMFEGB</c>
+    /// ("change subroom name", NLDBPDCNNCF.txt:8694) is verb 3 = PUT with form
+    /// key <c>name</c> and returns <c>Task&lt;FGCPNAACHIK&gt;</c>. Same
+    /// [FromForm]+[FromBody] 415 hazard as the room rename above, so it binds
+    /// through the shared FormOrJsonModelBinder and echoes full details.</para></summary>
     [HttpPost("rooms/{roomId:long}/subrooms/{subRoomId:long}/name")]
     [HttpPut("rooms/{roomId:long}/subrooms/{subRoomId:long}/name")]
     [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/name")]
@@ -2661,11 +2962,9 @@ public class RoomsController(
     public async Task<IActionResult> RenameSubroom(
         long roomId,
         long subRoomId,
-        [FromForm(Name = "Name")] string? nameForm,
-        [FromForm(Name = "name")] string? nameFormLower,
-        [FromBody] RenameBody? body)
+        [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] RenameBody body)
     {
-        var newName = nameForm ?? nameFormLower ?? body?.Name;
+        var newName = body?.Name;
         if (string.IsNullOrWhiteSpace(newName))
             return BadRequest(new { Result = 1, error = "empty_name" });
         newName = newName.Trim();
@@ -2698,19 +2997,7 @@ public class RoomsController(
         await db.SaveChangesAsync();
         logger.LogInformation("[subroom-rename] room={Room} sub={Sub} by={By} → '{Name}'", roomId, subRoomId, me, newName);
 
-        return Ok(new
-        {
-            Result = 0,
-            RoomId = roomId,
-            RoomSceneId = scene.OrderIndex,
-            SubRoomId = scene.OrderIndex,
-            Name = scene.Name,
-            scene.DataBlobName,
-            RoomSceneLocationId = scene.RoomSceneLocationId,
-            scene.IsSandbox,
-            scene.MaxPlayers,
-            scene.CanMatchmakeInto,
-        });
+        return Ok(await BuildRoomServerDetailsWithRolesAsync(roomId));
     }
 
     /// <summary>POST <c>api/rooms/v1/cheer</c> — cheer a room (body
@@ -2757,9 +3044,21 @@ public class RoomsController(
     }
 
     // ── Bare-path interactionby/me toggles ─────────────────────────────
+    //
+    // Verbs come straight from the 2023 client's four one-liner methods on
+    // NLDBPDCNNCF (each a non-generic Task, so no response body is parsed):
+    //   "cheer room"      :13467  r8 = 3 (PUT)
+    //   "uncheer room"    :13550  r8 = 4 (DELETE)
+    //   "favorite room"   :13633  r8 = 3 (PUT)
+    //   "unfavorite room" :13716  r8 = 4 (DELETE)
+    // All four are issued from NLDBPDCNNCF, so they arrive with the
+    // roomserver/ prefix (docs/recroom-2023-room-save.md:83-93) — without the
+    // twins the cheer/favorite buttons 404'd and failed silently.
 
     [HttpPost("rooms/{roomId:long}/interactionby/me/cheer")]
     [HttpPut("rooms/{roomId:long}/interactionby/me/cheer")]
+    [HttpPost("roomserver/rooms/{roomId:long}/interactionby/me/cheer")]
+    [HttpPut("roomserver/rooms/{roomId:long}/interactionby/me/cheer")]
     [Authorize]
     public async Task<IActionResult> BareCheer(long roomId)
     {
@@ -2769,6 +3068,7 @@ public class RoomsController(
     }
 
     [HttpDelete("rooms/{roomId:long}/interactionby/me/cheer")]
+    [HttpDelete("roomserver/rooms/{roomId:long}/interactionby/me/cheer")]
     [Authorize]
     public async Task<IActionResult> BareUncheer(long roomId)
     {
@@ -2779,6 +3079,8 @@ public class RoomsController(
 
     [HttpPost("rooms/{roomId:long}/interactionby/me/favorite")]
     [HttpPut("rooms/{roomId:long}/interactionby/me/favorite")]
+    [HttpPost("roomserver/rooms/{roomId:long}/interactionby/me/favorite")]
+    [HttpPut("roomserver/rooms/{roomId:long}/interactionby/me/favorite")]
     [Authorize]
     public async Task<IActionResult> BareFavorite(long roomId)
     {
@@ -2788,6 +3090,7 @@ public class RoomsController(
     }
 
     [HttpDelete("rooms/{roomId:long}/interactionby/me/favorite")]
+    [HttpDelete("roomserver/rooms/{roomId:long}/interactionby/me/favorite")]
     [Authorize]
     public async Task<IActionResult> BareUnfavorite(long roomId)
     {
@@ -3038,7 +3341,6 @@ public class RoomsController(
                 {
                     Type = RoomTagTypeForWire(t),
                     Tag = t,
-                    IsPrimaryGenre = false,
                 })
                 .ToList();
 
@@ -3294,10 +3596,20 @@ public class RoomsController(
     }
 
     /// <summary>POST <c>rooms/{id}/subrooms</c> — append a new scene.
-    /// Owner-gated. OrderIndex = max+1, Name unique within room.</summary>
+    /// Owner-gated. OrderIndex = max+1, Name unique within room.
+    ///
+    /// <para><b>2023 client:</b> <c>NLDBPDCNNCF.CMHBCOIBDME</c> ("add new
+    /// subroom", NLDBPDCNNCF.txt:9396) is verb 2 = POST with a single form key
+    /// <c>name</c> (NLDBPDCNNCF_NestedType_AIPHLHBILDN.txt ISIL 015) and returns
+    /// <c>Task&lt;FGCPNAACHIK&gt;</c>. It needs the roomserver/ twin, a binder
+    /// that accepts the form body (<c>[FromBody]</c> 415s it), and full room
+    /// details in the response instead of the scene row.</para></summary>
     [HttpPost("rooms/{roomId:long}/subrooms")]
+    [HttpPost("roomserver/rooms/{roomId:long}/subrooms")]
     [Authorize]
-    public async Task<IActionResult> AddSubRoom(long roomId, [FromBody] CreateSubRoomRequest req)
+    public async Task<IActionResult> AddSubRoom(
+        long roomId,
+        [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] CreateSubRoomRequest req)
     {
         var pid = this.RequireCurrentPlayerId();
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
@@ -3324,10 +3636,18 @@ public class RoomsController(
         };
         db.RoomScenes.Add(scene);
         await db.SaveChangesAsync();
-        return Ok(SceneWire(scene));
+        return Ok(await BuildRoomServerDetailsWithRolesAsync(roomId));
     }
 
+    /// <summary>DELETE <c>rooms/{id}/subrooms/{sub}</c>. The 2023 caller
+    /// <c>NLDBPDCNNCF.HGNGMIMJFJL</c> ("delete subroom", NLDBPDCNNCF.txt:9827)
+    /// moves verb ordinal 4 = DELETE and returns
+    /// <c>Task&lt;FGCPNAACHIK&gt;</c>; the only registration here used to be the
+    /// bare one (the roomserver/ twin at the top of the file is the GET), so
+    /// deleting a subroom 404'd, and the <c>{Result:0}</c> body was not the
+    /// details object the client re-parses.</summary>
     [HttpDelete("rooms/{roomId:long}/subrooms/{subRoomId:long}")]
+    [HttpDelete("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}")]
     [Authorize]
     public async Task<IActionResult> DeleteSubRoom(long roomId, long subRoomId)
     {
@@ -3341,20 +3661,69 @@ public class RoomsController(
         if (scene.OrderIndex == 0) return BadRequest(new { error = "cannot_delete_entry_scene" });
         db.RoomScenes.Remove(scene);
         await db.SaveChangesAsync();
-        return Ok(new { Result = 0 });
+        return Ok(await BuildRoomServerDetailsWithRolesAsync(roomId));
     }
 
-    public sealed class SubRoomIntRequest { public int? Value { get; set; } }
-    public sealed class SubRoomBoolRequest { public bool? Value { get; set; } }
+    // Subroom mutation DTOs. Property names mirror the LOWERCASE form keys the
+    // 2023 client actually sends (FormOrJsonModelBinder matches case-insensitively):
+    //   maxPlayers    NLDBPDCNNCF_NestedType_BLNOGFGHIIF.txt ISIL 020
+    //   accessibility NLDBPDCNNCF_NestedType_GNCLJBNJEKP.txt ISIL 020
+    //   name/accessibility/maxPlayers  ..._JEEACJHABAF.txt ISIL 021/035/048
+    //   newRoomId     NLDBPDCNNCF_NestedType_COIOGADEBKJ.txt ISIL 020
+    // The older {Value:…} DTOs matched no client key at all, and being bound
+    // [FromBody] they 415'd the form body before the handler ran.
+    public sealed class SubRoomMaxPlayersRequest { public int? MaxPlayers { get; set; } }
+
+    // Accessibility is typed string, not int, on purpose — the two client call
+    // sites disagree about how they stringify it. The standalone
+    // "change subroom accessibility" closure boxes the value as
+    // typeof(JHAOFLCJNAL) (GNCLJBNJEKP.txt ISIL 015), and the form writer's
+    // object overload falls through to a virtual ToString() for anything that
+    // isn't String/DateTime (BNDIAONDFFF.txt ISIL 107-110) — i.e. an enum
+    // MEMBER NAME goes on the wire. The bulk "modify" closure boxes the very
+    // same value as typeof(System.Int32) (JEEACJHABAF.txt ISIL 031) and sends a
+    // number. ParseSubRoomAccessibility below accepts both spellings.
+    public sealed class SubRoomAccessibilityRequest { public string? Accessibility { get; set; } }
+
     public sealed class SubRoomModifyRequest
     {
         public string? Name { get; set; }
+        public string? Accessibility { get; set; }
         public int? MaxPlayers { get; set; }
         public bool? IsSandbox { get; set; }
         public bool? CanMatchmakeInto { get; set; }
         public string? RoomSceneLocationId { get; set; }
     }
-    public sealed class SubRoomMoveRequest { public int? NewIndex { get; set; } }
+
+    public sealed class SubRoomMoveRequest
+    {
+        /// <summary>Target ROOM for the scene — the 2023 "move subroom" flow
+        /// re-parents a scene into another room. Nullable&lt;Int64&gt; on the
+        /// wire (NLDBPDCNNCF.MGGALMIAMBG, NLDBPDCNNCF.txt:9659).</summary>
+        public long? NewRoomId { get; set; }
+
+        /// <summary>Legacy in-room reorder used by the admin/import tooling.
+        /// Not something the 2023 client sends.</summary>
+        public int? NewIndex { get; set; }
+    }
+
+    /// <summary>One row of the per-subroom role-permission matrix the 2023
+    /// client PUTs to <c>subrooms/{sub}/permissions</c>. Keys verified in the
+    /// writer <c>HDOJMEBCAGP.txt</c> ISIL 050/069/085/101/117.</summary>
+    public sealed class SubRoomPermissionEntry
+    {
+        // Field order + CLR types come from the BNLPBMJJOMM constructor
+        // (BNLPBMJJOMM.txt:126): (String Permission, OMMBGJMJJPN Role,
+        // Boolean Override, FEOJFGECKGH Type, String Value). The two enum
+        // members serialize as numbers (the role writer boxes them
+        // System.Int32 — BFKNABDHMGG.txt ISIL 015), hence int? here.
+        public string? Permission { get; set; }
+        public int? Role { get; set; }
+        public bool? Override { get; set; }
+        public int? Type { get; set; }
+        public string? Value { get; set; }
+    }
+
     public sealed class PublishSubRoomSaveRequest
     {
         public long? SubRoomDataSaveId { get; set; }
@@ -3377,29 +3746,94 @@ public class RoomsController(
     [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/maxplayers")]
     [HttpPut("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/maxplayers")]
     [Authorize]
-    public Task<IActionResult> SubRoomMaxPlayers(long roomId, long subRoomId, [FromBody] SubRoomIntRequest req) =>
-        MutateScene(roomId, subRoomId, s => { if (req.Value is int v) s.MaxPlayers = Math.Max(1, v); });
+    public Task<IActionResult> SubRoomMaxPlayers(
+        long roomId,
+        long subRoomId,
+        [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] SubRoomMaxPlayersRequest req) =>
+        MutateScene(roomId, subRoomId, s => { if (req.MaxPlayers is int v) s.MaxPlayers = Math.Max(1, v); });
 
+    /// <summary>PUT <c>rooms/{id}/subrooms/{sub}/accessibility</c>. Client:
+    /// <c>NLDBPDCNNCF.OAINKEAFPGE(long, long, JHAOFLCJNAL)</c>
+    /// (NLDBPDCNNCF.txt:9032, verb 3), form key <c>accessibility</c>, response
+    /// <c>Task&lt;FGCPNAACHIK&gt;</c>. We only model the matchmaking bit
+    /// (<see cref="RoomSceneEntity.CanMatchmakeInto"/>), so Private collapses to
+    /// "not a matchmaking target" and everything else to "is one".</summary>
     [HttpPost("rooms/{roomId:long}/subrooms/{subRoomId:long}/accessibility")]
     [HttpPut("rooms/{roomId:long}/subrooms/{subRoomId:long}/accessibility")]
     [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/accessibility")]
     [HttpPut("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/accessibility")]
     [Authorize]
-    public Task<IActionResult> SubRoomAccessibility(long roomId, long subRoomId, [FromBody] SubRoomBoolRequest req) =>
-        MutateScene(roomId, subRoomId, s => { if (req.Value is bool v) s.CanMatchmakeInto = v; });
+    public Task<IActionResult> SubRoomAccessibility(
+        long roomId,
+        long subRoomId,
+        [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] SubRoomAccessibilityRequest req) =>
+        MutateScene(roomId, subRoomId, s =>
+        {
+            if (ParseSubRoomAccessibility(req.Accessibility) is int a)
+                s.CanMatchmakeInto = a != AccessibilityPrivate;
+        });
 
+    /// <summary>PUT <c>rooms/{id}/subrooms/{sub}/permissions</c> — the
+    /// role-permission matrix. Client:
+    /// <c>NLDBPDCNNCF.AAMEOMHKPHF(long, long, IReadOnlyList&lt;BNLPBMJJOMM&gt;)</c>
+    /// (NLDBPDCNNCF.txt:9198, verb 3). Unlike its siblings this one does NOT
+    /// form-encode: the closure calls <c>BNDIAONDFFF.FJLLPHFOOJJ(String)</c>
+    /// (CCNOMNNHNNG.txt ISIL 009), which stamps body-kind 4 = raw string
+    /// (BNDIAONDFFF.txt:275, <c>mov dword ptr [rbx+38h],4</c>) — i.e. a raw
+    /// JSON ARRAY. FormOrJsonModelBinder handles that (non-form → JSON
+    /// deserialize into the List).
+    ///
+    /// <para><b>Scope note — deliberately not persisted.</b> DorkNet has no
+    /// per-subroom permission storage: <see cref="RoomSceneEntity"/> has no
+    /// column for it and there is no permissions table. Adding one means an
+    /// entity + DbContext + migration, which is outside this file. Until then
+    /// the matrix is accepted, logged, and the room details echoed back so the
+    /// client's promise resolves instead of 415-ing; the values do not survive
+    /// a round-trip. The old handler silently bound an unrelated DTO whose keys
+    /// the client never sends, which was strictly worse.</para></summary>
     [HttpPost("rooms/{roomId:long}/subrooms/{subRoomId:long}/permissions")]
     [HttpPut("rooms/{roomId:long}/subrooms/{subRoomId:long}/permissions")]
     [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/permissions")]
     [HttpPut("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/permissions")]
     [Authorize]
-    public Task<IActionResult> SubRoomPermissions(long roomId, long subRoomId, [FromBody] SubRoomModifyRequest? req) =>
-        MutateScene(roomId, subRoomId, s =>
-        {
-            if (req?.CanMatchmakeInto is bool canMatchmakeInto) s.CanMatchmakeInto = canMatchmakeInto;
-            if (req?.MaxPlayers is int maxPlayers) s.MaxPlayers = Math.Max(1, maxPlayers);
-            if (req?.IsSandbox is bool isSandbox) s.IsSandbox = isSandbox;
-        });
+    public async Task<IActionResult> SubRoomPermissions(
+        long roomId,
+        long subRoomId,
+        [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] List<SubRoomPermissionEntry> req)
+    {
+        var pid = this.RequireCurrentPlayerId();
+        var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
+        if (room is null) return NotFound();
+        if (room.CreatorPlayerId != pid) return Forbid();
+        var scene = await GetOrCreateSceneForMutationAsync(room, subRoomId);
+        if (scene is null) return NotFound();
+        await db.SaveChangesAsync();
+
+        logger.LogWarning(
+            "[subroom-permissions] room={Room} sub={Sub} by={By} entries={Count} — accepted but NOT persisted (no permission storage yet)",
+            roomId, subRoomId, pid, req?.Count ?? 0);
+
+        return Ok(await BuildRoomServerDetailsWithRolesAsync(roomId));
+    }
+
+    // JHAOFLCJNAL member values. The numeric leg is verified (the "modify"
+    // closure boxes the same value as System.Int32 — JEEACJHABAF.txt ISIL 031);
+    // the NAMES are inferred from the room-accessibility enum in the nearest
+    // dump with real names (RecRoom-2023.06.21 dump.cs:1293997-1294004
+    // MKDFFJGGKDL { Private = 0, Public = 1, Unlisted = 2 }), which is the enum
+    // Enum.ToString() would spell out on the standalone accessibility call.
+    private const int AccessibilityPrivate = 0;
+
+    private static int? ParseSubRoomAccessibility(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var value = raw.Trim();
+        if (int.TryParse(value, out var numeric)) return numeric;
+        if (value.StartsWith("priv", StringComparison.OrdinalIgnoreCase)) return 0;
+        if (value.StartsWith("pub", StringComparison.OrdinalIgnoreCase)) return 1;
+        if (value.StartsWith("unlist", StringComparison.OrdinalIgnoreCase)) return 2;
+        return null;
+    }
 
     [HttpPost("rooms/{roomId:long}/subrooms/{subRoomId:long}/publish_save")]
     [HttpPut("rooms/{roomId:long}/subrooms/{subRoomId:long}/publish_save")]
@@ -3434,7 +3868,9 @@ public class RoomsController(
         scene.DataModifiedAt = DateTime.UtcNow;
         room.UpdatedAt = scene.DataModifiedAt;
         await db.SaveChangesAsync();
-        return Ok(SceneWire(scene));
+        // "restore subroom save" returns Task<FGCPNAACHIK> (NLDBPDCNNCF.txt:10476),
+        // so the scene row alone made a successful restore read as a failure.
+        return Ok(await BuildRoomServerDetailsWithRolesAsync(roomId));
     }
 
     private async Task<PublishSubRoomSaveRequest> ReadPublishSubRoomSaveRequestAsync()
@@ -3516,34 +3952,68 @@ public class RoomsController(
         };
         db.RoomScenes.Add(clone);
         await db.SaveChangesAsync();
-        return Ok(SceneWire(clone));
+        // Task<FGCPNAACHIK> ("clone subroom", NLDBPDCNNCF.txt:9554) — the scene
+        // row is not what the client re-parses.
+        return Ok(await BuildRoomServerDetailsWithRolesAsync(roomId));
     }
 
     // Subroom settings save POSTs here on the roomserver host ("failed to
     // modify room" = the bare-only routes 404'd). Same roomserver/ prefix as
     // the sibling subroom mutations.
+    //
+    // Body is form-urlencoded name/accessibility/maxPlayers ("modify room",
+    // NLDBPDCNNCF.txt:10846 verb 3; keys at JEEACJHABAF.txt ISIL 021/035/048).
+    // [FromBody] rejected that with 415 before the handler ran, and the DTO had
+    // no 'accessibility' member at all, so the bulk subroom-settings save was a
+    // guaranteed failure.
     [HttpPost("rooms/{roomId:long}/subrooms/{subRoomId:long}/modify")]
     [HttpPut("rooms/{roomId:long}/subrooms/{subRoomId:long}/modify")]
     [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/modify")]
     [HttpPut("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/modify")]
     [Authorize]
-    public Task<IActionResult> ModifySubRoom(long roomId, long subRoomId, [FromBody] SubRoomModifyRequest req) =>
+    public Task<IActionResult> ModifySubRoom(
+        long roomId,
+        long subRoomId,
+        [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] SubRoomModifyRequest req) =>
         MutateScene(roomId, subRoomId, s =>
         {
             if (!string.IsNullOrWhiteSpace(req.Name)) s.Name = req.Name.Trim();
             if (req.MaxPlayers is int mp) s.MaxPlayers = Math.Max(1, mp);
             if (req.IsSandbox is bool sb) s.IsSandbox = sb;
             if (req.CanMatchmakeInto is bool cmi) s.CanMatchmakeInto = cmi;
+            if (ParseSubRoomAccessibility(req.Accessibility) is int a)
+                s.CanMatchmakeInto = a != AccessibilityPrivate;
             if (req.RoomSceneLocationId is not null) s.RoomSceneLocationId = req.RoomSceneLocationId;
         });
 
-    /// <summary>POST <c>rooms/{id}/subrooms/{sub}/move</c> — reorder a
-    /// scene. Body NewIndex is the target OrderIndex; the in-between
-    /// rows shift to fill the gap.</summary>
+    /// <summary>POST <c>rooms/{id}/subrooms/{sub}/move</c>.
+    ///
+    /// <para><b>The 2023 semantics are "move to another ROOM", not "reorder".</b>
+    /// <c>NLDBPDCNNCF.MGGALMIAMBG(long roomId, long subRoomId,
+    /// Nullable&lt;Int64&gt; newRoomId)</c> ("move subroom",
+    /// NLDBPDCNNCF.txt:9659, verb 2 = POST) sends the single form key
+    /// <c>newRoomId</c> (COIOGADEBKJ.txt ISIL 013-020, boxed as
+    /// <c>Nullable&lt;Int64&gt;</c>) and returns
+    /// <c>Task&lt;FGCPNAACHIK&gt;</c>. The old handler bound
+    /// <c>[FromBody] {NewIndex}</c> — a key the client never sends, on a body
+    /// binding that 415s form posts — and reordered scenes in place instead.</para>
+    ///
+    /// <para>The caller must own BOTH rooms. The scene is re-parented to the end
+    /// of the target room's scene list and the source room's remaining scenes
+    /// are re-packed so <c>OrderIndex</c> stays a dense 0..n-1 sequence — the
+    /// wire <c>RoomSceneId</c> and matchmaking <c>SubRoomId</c> are that index.
+    /// Scene 0 is the room's entry scene and cannot be moved out.
+    /// <c>newIndex</c> (no client sends it) keeps the old in-room reorder for
+    /// the import tooling.</para></summary>
     [HttpPost("rooms/{roomId:long}/subrooms/{subRoomId:long}/move")]
+    [HttpPut("rooms/{roomId:long}/subrooms/{subRoomId:long}/move")]
     [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/move")]
+    [HttpPut("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/move")]
     [Authorize]
-    public async Task<IActionResult> MoveSubRoom(long roomId, long subRoomId, [FromBody] SubRoomMoveRequest req)
+    public async Task<IActionResult> MoveSubRoom(
+        long roomId,
+        long subRoomId,
+        [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] SubRoomMoveRequest req)
     {
         var pid = this.RequireCurrentPlayerId();
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
@@ -3553,19 +4023,69 @@ public class RoomsController(
             .Where(s => s.RoomId == roomId).OrderBy(s => s.OrderIndex).ToListAsync();
         var moving = scenes.FirstOrDefault(s => s.OrderIndex == subRoomId);
         if (moving is null) return NotFound();
-        var newIndex = Math.Clamp(req.NewIndex ?? 0, 0, scenes.Count - 1);
-        scenes.Remove(moving);
-        scenes.Insert(newIndex, moving);
-        // Recompute OrderIndex on the entire row set. The unique
-        // (RoomId, OrderIndex) index would clash if we wrote rows in
-        // place — flush a sentinel offset first, then settle to
-        // final indices.
+
+        // `newRoomId` is Nullable<Int64> on the wire and the form writer
+        // stringifies it with ToString(), which yields "" for the empty case —
+        // so an absent target arrives as a blank field, not a missing one.
+        // Treat "no target and no index" as a no-op; the old code fell through
+        // to `NewIndex ?? 0` and silently reordered the scene to the front.
+        if (req.NewRoomId is not long targetRoomId || targetRoomId == roomId)
+        {
+            if (req.NewIndex is not int requestedIndex)
+                return Ok(await BuildRoomServerDetailsWithRolesAsync(roomId));
+
+            var newIndex = Math.Clamp(requestedIndex, 0, scenes.Count - 1);
+            scenes.Remove(moving);
+            scenes.Insert(newIndex, moving);
+            await RepackSceneOrderAsync(scenes);
+            return Ok(await BuildRoomServerDetailsWithRolesAsync(roomId));
+        }
+
+        // Cross-room move — the path the 2023 client actually takes.
+        var target = await db.Rooms.FirstOrDefaultAsync(r => r.Id == targetRoomId);
+        if (target is null) return NotFound(new { error = "target_room_not_found", targetRoomId });
+        if (target.CreatorPlayerId != pid) return Forbid();
+        if (moving.OrderIndex == 0)
+            return BadRequest(new { error = "cannot_move_entry_scene" });
+
+        // Names are unique per room (RoomScenes index on (RoomId, Name)).
+        var movedName = moving.Name;
+        var suffix = 1;
+        while (await db.RoomScenes.AnyAsync(s => s.RoomId == targetRoomId && s.Name == movedName))
+        {
+            suffix += 1;
+            movedName = $"{moving.Name} {suffix}";
+        }
+
+        var targetOrder = (await db.RoomScenes.Where(s => s.RoomId == targetRoomId)
+            .Select(s => (int?)s.OrderIndex).MaxAsync() ?? -1) + 1;
+        moving.RoomId = targetRoomId;
+        moving.OrderIndex = targetOrder;
+        moving.Name = movedName;
+        moving.DataModifiedAt = DateTime.UtcNow;
+        room.UpdatedAt = moving.DataModifiedAt;
+        target.UpdatedAt = moving.DataModifiedAt;
+        await db.SaveChangesAsync();
+
+        // Re-pack the source room so its remaining scenes keep dense indices
+        // (same sentinel dance as the in-room reorder above).
+        await RepackSceneOrderAsync(scenes.Where(s => s.Id != moving.Id).ToList());
+        logger.LogInformation("[subroom-move] scene={Scene} room={From}→{To} by={By}",
+            moving.Id, roomId, targetRoomId, pid);
+        return Ok(await BuildRoomServerDetailsWithRolesAsync(targetRoomId));
+    }
+
+    /// <summary>Rewrite <see cref="RoomSceneEntity.OrderIndex"/> to 0..n-1 in
+    /// list order. The unique (RoomId, OrderIndex) index would clash if rows
+    /// were written in place, so flush a sentinel offset first, then settle.</summary>
+    private async Task RepackSceneOrderAsync(List<RoomSceneEntity> scenes)
+    {
+        if (scenes.Count == 0) return;
         const int sentinelOffset = 100_000;
         for (int i = 0; i < scenes.Count; i++) scenes[i].OrderIndex = i + sentinelOffset;
         await db.SaveChangesAsync();
         for (int i = 0; i < scenes.Count; i++) scenes[i].OrderIndex = i;
         await db.SaveChangesAsync();
-        return Ok(SceneWire(moving));
     }
 
     /// <summary>POST <c>roomserver/rooms/{id}/subrooms/{sub}/data</c> —
@@ -3638,6 +4158,11 @@ public class RoomsController(
         return null;
     }
 
+    /// <summary>Shared owner-gate + mutate + save for the subroom setting
+    /// endpoints. Responds with the FULL room details: every 2023 caller that
+    /// lands here (maxplayers / accessibility / modify) is typed
+    /// <c>Task&lt;FGCPNAACHIK&gt;</c>, so the old scene-row payload made a
+    /// successful mutation surface as a client-side parse failure.</summary>
     private async Task<IActionResult> MutateScene(long roomId, long subRoomId, Action<RoomSceneEntity> mutator)
     {
         var pid = this.RequireCurrentPlayerId();
@@ -3649,7 +4174,7 @@ public class RoomsController(
         mutator(scene);
         scene.DataModifiedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
-        return Ok(SceneWire(scene));
+        return Ok(await BuildRoomServerDetailsWithRolesAsync(roomId));
     }
 
     private async Task<RoomSceneEntity?> GetOrCreateSceneForMutationAsync(RoomEntity room, long subRoomId)
@@ -3674,25 +4199,21 @@ public class RoomsController(
         return scene;
     }
 
-    private static object SceneWire(RoomSceneEntity s) => new
-    {
-        Result = 0,
-        RoomId = s.RoomId,
-        RoomSceneId = s.OrderIndex,
-        SubRoomId = s.OrderIndex,
-        Name = s.Name,
-        s.DataBlobName,
-        RoomSceneLocationId = s.RoomSceneLocationId,
-        s.IsSandbox,
-        s.MaxPlayers,
-        s.CanMatchmakeInto,
-    };
+    // SceneWire (the old {Result,RoomId,RoomSceneId,…} scene-row payload) is
+    // gone: every subroom mutation the 2023 client issues is typed
+    // Task<FGCPNAACHIK> and re-parses the full room details, so all of these
+    // handlers now go through BuildRoomServerDetailsWithRolesAsync.
 
     // ── Bare-path roles ────────────────────────────────────────────────
 
     /// <summary>GET <c>rooms/{id}/roles</c> — account role DTOs consumed by
-    /// 2023's EFHPLDPNGIM deserializer.</summary>
+    /// 2023's EFHPLDPNGIM deserializer
+    /// (<c>NLDBPDCNNCF.LAJDCNIMBAB</c> → <c>Task&lt;List&lt;EFHPLDPNGIM&gt;&gt;</c>,
+    /// NLDBPDCNNCF.txt:2111, verb 0 = GET). Like every other NLDBPDCNNCF call it
+    /// arrives with the <c>roomserver/</c> prefix, so the bare-only registration
+    /// 404'd the permissions screen's list fetch.</summary>
     [HttpGet("rooms/{roomId:long}/roles")]
+    [HttpGet("roomserver/rooms/{roomId:long}/roles")]
     public async Task<IActionResult> RolesList(long roomId)
     {
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
@@ -3815,7 +4336,12 @@ public class RoomsController(
         return new StudioBundleInfo(saveId, target, version, name);
     }
 
+    /// <summary>GET <c>rooms/{id}/roles/{playerId}</c> — one role row
+    /// (<c>NLDBPDCNNCF.PCFOIPELKHN</c> → <c>Task&lt;EFHPLDPNGIM&gt;</c>,
+    /// NLDBPDCNNCF.txt:2192). roomserver/ twin required, same as the list
+    /// above.</summary>
     [HttpGet("rooms/{roomId:long}/roles/{playerId:long}")]
+    [HttpGet("roomserver/rooms/{roomId:long}/roles/{playerId:long}")]
     public async Task<IActionResult> RoleForPlayer(long roomId, long playerId)
     {
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
@@ -3830,10 +4356,17 @@ public class RoomsController(
 
     public sealed class GrantRoleRequest { public int? Role { get; set; } }
 
-    /// <summary>POST <c>rooms/{id}/roles/{playerId}</c> — owner grants
-    /// a role to a player. Auto-accepted (no invite step).</summary>
+    /// <summary>PUT <c>rooms/{id}/roles/{playerId}</c> — owner grants
+    /// a role to a player. Auto-accepted (no invite step).
+    /// <c>NLDBPDCNNCF.LMIEIJMCEAB</c> ("change room account role",
+    /// NLDBPDCNNCF.txt:7380) is verb 3 = PUT, form key <c>role</c> carrying a
+    /// boxed Int32 (BFKNABDHMGG.txt ISIL 015), and returns the full
+    /// <c>FGCPNAACHIK</c> details — which this already does. Only the
+    /// roomserver/ twin was missing.</summary>
     [HttpPut("rooms/{roomId:long}/roles/{playerId:long}")]
     [HttpPost("rooms/{roomId:long}/roles/{playerId:long}")]
+    [HttpPut("roomserver/rooms/{roomId:long}/roles/{playerId:long}")]
+    [HttpPost("roomserver/rooms/{roomId:long}/roles/{playerId:long}")]
     [HttpPut("/api/rooms/v1/rooms/{roomId:long}/roles/{playerId:long}")]
     [HttpPost("/api/rooms/v1/rooms/{roomId:long}/roles/{playerId:long}")]
     [HttpPut("/api/rooms/v2/rooms/{roomId:long}/roles/{playerId:long}")]
@@ -3875,9 +4408,13 @@ public class RoomsController(
     /// <summary>POST <c>rooms/{id}/roles/{playerId}/invite</c> — same
     /// as grant but Accepted=false; the target's accept-invite flow
     /// flips the flag (separate endpoint, not yet exposed). For now
-    /// invited rows surface in RoomDetails.InvitedCoOwners etc.</summary>
+    /// invited rows surface in RoomDetails.InvitedCoOwners etc.
+    /// <c>NLDBPDCNNCF.KIJDCLINOIC</c> ("invite account to role",
+    /// NLDBPDCNNCF.txt:7550) is verb 3 = PUT under the roomserver/ prefix.</summary>
     [HttpPut("rooms/{roomId:long}/roles/{playerId:long}/invite")]
     [HttpPost("rooms/{roomId:long}/roles/{playerId:long}/invite")]
+    [HttpPut("roomserver/rooms/{roomId:long}/roles/{playerId:long}/invite")]
+    [HttpPost("roomserver/rooms/{roomId:long}/roles/{playerId:long}/invite")]
     [HttpPut("/api/rooms/v1/rooms/{roomId:long}/roles/{playerId:long}/invite")]
     [HttpPost("/api/rooms/v1/rooms/{roomId:long}/roles/{playerId:long}/invite")]
     [HttpPut("/api/rooms/v2/rooms/{roomId:long}/roles/{playerId:long}/invite")]

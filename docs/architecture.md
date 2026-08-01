@@ -5,8 +5,10 @@ before you touch code; it explains layout, request flow, the design
 patterns that look weird in isolation, and where to start.
 
 For deployment, see [`deploy.md`](deploy.md). For wire-protocol
-reverse-engineering deliverables, see the `recroom-2020-client-*`
-files in this folder.
+reverse-engineering deliverables, see
+[`recroom-2023-client-api-complete.md`](recroom-2023-client-api-complete.md)
+(March-2023 client) and the `recroom-2020-client-*` files in this folder
+(December-2020 client).
 
 ---
 
@@ -252,6 +254,23 @@ The `docs/recroom-2020-client-*` files are an exhaustive catalog of
 client-side endpoints, DTOs, and request expectations extracted from
 the same decompile. They're the ground truth when a controller needs
 a new endpoint.
+
+[`docs/recroom-2023-client-api-complete.md`](recroom-2023-client-api-complete.md)
+is the equivalent for the March-2023 client, and additionally carries a
+per-subsystem diff of client expectation against current server behaviour.
+Three things account for nearly every defect it catalogues, so check all
+three whenever you touch a 2023 endpoint:
+
+- **The verb.** It is a `BestHTTP.HTTPMethods` ordinal in the disassembly
+  (GET=0, HEAD=1, POST=2, PUT=3, DELETE=4, PATCH=5). A route registered
+  under the wrong verb is a 405 the client reports as a generic failure.
+- **Scalar vs object.** Many endpoints return a BARE scalar — the client
+  reads `1000`, not `{"Limit":1000}`. Wrapping it makes the deserializer
+  throw and the feature fails silently.
+- **The body encoding.** The client sends nearly every write as
+  `application/x-www-form-urlencoded`. An action bound with `[FromBody]`
+  under `[ApiController]` rejects that with 415 before the handler runs.
+  Use `Binding/FormOrJsonModelBinder` rather than hand-rolling a reader.
 
 ---
 
