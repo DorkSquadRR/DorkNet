@@ -11,19 +11,25 @@ namespace DorkNet.Server.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            // Defaults must match the entity contract (TestCaseEntity inits
+            // CommentsJson to "[]", ClubEntity inits ClubChatEnabled to true):
+            // existing rows get the column default, and "" is not valid JSON
+            // while false silently muted every pre-existing club's chat. The
+            // ClubChatDefaultRepair migration fixes databases that applied
+            // this migration before the defaults were corrected.
             migrationBuilder.AddColumn<string>(
                 name: "CommentsJson",
                 table: "TestCases",
                 type: "TEXT",
                 nullable: false,
-                defaultValue: "");
+                defaultValue: "[]");
 
             migrationBuilder.AddColumn<bool>(
                 name: "ClubChatEnabled",
                 table: "Clubs",
                 type: "INTEGER",
                 nullable: false,
-                defaultValue: false);
+                defaultValue: true);
 
             migrationBuilder.AddColumn<int>(
                 name: "MinLevel",

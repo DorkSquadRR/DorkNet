@@ -1158,10 +1158,12 @@ public class AdminController(
         var previous = scene.MaxPlayers;
         scene.MaxPlayers = Math.Clamp(body.MaxPlayers, 1, 80);
         scene.DataModifiedAt = DateTime.UtcNow;
-        await db.SaveChangesAsync();
 
+        // LogAsync only stages the AdminActionEntity; save afterwards so the
+        // capacity change and its audit record commit together.
         await LogAsync("update_subroom_maxplayers", "room", id,
             $"subRoom={subRoomId} maxPlayers {previous} -> {scene.MaxPlayers}");
+        await db.SaveChangesAsync();
 
         return Ok(new
         {
