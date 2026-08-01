@@ -26,6 +26,7 @@ public class AccountsController(
     DorkNetDbContext db,
     NotificationService notifications,
     ServerSettingsService settings,
+    PlayerPresenceService presence,
     ILogger<AccountsController> logger) : ControllerBase
 {
     [HttpGet("/account/v1/savedlogins")]
@@ -60,6 +61,102 @@ public class AccountsController(
         var player = await GetCurrentPlayerAsync();
         if (player is null) return Unauthorized();
         return Ok(BuildSelfAccount(player.Id, player.Username, player.DisplayName, player.ProfileImageName));
+    }
+
+    /// <summary>
+    /// DELETE <c>/account/me</c> — the 2023 client's "delete local account"
+    /// (RecNet.Runtime <c>OPMAPIOEIFG.ADFMLPGEBOF()</c>). Binary evidence:
+    /// the request object is built at OPMAPIOEIFG.txt:8767-8777 with the
+    /// verb ordinal in <c>rdx</c> = 4 (BestHTTP.HTTPMethods.Delete) and the
+    /// path literal <c>"account/me"</c> at :8771; the failure branch at
+    /// :8790 carries the string <c>"Failed to delete local account"</c>.
+    /// The issuing method returns <c>LDGADANDBIO</c>, the fire-and-forget
+    /// promise handle — the response BODY is never parsed, only the HTTP
+    /// status decides success — so the RecNetResult we emit is purely for
+    /// human/curl consumption. Registering only <c>[HttpGet]</c> on this
+    /// path (the previous state) produced a 405 and the in-game
+    /// "delete my account" button silently failed.
+    ///
+    /// Erasure runs through the same <see cref="PlayerAccountPurge"/>
+    /// cascade the admin SPA uses, inside one transaction: personal rows
+    /// are deleted, authored durable content is reassigned to the system
+    /// account, then the Players row goes and the live session is kicked
+    /// so the bearer token stops being useful immediately.
+    /// </summary>
+    [HttpDelete("/account/me")]
+    [HttpDelete("/account/v1/me")]
+    [HttpDelete("/account/v2/me")]
+    public async Task<IActionResult> DeleteMe()
+    {
+        var player = await GetCurrentPlayerAsync();
+        if (player is null) return Unauthorized();
+
+        // The system account (id 1) owns every reassigned artefact — losing
+        // it would orphan the whole DB — and admin accounts must be demoted
+        // through the SPA first so a compromised session can't nuke the
+        // server's only operator. Both refusals are surfaced as a non-2xx so
+        // the client's promise rejects and the player sees the failure
+        // rather than a phantom success.
+        if (player.Id == 1)
+        {
+            logger.LogWarning("[accounts] DELETE account/me refused — system account");
+            return BadRequest(new RecNetResult
+            {
+                Success = false,
+                Error = "The system account cannot be deleted.",
+            });
+        }
+        if (player.IsAdmin)
+        {
+            logger.LogWarning(
+                "[accounts] DELETE account/me refused — {Id} ({Username}) is an admin",
+                player.Id, player.Username);
+            return BadRequest(new RecNetResult
+            {
+                Success = false,
+                Error = "Admin accounts cannot self-delete. Demote the account first.",
+            });
+        }
+
+        var playerId = player.Id;
+        var username = player.Username;
+
+        // Authored content is reassigned rather than destroyed. Preference
+        // order: the system account (id 1), else the lowest-id surviving
+        // account, else 0 (single-account server — nothing left to own it).
+        var systemPlayerId = await db.Players.AnyAsync(p => p.Id == 1)
+            ? 1L
+            : await db.Players.Where(p => p.Id != playerId)
+                .OrderBy(p => p.Id)
+                .Select(p => p.Id)
+                .FirstOrDefaultAsync();
+
+        // GetCurrentPlayerAsync goes through PlayerService.GetByIdAsync,
+        // which Include()s the Avatar and leaves it tracked on this same
+        // scoped DbContext. PurgeAsync deletes that avatar row with
+        // ExecuteDelete, so leaving it tracked would make the Players.Remove
+        // cascade emit a second DELETE for an already-gone row and throw
+        // DbUpdateConcurrencyException. Drop the graph, then re-read the
+        // Players row on its own.
+        db.ChangeTracker.Clear();
+        var row = await db.Players.FirstOrDefaultAsync(p => p.Id == playerId);
+        if (row is null) return Ok(new RecNetResult { Success = true, Error = string.Empty });
+
+        await using (var tx = await db.Database.BeginTransactionAsync())
+        {
+            var summary = await PlayerAccountPurge.PurgeAsync(db, playerId, systemPlayerId);
+            db.Players.Remove(row);
+            await db.SaveChangesAsync();
+            await tx.CommitAsync();
+            logger.LogInformation(
+                "[accounts] DELETE account/me — removed {Id} ({Username}); {Summary}",
+                playerId, username, summary);
+        }
+
+        await notifications.KickPlayerAsync(playerId, "This account has been deleted.");
+        presence.Clear(playerId);
+
+        return Ok(new RecNetResult { Success = true, Error = string.Empty });
     }
 
     /// <summary>
@@ -175,11 +272,18 @@ public class AccountsController(
     [HttpGet("/account/search")]
     [HttpGet("/account/v1/search")]
     [Microsoft.AspNetCore.Authorization.AllowAnonymous]
-    public async Task<IActionResult> Search([FromQuery] string? query, [FromQuery] int take = 20)
+    // The 2023-03-21 client names the search term "name"; binding only "query"
+    // meant every player search came back empty (the handler short-circuited on
+    // a null term before it ever reached the service).
+    public async Task<IActionResult> Search(
+        [FromQuery] string? query,
+        [FromQuery] string? name,
+        [FromQuery] int take = 20)
     {
-        if (string.IsNullOrWhiteSpace(query)) return Ok(Array.Empty<object>());
+        var term = !string.IsNullOrWhiteSpace(name) ? name : query;
+        if (string.IsNullOrWhiteSpace(term)) return Ok(Array.Empty<object>());
         var clamped = Math.Clamp(take, 1, 50);
-        var matches = await playerService.SearchAsync(query.Trim(), clamped);
+        var matches = await playerService.SearchAsync(term.Trim(), clamped);
         return Ok(matches
             .Select(p => BuildAccount(p.Id, p.Username, p.DisplayName, p.ProfileImageName))
             .ToList());
@@ -338,6 +442,10 @@ public class AccountsController(
     /// cutoff is &lt;13 years old; we recompute it on every birthday
     /// write so a freshly turned 13 player loses the junior flag the
     /// next time they update.</summary>
+    // The 2023 client PUTs birthday (verb 3 at OPMAPIOEIFG.txt:7950-7954);
+    // POST-only returned 405 and the birthday step of onboarding always failed.
+    [HttpPut("/account/v1/birthday")]
+    [HttpPut("/account/me/birthday")]
     [HttpPost("/account/v1/birthday")]
     [HttpPost("/account/me/birthday")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
@@ -681,8 +789,103 @@ public class AccountsController(
         return Ok(new { accountId = (int)accountId, bio = p?.Bio ?? string.Empty });
     }
 
+    /// <summary>
+    /// GET <c>/platformid/{accountId}</c> — the 2023 client's
+    /// <c>OPMAPIOEIFG.DPLOCBLKCEB(Int32 accountId)</c>. Binary evidence:
+    /// path literal <c>"platformid/{0}"</c> at OPMAPIOEIFG.txt:11056 with
+    /// the verb ordinal <c>rdx</c> = 0 (GET) at :11066, and the failure
+    /// string <c>"Failed to GetPlatformId for accountId {0}"</c> at :11102.
+    ///
+    /// RESPONSE SHAPE: the issuing method's return type is
+    /// <c>FGLDKEJLAKB&lt;System.String&gt;</c> — a BARE JSON string, not an
+    /// object. Emitting <c>{"PlatformId":0}</c> makes the strict reader hit
+    /// <c>'{'</c> where it wants <c>'"'</c> and throw. The legacy
+    /// <c>/account/v1/{id}/platformid</c> spelling is kept as an alias and
+    /// now returns the real stored value instead of a hardcoded 0.
+    ///
+    /// The client short-circuits and never issues the request when
+    /// accountId &lt;= 0 (:11052-11053), so we only ever see real ids.
+    /// Unknown accounts get an empty string — "no platform identity" is the
+    /// honest answer and keeps the promise resolved rather than rejected.
+    /// </summary>
+    [HttpGet("/platformid/{accountId:long}")]
     [HttpGet("/account/v1/{accountId:long}/platformid")]
-    public IActionResult GetPlatformId(long accountId) => Ok(new { PlatformId = 0L });
+    public async Task<IActionResult> GetPlatformId(long accountId)
+    {
+        var platformId = await db.Players
+            .Where(p => p.Id == accountId)
+            .Select(p => p.LastPlatformId)
+            .FirstOrDefaultAsync();
+        return Content(
+            System.Text.Json.JsonSerializer.Serialize(platformId ?? string.Empty),
+            "application/json");
+    }
+
+    /// <summary>
+    /// GET <c>/accounts/{accountId}/receives/{category}</c> — the 2023
+    /// client's platform-notification opt-in probe
+    /// (<c>LELAJKMOMIA.GCIPPNCOKAJ(Int32 accountId)</c>). Binary evidence:
+    /// path literal at LELAJKMOMIA.txt:695, verb ordinal <c>rdx</c> = 0
+    /// (GET) at :705, service-host ordinal 15 (platformnotifications) at
+    /// :709. The <c>{1}</c> segment is a <c>CCOKJMJOIJF</c> enum value
+    /// boxed and <c>String.Format</c>ed at :690-698, i.e. the enum MEMBER
+    /// NAME — the constant at this call site is value 8 (:693) but the
+    /// member names appear nowhere as literals in the binary, so the
+    /// segment MUST stay an unconstrained opaque string.
+    ///
+    /// RESPONSE SHAPE: the continuation is <c>System.Action&lt;Boolean&gt;</c>
+    /// over <c>FGLDKEJLAKB&lt;Boolean&gt;</c> (:721/:733) — a BARE JSON
+    /// boolean, no envelope. A 404 here rejects the promise inside AGUI's
+    /// AccountSpecificUIBehaviour and blocks the notification-gated action.
+    ///
+    /// Answered from the real <see cref="NotificationPrefsEntity"/> row that
+    /// backs <c>PUT /preferences</c>: <c>AllowAll</c> gates everything, then
+    /// the per-category flag. Categories are resolved by the same ids the
+    /// platformnotifications <c>config/categories</c> catalogue publishes
+    /// (1 Messages, 2 Friend Requests, 3 Event Invites, 4 Announcements) and
+    /// by normalised name, so both the numeric and member-name spellings
+    /// land on the right column. A category we don't model (such as the
+    /// value-8 one this call site uses) falls back to <c>AllowAll</c> — the
+    /// player has no mute for it, which is the truthful answer, not a stub.
+    /// </summary>
+    [HttpGet("/accounts/{accountId:long}/receives/{category}")]
+    [HttpGet("/platformnotifications/accounts/{accountId:long}/receives/{category}")]
+    public async Task<IActionResult> Receives(long accountId, string category)
+    {
+        var exists = await db.Players.AnyAsync(p => p.Id == accountId);
+        if (!exists) return Content("false", "application/json");
+
+        var prefs = await db.NotificationPrefs
+            .FirstOrDefaultAsync(p => p.PlayerId == accountId);
+        // No row at all = never opted out of anything.
+        if (prefs is null) return Content("true", "application/json");
+
+        var receives = prefs.AllowAll && CategoryAllowed(prefs, category);
+        return Content(receives ? "true" : "false", "application/json");
+    }
+
+    /// <summary>Maps the opaque <c>{category}</c> segment onto the columns
+    /// of <see cref="NotificationPrefsEntity"/>. Accepts the numeric
+    /// CategoryId published by <c>config/categories</c> as well as the enum
+    /// member name in any casing/punctuation; anything we don't model is
+    /// only gated by <c>AllowAll</c>.</summary>
+    private static bool CategoryAllowed(NotificationPrefsEntity prefs, string? category)
+    {
+        if (string.IsNullOrWhiteSpace(category)) return true;
+        var key = new string(category.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant();
+        return key switch
+        {
+            "1" or "message" or "messages" or "directmessage" or "directmessages"
+                => prefs.AllowMessage,
+            "2" or "friendrequest" or "friendrequests"
+                => prefs.AllowFriendRequest,
+            "3" or "eventinvite" or "eventinvites" or "invite" or "invites"
+                => prefs.AllowEventInvite,
+            "4" or "announcement" or "announcements" or "news"
+                => prefs.AllowAnnouncements,
+            _ => true,
+        };
+    }
 
     [HttpGet("/accountprivacysettings/{accountId:long}")]
     [HttpGet("/account/v1/privacysettings/{accountId:long}")]

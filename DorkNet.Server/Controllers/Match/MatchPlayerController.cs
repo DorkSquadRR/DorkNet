@@ -112,12 +112,17 @@ public class MatchPlayerController(
     /// </summary>
     [HttpPost("/player/notifydisconnect")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
-    public IActionResult NotifyDisconnect([FromForm(Name = "otherPlayerId")] int? otherPlayerId)
+    public IActionResult NotifyDisconnect(
+        [FromForm(Name = "otherPlayerId")] int? otherPlayerId,
+        // The 2023-03-21 client sends PascalCase PlayerId + RoomInstanceId
+        // instead of 2020's otherPlayerId, so the legacy binding logged null.
+        [FromForm(Name = "PlayerId")] long? playerId,
+        [FromForm(Name = "RoomInstanceId")] long? roomInstanceId)
     {
         var caller = TryGetCurrentPlayerId();
         log.LogInformation(
-            "[player-notify-disconnect] caller={Caller} reported other={Other} left",
-            caller, otherPlayerId);
+            "[player-notify-disconnect] caller={Caller} reported other={Other} instance={Instance} left",
+            caller, otherPlayerId ?? (int?)playerId, roomInstanceId);
         return Ok();
     }
 
@@ -158,9 +163,12 @@ public class MatchPlayerController(
         return Ok(new PresenceDto
         {
             PlayerId = playerId,
-            StatusVisibility = 0,   // Everyone (was 1 = FriendsOnly)
+            // Defaults: 0 = Everyone. Both come from the player's stored
+            // preference so a value set via /player/statusvisibility or
+            // /player/vrmovementmode survives the next heartbeat.
+            StatusVisibility = await GetPlayerPrefIntAsync(playerId, PrefStatusVisibility, 0),
             DeviceClass = 0,
-            VrMovementMode = 0,
+            VrMovementMode = await GetPlayerPrefIntAsync(playerId, PrefVrMovementMode, 0),
             RoomInstance = room,
         });
     }
@@ -170,13 +178,14 @@ public class MatchPlayerController(
     public async Task<ActionResult<PresenceDto>> SetStatusVisibility([FromForm(Name = "statusVisibility")] int? value)
     {
         var playerId = TryGetCurrentPlayerId();
+        if (value is int v) await SetPlayerPrefAsync(playerId, PrefStatusVisibility, v.ToString());
         var room = await GetPresenceRoomForResponseAsync(playerId);
         return Ok(new PresenceDto
         {
             PlayerId = playerId,
-            StatusVisibility = value ?? 0,   // default Everyone; honor explicit client choice
+            StatusVisibility = value ?? await GetPlayerPrefIntAsync(playerId, PrefStatusVisibility, 0),
             DeviceClass = 0,
-            VrMovementMode = 0,
+            VrMovementMode = await GetPlayerPrefIntAsync(playerId, PrefVrMovementMode, 0),
             RoomInstance = room,
         });
     }
@@ -186,16 +195,57 @@ public class MatchPlayerController(
     public async Task<ActionResult<PresenceDto>> SetVrMovementMode([FromForm(Name = "vrMovementMode")] int? value)
     {
         var playerId = TryGetCurrentPlayerId();
+        if (value is int v) await SetPlayerPrefAsync(playerId, PrefVrMovementMode, v.ToString());
         var room = await GetPresenceRoomForResponseAsync(playerId);
         return Ok(new PresenceDto
         {
             PlayerId = playerId,
-            StatusVisibility = 0,   // Everyone (was 1 = FriendsOnly)
+            StatusVisibility = await GetPlayerPrefIntAsync(playerId, PrefStatusVisibility, 0),
             DeviceClass = 0,
-            VrMovementMode = value ?? 0,
+            VrMovementMode = value ?? await GetPlayerPrefIntAsync(playerId, PrefVrMovementMode, 0),
             RoomInstance = room,
         });
     }
+
+    // ── per-player matchmaking preferences ───────────────────────────
+    // These three were previously echo-only: the client's chosen value came
+    // back in the response and was then dropped, so the setting reverted on the
+    // next heartbeat and never survived a restart. They live in PlayerSettings
+    // (no schema change needed) and are read back wherever presence is built.
+    private const string PrefStatusVisibility = "pref:statusVisibility";
+    private const string PrefVrMovementMode   = "pref:vrMovementMode";
+    private const string PrefAvoidJuniors     = "pref:avoidJuniors";
+
+    private async Task SetPlayerPrefAsync(long playerId, string key, string value)
+    {
+        if (playerId == 0) return;
+        var row = await db.PlayerSettings
+            .FirstOrDefaultAsync(s => s.PlayerId == playerId && s.Key == key);
+        if (row is null)
+        {
+            db.PlayerSettings.Add(new DorkNet.Server.Data.Entities.PlayerSettingEntity
+            {
+                PlayerId = playerId, Key = key, Value = value,
+            });
+        }
+        else
+        {
+            row.Value = value;
+        }
+        await db.SaveChangesAsync();
+    }
+
+    private async Task<string?> GetPlayerPrefAsync(long playerId, string key)
+    {
+        if (playerId == 0) return null;
+        return await db.PlayerSettings
+            .Where(s => s.PlayerId == playerId && s.Key == key)
+            .Select(s => s.Value)
+            .FirstOrDefaultAsync();
+    }
+
+    private async Task<int> GetPlayerPrefIntAsync(long playerId, string key, int fallback)
+        => int.TryParse(await GetPlayerPrefAsync(playerId, key), out var v) ? v : fallback;
 
     /// <summary>
     /// GET <c>/player/avoidjuniors</c> — returns a primitive boolean.
@@ -209,18 +259,28 @@ public class MatchPlayerController(
     /// matchmaking init in a never-completes state on some boot flows.
     /// </summary>
     [HttpGet("/player/avoidjuniors")]
-    public ActionResult<bool> GetAvoidJuniors() => Ok(false);
+    public async Task<ActionResult<bool>> GetAvoidJuniors()
+    {
+        var playerId = TryGetCurrentPlayerId();
+        var stored = await GetPlayerPrefAsync(playerId, PrefAvoidJuniors);
+        return Ok(bool.TryParse(stored, out var v) && v);
+    }
 
     /// <summary>PUT <c>/player/avoidjuniors</c> — body
-    /// <c>avoidJuniors=true|false</c> (Matchmaking.txt:7883). Stub for
-    /// now; the multi-tenant server doesn't currently track this
-    /// preference per-player. Returns the new value as a JSON
+    /// <c>avoidJuniors=true|false</c> (Matchmaking.txt:7883). Persisted
+    /// per-player in PlayerSettings and read back by
+    /// <see cref="GetAvoidJuniors"/>. Returns the new value as a JSON
     /// primitive so the watch's ExpectPrimitiveResponse is happy.</summary>
     [HttpPut("/player/avoidjuniors")]
     [HttpPost("/player/avoidjuniors")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
-    public ActionResult<bool> SetAvoidJuniors([FromForm(Name = "avoidJuniors")] bool? value)
-        => Ok(value ?? false);
+    public async Task<ActionResult<bool>> SetAvoidJuniors([FromForm(Name = "avoidJuniors")] bool? value)
+    {
+        var playerId = TryGetCurrentPlayerId();
+        if (value is bool v)
+            await SetPlayerPrefAsync(playerId, PrefAvoidJuniors, v ? "true" : "false");
+        return Ok(value ?? false);
+    }
 
     /// <summary>POST <c>/player/photonregionpings</c> — watch reports
     /// its measured Photon region ping vector so the server can pick
@@ -260,6 +320,27 @@ public class MatchPlayerController(
             // Sanity bound — discard wild values from misbehaving clients.
             pairs[r] = Math.Clamp(p, 0, 2000);
         }
+
+        // The 2023-03-21 client does NOT use the repeated (region, ping) pair
+        // shape above. It sends one field per measured region, keyed by the
+        // region name with the ping as the value (us=42&eu=90&...). Against the
+        // pair parser both arrays came back empty, so no 2023 client ever
+        // registered a ping and region selection fell back to the default.
+        if (pairs.Count == 0)
+        {
+            var fields = Request.HasFormContentType
+                ? (IEnumerable<KeyValuePair<string, Microsoft.Extensions.Primitives.StringValues>>)Request.Form
+                : Request.Query;
+            foreach (var (key, value) in fields)
+            {
+                var name = key?.Trim();
+                if (string.IsNullOrEmpty(name)) continue;
+                if (name.Equals("region", StringComparison.OrdinalIgnoreCase) ||
+                    name.Equals("ping", StringComparison.OrdinalIgnoreCase)) continue;
+                if (!int.TryParse(value.FirstOrDefault(), out var p)) continue;
+                pairs[name] = Math.Clamp(p, 0, 2000);
+            }
+        }
         if (pairs.Count > 0)
             presence.SetPhotonRegionPings(playerId, pairs);
         log.LogInformation("[player-region-pings] player={Player} regions={Count}", playerId, pairs.Count);
@@ -282,12 +363,34 @@ public class MatchPlayerController(
         var pending = joinTimeouts.GetPending(playerId);
         if (pending is { DeferPresenceCommit: true })
         {
+            // Report the instance the player is joining — NOT null.
+            //
+            // Deferring the commit is about what everyone ELSE sees: presence
+            // stays uncommitted until the join is confirmed, so a failed join
+            // never leaves a ghost in the room. It was never meant to change
+            // what we tell the joining player about themselves.
+            //
+            // Returning null did exactly that, and the client treats it as the
+            // room vanishing mid-join: OnPresenceHeartbeatResponse XORs
+            // (cachedRoomInstance != null) against (serverRoomInstance != null),
+            // so a client holding the target while we say null fires
+            // "presence heartbeat response indicates local presence is
+            // out-of-sync", then "Attempting to go to Invalid RoomInstance"
+            // and cancels its own load ("OnPlayerPresenceUpdate is cancelling
+            // room load"). The join it aborted was the one we were waiting on,
+            // so it retried until a heartbeat happened to miss the window —
+            // entering a dorm took several attempts and looked like a load
+            // failure. The branch below documents this same XOR for the
+            // boot-race case; this one contradicted it.
+            //
+            // Echoing the pending target satisfies the XOR and matches what the
+            // client already has, while presence itself stays uncommitted.
             log.LogInformation(
-                "[player-heartbeat] player={PlayerId} pending deferred room={RoomId} instance={InstanceId}; returning null until join result",
+                "[player-heartbeat] player={PlayerId} pending deferred room={RoomId} instance={InstanceId}; echoing target until join result",
                 playerId,
                 pending.Value.TargetRoom.RoomId,
                 pending.Value.TargetRoom.RoomInstanceId);
-            return null;
+            return pending.Value.TargetRoom;
         }
 
         if (room is null)

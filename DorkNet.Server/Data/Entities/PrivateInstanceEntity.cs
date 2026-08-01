@@ -38,5 +38,11 @@ public class PrivateInstanceEntity
     public int MaxCapacity { get; set; } = 8;
     [MaxLength(128)] public string Name { get; set; } = string.Empty;
 
+    /// <summary>Host-chosen room code, set via PUT
+    /// <c>/roominstance/{id}/roomcode</c>. Empty means "no custom code", in
+    /// which case the deterministic <c>RoomCodeService.Generate</c> value is
+    /// served instead.</summary>
+    [MaxLength(16)] public string RoomCode { get; set; } = string.Empty;
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 }

@@ -64,6 +64,10 @@ public class TestCaseEntity
     /// case belongs to (null = orphan / standalone).</summary>
     public uint? TestPassId { get; set; }
 
+    /// <summary>Append-only JSON array of QA comments posted through
+    /// <c>POST api/testcasemanagement/v1/testcase/{id}/comment</c>.</summary>
+    public string CommentsJson { get; set; } = "[]";
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }
