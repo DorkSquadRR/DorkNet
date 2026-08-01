@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using DorkNet.Models.Auth;
@@ -808,8 +809,12 @@ public class AccountsController(
     /// Unknown accounts get an empty string — "no platform identity" is the
     /// honest answer and keeps the promise resolved rather than rejected.
     /// </summary>
+    // LastPlatformId is a third-party identifier (Steam/Oculus id); without
+    // an auth gate this was an anonymous enumeration oracle over every
+    // account. The 2023 client only ever calls it with a token.
     [HttpGet("/platformid/{accountId:long}")]
     [HttpGet("/account/v1/{accountId:long}/platformid")]
+    [Authorize]
     public async Task<IActionResult> GetPlatformId(long accountId)
     {
         var platformId = await db.Players
