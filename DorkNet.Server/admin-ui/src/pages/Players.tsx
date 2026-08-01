@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router';
 import { api, get } from '../lib/api';
 import type { Player, PlayerDetail } from '../lib/types';
 import { absoluteTime, currencyName, num, relativeTime } from '../lib/format';
