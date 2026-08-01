@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { api, get } from '../lib/api';
 import type { Stats } from '../lib/types';
 import { absoluteTime, num, relativeTime } from '../lib/format';

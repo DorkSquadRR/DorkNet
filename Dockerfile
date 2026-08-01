@@ -9,7 +9,7 @@
 # context.
 
 ARG DOTNET_VERSION=9.0
-ARG NODE_VERSION=20
+ARG NODE_VERSION=22
 
 # ── admin SPA build stage ──────────────────────────────────────────
 # The Vite + React admin UI under DorkNet.Server/admin-ui builds in a
