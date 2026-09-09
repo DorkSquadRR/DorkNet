@@ -1,13 +1,12 @@
 # DorkNet — `march-2023-03-21`
 
-This is the **December 2020.12.18** branch of DorkNet — a self-hostable
-reimplementation of the Rec Room backend tuned to the wire protocol of
-the **Rec Room 2020.12.18** client build.
+This branch of DorkNet is a self-hostable reimplementation of the Rec Room
+backend tuned to the wire protocol of the **March 2023 desktop client**.
 
 > ⚠️ **Not affiliated with Rec Room Inc. or Against Gravity.**
 > See [DISCLAIMER](../../blob/main/DISCLAIMER.md). DorkNet ships no Rec
 > Room game assets or modified binaries — you supply your own
-> legally-acquired Rec Room 2020.12.18 install.
+> legally-acquired March 2023 Rec Room install.
 
 If you're not sure which DorkNet branch you want, start at the
 [main branch's chart](../../blob/main/BRANCHES.md). The launcher on
@@ -19,23 +18,15 @@ main also auto-detects your install.
 
 | | |
 |---|---|
-| **Client build** | Rec Room 2020.12.18 |
-| **Version key** (sent as `X-DorkNet-Version` header) | `december_2020_12_18` |
+| **Client family** | Rec Room March 2023 desktop |
+| **Accepted build IDs** | `20230317`, `20230321` |
+| **Version key** (sent as `X-DorkNet-Version` header) | `march_2023_03_21` |
 | **Version plugin** | `DorkNet.Server/Versions/Late2020/Late2020VersionPlugin.cs` |
-| **Schema** | One EF `Initial` migration; SQLite + Postgres both work |
 | **Runtime topology** | Gateway-fronted microservices with dedicated service slices and a monolith fallback |
-| **Diverges from `march-2020-03-10` by** | ~170 files |
 
-Subsystems present on this branch that the March branch doesn't have:
-
-- Chat threads + group DMs (`ChatThreads`, `ChatThreadMembers`)
-- Clubs surface (`clubs.{apex}/*` — announcements, categories, subscriptions)
-- Playlists (curated + user-created)
-- Weekly challenges
-- Room keys (purchasable room access)
-- Room roles (per-room co-owner / moderator / host grants)
-- Leaderboard channel metadata
-- Loading-screen tips
+The version plugin retains its historical `Late2020` class and directory
+name, but this branch registers and serves only the `march_2023_03_21`
+client key.
 
 ---
 
@@ -50,7 +41,7 @@ dotnet tool install --global dotnet-ef
 **2. Clone this branch:**
 
 ```pwsh
-git clone --branch december-2020-12-18 https://github.com/DorkSquadRR/DorkNet
+git clone --branch march-2023-03-21 https://github.com/DorkSquadRR/DorkNet
 cd DorkNet
 ```
 
@@ -110,7 +101,7 @@ that, then re-run with `-ResumeBuild` to finish — see the script's
 
 ### Standalone Quest build (experimental)
 
-The December Quest APK is also IL2CPP and can build the same
+The experimental Quest path also uses IL2CPP and can build the same
 `DorkNet.ClientMod` source against LemonLoader's Android runtime. The
 current Quest path is still device-tested manually: build the mod as a
 net8 LemonLoader DLL, install it into a LemonLoader-patched APK, then
