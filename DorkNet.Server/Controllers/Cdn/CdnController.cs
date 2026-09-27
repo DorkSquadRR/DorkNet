@@ -568,7 +568,7 @@ public class CdnController(
             // Maker Pen. See RoomDataBlobService.BuildRroEditableBlob.
             logger.LogInformation("[cdn] MISS host={Host} file={File} -> RRO editable blob (room {Room}, activity {Activity})",
                 Request.Host.Host, fileName, rroRoom.Id, rroRoom.LocationReplicationId);
-            var rroBlob = roomDataBlob.GetRroEditableBlob(rroRoom.LocationReplicationId);
+            var rroBlob = roomDataBlob.GetRroEditableBlob(rroRoom.LocationReplicationId, rroRoom.Name);
             rroBlob = ClampForClientUnlessDisabled(rroBlob, fileName);
             Response.Headers.CacheControl = "public, max-age=60";
             signatures.AddContentSignature(Response, rroBlob);

@@ -222,7 +222,16 @@ actions:
   `LocationReplicationId`, `last_save_time`, empty connectable graph /
   object model, scene settings and the four `room_mood_*` blocks, plus the
   permissive role collection. The miss path now runs the same 2023
-  version clamp as the S3-hit path.
+  version clamp as the S3-hit path. It also carries the room's own three
+  **game-role objects** (a default role named after the room, plus the
+  built-in "In-Game" and "Eliminated" roles, well-known GUIDs shared by
+  every room save — Rec Center and Stunt Runner both have exactly these).
+  The 2023 client grants Maker Pen off the player's *game* role
+  (`ICreatorRole.CreatorRoleCanUseMakerPen` on `GameRole`), so a blob with
+  no role objects leaves even a co-owner with nothing to hold — that was
+  the second reason "enable + co-owner" still showed no Maker Pen. The
+  default role sets `can_use_maker_pen` to true, matching the permissive
+  room-role overlay; the built-in roles mirror the reference saves.
 - **Reset to baked scene** — `POST api/admin/v1/rooms/{id}/subrooms/{subRoomId}/blob/reset`.
   Clears both pointers. This is the escape hatch if a save left the room
   unplayable. Saved blobs stay in `RoomDataBlobs`, so the in-game restore
