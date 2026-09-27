@@ -279,6 +279,24 @@ Procedure that makes Rec Royale playable AND editable:
 
 Tests: `RroRoomBlobTests`.
 
+### Why Rec Royale still has no Maker Pen after all of the above
+
+The Maker Pen permission check (`AGMBHDNGOEH.IJEIEBGJJLB`) first runs a
+room precondition (`LALJEMHEIBH`) that, via `MLKAFHHHEGA.GHPIBJPNOFF` →
+`PNPLLCBBMJP.JGPBNEHFLJA`, looks the current room up in
+`AGRoomRuntimeConfig` — a table **baked into the client's
+`resources.assets`** — and returns a per-original boolean. Rec Center and
+Stunt Runner allow creation there; Rec Royale does not. No blob, role or
+server response changes that table, and it is consulted only for rooms the
+client considers originals (`IsRRO` = our `IsAGRoom`).
+
+Server-side experiment: clone Rec Royale, flip the clone's **Rec Room
+Original (IsRRO)** checkbox off on the General tab
+(`rooms/{id}/props` `IsAGRoom: false`), upload a real save to it, join. If
+the client still loads the Frontier scene for a non-original, Rec Royale
+becomes an editable template; if the scene fails to load, the table gate
+has to be bypassed client-side (ClientMod postfix on `GHPIBJPNOFF`).
+
 ## Test cases ↔ GitHub issues
 
 QA test cases can file and track GitHub issues. Configure with:

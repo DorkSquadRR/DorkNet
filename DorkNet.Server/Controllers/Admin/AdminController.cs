@@ -975,7 +975,8 @@ public class AdminController(
         double? HotScore,
         int? State,
         string? ImageName,
-        int? MaxCapacity);
+        int? MaxCapacity,
+        bool? IsAGRoom);
 
     /// <summary>POST <c>api/admin/v1/rooms/{id}/props</c> — partial
     /// update of room properties. Only the non-null fields in the
@@ -1004,6 +1005,20 @@ public class AdminController(
             // client today (no Photon hard-enforce) — see RoomEntity.MaxCapacity.
             room.MaxCapacity = Math.Clamp(cap, 1, 80);
             changes.Add($"maxCapacity={room.MaxCapacity}");
+        }
+        if (body.IsAGRoom is bool ag)
+        {
+            // IsAGRoom is what the client reads as IsRRO. True: load the
+            // baked scene from the client's own assets AND consult the
+            // client-baked AGRoomRuntimeConfig table (which, per original,
+            // decides e.g. whether creation is allowed — Rec Center yes, Rec
+            // Royale no). False: treat the room as a custom room (roles and
+            // blob decide everything). Flipping a CLONE of a baked original
+            // to false is the server-side experiment for "editable Rec
+            // Royale"; whether the client still loads the baked scene for a
+            // non-original is what that experiment answers.
+            room.IsAGRoom = ag;
+            changes.Add($"isAGRoom={ag}");
         }
 
         if (changes.Count == 0) return Ok(new { room.Id, unchanged = true });
