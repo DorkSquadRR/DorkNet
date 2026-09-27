@@ -174,6 +174,22 @@ Stunt Runner: "StuntRunner"; GUID `c48bac02-…` in both), "In-Game"
 a blob without these leaves a co-owner with no Maker Pen. The stub now
 generates Rec Royale's own set (view ids derived from the activity id).
 
+Game-rule chip. A newer-client export of a custom Rec Royale room showed
+the saved `RecRoyaleSquads_GameRuleWrapperCircuit` chip is minimal:
+`spawnable_tool_data.prefab_id` `857f7500…`, `tagged_tool_data` tag
+`recroyalesquadsgameruleci` (prefab name lower-cased, 25 chars),
+`circuit_node_data.id`, and an EMPTY `game_rule_wrapper_data` (field 41).
+Prefab ids live in the client's spawnable-tool table in
+`resources.assets`: after `SpawnableTool_Runtime_<ENUM>` comes a 20-byte
+hash (len-prefixed), two u32s, then the 16-byte prefab id (len-prefixed),
+then the enum again, display name and tag. Extracted:
+Solos `983db81a68927f419edb0daf1243e93e`, Squads
+`857f750016ca77408ae9f72f9877748a` (matches the save), StuntRunner
+`28276d92470ff34ab05f72b2707a04d1`. Stunt Runner's other rule-ish object
+(`84eb8434…`, `game_configuration_data` field 40) is the generic Game
+Configuration chip, optional — `GameConfigurationTool` falls back to its
+baked asset. The stub emits the wrapper chip for the two Rec Royale rooms.
+
 Admin switch: `POST api/admin/v1/rooms/{id}/subrooms/{sub}/blob/enable`
 stamps `RoomService.SyntheticDefaultRoomDataBlobName(id)` on the scene and
 room; `.../blob/reset` clears it. See `docs/admin.md` → "RRO room data

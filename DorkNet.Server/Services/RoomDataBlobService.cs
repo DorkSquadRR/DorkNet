@@ -347,6 +347,19 @@ public class RoomDataBlobService
         AppendLengthDelimited(output, 2, BuildGameRoleView(seed, "Eliminated", EliminatedGameRoleGuid, nodeId: 11,
             transform: "0a0f0deac98341152c798b3f1da05e8dc02d0000803f32050d0000803f",
             roleId: 4_194_304, roleRank: 1015, isDefaultRole: false));
+
+        // 2: the room's GAME-RULE chip, for baked originals whose rule is not
+        // in the scene. Rec Royale's Frontier scene has no baked
+        // *_GameRuleWrapperCircuit (the paintball scenes do); real Rec Room
+        // delivered it in the blob. A saved RecRoyaleSquads chip (custom
+        // Rec Royale room export) is just header + prefab id + palette tag +
+        // node id + an EMPTY GameRuleWrapperData (field 41), so it can be
+        // generated. Prefab ids come from the client's spawnable-tool table
+        // in resources.assets (SpawnableTool_Runtime_<ENUM> → 16-byte id),
+        // cross-checked against ids seen in real saves.
+        var chip = GameRuleChipFor(roomName);
+        if (chip is not null)
+            AppendLengthDelimited(output, 2, BuildGameRuleChipView(seed, chip.Value.PrefabId, chip.Value.Tag, nodeId: 3));
         // 21: connectable_graph_data { root_node { slot_index=0-ish, field 7 = 1 } }
         AppendLengthDelimited(output, 21, new byte[] { 0x0A, 0x04, 0x0A, 0x00, 0x38, 0x01 });
         // 24: scene_settings_data { enforce_host_only_areas=true, use_new_materials=true }
@@ -367,6 +380,60 @@ public class RoomDataBlobService
         WriteVarint(output, ((ulong)fieldNumber << 3) | 2);
         WriteVarint(output, (ulong)payload.Length);
         output.Write(payload, 0, payload.Length);
+    }
+
+    /// <summary>Game-rule wrapper chips for baked originals whose rule is not
+    /// baked into the scene, keyed by (a substring of) the room name. Ids are
+    /// the client's <c>SpawnableTool_Runtime_*</c> prefab ids (2023-03-21
+    /// resources.assets); the Squads id also matches a real newer-client
+    /// save. Tags are what the client generates: prefab name lower-cased,
+    /// cut to 25 characters.</summary>
+    private static (byte[] PrefabId, string Tag)? GameRuleChipFor(string roomName)
+    {
+        if (string.IsNullOrWhiteSpace(roomName)) return null;
+        var n = roomName.Replace("-", "").Replace("_", "").Replace(" ", "");
+        if (n.Contains("RecRoyaleSquads", StringComparison.OrdinalIgnoreCase))
+            return (Convert.FromHexString("857f750016ca77408ae9f72f9877748a"), "recroyalesquadsgameruleci");
+        if (n.Contains("RecRoyaleSolos", StringComparison.OrdinalIgnoreCase))
+            return (Convert.FromHexString("983db81a68927f419edb0daf1243e93e"), "recroyalesolosgamerulecir");
+        return null;
+    }
+
+    /// <summary>PersistenceViewData for a GameRuleCircuitWrapperTool chip,
+    /// laid out like the saved RecRoyaleSquads chip: id, empty
+    /// tool_entity_data, transform, spawnable_tool_data{prefab_id},
+    /// creation_object_data{is_frozen,is_grabbable}, tagged_tool_data{tag},
+    /// empty tool_cleanup_data, circuit_node_data{id}, empty
+    /// game_rule_wrapper_data (field 41).</summary>
+    private static byte[] BuildGameRuleChipView(string seed, byte[] prefabId, string tag, int nodeId)
+    {
+        using var view = new MemoryStream(256);
+        AppendLengthDelimited(view, 1, System.Security.Cryptography.MD5.HashData(
+            System.Text.Encoding.UTF8.GetBytes($"dorknet-rro-gamerule:{seed}:{tag}")));
+        AppendLengthDelimited(view, 9, Array.Empty<byte>());
+        // Same spot the saved Squads chip sat at (position/scale/rotation).
+        AppendLengthDelimited(view, 10, Convert.FromHexString("0a0f0d804081c21520b58b431d941d50c42d0000803f32140d7cbd5d3f150034353a1d75deffbe250034353a"));
+        using (var spawnable = new MemoryStream(20))
+        {
+            AppendLengthDelimited(spawnable, 1, prefabId);
+            AppendLengthDelimited(view, 11, spawnable.ToArray());
+        }
+        AppendLengthDelimited(view, 14, new byte[] { 0x18, 0x01, 0x30, 0x01 });
+        using (var tagged = new MemoryStream(40))
+        {
+            using var tagData = new MemoryStream(32);
+            AppendLengthDelimited(tagData, 1, System.Text.Encoding.UTF8.GetBytes(tag));
+            AppendLengthDelimited(tagged, 1, tagData.ToArray());
+            AppendLengthDelimited(view, 15, tagged.ToArray());
+        }
+        AppendLengthDelimited(view, 22, Array.Empty<byte>());
+        using (var node = new MemoryStream(4))
+        {
+            AppendVarint(node, 1, (ulong)nodeId);
+            AppendLengthDelimited(view, 25, node.ToArray());
+        }
+        AppendLengthDelimited(view, 41, Array.Empty<byte>());
+        return view.ToArray();
     }
 
     private static void AppendVarint(Stream output, int fieldNumber, ulong value)
