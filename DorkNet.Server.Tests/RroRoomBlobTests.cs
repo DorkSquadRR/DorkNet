@@ -239,6 +239,111 @@ public sealed class RroRoomBlobTests : IClassFixture<DorkNetServerFactory>
         Assert.Contains(expectedTag, System.Text.Encoding.UTF8.GetString(blobBytes));
     }
 
+    /// <summary>A real save from any client version can be attached to a baked
+    /// original: activity id rewritten to the target room, output log /
+    /// sub-room id / unknown fields dropped, version clamped, and in
+    /// <c>basics</c> mode only the role + rule objects kept with circuits
+    /// stripped. The room then loads that blob (with the CDN's role overlay).</summary>
+    [Fact]
+    public async Task Uploading_a_real_save_attaches_it_to_the_room_rewritten_for_2023()
+    {
+        using var setup = Client("rooms");
+        var player = await GameClientSessionFactory.CreateAsync(setup, _factory.ApexDomain);
+        var admin = await GameClientSessionFactory.CreateAsync(setup, _factory.ApexDomain);
+
+        var roomId = 9_690_000 + Random.Shared.Next(1, 99_999);
+        const string location = "253fa009-6e65-4c90-91a1-7137a56a267f";
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<DorkNetDbContext>();
+            (await db.Players.FirstAsync(p => p.Id == admin.PlayerId)).IsAdmin = true;
+            db.Rooms.Add(new RoomEntity
+            {
+                Id = roomId,
+                Name = $"Upload{Guid.NewGuid():N}"[..18],
+                CreatorPlayerId = 1,
+                IsAGRoom = true,
+                TagsCsv = "recroomoriginal",
+                LocationReplicationId = location,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        // A "modern" save: version 138, someone else's activity id, an output
+        // log, a sub-room id, a newer-only field 37, circuit payloads, and
+        // three views — a game role (field 50), a game rule (field 41) and a
+        // plain prop (field 15 only).
+        var modern = BuildModernSave();
+
+        using var adminClient = Client("admin", admin);
+        using var form = new MultipartFormDataContent();
+        form.Add(new ByteArrayContent(modern), "file", "persisted_room_data.binpb");
+        using var uploaded = await adminClient.PostAsync($"/api/admin/v1/rooms/{roomId}/subrooms/0/blob/upload?mode=basics", form);
+        var uploadBody = await uploaded.Content.ReadAsStringAsync();
+        Assert.True(uploaded.IsSuccessStatusCode, $"upload -> {(int)uploaded.StatusCode}: {uploadBody}");
+        var result = JsonDocument.Parse(uploadBody).RootElement;
+        var blobName = result.GetProperty("dataBlobName").GetString()!;
+        Assert.StartsWith($"room_{roomId}_upload_", blobName);
+        var summary = result.GetProperty("summary");
+        Assert.Equal(3, summary.GetProperty("viewsIn").GetInt32());
+        Assert.Equal(2, summary.GetProperty("viewsKept").GetInt32());
+        Assert.Equal(138, summary.GetProperty("versionIn").GetInt32());
+        Assert.Equal(16, summary.GetProperty("versionOut").GetInt32());
+
+        // The game client is now pointed at the uploaded blob …
+        using var gameClient = Client("rooms", player);
+        var details = await GetJsonAsync(gameClient, $"/rooms/{roomId}");
+        Assert.Equal(blobName, SubRoomZero(details).GetProperty("DataBlob").GetString());
+
+        // … and the CDN serves it rewritten: 2 views, clamped header, our
+        // activity id, the role overlay applied, no field 37 / output log.
+        using var cdnClient = Client("cdn");
+        using var served = await cdnClient.GetAsync($"/room/{blobName}");
+        Assert.True(served.IsSuccessStatusCode, $"cdn -> {(int)served.StatusCode}");
+        var bytes = await served.Content.ReadAsByteArrayAsync();
+        var parsed = PersistedRoomData.Parser.ParseFrom(bytes);
+        Assert.Equal(RoomDataBlobService.Client2023MaxPersistedRoomVersion, (int)parsed.Version);
+        Assert.NotEmpty(parsed.RoomRoleData.RoomRoles);
+        Assert.Equal(2, CountTopLevelPersistenceViews(bytes));
+        var text = System.Text.Encoding.UTF8.GetString(bytes);
+        Assert.Contains(location, text);
+        Assert.DoesNotContain("someone-elses-activity", text);
+        Assert.DoesNotContain("Serialized 3 persistence views", text);
+    }
+
+    private static byte[] BuildModernSave()
+    {
+        var ms = new MemoryStream();
+        void Varint(int field, ulong v) { WriteVarint(ms, ((ulong)field << 3) | 0); WriteVarint(ms, v); }
+        void Bytes(int field, byte[] payload) { WriteVarint(ms, ((ulong)field << 3) | 2); WriteVarint(ms, (ulong)payload.Length); ms.Write(payload); }
+        static byte[] View(int markerField)
+        {
+            var v = new MemoryStream();
+            WriteVarint(v, (1UL << 3) | 2); WriteVarint(v, 16); v.Write(Guid.NewGuid().ToByteArray());
+            WriteVarint(v, ((ulong)markerField << 3) | 2); WriteVarint(v, 0);
+            return v.ToArray();
+        }
+        Varint(1, 38);
+        Bytes(2, View(50));  // game role
+        Bytes(2, View(41));  // game rule wrapper
+        Bytes(2, View(15));  // a prop (tagged tool only)
+        Bytes(4, System.Text.Encoding.UTF8.GetBytes("someone-elses-activity-0000-000000000000"));
+        Bytes(5, System.Text.Encoding.UTF8.GetBytes("Serialized 3 persistence views"));
+        Varint(6, 3991471883933115623UL);
+        Bytes(18, new byte[] { 0x0A, 0x02, 0x08, 0x01 });
+        Bytes(28, new byte[] { 0x0A, 0x02, 0x08, 0x01 });
+        Varint(30, 138);
+        Varint(31, 1);
+        Varint(37, 1);
+        return ms.ToArray();
+    }
+
+    private static void WriteVarint(Stream s, ulong value)
+    {
+        while (value >= 0x80) { s.WriteByte((byte)(value | 0x80)); value >>= 7; }
+        s.WriteByte((byte)value);
+    }
+
     [Fact]
     public async Task Enable_on_a_saved_subroom_keeps_the_saved_blob()
     {

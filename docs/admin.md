@@ -238,6 +238,22 @@ actions:
   spawnable-tool table; a saved Squads chip is header + prefab id + tag +
   node id + an empty wrapper payload), so the match logic exists on first
   join without anyone spawning it by hand.
+- **Upload save** — `POST api/admin/v1/rooms/{id}/subrooms/{subRoomId}/blob/upload?mode=full|basics`,
+  multipart `file` = a real `PersistedRoomData` save from ANY client
+  version (`.binpb` / `.room` / `.dat`, e.g. a RecNet export of a custom
+  Rec Royale room). The server rewrites it for this room
+  (`RoomDataBlobService.PrepareUploadedRoomBlob`): `activity_id` → the
+  room's `LocationReplicationId`, drops `output_log`, `sub_room_id` and
+  every field the 2023 schema doesn't know, clamps the header versions to
+  the 2023 maxima, and in `basics` mode keeps only the game-role (field 50)
+  and game-rule (fields 40/41) objects while stripping the circuit payloads
+  (`circuit_data`, connectable graph, `circuit_v2_data` — a newer
+  CircuitsV2 graph is rejected by the client's own CV2 version gate no
+  matter what). Stored under a fresh `room_{id}_upload_*.dat`, recorded in
+  `RoomDataBlobs`, and the sub-room (and room, for sub-room 0) is pointed
+  at it. On serve the CDN applies the RRO role overlay and clamp exactly
+  as for Rec Center's saved blob. Response carries a `summary`
+  (`viewsIn/viewsKept/roleViews/gameRuleViews/versionIn/versionOut`).
 - **Reset to baked scene** — `POST api/admin/v1/rooms/{id}/subrooms/{subRoomId}/blob/reset`.
   Clears both pointers. This is the escape hatch if a save left the room
   unplayable. Saved blobs stay in `RoomDataBlobs`, so the in-game restore
