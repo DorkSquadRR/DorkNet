@@ -165,6 +165,7 @@ function GeneralTab({ room, onSaved }: { room: RoomDetail; onSaved: () => void }
   const [description, setDescription] = useState(room.description);
   const [accessibility, setAccessibility] = useState(room.accessibility);
   const [cloningAllowed, setCloningAllowed] = useState(room.cloningAllowed);
+  const [isAGRoom, setIsAGRoom] = useState(room.isAGRoom);
   const [tagsCsv, setTagsCsv] = useState(room.tagsCsv);
   const [hotScore, setHotScore] = useState(String(room.hotScore));
   const [imageName, setImageName] = useState(room.imageName);
@@ -176,6 +177,7 @@ function GeneralTab({ room, onSaved }: { room: RoomDetail; onSaved: () => void }
     setDescription(room.description);
     setAccessibility(room.accessibility);
     setCloningAllowed(room.cloningAllowed);
+    setIsAGRoom(room.isAGRoom);
     setTagsCsv(room.tagsCsv);
     setHotScore(String(room.hotScore));
     setImageName(room.imageName);
@@ -193,6 +195,7 @@ function GeneralTab({ room, onSaved }: { room: RoomDetail; onSaved: () => void }
           Description: description,
           Accessibility: accessibility,
           CloningAllowed: cloningAllowed,
+          IsAGRoom: isAGRoom,
           TagsCsv: tagsCsv,
           HotScore: Number.isFinite(hot) ? hot : undefined,
           ImageName: imageName,
@@ -282,6 +285,14 @@ function GeneralTab({ room, onSaved }: { room: RoomDetail; onSaved: () => void }
           onChange={e => setCloningAllowed(e.target.checked)}
         />
         <span>Cloning allowed</span>
+      </label>
+      <label className="flex items-center gap-2 text-sm" title="What the client reads as IsRRO. On: load the baked scene from the client's assets and consult the client's built-in per-original table (which forbids creation in Rec Royale). Off: treat as a custom room — roles and blob decide. Flip a CLONE of an original off to test editable Rec Royale.">
+        <input
+          type="checkbox"
+          checked={isAGRoom}
+          onChange={e => setIsAGRoom(e.target.checked)}
+        />
+        <span>Rec Room Original (IsRRO) — baked scene + client creation table</span>
       </label>
       <div className="flex gap-2 pt-2 border-t border-ink-800">
         <button onClick={save} disabled={busy} className="btn-primary text-xs">
