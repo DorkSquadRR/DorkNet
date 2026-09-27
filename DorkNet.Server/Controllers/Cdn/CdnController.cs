@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using System.Text;
 using System.Text.Json;
 using DorkNet.Server.Data;
+using DorkNet.Server.Data.Entities;
 using DorkNet.Server.Services;
 
 namespace DorkNet.Server.Controllers.Cdn;
@@ -557,11 +558,18 @@ public class CdnController(
             return new FileContentResult(TransparentPng, "image/png");
         }
 
-        if (await ShouldOverlayRroRoomRoleDataAsync(fileName))
+        var rroRoom = await ResolveRroRoomAsync(fileName);
+        if (rroRoom is not null)
         {
-            logger.LogInformation("[cdn] MISS host={Host} file={File} -> RRO editable role blob",
-                Request.Host.Host, fileName);
-            var rroBlob = roomDataBlob.GetRroEditableBlob();
+            // Per-room stub: a real save's skeleton at the 2023 version
+            // ceiling with the room's own activity_id. The old generic stub
+            // (version 19, roles only) was fetched and silently rejected by
+            // the client, which is why an enabled baked room still had no
+            // Maker Pen. See RoomDataBlobService.BuildRroEditableBlob.
+            logger.LogInformation("[cdn] MISS host={Host} file={File} -> RRO editable blob (room {Room}, activity {Activity})",
+                Request.Host.Host, fileName, rroRoom.Id, rroRoom.LocationReplicationId);
+            var rroBlob = roomDataBlob.GetRroEditableBlob(rroRoom.LocationReplicationId);
+            rroBlob = ClampForClientUnlessDisabled(rroBlob, fileName);
             Response.Headers.CacheControl = "public, max-age=60";
             signatures.AddContentSignature(Response, rroBlob);
             return new FileContentResult(rroBlob, "application/octet-stream");
@@ -569,14 +577,34 @@ public class CdnController(
 
         logger.LogInformation("[cdn] MISS host={Host} file={File} -> default blob",
             Request.Host.Host, fileName);
-        var fallbackBlob = roomDataBlob.GetDefaultBlob();
+        var fallbackBlob = ClampForClientUnlessDisabled(roomDataBlob.GetDefaultBlob(), fileName);
         signatures.AddContentSignature(Response, fallbackBlob);
         return new FileContentResult(fallbackBlob, "application/octet-stream");
     }
 
-    private async Task<bool> ShouldOverlayRroRoomRoleDataAsync(string fileName)
+    /// <summary>Same 2023 version clamp the S3-hit path applies, for the
+    /// synthesised blobs on the miss path — a stub past the client's ceiling
+    /// is rejected exactly like a modern export would be.</summary>
+    private byte[] ClampForClientUnlessDisabled(byte[] bytes, string fileName)
     {
-        if (string.IsNullOrWhiteSpace(fileName)) return false;
+        if (!IsRoomDataName(fileName)) return bytes;
+        if (serverSettings.IsRoomBlobVersionClampDisabledAsync().GetAwaiter().GetResult()) return bytes;
+        var (clamped, changed) = RoomDataBlobService.ClampVersionsFor2023(bytes);
+        if (changed)
+            logger.LogInformation("[cdn] clamped synthesised blob versions to 2023 maxima file={File}", fileName);
+        return clamped;
+    }
+
+    private async Task<bool> ShouldOverlayRroRoomRoleDataAsync(string fileName) =>
+        await ResolveRroRoomAsync(fileName) is not null;
+
+    /// <summary>The AG/RRO room a blob name belongs to, or null when the name
+    /// is not an RRO room's (current blob, synthetic <c>room_{id}_*</c> form,
+    /// or a sub-room scene blob). Drives both the role overlay on S3 hits and
+    /// the per-room stub on misses.</summary>
+    private async Task<RoomEntity?> ResolveRroRoomAsync(string fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName)) return null;
 
         // MakerPen across ALL Rec Room Originals: overlay the permissive
         // room-role data (which grants CanUseMakerPen etc.) onto any AG/RRO
@@ -587,9 +615,9 @@ public class CdnController(
         // blob's RoomRoleData field (RoomDataBlobService.OverlayRroEditable-
         // RoleData) — the game-rule circuit data and GameRoleData are left
         // intact — so quest rooms keep working, exactly as Stunt Runner does.
-        if (await db.Rooms.AsNoTracking().AnyAsync(r =>
-                r.IsAGRoom && r.CurrentDataBlobName == fileName))
-            return true;
+        var byCurrentBlob = await db.Rooms.AsNoTracking().FirstOrDefaultAsync(r =>
+            r.IsAGRoom && r.CurrentDataBlobName == fileName);
+        if (byCurrentBlob is not null) return byCurrentBlob;
 
         // Synthetic/default room-data blob names for rooms with no saved blob:
         // the CURRENT form is room_{id}_dorknet_v8.dat
@@ -603,18 +631,19 @@ public class CdnController(
         {
             var rest = fileName["room_".Length..];
             var underscore = rest.IndexOf('_');
-            if (underscore > 0 &&
-                long.TryParse(rest[..underscore], out var roomId) &&
-                await db.Rooms.AsNoTracking().AnyAsync(r => r.Id == roomId && r.IsAGRoom))
-                return true;
+            if (underscore > 0 && long.TryParse(rest[..underscore], out var roomId))
+            {
+                var byId = await db.Rooms.AsNoTracking().FirstOrDefaultAsync(r => r.Id == roomId && r.IsAGRoom);
+                if (byId is not null) return byId;
+            }
         }
 
         return await (
             from scene in db.RoomScenes.AsNoTracking()
             join room in db.Rooms.AsNoTracking() on scene.RoomId equals room.Id
             where room.IsAGRoom && scene.DataBlobName == fileName
-            select scene.Id
-        ).AnyAsync();
+            select room
+        ).FirstOrDefaultAsync();
     }
 
     /// <summary>

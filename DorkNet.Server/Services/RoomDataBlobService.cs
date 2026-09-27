@@ -19,7 +19,6 @@ public class RoomDataBlobService
         PersistedRoomVersion.LatestVersion;
 
     private readonly RoomRoleCollectionData _allPermsRoleData = BuildAllPermsRoleData();
-    private readonly byte[] _rroEditableBlob = BuildRroEditableBlob();
     private readonly RoomRoleCollectionData _rroEditableRoleData = BuildRroEditableRoleData();
 
     /// <summary>The blob served when a room_&lt;id&gt;_v1.dat misses S3
@@ -37,7 +36,15 @@ public class RoomDataBlobService
     }
 
     public byte[] GetDefaultBlob() => _defaultBlob;
-    public byte[] GetRroEditableBlob() => _rroEditableBlob;
+    public byte[] GetRroEditableBlob() => GetRroEditableBlob(string.Empty);
+
+    /// <summary>The blob served for a baked Rec Room Original whose blob name
+    /// misses S3 (nothing saved yet). <paramref name="activityId"/> is the
+    /// room's <c>LocationReplicationId</c> — a real save carries it as
+    /// <c>activity_id</c> (Rec Center's saved blob: activity_id ==
+    /// cbad71af-…, its location id).</summary>
+    public byte[] GetRroEditableBlob(string activityId) =>
+        BuildRroEditableBlob(_rroEditableRoleData, activityId);
 
     private static byte[] LoadDefaultBlob()
     {
@@ -267,19 +274,72 @@ public class RoomDataBlobService
         return BuildRroEditableRoleData();
     }
 
-    private static byte[] BuildRroEditableBlob()
+    /// <summary>Shape of the stub matters: the March-2023 client fetches this
+    /// through <c>RecNet.Rooms.GetRoomData</c> and REJECTS a blob it deems
+    /// unusable (seen as the bare "Failed to copy room" on clones, and as a
+    /// baked room that silently loads without any room roles / Maker Pen).
+    /// Two things were wrong with the old six-field stub, measured against
+    /// Rec Center's real saved blob (room_100_v1.dat, which the same client
+    /// loads with Maker Pen):
+    ///
+    ///  • <c>version</c> was stamped <c>PersistedRoomVersion.LatestVersion</c>
+    ///    (19) — past the client's ceiling of <see cref="Client2023MaxPersistedRoomVersion"/>
+    ///    (16). The S3-hit path clamps that; the miss path never did.
+    ///  • it lacked the skeleton every real save carries: <c>last_save_time</c>,
+    ///    <c>activity_id</c> (= the room's LocationReplicationId), an empty
+    ///    <c>connectable_graph_data</c>, <c>scene_settings_data</c>,
+    ///    <c>object_model_data</c> and the four <c>room_mood_*</c> blocks.
+    ///
+    /// Our server proto only types the role/tag fields, so the rest is
+    /// appended as raw wire-format fields (protobuf field order is free).
+    /// The byte payloads below are Rec Center's own defaults, verbatim.</summary>
+    private static byte[] BuildRroEditableBlob(RoomRoleCollectionData roleData, string activityId)
     {
         var msg = new PersistedRoomData
         {
             DEPRECATEDVersion = LatestDeprecatedPersistenceVersion,
-            Version = LatestPersistenceVersion,
+            Version = (PersistedRoomVersion)Client2023MaxPersistedRoomVersion,
             CreativeRolesEnabled = true,
             ToolTagSettingsData = BuildDefaultToolTagSettingsData(),
             GameRoleData = BuildDefaultGameRoleData(),
-            RoomRoleData = BuildRroEditableRoleData(),
+            RoomRoleData = roleData.Clone(),
         };
 
-        return msg.ToByteArray();
+        using var output = new MemoryStream(4096);
+        var typed = msg.ToByteArray();
+        output.Write(typed, 0, typed.Length);
+
+        // 3: last_save_time (google.protobuf.Timestamp{seconds})
+        var seconds = (ulong)DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+        using (var ts = new MemoryStream(12))
+        {
+            WriteVarint(ts, 0x08);
+            WriteVarint(ts, seconds);
+            AppendLengthDelimited(output, 3, ts.ToArray());
+        }
+        // 4: activity_id
+        if (!string.IsNullOrWhiteSpace(activityId))
+            AppendLengthDelimited(output, 4, System.Text.Encoding.UTF8.GetBytes(activityId));
+        // 21: connectable_graph_data { root_node { slot_index=0-ish, field 7 = 1 } }
+        AppendLengthDelimited(output, 21, new byte[] { 0x0A, 0x04, 0x0A, 0x00, 0x38, 0x01 });
+        // 24: scene_settings_data { enforce_host_only_areas=true, use_new_materials=true }
+        AppendLengthDelimited(output, 24, new byte[] { 0x18, 0x01, 0x30, 0x01 });
+        // 29: object_model_data (opaque bytes; empty model)
+        AppendLengthDelimited(output, 29, new byte[] { 0x08, 0x02, 0x1A, 0x00 });
+        // 32-35: room_fog_data / room_mood_sun_data / room_mood_background_objects / room_mood_skydome
+        AppendLengthDelimited(output, 32, Convert.FromHexString("0a070d00000040100110122500004844"));
+        AppendLengthDelimited(output, 33, Convert.FromHexString("0a070d000000401001580162140dffffff3e15ffffff3e1dffffffbe25ffffff3e"));
+        AppendLengthDelimited(output, 34, Convert.FromHexString("0a070d000000401001121208ffffffffffffffffff01100d250000803f1a1208ffffffffffffffffff01100d250000803f221208ffffffffffffffffff01100d250000803f2a1208ffffffffffffffffff01100d250000803f"));
+        AppendLengthDelimited(output, 35, Convert.FromHexString("0a070d0000004010011032182920252825300d3dae47613e45713d8a3e"));
+
+        return output.ToArray();
+    }
+
+    private static void AppendLengthDelimited(Stream output, int fieldNumber, byte[] payload)
+    {
+        WriteVarint(output, ((ulong)fieldNumber << 3) | 2);
+        WriteVarint(output, (ulong)payload.Length);
+        output.Write(payload, 0, payload.Length);
     }
 
     private static RoomRoleCollectionData BuildRroEditableRoleData()
