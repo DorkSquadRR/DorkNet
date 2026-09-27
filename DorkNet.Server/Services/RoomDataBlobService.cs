@@ -436,6 +436,116 @@ public class RoomDataBlobService
         return view.ToArray();
     }
 
+    public sealed record UploadedBlobSummary(int ViewsIn, int ViewsKept, int RoleViews, int GameRuleViews,
+        int VersionIn, int VersionOut, bool CircuitsStripped, string ActivityId);
+
+    /// <summary>Turn a real <c>PersistedRoomData</c> save (any client
+    /// version) into something the March-2023 client can load as room
+    /// <paramref name="activityId"/>'s blob:
+    ///  • field 4 <c>activity_id</c> is rewritten to the target room's
+    ///    location id (real saves carry their own room's);
+    ///  • field 5 <c>output_log</c>, field 6 <c>sub_room_id</c> and every
+    ///    field the 2023 schema does not know (&gt; 36) are dropped;
+    ///  • with <paramref name="basicsOnly"/>, only the persistence views that
+    ///    carry a game role (field 50) or a game rule (fields 40/41) are kept
+    ///    and the circuit payloads (18 circuit_data, 21 connectable graph,
+    ///    28 circuit_v2_data) are dropped — a newer CircuitsV2 graph is
+    ///    rejected by the client's own CV2 version gate no matter what;
+    ///  • the two header versions are clamped to the 2023 maxima.
+    /// Every other byte is copied verbatim.</summary>
+    public static (byte[] Bytes, UploadedBlobSummary Summary) PrepareUploadedRoomBlob(
+        byte[] input, string activityId, bool basicsOnly)
+    {
+        using var output = new MemoryStream(input.Length);
+        var pos = 0;
+        int viewsIn = 0, viewsKept = 0, roleViews = 0, ruleViews = 0, versionIn = 0;
+        var wroteActivity = false;
+        while (pos < input.Length)
+        {
+            var fieldStart = pos;
+            var tag = ReadVarint(input, ref pos);
+            var fieldNumber = (int)(tag >> 3);
+            var wireType = (int)(tag & 0x07);
+            var payloadStart = pos;
+            if (wireType == 0)
+            {
+                var value = ReadVarint(input, ref pos);
+                if (fieldNumber == 30) versionIn = (int)value;
+                if (fieldNumber is 5 or 6 || fieldNumber > 36) continue;
+                output.Write(input, fieldStart, pos - fieldStart);
+                continue;
+            }
+            SkipField(input, ref pos, wireType);
+            if (wireType != 2)
+            {
+                if (fieldNumber > 36) continue;
+                output.Write(input, fieldStart, pos - fieldStart);
+                continue;
+            }
+
+            var lenPos = payloadStart;
+            var len = checked((int)ReadVarint(input, ref lenPos));
+            var payload = new ReadOnlySpan<byte>(input, lenPos, len);
+
+            switch (fieldNumber)
+            {
+                case 4:
+                    AppendLengthDelimited(output, 4, System.Text.Encoding.UTF8.GetBytes(activityId));
+                    wroteActivity = true;
+                    continue;
+                case 5:
+                case 18 when basicsOnly:
+                case 21 when basicsOnly:
+                case 28 when basicsOnly:
+                    continue;
+                case 2:
+                {
+                    viewsIn++;
+                    var (isRole, isRule) = ClassifyView(payload);
+                    if (isRole) roleViews++;
+                    if (isRule) ruleViews++;
+                    if (basicsOnly && !isRole && !isRule) continue;
+                    viewsKept++;
+                    output.Write(input, fieldStart, pos - fieldStart);
+                    continue;
+                }
+                default:
+                    if (fieldNumber > 36) continue;
+                    output.Write(input, fieldStart, pos - fieldStart);
+                    continue;
+            }
+        }
+        if (!wroteActivity && !string.IsNullOrWhiteSpace(activityId))
+            AppendLengthDelimited(output, 4, System.Text.Encoding.UTF8.GetBytes(activityId));
+
+        var (clamped, _) = ClampVersionsFor2023(output.ToArray());
+        return (clamped, new UploadedBlobSummary(viewsIn, viewsKept, roleViews, ruleViews, versionIn,
+            Math.Min(versionIn == 0 ? Client2023MaxPersistedRoomVersion : versionIn, Client2023MaxPersistedRoomVersion),
+            basicsOnly, activityId));
+    }
+
+    /// <summary>Does this PersistenceViewData carry a GameRoleNode (field 50)
+    /// or a game rule (40 game_configuration_data / 41 game_rule_wrapper_data)?</summary>
+    private static (bool IsRole, bool IsRule) ClassifyView(ReadOnlySpan<byte> view)
+    {
+        var bytes = view.ToArray();
+        var pos = 0; bool role = false, rule = false;
+        try
+        {
+            while (pos < bytes.Length)
+            {
+                var tag = ReadVarint(bytes, ref pos);
+                var fieldNumber = (int)(tag >> 3);
+                var wireType = (int)(tag & 0x07);
+                if (fieldNumber == 50) role = true;
+                if (fieldNumber is 40 or 41) rule = true;
+                SkipField(bytes, ref pos, wireType);
+            }
+        }
+        catch { /* malformed view — treat as neither */ }
+        return (role, rule);
+    }
+
     private static void AppendVarint(Stream output, int fieldNumber, ulong value)
     {
         WriteVarint(output, ((ulong)fieldNumber << 3) | 0);

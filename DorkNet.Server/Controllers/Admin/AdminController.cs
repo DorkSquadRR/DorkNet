@@ -7,6 +7,7 @@ using DorkNet.Server.Data;
 using DorkNet.Server.Data.Entities;
 using DorkNet.Server.Hubs;
 using DorkNet.Server.Services;
+using RecRoom.Protobuf;
 
 namespace DorkNet.Server.Controllers.Admin;
 
@@ -1289,6 +1290,115 @@ public class AdminController(
             await db.SaveChangesAsync();
         }
         return Ok(SubRoomBlobWire(room, scene, bakedOriginal, changed));
+    }
+
+    /// <summary>POST <c>api/admin/v1/rooms/{id}/subrooms/{subRoomId}/blob/upload</c>
+    /// — multipart <c>file</c> = a real <c>PersistedRoomData</c> save (any
+    /// client version; <c>.binpb</c> / <c>.room</c> / <c>.dat</c>), optional
+    /// form/query <c>mode</c> = <c>full</c> (default) or <c>basics</c>.
+    /// Rewrites it for this room (activity id, 2023 version clamp, drops
+    /// output log / sub-room id / unknown fields; <c>basics</c> also keeps
+    /// only the game-role and game-rule objects and drops the circuit
+    /// payloads — see <see cref="RoomDataBlobService.PrepareUploadedRoomBlob"/>),
+    /// stores it under a fresh <c>room_{id}_upload_*.dat</c> name, records
+    /// the RoomDataBlobs row and points the sub-room (and, for sub-room 0,
+    /// the room) at it. The CDN's RRO role overlay and version clamp then
+    /// apply on serve exactly as for Rec Center's saved blob.</summary>
+    [HttpPost("rooms/{id:long}/subrooms/{subRoomId:int}/blob/upload")]
+    [RequestSizeLimit(64 * 1024 * 1024)]
+    public async Task<ActionResult> UploadSubRoomBlob(long id, int subRoomId, IFormFile? file, [FromQuery] string? mode)
+    {
+        if (file is null || file.Length == 0) return BadRequest("missing file");
+        var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == id);
+        if (room is null) return NotFound();
+        var scene = await db.RoomScenes.FirstOrDefaultAsync(s => s.RoomId == id && s.OrderIndex == subRoomId);
+        if (scene is null && subRoomId != 0) return NotFound();
+
+        byte[] raw;
+        using (var ms = new MemoryStream((int)file.Length))
+        {
+            await file.CopyToAsync(ms);
+            raw = ms.ToArray();
+        }
+        try { _ = PersistedRoomData.Parser.ParseFrom(raw); }
+        catch (Exception ex) { return BadRequest($"not a PersistedRoomData blob: {ex.Message}"); }
+
+        var basics = string.Equals(mode ?? Request.Form["mode"].ToString(), "basics", StringComparison.OrdinalIgnoreCase);
+        var (bytes, summary) = RoomDataBlobService.PrepareUploadedRoomBlob(raw, room.LocationReplicationId, basics);
+
+        var now = DateTime.UtcNow;
+        var blobName = $"room_{id}_upload_{now:yyyyMMddHHmmss}.dat";
+        var (bucket, key) = BlobRouter.Route(blobName);
+        try
+        {
+            await storage.PutAsync(bucket, key, bytes, "application/octet-stream");
+        }
+        catch (Exception ex)
+        {
+            adminLogger.LogError(ex, "[admin] blob upload S3 PUT failed room={Room} blob={Blob}", id, blobName);
+            return StatusCode(502, new { error = "storage_put_failed", detail = ex.Message });
+        }
+
+        db.RoomDataBlobs.Add(new RoomDataBlobEntity
+        {
+            RoomId = id,
+            BlobName = blobName,
+            SubRoomId = subRoomId,
+            UploadedByPlayerId = CurrentAdminId,
+            UploadedAt = now,
+        });
+
+        if (scene is null)
+        {
+            scene = new RoomSceneEntity
+            {
+                RoomId = room.Id,
+                OrderIndex = 0,
+                Name = "Home",
+                RoomSceneLocationId = room.LocationReplicationId,
+                MaxPlayers = room.MaxCapacity,
+                IsSandbox = false,
+                CanMatchmakeInto = true,
+            };
+            db.RoomScenes.Add(scene);
+        }
+        scene.DataBlobName = blobName;
+        scene.DataModifiedAt = now;
+        if (subRoomId == 0)
+        {
+            room.CurrentDataBlobName = blobName;
+            room.UpdatedAt = now;
+        }
+
+        await LogAsync("upload_subroom_blob", "room", id,
+            $"subRoom={subRoomId} blob={blobName} mode={(basics ? "basics" : "full")} bytes={bytes.Length} views={summary.ViewsKept}/{summary.ViewsIn} roles={summary.RoleViews} rules={summary.GameRuleViews} version={summary.VersionIn}->{summary.VersionOut}");
+        await db.SaveChangesAsync();
+
+        var bakedOriginal = RoomService.IsBakedOriginalRoom(room);
+        return Ok(new
+        {
+            id = scene.Id.ToString(),
+            subRoomId = scene.OrderIndex,
+            name = scene.Name,
+            dataBlobName = scene.DataBlobName,
+            roomCurrentDataBlobName = room.CurrentDataBlobName,
+            effectiveBlobName = EffectiveSubRoomBlobName(room, scene, bakedOriginal),
+            isBakedOriginal = bakedOriginal,
+            bytes = bytes.Length,
+            // Explicit camelCase: the API's naming policy is "as declared",
+            // and the rest of this payload is camelCase.
+            summary = new
+            {
+                viewsIn = summary.ViewsIn,
+                viewsKept = summary.ViewsKept,
+                roleViews = summary.RoleViews,
+                gameRuleViews = summary.GameRuleViews,
+                versionIn = summary.VersionIn,
+                versionOut = summary.VersionOut,
+                circuitsStripped = summary.CircuitsStripped,
+                activityId = summary.ActivityId,
+            },
+        });
     }
 
     private static object SubRoomBlobWire(RoomEntity room, RoomSceneEntity? scene, bool bakedOriginal, bool changed) => new

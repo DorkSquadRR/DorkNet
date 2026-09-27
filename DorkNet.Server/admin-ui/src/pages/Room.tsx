@@ -591,6 +591,32 @@ function SubRoomsTab({ roomId, roomCapacity }: { roomId: number; roomCapacity: n
   // runs its room-data path there (no Maker Pen, no CV2 chips, no saves).
   // "Enable" stamps the synthetic default name the CDN already answers with
   // the RRO-editable blob; "Reset" clears the pointers back to scene-only.
+  // Attach a real PersistedRoomData save (any client version) to a sub-room:
+  // the server rewrites it for this room (activity id, 2023 version clamp,
+  // drops output log / sub-room id / unknown fields; "basics" keeps only the
+  // game-role + game-rule objects and strips circuits).
+  const [uploadMode, setUploadMode] = useState<'full' | 'basics'>('basics');
+  const uploadBlob = async (sub: SubRoom, file: File) => {
+    setBlobBusy(sub.subRoomId);
+    try {
+      const fd = new FormData();
+      fd.append('file', file, file.name);
+      const res = await api<{ dataBlobName: string; summary: { viewsIn: number; viewsKept: number; versionIn: number; versionOut: number } }>(
+        `/rooms/${roomId}/subrooms/${sub.subRoomId}/blob/upload?mode=${uploadMode}`,
+        { method: 'POST', formData: fd, timeoutMs: 120000 },
+      );
+      toast.push(
+        `Uploaded ${res.dataBlobName}: ${res.summary.viewsKept}/${res.summary.viewsIn} objects kept, version ${res.summary.versionIn} → ${res.summary.versionOut}`,
+        'success',
+      );
+      refresh();
+    } catch (e) {
+      toast.push((e as Error).message, 'error');
+    } finally {
+      setBlobBusy(null);
+    }
+  };
+
   const setBlob = async (sub: SubRoom, action: 'enable' | 'reset') => {
     setBlobBusy(sub.subRoomId);
     try {
@@ -674,6 +700,31 @@ function SubRoomsTab({ roomId, roomCapacity }: { roomId: number; roomCapacity: n
                         ? 'no data blob — baked scene only (no Maker Pen / chips)'
                         : '(synthetic default blob)'}
                   </div>
+                  {sub.isBakedOriginal && (
+                    <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                      <label className="text-xs text-ink-400">Upload save</label>
+                      <select
+                        value={uploadMode}
+                        onChange={e => setUploadMode(e.target.value as 'full' | 'basics')}
+                        className="input text-xs py-0.5 w-40"
+                        title="basics = keep only the game-role and game-rule objects and strip circuits (a newer CircuitsV2 graph is rejected by the 2023 client); full = keep every object"
+                      >
+                        <option value="basics">basics (roles + game rule)</option>
+                        <option value="full">full (every object)</option>
+                      </select>
+                      <input
+                        type="file"
+                        accept=".binpb,.room,.dat,.bin"
+                        disabled={blobBusy === sub.subRoomId}
+                        onChange={e => {
+                          const f = e.target.files?.[0];
+                          if (f) uploadBlob(sub, f);
+                          e.target.value = '';
+                        }}
+                        className="text-xs"
+                      />
+                    </div>
+                  )}
                   {sub.isBakedOriginal && (
                     <div className="flex items-center gap-2 mt-1.5">
                       {!sub.dataBlobName ? (

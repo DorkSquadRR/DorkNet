@@ -190,6 +190,11 @@ Solos `983db81a68927f419edb0daf1243e93e`, Squads
 Configuration chip, optional — `GameConfigurationTool` falls back to its
 baked asset. The stub emits the wrapper chip for the two Rec Royale rooms.
 
+Attaching a real save: `POST api/admin/v1/rooms/{id}/subrooms/{sub}/blob/upload`
+(multipart `file`, `?mode=basics|full`) rewrites any-version
+`PersistedRoomData` for the room — see `docs/admin.md` → "Upload save".
+Used to A/B a generated stub against a genuine custom-Rec-Royale save.
+
 Admin switch: `POST api/admin/v1/rooms/{id}/subrooms/{sub}/blob/enable`
 stamps `RoomService.SyntheticDefaultRoomDataBlobName(id)` on the scene and
 room; `.../blob/reset` clears it. See `docs/admin.md` → "RRO room data
