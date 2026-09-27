@@ -208,7 +208,11 @@ actions:
   room roles, no objects) while nothing is saved. `IsRRO` is derived from
   `IsAGRoom`, so the client keeps loading the baked map and only
   additionally fetches the blob. Idempotent; a no-op on a sub-room that
-  already has a blob.
+  already has a blob. Seeded originals such as Rec Royale have **no
+  `RoomScenes` row at all** ("Scenes 0"); the list synthesises a virtual
+  "Home" entry (`isVirtual: true`, max players = room capacity) and enable
+  creates the real row with the game-side defaults
+  (`RoomsController.GetOrCreateSceneForMutationAsync`).
 - **Reset to baked scene** — `POST api/admin/v1/rooms/{id}/subrooms/{subRoomId}/blob/reset`.
   Clears both pointers. This is the escape hatch if a save left the room
   unplayable. Saved blobs stay in `RoomDataBlobs`, so the in-game restore

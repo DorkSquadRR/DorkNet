@@ -113,6 +113,67 @@ public sealed class RroRoomBlobTests : IClassFixture<DorkNetServerFactory>
         Assert.Equal(string.Empty, SubRoomZero(restored).GetProperty("DataBlob").GetString());
     }
 
+    /// <summary>The seeded Rec Royale rows have NO RoomScenes at all (the admin
+    /// page showed "Scenes 0 / No sub-rooms"). The admin list must synthesise
+    /// the entry scene the way the game-client details do, and enable must
+    /// create the row rather than 404.</summary>
+    [Fact]
+    public async Task Room_without_scene_rows_gets_a_virtual_entry_scene_and_enable_creates_it()
+    {
+        using var setup = Client("rooms");
+        var player = await GameClientSessionFactory.CreateAsync(setup, _factory.ApexDomain);
+        var admin = await GameClientSessionFactory.CreateAsync(setup, _factory.ApexDomain);
+
+        var roomId = 9_670_000 + Random.Shared.Next(1, 99_999);
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<DorkNetDbContext>();
+            (await db.Players.FirstAsync(p => p.Id == admin.PlayerId)).IsAdmin = true;
+            db.Rooms.Add(new RoomEntity
+            {
+                Id = roomId,
+                Name = $"NoScene{Guid.NewGuid():N}"[..18],
+                CreatorPlayerId = 1,
+                IsAGRoom = true,
+                TagsCsv = "recroomoriginal",
+                MaxCapacity = 24,
+            });
+            await db.SaveChangesAsync();
+        }
+
+        var synthetic = RoomService.SyntheticDefaultRoomDataBlobName(roomId);
+        using var gameClient = Client("rooms", player);
+        using var adminClient = Client("admin", admin);
+
+        var listed = await GetJsonAsync(adminClient, $"/api/admin/v1/rooms/{roomId}/subrooms");
+        var virtualRow = listed.EnumerateArray().Single();
+        Assert.True(virtualRow.GetProperty("isVirtual").GetBoolean());
+        Assert.Equal(0, virtualRow.GetProperty("subRoomId").GetInt32());
+        Assert.Equal(24, virtualRow.GetProperty("maxPlayers").GetInt32());
+        Assert.Equal(string.Empty, virtualRow.GetProperty("effectiveBlobName").GetString());
+
+        var enabled = await PostJsonAsync(adminClient, $"/api/admin/v1/rooms/{roomId}/subrooms/0/blob/enable");
+        Assert.True(enabled.GetProperty("changed").GetBoolean());
+        Assert.Equal(synthetic, enabled.GetProperty("effectiveBlobName").GetString());
+
+        // The row now exists with the game-side defaults, and the game client
+        // sees the blob on its entry scene.
+        var relisted = await GetJsonAsync(adminClient, $"/api/admin/v1/rooms/{roomId}/subrooms");
+        var real = relisted.EnumerateArray().Single();
+        Assert.False(real.TryGetProperty("isVirtual", out _));
+        Assert.Equal("Home", real.GetProperty("name").GetString());
+        Assert.Equal(24, real.GetProperty("maxPlayers").GetInt32());
+        Assert.Equal(synthetic, real.GetProperty("dataBlobName").GetString());
+
+        var details = await GetJsonAsync(gameClient, $"/rooms/{roomId}");
+        Assert.True(details.GetProperty("IsRRO").GetBoolean());
+        Assert.Equal(synthetic, SubRoomZero(details).GetProperty("DataBlob").GetString());
+
+        var reset = await PostJsonAsync(adminClient, $"/api/admin/v1/rooms/{roomId}/subrooms/0/blob/reset");
+        Assert.True(reset.GetProperty("changed").GetBoolean());
+        Assert.Equal(string.Empty, SubRoomZero(await GetJsonAsync(gameClient, $"/rooms/{roomId}")).GetProperty("DataBlob").GetString());
+    }
+
     [Fact]
     public async Task Enable_on_a_saved_subroom_keeps_the_saved_blob()
     {
