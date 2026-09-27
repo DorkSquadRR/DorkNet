@@ -179,6 +179,61 @@ Enforcement caveat carried over from `RoomEntity.MaxCapacity`: this is the
 advertised cap. The client never sets Photon `RoomOptions.MaxPlayers`, so
 hard enforcement still needs a ClientMod Photon patch.
 
+## RRO room data blob — Maker Pen and chips in a Rec Room Original (`/rooms` → room detail → Sub-rooms)
+
+Baked Rec Room Originals (Rec Royale, Paintball, Laser Tag, …) are seeded
+with an empty `RoomSceneEntity.DataBlobName` and empty
+`RoomEntity.CurrentDataBlobName`. Every details builder and matchmaking
+resolver (`RoomsController.CurrentOrSyntheticDataBlobName`,
+`GoToController.ResolveInitialDataBlobAsync`,
+`MatchPlayerController`) turns that into an empty `DataBlob`, and the 2023
+client reads an empty blob name as "this room has no room data": it skips
+the persistence download entirely, so there are no room roles (no Maker
+Pen despite the CDN's RRO role overlay), no CV2 room-settings chips, no
+room mood engine and no saves. Real Rec Room served these rooms a blob —
+Rec Royale's game-rule chip (`RecRoyaleSolos_GameRuleWrapperCircuit` /
+`RecRoyaleSquads_GameRuleWrapperCircuit`, prefabs in `resources.assets`)
+is delivered that way; the Frontier scene has no baked game rule.
+
+The Sub-rooms tab shows, per sub-room, the blob the client will actually
+be told to download (`effectiveBlobName`) and, for baked originals, two
+actions:
+
+- **Enable Maker Pen blob** — `POST api/admin/v1/rooms/{id}/subrooms/{subRoomId}/blob/enable`.
+  Stamps the synthetic default name (`room_{id}_dorknet_v8.dat` for the
+  entry scene, `room_{id}_dorknet_v8_sub{n}.dat` otherwise) on the scene
+  and, for sub-room 0, on the room. No resolver changes are involved: they
+  already return a non-empty name verbatim, and `CdnController` already
+  answers that name for AG rooms with the RRO-editable blob (permissive
+  room roles, no objects) while nothing is saved. `IsRRO` is derived from
+  `IsAGRoom`, so the client keeps loading the baked map and only
+  additionally fetches the blob. Idempotent; a no-op on a sub-room that
+  already has a blob.
+- **Reset to baked scene** — `POST api/admin/v1/rooms/{id}/subrooms/{subRoomId}/blob/reset`.
+  Clears both pointers. This is the escape hatch if a save left the room
+  unplayable. Saved blobs stay in `RoomDataBlobs`, so the in-game restore
+  list can bring one back later.
+
+Both are audited (`enable_subroom_blob`, `reset_subroom_blob`). Who can
+then save the room in game is the normal rule in `SaveDataCore`: owner,
+any admin, or an accepted co-owner (`RoomRoles.Role == 0`). Grant a
+co-owner role from the Roles tab if a non-admin should be able to save.
+
+Procedure that makes Rec Royale playable AND editable:
+
+1. Enable the blob on the Solos room's sub-room 0 (and the Squads room's).
+2. Join as an admin; the Maker Pen is available. Spawn the room's game-rule
+   chip (`RecRoyaleSolos_GameRuleWrapperCircuit` in Solos,
+   `RecRoyaleSquads_GameRuleWrapperCircuit` in Squads) — via the palette's
+   Game Rules section, or the debug console's `DebugSpawnTool` if it is not
+   listed — then save. Without that chip there is no `BattleRoyaleManager`
+   in the scene and the match never starts.
+3. From then on the saved blob (with the game-rule chip and whatever
+   room-settings chips were placed) is what everyone loads. If a save
+   breaks the room, Reset to baked scene.
+
+Tests: `RroRoomBlobTests`.
+
 ## Test cases ↔ GitHub issues
 
 QA test cases can file and track GitHub issues. Configure with:
