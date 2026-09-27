@@ -1120,6 +1120,33 @@ public class AdminController(
         var room = await db.Rooms.AsNoTracking().FirstAsync(r => r.Id == id);
         var bakedOriginal = RoomService.IsBakedOriginalRoom(room);
 
+        // Seeded baked originals (Rec Royale, …) have NO RoomScenes rows at
+        // all; the game-client details builder synthesises a "Home" entry
+        // scene for them (RoomsController.BuildSubRoomWire with a null scene)
+        // and the mutation handlers create the row on first write. Mirror
+        // that here so the SPA has something to act on — the blob/enable
+        // action below creates the real row.
+        if (scenes.Count == 0)
+        {
+            return Ok(new[]
+            {
+                new
+                {
+                    id = "0",
+                    subRoomId = 0,
+                    name = "Home",
+                    maxPlayers = room.MaxCapacity,
+                    canMatchmakeInto = true,
+                    isSandbox = false,
+                    dataBlobName = string.Empty,
+                    effectiveBlobName = EffectiveSubRoomBlobName(room, null, bakedOriginal),
+                    isBakedOriginal = bakedOriginal,
+                    isVirtual = true,
+                    dataModifiedAt = room.UpdatedAt,
+                },
+            });
+        }
+
         return Ok(scenes.Select(s => new
         {
             // Ids go out as strings: the admin SPA is JavaScript and silently
@@ -1142,9 +1169,9 @@ public class AdminController(
         }).ToList());
     }
 
-    private static string EffectiveSubRoomBlobName(RoomEntity room, RoomSceneEntity scene, bool bakedOriginal)
+    private static string EffectiveSubRoomBlobName(RoomEntity room, RoomSceneEntity? scene, bool bakedOriginal)
     {
-        if (!string.IsNullOrWhiteSpace(scene.DataBlobName)) return scene.DataBlobName;
+        if (!string.IsNullOrWhiteSpace(scene?.DataBlobName)) return scene!.DataBlobName;
         if (!string.IsNullOrWhiteSpace(room.CurrentDataBlobName)) return room.CurrentDataBlobName;
         if (bakedOriginal) return string.Empty;
         return RoomService.SyntheticDefaultRoomDataBlobName(room.Id);
@@ -1183,14 +1210,31 @@ public class AdminController(
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == id);
         if (room is null) return NotFound();
         var scene = await db.RoomScenes.FirstOrDefaultAsync(s => s.RoomId == id && s.OrderIndex == subRoomId);
-        if (scene is null) return NotFound();
+        if (scene is null && subRoomId != 0) return NotFound();
 
         var bakedOriginal = RoomService.IsBakedOriginalRoom(room);
-        if (!string.IsNullOrWhiteSpace(scene.DataBlobName))
+        if (scene is not null && !string.IsNullOrWhiteSpace(scene.DataBlobName))
             return Ok(SubRoomBlobWire(room, scene, bakedOriginal, changed: false));
 
         var blobName = SyntheticSubRoomBlobName(id, subRoomId);
         var now = DateTime.UtcNow;
+        if (scene is null)
+        {
+            // Seeded baked originals carry no RoomScenes row; create the
+            // entry scene with the same defaults the game-side mutation
+            // path uses (RoomsController.GetOrCreateSceneForMutationAsync).
+            scene = new RoomSceneEntity
+            {
+                RoomId = room.Id,
+                OrderIndex = 0,
+                Name = "Home",
+                RoomSceneLocationId = room.LocationReplicationId,
+                MaxPlayers = room.MaxCapacity,
+                IsSandbox = false,
+                CanMatchmakeInto = true,
+            };
+            db.RoomScenes.Add(scene);
+        }
         scene.DataBlobName = blobName;
         scene.DataModifiedAt = now;
         if (subRoomId == 0 && string.IsNullOrWhiteSpace(room.CurrentDataBlobName))
@@ -1217,15 +1261,15 @@ public class AdminController(
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == id);
         if (room is null) return NotFound();
         var scene = await db.RoomScenes.FirstOrDefaultAsync(s => s.RoomId == id && s.OrderIndex == subRoomId);
-        if (scene is null) return NotFound();
+        if (scene is null && subRoomId != 0) return NotFound();
 
         var bakedOriginal = RoomService.IsBakedOriginalRoom(room);
-        var previousScene = scene.DataBlobName;
+        var previousScene = scene?.DataBlobName ?? string.Empty;
         var previousRoom = room.CurrentDataBlobName;
         var changed = false;
         var now = DateTime.UtcNow;
 
-        if (!string.IsNullOrWhiteSpace(scene.DataBlobName))
+        if (scene is not null && !string.IsNullOrWhiteSpace(scene.DataBlobName))
         {
             scene.DataBlobName = string.Empty;
             scene.DataModifiedAt = now;
@@ -1247,12 +1291,12 @@ public class AdminController(
         return Ok(SubRoomBlobWire(room, scene, bakedOriginal, changed));
     }
 
-    private static object SubRoomBlobWire(RoomEntity room, RoomSceneEntity scene, bool bakedOriginal, bool changed) => new
+    private static object SubRoomBlobWire(RoomEntity room, RoomSceneEntity? scene, bool bakedOriginal, bool changed) => new
     {
-        id = scene.Id.ToString(),
-        subRoomId = scene.OrderIndex,
-        name = scene.Name,
-        dataBlobName = scene.DataBlobName,
+        id = (scene?.Id ?? 0).ToString(),
+        subRoomId = scene?.OrderIndex ?? 0,
+        name = scene?.Name ?? "Home",
+        dataBlobName = scene?.DataBlobName ?? string.Empty,
         roomCurrentDataBlobName = room.CurrentDataBlobName,
         effectiveBlobName = EffectiveSubRoomBlobName(room, scene, bakedOriginal),
         isBakedOriginal = bakedOriginal,

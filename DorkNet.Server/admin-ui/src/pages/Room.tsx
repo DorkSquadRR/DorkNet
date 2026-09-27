@@ -568,6 +568,9 @@ interface SubRoom {
    *  with no blob enabled (scene geometry only, no Maker Pen / chips). */
   effectiveBlobName: string;
   isBakedOriginal: boolean;
+  /** No RoomScenes row exists yet (seeded baked originals); the entry
+   *  scene is synthesised on read and created by "Enable Maker Pen blob". */
+  isVirtual?: boolean;
 }
 
 // Per-sub-room player caps. Distinct from the room's own MaxCapacity, which is
@@ -718,8 +721,9 @@ function SubRoomsTab({ roomId, roomCapacity }: { roomId: number; roomCapacity: n
                   />
                   <button
                     onClick={() => save(sub)}
-                    disabled={!dirty || saving === sub.subRoomId}
+                    disabled={!dirty || saving === sub.subRoomId || sub.isVirtual}
                     className="btn-primary text-xs"
+                    title={sub.isVirtual ? 'This room has no sub-room row yet — enable the blob first' : undefined}
                   >
                     {saving === sub.subRoomId ? 'Saving…' : 'Save'}
                   </button>
