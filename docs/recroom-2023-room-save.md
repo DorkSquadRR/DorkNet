@@ -152,6 +152,17 @@ baked into the paintball scene). Its rule is the Maker Pen chip
 Rec Room delivered inside the room blob. Without it there is no
 `BattleRoyaleManager` in the scene.
 
+Stub shape matters. Until something is saved the CDN synthesises the blob,
+and the client fetches it through `RecNet.Rooms.GetRoomData` and rejects
+one it deems unusable — a clone surfaces that as the bare "Failed to copy
+room", a baked room as a silent load with no room roles (no Maker Pen).
+Compared against Rec Center's working `room_100_v1.dat`, the old stub was
+stamped `PersistedRoomVersion` 19 (client ceiling 16; only the S3-hit path
+clamped) and lacked the save skeleton (`last_save_time`, `activity_id` =
+LocationReplicationId, connectable graph, scene settings, object model,
+`room_mood_*`). `RoomDataBlobService.BuildRroEditableBlob` now emits that
+skeleton per room at version 16.
+
 Admin switch: `POST api/admin/v1/rooms/{id}/subrooms/{sub}/blob/enable`
 stamps `RoomService.SyntheticDefaultRoomDataBlobName(id)` on the scene and
 room; `.../blob/reset` clears it. See `docs/admin.md` → "RRO room data

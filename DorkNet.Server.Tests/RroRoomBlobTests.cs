@@ -54,6 +54,7 @@ public sealed class RroRoomBlobTests : IClassFixture<DorkNetServerFactory>
                 IsAGRoom = true,
                 TagsCsv = "recroomoriginal,sport",
                 CurrentDataBlobName = string.Empty,
+                LocationReplicationId = "b010171f-4875-4e89-baba-61e878cd41e1",
             });
             db.RoomScenes.Add(new RoomSceneEntity
             { RoomId = roomId, Name = "Home", OrderIndex = 0, DataBlobName = string.Empty });
@@ -102,6 +103,14 @@ public sealed class RroRoomBlobTests : IClassFixture<DorkNetServerFactory>
         var persisted = PersistedRoomData.Parser.ParseFrom(blobBytes);
         Assert.NotNull(persisted.RoomRoleData);
         Assert.NotEmpty(persisted.RoomRoleData.RoomRoles);
+        Assert.True(persisted.RoomRoleData.RoomRoles.All(r => r.CanUseMakerPen is { Overrides: true, InnerValue: true }));
+
+        // The March-2023 client rejects a blob past PersistedRoomVersion 16
+        // (the old stub was stamped 19 and loaded as "no room data"), and a
+        // real save carries the room's location id as activity_id. Our proto
+        // doesn't type activity_id, so look for it on the wire.
+        Assert.Equal(RoomDataBlobService.Client2023MaxPersistedRoomVersion, (int)persisted.Version);
+        Assert.Contains("b010171f-4875-4e89-baba-61e878cd41e1", System.Text.Encoding.UTF8.GetString(blobBytes));
 
         // ── reset: back to scene-only ───────────────────────────────────────
         var reset = await PostJsonAsync(adminClient, $"/api/admin/v1/rooms/{roomId}/subrooms/0/blob/reset");

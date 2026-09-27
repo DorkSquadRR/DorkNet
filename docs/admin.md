@@ -213,6 +213,16 @@ actions:
   "Home" entry (`isVirtual: true`, max players = room capacity) and enable
   creates the real row with the game-side defaults
   (`RoomsController.GetOrCreateSceneForMutationAsync`).
+  What the CDN hands back for that name while nothing is saved is a
+  **per-room stub** built by `RoomDataBlobService.BuildRroEditableBlob`:
+  the skeleton of a real save (Rec Center's `room_100_v1.dat` was the
+  reference) — `version` 16 (the client's ceiling; the old roles-only stub
+  was stamped 19 and the client fetched it and silently loaded the room
+  with no roles, i.e. no Maker Pen), `activity_id` = the room's
+  `LocationReplicationId`, `last_save_time`, empty connectable graph /
+  object model, scene settings and the four `room_mood_*` blocks, plus the
+  permissive role collection. The miss path now runs the same 2023
+  version clamp as the S3-hit path.
 - **Reset to baked scene** — `POST api/admin/v1/rooms/{id}/subrooms/{subRoomId}/blob/reset`.
   Clears both pointers. This is the escape hatch if a save left the room
   unplayable. Saved blobs stay in `RoomDataBlobs`, so the in-game restore
