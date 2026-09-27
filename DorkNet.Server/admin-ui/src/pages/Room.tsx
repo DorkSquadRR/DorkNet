@@ -563,6 +563,11 @@ interface SubRoom {
   canMatchmakeInto: boolean;
   isSandbox: boolean;
   dataBlobName: string;
+  /** What the client is actually told to download: scene blob, else room
+   *  blob, else synthetic default — or '' for a baked Rec Room Original
+   *  with no blob enabled (scene geometry only, no Maker Pen / chips). */
+  effectiveBlobName: string;
+  isBakedOriginal: boolean;
 }
 
 // Per-sub-room player caps. Distinct from the room's own MaxCapacity, which is
@@ -576,6 +581,34 @@ function SubRoomsTab({ roomId, roomCapacity }: { roomId: number; roomCapacity: n
   const { data, loading, error, refresh } = useApi<SubRoom[]>(`/rooms/${roomId}/subrooms`);
   const [edits, setEdits] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState<number | null>(null);
+  const [blobBusy, setBlobBusy] = useState<number | null>(null);
+  const [resetArmed, setResetArmed] = useState<number | null>(null);
+
+  // Baked Rec Room Originals ship with no data blob, so the client never
+  // runs its room-data path there (no Maker Pen, no CV2 chips, no saves).
+  // "Enable" stamps the synthetic default name the CDN already answers with
+  // the RRO-editable blob; "Reset" clears the pointers back to scene-only.
+  const setBlob = async (sub: SubRoom, action: 'enable' | 'reset') => {
+    setBlobBusy(sub.subRoomId);
+    try {
+      const res = await api<{ effectiveBlobName: string; changed: boolean }>(
+        `/rooms/${roomId}/subrooms/${sub.subRoomId}/blob/${action}`,
+        { method: 'POST' },
+      );
+      toast.push(
+        action === 'enable'
+          ? `${sub.name || `Sub-room ${sub.subRoomId}`} now loads ${res.effectiveBlobName}`
+          : `${sub.name || `Sub-room ${sub.subRoomId}`} reset to the baked scene (no blob)`,
+        'success',
+      );
+      setResetArmed(null);
+      refresh();
+    } catch (e) {
+      toast.push((e as Error).message, 'error');
+    } finally {
+      setBlobBusy(null);
+    }
+  };
 
   const save = async (sub: SubRoom) => {
     const raw = edits[sub.subRoomId];
@@ -631,8 +664,46 @@ function SubRoomsTab({ roomId, roomCapacity }: { roomId: number; roomCapacity: n
                     {sub.isSandbox && <span className="badge-neutral">Sandbox</span>}
                     {!sub.canMatchmakeInto && <span className="badge-banned">No matchmaking</span>}
                   </div>
-                  {sub.dataBlobName && (
-                    <div className="text-xs text-ink-500 font-mono truncate mt-0.5">{sub.dataBlobName}</div>
+                  <div className="text-xs text-ink-500 font-mono truncate mt-0.5">
+                    {sub.effectiveBlobName
+                      ? sub.effectiveBlobName
+                      : sub.isBakedOriginal
+                        ? 'no data blob — baked scene only (no Maker Pen / chips)'
+                        : '(synthetic default blob)'}
+                  </div>
+                  {sub.isBakedOriginal && (
+                    <div className="flex items-center gap-2 mt-1.5">
+                      {!sub.dataBlobName ? (
+                        <button
+                          onClick={() => setBlob(sub, 'enable')}
+                          disabled={blobBusy === sub.subRoomId}
+                          className="btn-secondary text-xs"
+                          title="Serve a room data blob for this baked sub-room so Maker Pen, CV2 chips and saves work. The first in-game save replaces it with a real upload."
+                        >
+                          {blobBusy === sub.subRoomId ? 'Enabling…' : 'Enable Maker Pen blob'}
+                        </button>
+                      ) : resetArmed === sub.subRoomId ? (
+                        <>
+                          <span className="text-xs text-danger">Drops the blob pointer; saved blobs stay restorable.</span>
+                          <button
+                            onClick={() => setBlob(sub, 'reset')}
+                            disabled={blobBusy === sub.subRoomId}
+                            className="btn-danger text-xs"
+                          >
+                            {blobBusy === sub.subRoomId ? 'Resetting…' : 'Confirm reset'}
+                          </button>
+                          <button onClick={() => setResetArmed(null)} className="btn-secondary text-xs">Cancel</button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => setResetArmed(sub.subRoomId)}
+                          className="btn-secondary text-xs"
+                          title="Go back to the baked scene with no data blob (escape hatch if a save broke the room)."
+                        >
+                          Reset to baked scene
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
                 <div className="flex items-center gap-2">

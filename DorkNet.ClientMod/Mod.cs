@@ -6,8 +6,9 @@
 //   2. TLS trust bypass — make BouncyCastle never reject server certs
 //
 // Plus the anti-cheat BYPASS patches (anti-tamper / ToxMod / file-hash)
-// needed so a modded client isn't kicked, and two opt-in features that
-// are OFF by default (Desktop Screen-Share FPS, RRO quest party size).
+// needed so a modded client isn't kicked, and three opt-in features that
+// are OFF by default (Desktop Screen-Share FPS, RRO quest party size,
+// Rec Royale night mode).
 //
 // This is the STABLE, shipping mod: it carries no diagnostic/tracing
 // code. All of that lives in the separate DorkNet.DebugMod (drop it in
@@ -109,6 +110,52 @@ public class Mod : MelonMod
         // generic "Quest" config is intentionally NOT in the default list.
         public static string[] QuestMaxTeamSizeRooms =
             { "CrimsonCauldron", "Crescendo", "GoldenTrophy", "IsleOfLostSkulls", "TheRiseofJumbotron" };
+
+        // ── Rec Royale night mode (client-side visual) ──
+        // Re-skins Rec Royale with one of the game's own shipped night
+        // MoodSetting assets (sky dome, sun, fog, bloom, colour grading)
+        // through SceneMoodSettings' apply path, and unlocks the weapon
+        // flashlight prefab while it is on. Purely local: the networked room
+        // mood index is never touched. See RecRoyaleNight.
+        public static bool   RecRoyaleNightMode = false;
+        // Resources asset name of the MoodSetting to apply. Shipped options:
+        // Night_Calm_Outdoor_Mood, Night_Spooky_Outdoor_Mood,
+        // Night_Wild_Outdoor_Mood, Night_StuntRunner_Outdoor_Mood, OuterSpace_Mood.
+        public static string RecRoyaleNightMood = "Night_Calm_Outdoor_Mood";
+        // Unity scene names (substring, case-insensitive) that count as Rec
+        // Royale. 2023-03-21 has a single map: RecRoyale_Frontier.
+        public static string[] RecRoyaleNightScenes = { "RecRoyale" };
+        // Force WeaponFlashlightController.FlashlightAllowed while night is on.
+        public static bool   RecRoyaleNightFlashlights = true;
+        // Apply the mood's fog block too. Off = the mood's FogSettings are
+        // swapped for a block captured from the scene, so fog stays as-is.
+        public static bool   RecRoyaleNightFog = false;
+        // Darkening knobs applied to the mood data before it is used. Baked
+        // lightmaps can't be dimmed, so post-exposure (EV, added to the mood's
+        // ColorGradingSettings.exposure) is what actually darkens the whole
+        // frame; the sun/ambient multipliers tone down realtime lighting.
+        public static float  RecRoyaleNightExposure = -3.5f;    // EV offset (0 = mood default)
+        public static float  RecRoyaleNightSunScale = 0.15f;    // × SunSettings.sunIntensity (1 = unchanged)
+        public static float  RecRoyaleNightAmbientScale = 0.2f; // × SkyBoxSettings.ambientLightIntensity (1 = unchanged)
+        // Post-exposure only renders if the scene Volume is on and the camera
+        // renders post-processing; force both while night mode is active.
+        public static bool   RecRoyaleNightForcePostProcessing = true;
+        // The engine only drives RenderSettings.sun (Frontier: the sun-disc
+        // light). Copy its rotation/colour onto every other directional light
+        // and scale their intensity by RecRoyaleNightSunScale.
+        public static bool   RecRoyaleNightMatchSunLights = true;
+        // Turn fog off entirely while night is on (RenderSettings.fog=false and
+        // the mood's fog block pushed out of range). Ignored when
+        // RecRoyaleNightFog is true.
+        public static bool   RecRoyaleNightDisableFog = false;
+        // Renderers whose GameObject or material name contains any of these
+        // (case-insensitive) are hidden while night is on. Frontier's daytime
+        // cloud meshes are CloudPlane/Clouds/…_Cloud_RecRoyale_Frontier_Mat.
+        public static string[] RecRoyaleNightHideObjects = { "Cloud" };
+        // Optional UnityEngine.KeyCode name to toggle night at runtime (e.g.
+        // "N"). Empty = no hotkey. A hotkey also arms the feature when
+        // RecRoyaleNightMode is false, so it can be switched on in-game.
+        public static string RecRoyaleNightToggleKey = "";
     }
     public override void OnInitializeMelon()
     {
@@ -178,6 +225,19 @@ public class Mod : MelonMod
                            postfix: nameof(QuestTeamSize.RelaxEmptySpawnFilter_Postfix));
         }
 
+        // Rec Royale night mode: armed when enabled OR when a hotkey is set
+        // (so it can be switched on in-game). Scene detection + mood apply
+        // run from OnSceneWasLoaded / OnUpdate below.
+        if (Cfg.RecRoyaleNightMode || !string.IsNullOrWhiteSpace(Cfg.RecRoyaleNightToggleKey))
+        {
+            _recRoyaleNightArmed = true;
+            RecRoyaleNight.Register(HarmonyInstance);
+        }
+    }
+    private bool _recRoyaleNightArmed;
+    public override void OnSceneWasLoaded(int buildIndex, string sceneName)
+    {
+        if (_recRoyaleNightArmed) RecRoyaleNight.OnSceneLoaded(sceneName);
     }
     private bool PatchFileHashCheckerCallback()
     {
@@ -359,6 +419,8 @@ public class Mod : MelonMod
     }
     public override void OnUpdate()
     {
+        if (_recRoyaleNightArmed) RecRoyaleNight.Tick();
+
         if (!_antiTamperCallbackPatchesComplete && ++_antiTamperCallbackRetryFrame >= 300)
         {
             _antiTamperCallbackRetryFrame = 0;
@@ -403,6 +465,33 @@ public class Mod : MelonMod
                     if (e.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(e.GetString()))
                         rooms.Add(e.GetString()!);
                 Cfg.QuestMaxTeamSizeRooms = rooms.ToArray(); // explicit (incl. empty = none)
+            }
+            if (TryGetConfigValue(r, "RecRoyaleNightMode", out v))        Cfg.RecRoyaleNightMode = v.GetBoolean();
+            if (TryGetConfigValue(r, "RecRoyaleNightMood", out v))        Cfg.RecRoyaleNightMood = v.GetString() ?? Cfg.RecRoyaleNightMood;
+            if (TryGetConfigValue(r, "RecRoyaleNightFlashlights", out v)) Cfg.RecRoyaleNightFlashlights = v.GetBoolean();
+            if (TryGetConfigValue(r, "RecRoyaleNightFog", out v))         Cfg.RecRoyaleNightFog = v.GetBoolean();
+            if (TryGetConfigValue(r, "RecRoyaleNightExposure", out v))     Cfg.RecRoyaleNightExposure = (float)v.GetDouble();
+            if (TryGetConfigValue(r, "RecRoyaleNightSunScale", out v))     Cfg.RecRoyaleNightSunScale = (float)v.GetDouble();
+            if (TryGetConfigValue(r, "RecRoyaleNightAmbientScale", out v)) Cfg.RecRoyaleNightAmbientScale = (float)v.GetDouble();
+            if (TryGetConfigValue(r, "RecRoyaleNightForcePostProcessing", out v)) Cfg.RecRoyaleNightForcePostProcessing = v.GetBoolean();
+            if (TryGetConfigValue(r, "RecRoyaleNightMatchSunLights", out v))     Cfg.RecRoyaleNightMatchSunLights = v.GetBoolean();
+            if (TryGetConfigValue(r, "RecRoyaleNightDisableFog", out v))         Cfg.RecRoyaleNightDisableFog = v.GetBoolean();
+            if (TryGetConfigValue(r, "RecRoyaleNightHideObjects", out v) && v.ValueKind == JsonValueKind.Array)
+            {
+                var names = new List<string>();
+                foreach (var e in v.EnumerateArray())
+                    if (e.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(e.GetString()))
+                        names.Add(e.GetString()!);
+                Cfg.RecRoyaleNightHideObjects = names.ToArray(); // explicit (incl. empty = hide nothing)
+            }
+            if (TryGetConfigValue(r, "RecRoyaleNightToggleKey", out v))   Cfg.RecRoyaleNightToggleKey = v.GetString() ?? "";
+            if (TryGetConfigValue(r, "RecRoyaleNightScenes", out v) && v.ValueKind == JsonValueKind.Array)
+            {
+                var scenes = new List<string>();
+                foreach (var e in v.EnumerateArray())
+                    if (e.ValueKind == JsonValueKind.String && !string.IsNullOrWhiteSpace(e.GetString()))
+                        scenes.Add(e.GetString()!);
+                if (scenes.Count > 0) Cfg.RecRoyaleNightScenes = scenes.ToArray();
             }
         }
         catch (Exception ex)
@@ -573,7 +662,7 @@ public class Mod : MelonMod
     private MethodInfo GetPatchMethod(string name)
     {
         // Look in the core + feature patch holder classes.
-        foreach (var holder in new[] { typeof(UriPatches), typeof(AntiCheatPatches), typeof(AntiTamperPatches), typeof(FileHashCheckerPatches), typeof(ToxModPatches), typeof(TlsPatches), typeof(ScreenSharePatches), typeof(QuestTeamSize) })
+        foreach (var holder in new[] { typeof(UriPatches), typeof(AntiCheatPatches), typeof(AntiTamperPatches), typeof(FileHashCheckerPatches), typeof(ToxModPatches), typeof(TlsPatches), typeof(ScreenSharePatches), typeof(QuestTeamSize), typeof(RecRoyaleNight) })
         {
             var m = holder.GetMethod(name, BindingFlags.Public | BindingFlags.Static);
             if (m is not null) return m;

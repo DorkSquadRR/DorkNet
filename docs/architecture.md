@@ -55,7 +55,9 @@ DorkNet.sln
 watch at a DorkNet server: URI rewrite (`.rec.net` → configured apex),
 Photon AppId override, and TLS trust bypass. It loads under
 MelonLoader 0.6.x and reads its settings from a JSON config under
-`MelonLoader/UserData/`.
+`MelonLoader/UserData/`. Opt-in extras (all off by default) live in the
+same config: Desktop Screen-Share FPS, RRO quest party size, and Rec
+Royale night mode (see the README and `recroom-2023-scene-moods.md`).
 
 ---
 

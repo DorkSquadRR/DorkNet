@@ -204,6 +204,87 @@ filter for extra players, so player indexes above the four baked spawn
 slots can reuse existing quest spawn points instead of being left out.
 Default `0` (off).
 
+### Rec Royale night mode (opt-in)
+
+Rec Royale never shipped a night variant, but the client carries the room
+"mood" engine (`RecRoom.Core.Scene.SceneMoodSettings`) and ready-made
+night `MoodSetting` assets in `resources.assets`. Set
+`"RecRoyaleNightMode"` in `dorknet-clientmod.json` and the mod applies one
+of those moods (sky dome, sun, fog, bloom and colour grading) as soon as
+the `RecRoyale_Frontier` scene finishes loading, and unlocks the weapon
+flashlight prefab while it is on:
+
+```json
+{
+  "RecRoyaleNightMode": true,
+  "RecRoyaleNightMood": "Night_Calm_Outdoor_Mood",
+  "RecRoyaleNightScenes": ["RecRoyale"],
+  "RecRoyaleNightFlashlights": true,
+  "RecRoyaleNightFog": false,
+  "RecRoyaleNightExposure": -3.5,
+  "RecRoyaleNightSunScale": 0.15,
+  "RecRoyaleNightAmbientScale": 0.2,
+  "RecRoyaleNightForcePostProcessing": true,
+  "RecRoyaleNightMatchSunLights": true,
+  "RecRoyaleNightDisableFog": false,
+  "RecRoyaleNightHideObjects": ["Cloud"],
+  "RecRoyaleNightToggleKey": "N"
+}
+```
+
+`RecRoyaleNightDisableFog` turns fog off entirely while night is on
+(`RenderSettings.fog` forced off and the mood's fog block pushed out of
+range); it is ignored when `RecRoyaleNightFog` is `true`.
+`RecRoyaleNightHideObjects` hides every renderer whose object or material
+name contains one of the entries; the default hides Frontier's daytime
+cloud meshes (`CloudPlane`, `Clouds`, the `_Cloud_RecRoyale_Frontier_Mat`
+static batch). Both are restored on toggle-off or scene change.
+
+The mood engine only ever drives `RenderSettings.sun`, which on Frontier
+is the sun-disc light, not the map's key light, so daylight would keep
+casting. `RecRoyaleNightMatchSunLights` (default `true`) copies the
+engine-driven sun's rotation and colour onto every other directional
+light and scales their intensity by `RecRoyaleNightSunScale`.
+
+Two more RRO quirks the mod works around: the mood skybox material the
+engine swaps in (`MoodConfig.SkyBoxMaterial`) is not loaded outside
+custom-room scenes, so the mod builds one on the `Custom/SkyBox` shader
+and hands it to the engine (otherwise the sky is plain black and the
+engine refuses to touch sky colours or the sun); and post-exposure only
+shows when the scene Volume is on and the camera renders
+post-processing, which `RecRoyaleNightForcePostProcessing` (default
+`true`) forces while night mode is active.
+
+Brightness: RRO maps are lightmapped, and baked lighting ignores the sun
+and ambient changes a mood makes, so the mod also darkens the mood data
+itself before applying it. `RecRoyaleNightExposure` is an EV offset added
+to the mood's colour-grading post-exposure (a full-frame post effect, so
+it dims lightmapped surfaces too; `0` = mood default), and
+`RecRoyaleNightSunScale` / `RecRoyaleNightAmbientScale` multiply the
+mood's sun and ambient intensities (`1` = unchanged). Raise the exposure
+toward `0` if it is too dark.
+
+RRO scenes have no room data blob, so the mood engine starts disabled
+there; the mod replays the room-data loader's bring-up (disable, capture
+the scene's own lighting, enable), points `RenderSettings.sun` at the
+scene's directional light (Frontier ships without the reference, which
+would otherwise skip every sun change), and re-captures once the mood
+skybox material is in place so the sky colours apply. `RecRoyaleNightFog`
+is off by default: the mood's fog block is swapped for one captured from
+the scene, so fog stays as the map author left it.
+
+Shipped moods: `Night_Calm_Outdoor_Mood` ("Calm Night"),
+`Night_Spooky_Outdoor_Mood` ("Spooky Night"), `Night_Wild_Outdoor_Mood`
+("Wild Night"), `Night_StuntRunner_Outdoor_Mood` and `OuterSpace_Mood`.
+`RecRoyaleNightToggleKey` is an optional `UnityEngine.KeyCode` name that
+flips night on/off in-game (off restores the scene's own mood); setting a
+key also arms the feature when `RecRoyaleNightMode` is `false`. This is
+purely **client-side**: the mod calls the mood engine's apply step
+directly and never touches the networked room-mood index, so other players
+keep their own view. Baked lightmaps are not changed, so interiors stay
+lit; the mood's colour grading does the darkening. Default `false` (off).
+Wire-level notes: `docs/recroom-2023-scene-moods.md`.
+
 ---
 
 ## Code map

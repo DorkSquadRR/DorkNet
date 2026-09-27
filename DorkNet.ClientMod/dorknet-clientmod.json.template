@@ -11,5 +11,18 @@
     "GoldenTrophy",
     "IsleOfLostSkulls",
     "TheRiseofJumbotron"
-  ]
+  ],
+  "RecRoyaleNightMode": false,
+  "RecRoyaleNightMood": "Night_Calm_Outdoor_Mood",
+  "RecRoyaleNightScenes": ["RecRoyale"],
+  "RecRoyaleNightFlashlights": true,
+  "RecRoyaleNightFog": false,
+  "RecRoyaleNightExposure": -3.5,
+  "RecRoyaleNightSunScale": 0.15,
+  "RecRoyaleNightAmbientScale": 0.2,
+  "RecRoyaleNightForcePostProcessing": true,
+  "RecRoyaleNightMatchSunLights": true,
+  "RecRoyaleNightDisableFog": false,
+  "RecRoyaleNightHideObjects": ["Cloud"],
+  "RecRoyaleNightToggleKey": ""
 }

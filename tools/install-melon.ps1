@@ -447,6 +447,35 @@ $cfg = [ordered]@{
     DesktopScreenShareRaisePhotonRate = $true
     DesktopScreenShareResolution      = 0
     DesktopScreenShareQuality         = 0
+    # Rec Royale night mode (client-side visual). Applies one of the game's
+    # shipped night MoodSetting assets (sky dome, sun, fog, colour grading)
+    # to the Rec Royale map and unlocks weapon flashlights. Moods:
+    # Night_Calm_Outdoor_Mood, Night_Spooky_Outdoor_Mood,
+    # Night_Wild_Outdoor_Mood, Night_StuntRunner_Outdoor_Mood, OuterSpace_Mood.
+    # ToggleKey is an optional UnityEngine.KeyCode name (e.g. 'N') to flip it
+    # in-game; it also arms the feature when NightMode is $false.
+    RecRoyaleNightMode        = $false
+    RecRoyaleNightMood        = 'Night_Calm_Outdoor_Mood'
+    RecRoyaleNightScenes      = @('RecRoyale')
+    RecRoyaleNightFlashlights = $true
+    RecRoyaleNightFog         = $false   # $true = also apply the mood's fog
+    # Darkening: EV offset added to the mood's post-exposure (dims baked
+    # lightmaps too), and multipliers on the mood's sun / ambient intensity.
+    RecRoyaleNightExposure     = -3.5
+    RecRoyaleNightSunScale     = 0.15
+    RecRoyaleNightAmbientScale = 0.2
+    # Post-exposure needs the scene Volume on and camera post-processing
+    # enabled; force both while night mode is active.
+    RecRoyaleNightForcePostProcessing = $true
+    # The engine only drives RenderSettings.sun; match every other
+    # directional light's rotation/colour to it and scale its intensity.
+    RecRoyaleNightMatchSunLights = $true
+    # Fog off entirely while night is on, and renderers whose object or
+    # material name contains any of these are hidden (Frontier's daytime
+    # cloud meshes). Empty array = hide nothing.
+    RecRoyaleNightDisableFog  = $false
+    RecRoyaleNightHideObjects = @('Cloud')
+    RecRoyaleNightToggleKey   = ''
 }
 Write-Step "Writing mod config -> $cfgPath"
 [System.IO.File]::WriteAllText($cfgPath, ($cfg | ConvertTo-Json -Depth 4))

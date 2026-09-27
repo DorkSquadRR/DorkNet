@@ -1117,6 +1117,9 @@ public class AdminController(
             .OrderBy(s => s.OrderIndex)
             .ToListAsync();
 
+        var room = await db.Rooms.AsNoTracking().FirstAsync(r => r.Id == id);
+        var bakedOriginal = RoomService.IsBakedOriginalRoom(room);
+
         return Ok(scenes.Select(s => new
         {
             // Ids go out as strings: the admin SPA is JavaScript and silently
@@ -1128,9 +1131,133 @@ public class AdminController(
             canMatchmakeInto = s.CanMatchmakeInto,
             isSandbox = s.IsSandbox,
             dataBlobName = s.DataBlobName,
+            // What the client will actually be told to download for this
+            // sub-room (same rule as RoomsController.BuildSubRoomWire): the
+            // scene's own blob, else the room's, else a synthetic default —
+            // except baked Rec Room Originals, which get NO blob until an
+            // admin enables one (see EnableSubRoomBlob).
+            effectiveBlobName = EffectiveSubRoomBlobName(room, s, bakedOriginal),
+            isBakedOriginal = bakedOriginal,
             dataModifiedAt = s.DataModifiedAt,
         }).ToList());
     }
+
+    private static string EffectiveSubRoomBlobName(RoomEntity room, RoomSceneEntity scene, bool bakedOriginal)
+    {
+        if (!string.IsNullOrWhiteSpace(scene.DataBlobName)) return scene.DataBlobName;
+        if (!string.IsNullOrWhiteSpace(room.CurrentDataBlobName)) return room.CurrentDataBlobName;
+        if (bakedOriginal) return string.Empty;
+        return RoomService.SyntheticDefaultRoomDataBlobName(room.Id);
+    }
+
+    /// <summary>Blob name handed to a baked RRO sub-room when an admin enables
+    /// editing: the synthetic default for the entry scene (the same name the
+    /// CDN already recognises as "serve the RRO-editable blob on S3 miss"),
+    /// and the clone-style <c>_sub{n}</c> form for the others.</summary>
+    private static string SyntheticSubRoomBlobName(long roomId, int subRoomId) =>
+        subRoomId == 0
+            ? RoomService.SyntheticDefaultRoomDataBlobName(roomId)
+            : $"room_{roomId}_dorknet_v8_sub{subRoomId}.dat";
+
+    /// <summary>POST <c>api/admin/v1/rooms/{id}/subrooms/{subRoomId}/blob/enable</c>
+    /// — give a baked Rec Room Original sub-room a data blob so the client
+    /// runs its room-data path there (Maker Pen, CV2 chips, room saves).
+    ///
+    /// Why this exists: baked RRO rooms (Rec Royale, Paintball, …) ship with
+    /// an empty <see cref="RoomSceneEntity.DataBlobName"/>, and every details
+    /// builder + matchmaking resolver turns that into an empty
+    /// <c>DataBlob</c>, which the client treats as "no room data at all" —
+    /// no persistence views, no room-role overlay, no Maker Pen, no room
+    /// mood engine. Real Rec Room served these rooms a blob (Rec Royale's
+    /// game-rule chip <c>RecRoyaleSolos_GameRuleWrapperCircuit</c> lives in
+    /// it, not in the scene). Stamping the synthetic default name is enough:
+    /// every resolver returns it verbatim, and <c>CdnController</c> already
+    /// answers that name for AG rooms with the RRO-editable blob (permissive
+    /// room roles, no objects) when nothing has been saved yet. The first
+    /// in-game save then replaces the name with a real upload.
+    ///
+    /// No-op when the sub-room already has a blob. Idempotent.</summary>
+    [HttpPost("rooms/{id:long}/subrooms/{subRoomId:int}/blob/enable")]
+    public async Task<ActionResult> EnableSubRoomBlob(long id, int subRoomId)
+    {
+        var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == id);
+        if (room is null) return NotFound();
+        var scene = await db.RoomScenes.FirstOrDefaultAsync(s => s.RoomId == id && s.OrderIndex == subRoomId);
+        if (scene is null) return NotFound();
+
+        var bakedOriginal = RoomService.IsBakedOriginalRoom(room);
+        if (!string.IsNullOrWhiteSpace(scene.DataBlobName))
+            return Ok(SubRoomBlobWire(room, scene, bakedOriginal, changed: false));
+
+        var blobName = SyntheticSubRoomBlobName(id, subRoomId);
+        var now = DateTime.UtcNow;
+        scene.DataBlobName = blobName;
+        scene.DataModifiedAt = now;
+        if (subRoomId == 0 && string.IsNullOrWhiteSpace(room.CurrentDataBlobName))
+        {
+            room.CurrentDataBlobName = blobName;
+            room.UpdatedAt = now;
+        }
+
+        await LogAsync("enable_subroom_blob", "room", id, $"subRoom={subRoomId} blob={blobName}");
+        await db.SaveChangesAsync();
+        return Ok(SubRoomBlobWire(room, scene, bakedOriginal, changed: true));
+    }
+
+    /// <summary>POST <c>api/admin/v1/rooms/{id}/subrooms/{subRoomId}/blob/reset</c>
+    /// — clear the sub-room's data blob reference. For a baked Rec Room
+    /// Original that puts the room back to "scene only, no blob" (the escape
+    /// hatch if a save left the room unplayable); for any other room the
+    /// resolvers fall back to the synthetic default, i.e. an empty room.
+    /// Saved blobs stay in <c>RoomDataBlobs</c>; only the pointers move, so
+    /// the in-game restore list can bring an old save back.</summary>
+    [HttpPost("rooms/{id:long}/subrooms/{subRoomId:int}/blob/reset")]
+    public async Task<ActionResult> ResetSubRoomBlob(long id, int subRoomId)
+    {
+        var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == id);
+        if (room is null) return NotFound();
+        var scene = await db.RoomScenes.FirstOrDefaultAsync(s => s.RoomId == id && s.OrderIndex == subRoomId);
+        if (scene is null) return NotFound();
+
+        var bakedOriginal = RoomService.IsBakedOriginalRoom(room);
+        var previousScene = scene.DataBlobName;
+        var previousRoom = room.CurrentDataBlobName;
+        var changed = false;
+        var now = DateTime.UtcNow;
+
+        if (!string.IsNullOrWhiteSpace(scene.DataBlobName))
+        {
+            scene.DataBlobName = string.Empty;
+            scene.DataModifiedAt = now;
+            changed = true;
+        }
+        if (subRoomId == 0 && !string.IsNullOrWhiteSpace(room.CurrentDataBlobName))
+        {
+            room.CurrentDataBlobName = string.Empty;
+            room.UpdatedAt = now;
+            changed = true;
+        }
+
+        if (changed)
+        {
+            await LogAsync("reset_subroom_blob", "room", id,
+                $"subRoom={subRoomId} scene '{previousScene}' -> '' room '{previousRoom}' -> '{room.CurrentDataBlobName}'");
+            await db.SaveChangesAsync();
+        }
+        return Ok(SubRoomBlobWire(room, scene, bakedOriginal, changed));
+    }
+
+    private static object SubRoomBlobWire(RoomEntity room, RoomSceneEntity scene, bool bakedOriginal, bool changed) => new
+    {
+        id = scene.Id.ToString(),
+        subRoomId = scene.OrderIndex,
+        name = scene.Name,
+        dataBlobName = scene.DataBlobName,
+        roomCurrentDataBlobName = room.CurrentDataBlobName,
+        effectiveBlobName = EffectiveSubRoomBlobName(room, scene, bakedOriginal),
+        isBakedOriginal = bakedOriginal,
+        changed,
+    };
 
     public sealed record SetSubRoomMaxPlayersRequest(int MaxPlayers);
 

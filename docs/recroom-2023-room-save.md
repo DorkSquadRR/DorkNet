@@ -132,6 +132,31 @@ role-holder (co-owner/mod/host), nor an instance invitee return
 `errorCode=4` (RoomDoesNotExist) so private rooms don't leak their
 existence. Tests: `PrivateRoomInstanceTests.cs`.
 
+## Baked Rec Room Originals and data blobs (Rec Royale)
+
+Baked RRO rooms are seeded with empty `DataBlobName` / `CurrentDataBlobName`,
+which the details builders and matchmaking resolvers pass through as an
+empty `DataBlob`. The 2023 client treats that as "no room data": it never
+downloads a blob, so the room has no room roles (no Maker Pen even though
+the CDN overlays permissive roles for AG rooms), no CV2 room-settings
+chips, no mood engine and nothing to save into. `IsRRO` (= `IsAGRoom`) is
+independent of the blob, so a baked room CAN carry one: the client loads
+the baked map from its own assets and layers the blob's persistence views
+on top — exactly how Rec Center behaves.
+
+Rec Royale needs this to be a game at all: the Frontier scene has no baked
+game rule (contrast `PaintballTeamBattle_GameRuleWrapperCircuit`, which is
+baked into the paintball scene). Its rule is the Maker Pen chip
+`RecRoyaleSolos_GameRuleWrapperCircuit` / `RecRoyaleSquads_GameRuleWrapperCircuit`
+(`BattleRoyaleGameRuleWrapper : GameRuleCircuitWrapperTool`), which real
+Rec Room delivered inside the room blob. Without it there is no
+`BattleRoyaleManager` in the scene.
+
+Admin switch: `POST api/admin/v1/rooms/{id}/subrooms/{sub}/blob/enable`
+stamps `RoomService.SyntheticDefaultRoomDataBlobName(id)` on the scene and
+room; `.../blob/reset` clears it. See `docs/admin.md` → "RRO room data
+blob" for the full procedure (enable → spawn the game-rule chip → save).
+
 ## Related 2023 quirks fixed alongside
 
 - **Play-menu search** (`IBEOONPEELF.SearchRooms`): calls
