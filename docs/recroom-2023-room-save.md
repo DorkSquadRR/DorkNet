@@ -163,6 +163,17 @@ LocationReplicationId, connectable graph, scene settings, object model,
 `room_mood_*`). `RoomDataBlobService.BuildRroEditableBlob` now emits that
 skeleton per room at version 16.
 
+Second requirement — game-role objects. Both reference saves carry three
+`PersistenceViewData` entries whose `game_role_node_data` (field 50) holds a
+`PlayerGameRoleData`: the room's default role (Rec Center: "Rec Center",
+Stunt Runner: "StuntRunner"; GUID `c48bac02-…` in both), "In-Game"
+(`role_id` 2097152, GUID `2c721342-…`) and "Eliminated" (`role_id`
+4194304, rank 1015, `can_move` false, GUID `0b9ec39e-…`). Their
+`spawnable_tool_data.prefab_id` is the GameRoleNode chip prefab
+(`c46e1535…` raw). Since 2023 permissions hang off the player's GameRole,
+a blob without these leaves a co-owner with no Maker Pen. The stub now
+generates Rec Royale's own set (view ids derived from the activity id).
+
 Admin switch: `POST api/admin/v1/rooms/{id}/subrooms/{sub}/blob/enable`
 stamps `RoomService.SyntheticDefaultRoomDataBlobName(id)` on the scene and
 room; `.../blob/reset` clears it. See `docs/admin.md` → "RRO room data

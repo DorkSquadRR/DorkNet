@@ -39,6 +39,7 @@ public sealed class RroRoomBlobTests : IClassFixture<DorkNetServerFactory>
         var admin = await GameClientSessionFactory.CreateAsync(setup, _factory.ApexDomain);
 
         var roomId = 9_600_000 + Random.Shared.Next(1, 99_999);
+        var roomName = $"Royale{Guid.NewGuid():N}"[..18];
         await using (var scope = _factory.Services.CreateAsyncScope())
         {
             var db = scope.ServiceProvider.GetRequiredService<DorkNetDbContext>();
@@ -49,7 +50,7 @@ public sealed class RroRoomBlobTests : IClassFixture<DorkNetServerFactory>
             db.Rooms.Add(new RoomEntity
             {
                 Id = roomId,
-                Name = $"Royale{Guid.NewGuid():N}"[..18],
+                Name = roomName,
                 CreatorPlayerId = 1,
                 IsAGRoom = true,
                 TagsCsv = "recroomoriginal,sport",
@@ -110,7 +111,20 @@ public sealed class RroRoomBlobTests : IClassFixture<DorkNetServerFactory>
         // real save carries the room's location id as activity_id. Our proto
         // doesn't type activity_id, so look for it on the wire.
         Assert.Equal(RoomDataBlobService.Client2023MaxPersistedRoomVersion, (int)persisted.Version);
-        Assert.Contains("b010171f-4875-4e89-baba-61e878cd41e1", System.Text.Encoding.UTF8.GetString(blobBytes));
+        var blobText = System.Text.Encoding.UTF8.GetString(blobBytes);
+        Assert.Contains("b010171f-4875-4e89-baba-61e878cd41e1", blobText);
+
+        // Every real room save carries three GameRoleNode chips (default role
+        // named after the room, "In-Game", "Eliminated" — well-known GUIDs).
+        // The 2023 client grants Maker Pen off the player's GameRole, so a
+        // blob with no role objects leaves even a co-owner with nothing.
+        Assert.Equal(3, CountTopLevelPersistenceViews(blobBytes));
+        Assert.Contains("In-Game", blobText);
+        Assert.Contains("Eliminated", blobText);
+        Assert.Contains("2c721342-c7ed-49fe-b8f0-93f8d282a6df", blobText);
+        Assert.Contains("0b9ec39e-2cc9-4825-8321-da11561f1c4f", blobText);
+        Assert.Contains("c48bac02-a743-4797-94c4-e2d6f0749004", blobText);
+        Assert.Contains(roomName, blobText);
 
         // ── reset: back to scene-only ───────────────────────────────────────
         var reset = await PostJsonAsync(adminClient, $"/api/admin/v1/rooms/{roomId}/subrooms/0/blob/reset");
@@ -213,6 +227,46 @@ public sealed class RroRoomBlobTests : IClassFixture<DorkNetServerFactory>
         var enabled = await PostJsonAsync(adminClient, $"/api/admin/v1/rooms/{roomId}/subrooms/0/blob/enable");
         Assert.False(enabled.GetProperty("changed").GetBoolean());
         Assert.Equal(saved, enabled.GetProperty("effectiveBlobName").GetString());
+    }
+
+    /// <summary>Count top-level <c>persistence_views</c> (field 2) entries by
+    /// walking the wire format — our server proto doesn't type field 2.</summary>
+    private static int CountTopLevelPersistenceViews(byte[] blob)
+    {
+        var pos = 0;
+        var count = 0;
+        while (pos < blob.Length)
+        {
+            var tag = ReadVarint(blob, ref pos);
+            var field = (int)(tag >> 3);
+            var wireType = (int)(tag & 7);
+            switch (wireType)
+            {
+                case 0: ReadVarint(blob, ref pos); break;
+                case 1: pos += 8; break;
+                case 2:
+                    var len = (int)ReadVarint(blob, ref pos);
+                    if (field == 2) count++;
+                    pos += len;
+                    break;
+                case 5: pos += 4; break;
+                default: throw new InvalidDataException($"wire type {wireType}");
+            }
+        }
+        return count;
+    }
+
+    private static ulong ReadVarint(byte[] input, ref int pos)
+    {
+        ulong value = 0;
+        var shift = 0;
+        while (true)
+        {
+            var b = input[pos++];
+            value |= (ulong)(b & 0x7F) << shift;
+            if ((b & 0x80) == 0) return value;
+            shift += 7;
+        }
     }
 
     private static JsonElement SubRoomZero(JsonElement details) =>

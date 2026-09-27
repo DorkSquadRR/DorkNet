@@ -44,7 +44,12 @@ public class RoomDataBlobService
     /// <c>activity_id</c> (Rec Center's saved blob: activity_id ==
     /// cbad71af-…, its location id).</summary>
     public byte[] GetRroEditableBlob(string activityId) =>
-        BuildRroEditableBlob(_rroEditableRoleData, activityId);
+        BuildRroEditableBlob(_rroEditableRoleData, activityId, "Room");
+
+    /// <param name="roomName">Name of the room's default game role (Rec
+    /// Center's is "Rec Center", Stunt Runner's "StuntRunner").</param>
+    public byte[] GetRroEditableBlob(string activityId, string roomName) =>
+        BuildRroEditableBlob(_rroEditableRoleData, activityId, roomName);
 
     private static byte[] LoadDefaultBlob()
     {
@@ -293,7 +298,7 @@ public class RoomDataBlobService
     /// Our server proto only types the role/tag fields, so the rest is
     /// appended as raw wire-format fields (protobuf field order is free).
     /// The byte payloads below are Rec Center's own defaults, verbatim.</summary>
-    private static byte[] BuildRroEditableBlob(RoomRoleCollectionData roleData, string activityId)
+    private static byte[] BuildRroEditableBlob(RoomRoleCollectionData roleData, string activityId, string roomName)
     {
         var msg = new PersistedRoomData
         {
@@ -320,6 +325,28 @@ public class RoomDataBlobService
         // 4: activity_id
         if (!string.IsNullOrWhiteSpace(activityId))
             AppendLengthDelimited(output, 4, System.Text.Encoding.UTF8.GetBytes(activityId));
+
+        // 2: persistence_views — the room's own GAME-ROLE objects. Every real
+        // room save carries three GameRoleNode chips (default role named after
+        // the room, "In-Game", "Eliminated"; Rec Center and Stunt Runner both
+        // do, with the same well-known role GUIDs), and the 2023 client reads
+        // Maker Pen / save / spawn rights off the player's GameRole
+        // (ICreatorRole.get_CreatorRoleCanUseMakerPen on
+        // RecRoom.Systems.PlayerRoles.GameRole). A blob with no role objects
+        // gives a co-owner nothing to hold, so MakerPen.CheckMakerPen-
+        // PermissionAndUpdateMode fails even though the room-role collection
+        // says yes. View ids are derived from the activity id so repeated
+        // downloads describe the same objects.
+        var seed = string.IsNullOrWhiteSpace(activityId) ? "rro" : activityId;
+        AppendLengthDelimited(output, 2, BuildGameRoleView(seed, roomName, DefaultGameRoleGuid, nodeId: 7,
+            transform: "0a0f0db7968041152c798b3f1da05e8dc02d0000803f32050d0000803f",
+            roleId: 0, roleRank: 0, isDefaultRole: true));
+        AppendLengthDelimited(output, 2, BuildGameRoleView(seed, "In-Game", InGameGameRoleGuid, nodeId: 9,
+            transform: "0a0f0d51308241152c798b3f1da05e8dc02d0000803f32050d0000803f",
+            roleId: 2_097_152, roleRank: 1, isDefaultRole: false));
+        AppendLengthDelimited(output, 2, BuildGameRoleView(seed, "Eliminated", EliminatedGameRoleGuid, nodeId: 11,
+            transform: "0a0f0deac98341152c798b3f1da05e8dc02d0000803f32050d0000803f",
+            roleId: 4_194_304, roleRank: 1015, isDefaultRole: false));
         // 21: connectable_graph_data { root_node { slot_index=0-ish, field 7 = 1 } }
         AppendLengthDelimited(output, 21, new byte[] { 0x0A, 0x04, 0x0A, 0x00, 0x38, 0x01 });
         // 24: scene_settings_data { enforce_host_only_areas=true, use_new_materials=true }
@@ -340,6 +367,102 @@ public class RoomDataBlobService
         WriteVarint(output, ((ulong)fieldNumber << 3) | 2);
         WriteVarint(output, (ulong)payload.Length);
         output.Write(payload, 0, payload.Length);
+    }
+
+    private static void AppendVarint(Stream output, int fieldNumber, ulong value)
+    {
+        WriteVarint(output, ((ulong)fieldNumber << 3) | 0);
+        WriteVarint(output, value);
+    }
+
+    // Well-known game-role GUIDs, identical in every room save inspected
+    // (Rec Center room_100_v1.dat, Stunt Runner room_125_v1.dat).
+    private const string DefaultGameRoleGuid = "c48bac02-a743-4797-94c4-e2d6f0749004";
+    private const string InGameGameRoleGuid = "2c721342-c7ed-49fe-b8f0-93f8d282a6df";
+    private const string EliminatedGameRoleGuid = "0b9ec39e-2cc9-4825-8321-da11561f1c4f";
+
+    // SpawnableToolData.prefab_id of the GameRoleNode chip prefab (16 raw
+    // bytes, same in both reference saves).
+    private static readonly byte[] GameRoleNodePrefabId = Convert.FromHexString("c46e153588a47147835d6cc2f69bfd6c");
+
+    /// <summary>One <c>PersistenceViewData</c> carrying a GameRoleNode chip,
+    /// laid out exactly as the client's own writer emits it: id, empty
+    /// tool_entity_data, transform, spawnable_tool_data{prefab_id},
+    /// creation_object_data{is_frozen, is_grabbable}, empty tool_cleanup_data,
+    /// circuit_node_data{id}, game_role_node_data{PlayerGameRoleData}. The
+    /// PlayerGameRoleData mirrors the reference saves field-for-field,
+    /// including the empty Overridable* submessages the writer always emits
+    /// (the reader expects them present).</summary>
+    private static byte[] BuildGameRoleView(string seed, string roleName, string roleGuid, int nodeId,
+        string transform, int roleId, int roleRank, bool isDefaultRole)
+    {
+        using var view = new MemoryStream(512);
+        // 1: id — stable per (room, role)
+        AppendLengthDelimited(view, 1, System.Security.Cryptography.MD5.HashData(
+            System.Text.Encoding.UTF8.GetBytes($"dorknet-rro-role:{seed}:{roleGuid}")));
+        AppendLengthDelimited(view, 9, Array.Empty<byte>());                 // tool_entity_data
+        AppendLengthDelimited(view, 10, Convert.FromHexString(transform));  // transform
+        using (var spawnable = new MemoryStream(20))                         // spawnable_tool_data
+        {
+            AppendLengthDelimited(spawnable, 1, GameRoleNodePrefabId);
+            AppendLengthDelimited(view, 11, spawnable.ToArray());
+        }
+        AppendLengthDelimited(view, 14, new byte[] { 0x18, 0x01, 0x30, 0x01 }); // creation_object_data
+        AppendLengthDelimited(view, 22, Array.Empty<byte>());                // tool_cleanup_data
+        using (var node = new MemoryStream(4))                               // circuit_node_data
+        {
+            AppendVarint(node, 1, (ulong)nodeId);
+            AppendLengthDelimited(view, 25, node.ToArray());
+        }
+        using (var roleNode = new MemoryStream(512))                         // game_role_node_data
+        {
+            AppendLengthDelimited(roleNode, 1, BuildPlayerGameRole(roleName, roleGuid, roleId, roleRank, isDefaultRole));
+            AppendLengthDelimited(view, 50, roleNode.ToArray());
+        }
+        return view.ToArray();
+    }
+
+    private static byte[] BuildPlayerGameRole(string roleName, string roleGuid, int roleId, int roleRank, bool isDefaultRole)
+    {
+        // Field order and the set of always-present empty submessages copied
+        // from Rec Center's save (role_version 33 = the 2023 writer).
+        int[] order =
+        {
+            3, 5, 8, 11, 12, 13, 14, 15, 17, 18, 19, 21, 22, 23, 24, 26, 27, 30, 31, 32, 33, 34, 36, 37, 38, 39,
+            40, 41, 42, 43, 44, 46, 47, 48, 49, 50, 51, 52, 62, 63, 64, 65, 66, 67, 70, 71, 72, 73, 74, 75, 76,
+            77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 89, 90, 91, 92, 93, 94, 95, 96, 97, 98, 99, 100,
+        };
+        static byte[] OverrideBool(bool value) => value ? new byte[] { 0x08, 0x01, 0x10, 0x01 } : new byte[] { 0x08, 0x01 };
+
+        using var role = new MemoryStream(320);
+        if (!isDefaultRole)
+        {
+            AppendVarint(role, 1, (ulong)roleId);   // role_id (AG bitmask)
+            AppendVarint(role, 2, (ulong)roleRank); // role_rank
+        }
+        foreach (var f in order)
+        {
+            switch (f)
+            {
+                case 3: AppendVarint(role, 3, 1); break;                                   // is_role_active
+                case 5: AppendLengthDelimited(role, 5, System.Text.Encoding.UTF8.GetBytes(roleName)); break;
+                case 17 when roleName == "Eliminated":
+                    AppendLengthDelimited(role, 17, new byte[] { 0x08, 0x01, 0x10, 0x01 }); break; // item_pickup_restrictions
+                case 26 when isDefaultRole:
+                    AppendLengthDelimited(role, 26, new byte[] { 0x08, 0x01, 0x10, 0x14 }); break; // voice_rolloff_max_distance=20
+                case 27: AppendVarint(role, 27, 33); break;                                // role_version
+                case 31 when roleName == "Eliminated":
+                    AppendLengthDelimited(role, 31, OverrideBool(false)); break;            // can_move
+                case 49: AppendLengthDelimited(role, 49, System.Text.Encoding.UTF8.GetBytes(roleGuid)); break;
+                // DorkNet policy for editable RROs: the default role may use
+                // the Maker Pen regardless of room role (matches the
+                // permissive room-role overlay the CDN applies).
+                case 94 when isDefaultRole:
+                    AppendLengthDelimited(role, 94, OverrideBool(true)); break;             // can_use_maker_pen
+                default: AppendLengthDelimited(role, f, Array.Empty<byte>()); break;
+            }
+        }
+        return role.ToArray();
     }
 
     private static RoomRoleCollectionData BuildRroEditableRoleData()
