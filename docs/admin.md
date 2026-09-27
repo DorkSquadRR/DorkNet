@@ -232,6 +232,12 @@ actions:
   the second reason "enable + co-owner" still showed no Maker Pen. The
   default role sets `can_use_maker_pen` to true, matching the permissive
   room-role overlay; the built-in roles mirror the reference saves.
+  For the two Rec Royale rooms the stub also carries the room's
+  **game-rule chip** (`RecRoyaleSolos_GameRuleWrapperCircuit` prefab id
+  `983db81a…`, `RecRoyaleSquads_…` `857f7500…`, read from the client's
+  spawnable-tool table; a saved Squads chip is header + prefab id + tag +
+  node id + an empty wrapper payload), so the match logic exists on first
+  join without anyone spawning it by hand.
 - **Reset to baked scene** — `POST api/admin/v1/rooms/{id}/subrooms/{subRoomId}/blob/reset`.
   Clears both pointers. This is the escape hatch if a save left the room
   unplayable. Saved blobs stay in `RoomDataBlobs`, so the in-game restore

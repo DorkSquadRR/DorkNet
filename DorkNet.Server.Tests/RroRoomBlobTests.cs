@@ -197,6 +197,48 @@ public sealed class RroRoomBlobTests : IClassFixture<DorkNetServerFactory>
         Assert.Equal(string.Empty, SubRoomZero(await GetJsonAsync(gameClient, $"/rooms/{roomId}")).GetProperty("DataBlob").GetString());
     }
 
+    /// <summary>Rec Royale's Frontier scene has no baked game rule; real Rec
+    /// Room delivered the RecRoyaleSolos/Squads_GameRuleWrapperCircuit chip
+    /// in the blob. The stub for those rooms must carry it (a fourth
+    /// persistence view with the palette tag the client generates).</summary>
+    [Theory]
+    [InlineData("RecRoyaleSolos", "recroyalesolosgamerulecir")]
+    [InlineData("RecRoyaleSquads", "recroyalesquadsgameruleci")]
+    public async Task Rec_royale_stub_carries_its_game_rule_chip(string roomNamePrefix, string expectedTag)
+    {
+        using var setup = Client("rooms");
+        var admin = await GameClientSessionFactory.CreateAsync(setup, _factory.ApexDomain);
+
+        var roomId = 9_680_000 + Random.Shared.Next(1, 99_999);
+        var roomName = $"{roomNamePrefix}-{Guid.NewGuid():N}"[..24];
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<DorkNetDbContext>();
+            (await db.Players.FirstAsync(p => p.Id == admin.PlayerId)).IsAdmin = true;
+            db.Rooms.Add(new RoomEntity
+            {
+                Id = roomId,
+                Name = roomName,
+                CreatorPlayerId = 1,
+                IsAGRoom = true,
+                TagsCsv = "recroomoriginal",
+                LocationReplicationId = "253fa009-6e65-4c90-91a1-7137a56a267f",
+            });
+            await db.SaveChangesAsync();
+        }
+
+        using var adminClient = Client("admin", admin);
+        using var cdnClient = Client("cdn");
+        await PostJsonAsync(adminClient, $"/api/admin/v1/rooms/{roomId}/subrooms/0/blob/enable");
+
+        var synthetic = RoomService.SyntheticDefaultRoomDataBlobName(roomId);
+        using var blobResponse = await cdnClient.GetAsync($"/room/{synthetic}");
+        Assert.True(blobResponse.IsSuccessStatusCode);
+        var blobBytes = await blobResponse.Content.ReadAsByteArrayAsync();
+        Assert.Equal(4, CountTopLevelPersistenceViews(blobBytes)); // 3 roles + the rule chip
+        Assert.Contains(expectedTag, System.Text.Encoding.UTF8.GetString(blobBytes));
+    }
+
     [Fact]
     public async Task Enable_on_a_saved_subroom_keeps_the_saved_blob()
     {
