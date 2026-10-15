@@ -257,6 +257,46 @@ public sealed class OwnedAvatarItemsTests : IClassFixture<DorkNetServerFactory>
         }
     }
 
+    [Fact]
+    public async Task Base_avatar_items_are_only_the_custom_clothing_templates()
+    {
+        // The client flags every defaultbaseavataritems row as a custom-
+        // clothing template and leaves it out of the owned rebuild, so a
+        // normal item listed here showed a price even when owned.
+        using var anonymous = ApiClient();
+        var rows = await GetJsonAsync(anonymous, "/api/avatar/v1/defaultbaseavataritems");
+        var byDesc = rows.EnumerateArray().ToDictionary(
+            r => r.GetProperty("AvatarItemDesc").GetString()!.Split(',')[0],
+            r => r);
+        Assert.Equal(2, byDesc.Count);
+        Assert.Equal(2184, byDesc["c5d70cb4-71dd-4fe4-b719-34fe2073c611"].GetProperty("AvatarItemId").GetInt32());
+        Assert.Equal(2918, byDesc["95a519de-f2cb-429c-b014-508477f20d42"].GetProperty("AvatarItemId").GetInt32());
+        Assert.All(byDesc.Values, r => Assert.True(r.GetProperty("IsBaseAvatarItem").GetBoolean()));
+
+        // Templates aren't sold or listed as owned clothing.
+        var shop = await GetJsonAsync(anonymous, "/api/storefronts/v3/giftdropstore/3");
+        var shopDescs = shop.GetProperty("StoreItems").EnumerateArray()
+            .Select(r => r.GetProperty("GiftDrop").GetProperty("AvatarItemDesc").GetString() ?? "");
+        Assert.DoesNotContain(shopDescs, d => byDesc.ContainsKey(d.Split(',')[0]));
+
+        await using (var scope = _factory.Services.CreateAsyncScope())
+            await scope.ServiceProvider.GetRequiredService<DorkNet.Server.Services.ServerSettingsService>()
+                .SetAllAvatarItemsOwnedEnabledAsync(true);
+        try
+        {
+            var owned = await GetJsonAsync(anonymous, "/api/avatar/v1/defaultunlocked");
+            var ownedDescs = owned.EnumerateArray().Select(r => r.GetProperty("AvatarItemDesc").GetString()!.Split(',')[0]).ToList();
+            Assert.DoesNotContain(ownedDescs, byDesc.ContainsKey);
+            Assert.Contains("3c2ed30c-ca2a-4f9f-9bfa-ffe561c4a686", ownedDescs); // 80sHipHopJacket
+        }
+        finally
+        {
+            await using var scope = _factory.Services.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<DorkNet.Server.Services.ServerSettingsService>()
+                .SetAllAvatarItemsOwnedEnabledAsync(false);
+        }
+    }
+
     // Beard_Close: one of the client's defaultUnlockedVariants.
     private const string DefaultItemGuid = "8d10cc78-6b00-45f3-affb-205e9cc5b03f";
 
