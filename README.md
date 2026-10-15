@@ -153,10 +153,25 @@ calls so self-signed certs work.
 
 ### Quest
 
-A Quest client for this branch is in progress and not usable yet. The
-archive holds a Quest build of the same release (version `20230317`), so
-Quest and PC players will be on matching versions once it lands. Until
-then, this branch supports the PC client only.
+`DorkNet.Quest` patches the Rec Room 2023.03.21 Quest client (versionCode
+`2128210`) for sideloading onto a standalone Meta Quest. That build reports
+`appVersion` `20230317`, the same version as the PC client, so Quest and PC
+players can share rooms.
+
+The patcher injects a single native hook library into the APK. The library
+redirects the Rec Room name server to your DorkNet host, supplies your
+Photon AppIds, and turns off the client's certificate pinning and
+image-signature checks so a self-hosted server works. A build without a
+Meta app ID lets players sign in with DorkNet credentials and no Meta
+account. Each hook checks a fingerprint of its target first, so the patch
+refuses to apply to any other build.
+
+You supply your own extracted APK and OBB; no game binaries are
+redistributed. Build, install and troubleshooting steps are in
+[DorkNet.Quest/README.md](DorkNet.Quest/README.md), and the operator view
+is in [docs/quest.md](docs/quest.md).
+
+> The Quest build is new and has not yet been tested on a headset.
 
 ### Debugging (opt-in — `DorkNet.DebugMod`)
 
@@ -475,6 +490,31 @@ Branch-specific: this is the repo's default branch, and Dependabot and
 server PRs target it. Schema changes here don't flow to the 2020 or 2018
 branches automatically. If a fix applies to more than one, cherry-pick
 it across. Don't rebase across branches.
+
+---
+
+## Acknowledgements
+
+Thanks to [RecFlare](https://github.com/recflare), an independent
+open-source 2023 Rec Room server by djdevin, for sharing their work in the
+open. Their server and Quest client were a valuable second opinion while
+building this branch:
+
+- **Quest:** `DorkNet.Quest` follows their approach of a single native hook
+  library loaded through a `DT_NEEDED` entry on `libmain.so`. Their notes
+  also showed which client checks a self-hosted server has to get past.
+- **Wire contracts:** their implementation pointed us at several things we
+  then confirmed in our own client disassembly. These include the profile
+  edit form fields, the saved-outfit keys, the `{Success, Error}` envelope
+  behind `isCreationAllowedForAccount`, and the gameconfig catalogue,
+  including the `PlayMenuCarouselOrdering_*` format.
+- **Accounts:** their warning that a Quest client without a Meta account
+  sends the same platform id from every headset led to the placeholder
+  platform-id handling in `PlayerService`.
+
+No RecFlare code is included in DorkNet. RecFlare targets a newer client
+(20230414), so every finding was re-verified against the 2023.03.21 build
+before use.
 
 ---
 

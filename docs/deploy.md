@@ -400,6 +400,18 @@ means losing post-cutover writes unless you migrate them back.
 
 ---
 
+## Meta Quest client
+
+DorkNet also serves a sideload-patched Rec Room 2023.03.21 **Quest** client
+(versionCode 2128210, appVersion `20230317` — the same version the PC client
+reports, so Quest and PC players share rooms). The same DNS/TLS/Photon/image-
+signing setup here serves it; the only Quest-specific server behaviour is the
+placeholder-platform-id handling in `PlayerService`. See [`quest.md`](quest.md)
+for the operator view and [`../DorkNet.Quest/README.md`](../DorkNet.Quest/README.md)
+for building and installing the patched APK.
+
+---
+
 ## Photon Cloud
 
 Use your own Photon AppIds. Rec Room's original Photon AppIds reject

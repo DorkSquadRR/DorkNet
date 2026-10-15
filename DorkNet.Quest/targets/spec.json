@@ -1,0 +1,119 @@
+{
+  "_comment": [
+    "Hook targets, identified by the class header and method signature exactly as",
+    "Il2CppDumper prints them in dump.cs. scripts/resolve_targets.py turns this into a",
+    "per-build table (RVA, length, code fingerprint). Obfuscated names are fixed per",
+    "release and shared with the PC build of the same release; when rebasing, re-check",
+    "each one against the PC decompile and update the signature here."
+  ],
+  "targets": [
+    {
+      "id": "http_send_request",
+      "class": "public static class HTTPManager ",
+      "method": "public static HTTPRequest SendRequest(HTTPRequest request)",
+      "why": "Rewrites <service>.rec.net hosts to <service>.<ServerHost> before a request is queued."
+    },
+    {
+      "id": "http_call_callback",
+      "class": "public sealed class HTTPRequest ",
+      "method": "internal void CallCallback()",
+      "why": "Logs each finished request's status (and the body of non-2xx responses)."
+    },
+    {
+      "id": "oculus_get_app_id",
+      "class": "public sealed class PlatformSettings ",
+      "method": "public static string get_AppID()",
+      "why": "Returns the operator's Meta app id when OculusAppId is set."
+    },
+    {
+      "id": "oculus_get_mobile_app_id",
+      "class": "public sealed class PlatformSettings ",
+      "method": "public static string get_MobileAppID()",
+      "why": "Same as get_AppID; the Quest build reads this getter."
+    },
+    {
+      "id": "photon_app_settings",
+      "class": "internal class NFOMFIAOKFO ",
+      "method": "public AppSettings LBKJOHGFHOO()",
+      "why": "Builds Photon.Realtime.AppSettings with Rec Room's hardcoded Realtime/Voice app ids (PC: same class+method). Postfixed to set the operator's ids."
+    },
+    {
+      "id": "tls_unity_verify",
+      "class": "internal class UnityTlsContext ",
+      "method": "private UnityTls.unitytls_x509verify_result VerifyCallback(UnityTls.unitytls_x509list_ref chain, UnityTls.unitytls_errorstate* errorState)",
+      "why": "Platform TLS trust decision (Mono's bundled CA set). Forced to success when TlsTrustBypass is on."
+    },
+    {
+      "id": "tls_bc_notify_server_certificate",
+      "class": "public class LegacyTlsAuthentication ",
+      "method": "public virtual void NotifyServerCertificate(Certificate serverCertificate)",
+      "why": "BestHTTP BouncyCastle trust hook (PC ClientMod skips the same method). No-op when TlsTrustBypass is on."
+    },
+    {
+      "id": "pin_nameserver",
+      "class": "public class PAPLNIPKAMG ",
+      "method": "private static bool GKHFNFDOKDK(HTTPRequest ODNHKCNDAKN, X509Certificate PGKJCEFFIPB, X509Chain AJJPNBICGLG)",
+      "why": "Name-server client's certificate callback: chain status + SPKI pin compare. Always accepted (pins never match a self-hosted server)."
+    },
+    {
+      "id": "pin_https",
+      "class": "public static class LJEHIHEHMCN ",
+      "method": "public static bool JFIODJJKMBF(HTTPRequest ODNHKCNDAKN, X509Certificate PGKJCEFFIPB, X509Chain AJJPNBICGLG)",
+      "why": "SPKI pinning for every RecNet request; a miss reports NetworkCertificateMismatch through FPIBGPIAOBI. Always accepted."
+    },
+    {
+      "id": "pin_bc_verifier",
+      "class": "public class LJEHIHEHMCN.NALNEIDKBOC ",
+      "method": "public bool IsValid(Uri HEEAJLIFCHN, X509CertificateStructure[] MFLGMAEAFON)",
+      "why": "The same pin check as an ICertificateVerifyer for the BouncyCastle path. Always accepted."
+    },
+    {
+      "id": "image_signature_verify",
+      "class": "public class KLJOGJHBONK ",
+      "method": "private static bool PBLLFOKJAMK(byte[] HBMMCJPOJGP, byte[] JJGOGMKDLGI)",
+      "why": "RSA-SHA1 check of image Content-Signature against Rec Room's baked public key. Accepted when AcceptUnsignedImages is on."
+    },
+    {
+      "id": "hile_warning_callback",
+      "class": "private sealed class FPIBGPIAOBI.KHIIHOIFDMP ",
+      "method": "internal void <CreateHileWarning>b__0(bool shouldQuit)",
+      "why": "Cheat-warning dialog/quit callback. Skipped, as on PC."
+    },
+    {
+      "id": "unknown_dll_callback",
+      "class": "private sealed class CheatManager.NOBCKPOGHEB ",
+      "method": "internal void <OnUnknownDLLDetected>b__0()",
+      "why": "Unknown-library detection callback (the injected hook library is one). Skipped, as on PC (PC closure class is PNHDGEKCJCH)."
+    },
+    {
+      "id": "file_hash_callback",
+      "class": "private sealed class BEPEAHOOLDB.PBENKLNHBHL ",
+      "method": "internal void <InitializeFileHashChecker>b__0(JFDPIJFDHAD.ACCABIOJGNE result)",
+      "why": "File-hash checker result callback (the APK is re-signed). Skipped, as on PC."
+    },
+    {
+      "id": "toxmod_can_initialize",
+      "class": "public class ToxModVoiceComponent ",
+      "method": "public static bool CanInitializeToxMod()",
+      "why": "Third-party voice moderation service; forced false, as on PC."
+    },
+    {
+      "id": "cheat_report",
+      "class": "public class FPIBGPIAOBI ",
+      "method": "public static LDGADANDBIO IEIHCFLCHBE(FPIBGPIAOBI.HHKINDNBLEE EHPFPOFFCEJ, string EPAIMCEIMPA, Nullable<int> BNCEPENKLDF)",
+      "why": "Log-only: names any integrity report so a new one is visible in logcat."
+    },
+    {
+      "id": "fatal_application_quit",
+      "class": "public class SessionManager ",
+      "method": "public static void FatalApplicationQuit(int DKOGJICFAEP, string EPAIMCEIMPA = \"\")",
+      "why": "Log-only: prints the quit reason and caller."
+    },
+    {
+      "id": "try_application_quit",
+      "class": "public class SessionManager ",
+      "method": "public static void TryApplicationQuit(int DKOGJICFAEP)",
+      "why": "Log-only: prints the quit code and caller."
+    }
+  ]
+}
