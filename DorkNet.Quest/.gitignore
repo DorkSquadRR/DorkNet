@@ -1,0 +1,9 @@
+# Operator secrets and build outputs — never commit.
+dorknet-quest.cfg
+*.keystore
+*.so
+build/
+*_generated.h
+
+# The resolved per-build target tables ARE committed (targets/<ver>-<code>.json);
+# only the generated C header is ignored.

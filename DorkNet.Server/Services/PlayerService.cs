@@ -424,6 +424,38 @@ public class PlayerService(DorkNetDbContext db, RoomService rooms, ILogger<Playe
     }
 
     /// <summary>
+    /// True for a platform id that identifies nobody: blank, "0" (no platform
+    /// session) or "1". A Quest client patched without its own Meta app
+    /// (DorkNet.Quest, no-Meta mode) has no platform session, so it reports
+    /// the same placeholder user id "1" from every headset. Treating that as a
+    /// real id would list every Quest player's account in every other Quest
+    /// player's remembered-logins prompt and, with no device id, merge them
+    /// into one synthetic account. Placeholders are never stored on an
+    /// account, never matched by the cached-login lookup and never used to
+    /// synthesise a device id — those players are keyed by deviceId alone.
+    /// </summary>
+    public static bool IsPlaceholderPlatformId(string? platformId)
+    {
+        if (string.IsNullOrWhiteSpace(platformId)) return true;
+        var trimmed = platformId.Trim();
+        return trimmed == "0" || trimmed == "1";
+    }
+
+    /// <summary>Lookup-only counterpart to
+    /// <see cref="GetOrCreateByDeviceAsync"/>. Returns the existing player
+    /// row for the given deviceId, or null if none exists — never creates
+    /// a new account. Callers that want to enforce the admin "signups
+    /// disabled" toggle use this to gate the device-id login fallback
+    /// without accidentally minting an account.</summary>
+    public async Task<PlayerEntity?> GetByDeviceAsync(string? deviceId)
+    {
+        if (string.IsNullOrWhiteSpace(deviceId)) return null;
+        return await db.Players
+            .Include(p => p.Avatar)
+            .FirstOrDefaultAsync(p => p.DeviceId == deviceId);
+    }
+
+    /// <summary>
     /// Look up an existing account by deviceId, or create a new one if no
     /// account is bound to that device yet. This is the canonical
     /// account-creation entry point — every login flow funnels through here.
@@ -440,26 +472,13 @@ public class PlayerService(DorkNetDbContext db, RoomService rooms, ILogger<Playe
     ///   - When deviceId is empty (rare paths), fall back to a generated
     ///     synthetic id so we never create accidentally-shared accounts.
     /// </summary>
-    /// <summary>Lookup-only counterpart to
-    /// <see cref="GetOrCreateByDeviceAsync"/>. Returns the existing player
-    /// row for the given deviceId, or null if none exists — never creates
-    /// a new account. Callers that want to enforce the admin "signups
-    /// disabled" toggle use this to gate the device-id login fallback
-    /// without accidentally minting an account.</summary>
-    public async Task<PlayerEntity?> GetByDeviceAsync(string? deviceId)
-    {
-        if (string.IsNullOrWhiteSpace(deviceId)) return null;
-        return await db.Players
-            .Include(p => p.Avatar)
-            .FirstOrDefaultAsync(p => p.DeviceId == deviceId);
-    }
-
     public async Task<PlayerEntity> GetOrCreateByDeviceAsync(
         string? deviceId,
         int platform = 0,
         string? platformId = null,
         string? displayName = null)
     {
+        if (IsPlaceholderPlatformId(platformId)) platformId = null;
         if (string.IsNullOrWhiteSpace(deviceId))
         {
             // Synthesize a stable id from the platformId or generate one so
@@ -559,6 +578,7 @@ public class PlayerService(DorkNetDbContext db, RoomService rooms, ILogger<Playe
         string? platformId = null,
         string? displayName = null)
     {
+        if (IsPlaceholderPlatformId(platformId)) platformId = null;
         // Synthesise deviceId / platformId for empty inputs so the
         // audit trail still lands somewhere meaningful.
         var effectiveDeviceId = string.IsNullOrWhiteSpace(deviceId)
@@ -646,7 +666,7 @@ public class PlayerService(DorkNetDbContext db, RoomService rooms, ILogger<Playe
         if (player is null) return;
         player.LastSeenAt = DateTime.UtcNow;
         if (platform != 0) player.LastPlatform = platform;
-        if (!string.IsNullOrWhiteSpace(platformId)) player.LastPlatformId = platformId;
+        if (!IsPlaceholderPlatformId(platformId)) player.LastPlatformId = platformId!;
         await db.SaveChangesAsync();
     }
 
@@ -663,7 +683,7 @@ public class PlayerService(DorkNetDbContext db, RoomService rooms, ILogger<Playe
     /// </summary>
     public async Task<List<PlayerEntity>> GetCachedLoginsAsync(int platform, string? platformId, int take = 10)
     {
-        if (string.IsNullOrWhiteSpace(platformId))
+        if (IsPlaceholderPlatformId(platformId))
             return [];
         return await db.Players
             .Where(p => p.LastPlatform == platform && p.LastPlatformId == platformId)
