@@ -41,6 +41,7 @@ public class GoToController(
     NotificationService notifications,
     JoinTimeoutService joinTimeouts,
     ServerSettingsService serverSettings,
+    PresenceBroadcastService presenceFanout,
     ILogger<GoToController> logger) : ControllerBase
 {
     [HttpPost("/goto/room/{roomName}")]
@@ -1294,15 +1295,14 @@ public class GoToController(
 
     private async Task NotifyFriendsOfMoveAsync(long playerId, RoomInstanceDto room)
     {
-        // Honors the global-friends toggle: with it on, every other player is
-        // a "friend" and gets the presence ping (so the whole small server
-        // sees each other's room moves).
-        var friendIds = await RelationshipQueries.EffectiveFriendIdsAsync(db, serverSettings, playerId);
+        // Honors the global-friends toggle (every other player is a "friend"
+        // when it is on). Goes through the shared fan-out so the frame
+        // carries the player's real status visibility and the same
+        // online/room state every other presence transition reports.
         logger.LogInformation(
-            "[goto-fanout] player={PlayerId} moved to room={RoomId}/{RoomName} → notifying {FriendCount} friend(s)",
-            playerId, room.RoomId, room.Name, friendIds.Count);
-        if (friendIds.Count == 0) return;
-        await notifications.PlayerEnteredRoom(friendIds, playerId, room);
+            "[goto-fanout] player={PlayerId} moved to room={RoomId}/{RoomName}",
+            playerId, room.RoomId, room.Name);
+        await presenceFanout.PublishCurrentAsync(playerId);
     }
 
     private async Task<MatchmakingResponseDto> BuildResponseAsync(string roomName)

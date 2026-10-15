@@ -1642,7 +1642,21 @@ public class RoomsModerationController(
 
         var newBlob = CloneBlobName(cloneId, orderIndex);
         var (dstBucket, dstKey) = BlobRouter.Route(newBlob);
-        await storage.PutAsync(dstBucket, dstKey, bytes, "application/octet-stream");
+        try
+        {
+            await storage.PutAsync(dstBucket, dstKey, bytes, "application/octet-stream");
+        }
+        catch (Exception ex)
+        {
+            // Same reasoning as the read side: the clone row is already
+            // committed, so a storage outage must degrade to an empty
+            // sub-room, not a 500 that leaves a failed-looking clone still
+            // pointing at the source's data.
+            logger.LogWarning(ex,
+                "[room-clone] could not write blob {Blob}; room {Room} sub-room {Sub} starts empty",
+                newBlob, cloneId, orderIndex);
+            return null;
+        }
 
         db.RoomDataBlobs.Add(new RoomDataBlobEntity
         {

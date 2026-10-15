@@ -284,7 +284,11 @@ public class RoomCurrenciesController(DorkNetDbContext db, LevelService level) :
         offer.IsDeleted = true;
         offer.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
-        return Ok(ToOfferWire(offer, currency));
+        // MIHKAJFMIPE.OHCONDGELJB hands this body to BFDGEKKNAPB.PEFKBAEAOPD
+        // (ExpandRecNetResult): it is a {success,error} RecNetResult, not the
+        // offer. The offer wire has no Success key, so it parsed as a failure
+        // with a null Error and the delete toast threw instead of closing.
+        return RecNetResults.Ok();
     }
 
     /// <summary>Both verbs are mapped on purpose: the client picks GET or POST at

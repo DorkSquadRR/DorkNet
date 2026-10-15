@@ -371,11 +371,22 @@ public class CustomAvatarItemsController(
         var allowed = player is not null
             && !player.IsJunior
             && (player.BannedUntil is null || player.BannedUntil <= DateTime.UtcNow);
-        // Bare JSON boolean, like the two sibling gates below: the client's
-        // issuing method is FGLDKEJLAKB<System.Boolean> GGMDLMLJDDK()
-        // (RecNet.Runtime/MPBLNLMCEDL.txt:6048, route literal on :6205), so an
-        // object body threw and the can-create gate blocked shirt creation.
-        return Content(allowed ? "true" : "false", "application/json");
+        // NOT a bare boolean, unlike the two sibling gates below. The issuing
+        // method GGMDLMLJDDK (RecNet.Runtime/MPBLNLMCEDL.txt:6048, route on
+        // :6205) parses the body as DJMHAFPGLLN — {Boolean @0x10, String} —
+        // (generic token 0x188477F70 at :6216; Func<DJMHAFPGLLN,…> at :6223)
+        // and its success continuation HONEEPBHNLB reads the bool at +0x10
+        // (:9155-9216).
+        // DJMHAFPGLLN's converter LMCCNLLHLCJ registers exactly the keys
+        // "Success" and "Error" (LMCCNLLHLCJ.txt:191-254). A bare `true`
+        // failed that parse, so the client logged "Failed to query if local
+        // account can create Custom Avatar Items: An error occurred" and
+        // treated the account as unable to create shirts.
+        return Ok(new Dictionary<string, object?>
+        {
+            ["Success"] = allowed,
+            ["Error"] = allowed ? null : "Custom avatar item creation is not available for this account.",
+        });
     }
 
     [HttpGet("isCreationEnabled")]
@@ -386,22 +397,17 @@ public class CustomAvatarItemsController(
     [AllowAnonymous]
     public IActionResult IsRenderingEnabled() => Content("true", "application/json");
 
-    /// <summary>The client DTO (IHLMDLKOLNB) is an object with exactly one
-    /// Int32 property, but its accessor name (GFGCCNBDKAK) appears nowhere
-    /// else in the dump, so — unlike Price/BaseAvatarItemId/Color, which are
-    /// pinned by accessors shared with NOAAFNFJPFB — the JSON key is NOT
-    /// recoverable. All four spellings below are UNPROVEN hedges; Newtonsoft
-    /// ignores the ones that don't match, and a total miss falls back to the
-    /// DTO's static default (IHLMDLKOLNB.txt:75-117) rather than throwing.</summary>
+    /// <summary>Bare JSON integer. The client's IHLMDLKOLNB pricing config is
+    /// built CLIENT-side: HCBOHHEACPK sends through FDKKOPAPDGF&lt;Int32&gt;
+    /// (RecNet.Runtime/MPBLNLMCEDL.txt:6922 — the same generic token
+    /// 0x18847B0B8 as the bare-Int32 itemOwnershipLimit call at :2981) and
+    /// continues with <c>&lt;GetPricingConfig&gt;b__69_0(Int32 minimumPrice)</c>
+    /// (MPBLNLMCEDL_NestedType___c.txt:286). An object body failed the Int32
+    /// parse, so the designer's public-price floor never loaded.</summary>
     [HttpGet("minPriceForPublicItem")]
     [AllowAnonymous]
-    public IActionResult MinPriceForPublicItem() => Ok(new
-    {
-        MinPrice = MinPublicItemPrice,
-        Price = MinPublicItemPrice,
-        MinimumPrice = MinPublicItemPrice,
-        MinPriceForPublicItem = MinPublicItemPrice,
-    });
+    public IActionResult MinPriceForPublicItem()
+        => Content(MinPublicItemPrice.ToString(System.Globalization.CultureInfo.InvariantCulture), "application/json");
 
     /// <summary>GET api/customAvatarItems/v1/design — hand back the caller's
     /// saved in-progress shirt design. Verb ordinal 0 = GET

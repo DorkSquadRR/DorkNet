@@ -144,6 +144,19 @@ public static class PlayerAccountPurge
                 .SetProperty(x => x.DeletedAt, now)
                 .SetProperty(x => x.IsPublic, false));
 
+        // Custom avatar items: the purged player's ownership rows go away;
+        // items they CREATED are reassigned to the system account like
+        // Inventions, because other players may own and be wearing them —
+        // deleting the item would break those avatars.
+        deleted += await db.CustomAvatarItemOwnership
+            .Where(x => x.PlayerId == playerId)
+            .ExecuteDeleteAsync();
+        reassigned += await db.CustomAvatarItems
+            .Where(x => x.CreatorPlayerId == playerId)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.CreatorPlayerId, systemPlayerId)
+                .SetProperty(x => x.UpdatedAt, now));
+
         reassigned += await db.SignupCodes
             .Where(x => x.RedeemedByPlayerId == playerId)
             .ExecuteUpdateAsync(s => s.SetProperty(x => x.RedeemedByPlayerId, (long?)null));

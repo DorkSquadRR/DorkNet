@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using DorkNet.Models.Auth;
@@ -60,7 +61,7 @@ public class AccountsController(
     {
         var player = await GetCurrentPlayerAsync();
         if (player is null) return Unauthorized();
-        return Ok(BuildSelfAccount(player.Id, player.Username, player.DisplayName, player.ProfileImageName));
+        return Ok(AccountDtos.Self(player));
     }
 
     /// <summary>
@@ -193,7 +194,7 @@ public class AccountsController(
     {
         var player = await playerService.GetByIdAsync(accountId);
         if (player is null) return NotFound();
-        return Ok(BuildAccount(player.Id, player.Username, player.DisplayName, player.ProfileImageName));
+        return Ok(AccountDtos.Public(player));
     }
 
     // Accounts.GetAccountByUsername
@@ -202,7 +203,7 @@ public class AccountsController(
     {
         var player = await playerService.GetByUsernameAsync(username);
         if (player is null) return NotFound();
-        return Ok(BuildAccount(player.Id, player.Username, player.DisplayName, player.ProfileImageName));
+        return Ok(AccountDtos.Public(player));
     }
 
     // Accounts.CreateAccount — actual URL observed in server logs:
@@ -262,7 +263,7 @@ public class AccountsController(
         {
             Success = true,
             Error = string.Empty,
-            Account = BuildAccount(player.Id, player.Username, player.DisplayName, player.ProfileImageName),
+            Account = AccountDtos.Public(player),
         });
     }
 
@@ -285,7 +286,7 @@ public class AccountsController(
         var clamped = Math.Clamp(take, 1, 50);
         var matches = await playerService.SearchAsync(term.Trim(), clamped);
         return Ok(matches
-            .Select(p => BuildAccount(p.Id, p.Username, p.DisplayName, p.ProfileImageName))
+            .Select(p => AccountDtos.Public(p))
             .ToList());
     }
 
@@ -301,6 +302,12 @@ public class AccountsController(
     [HttpPost("/account/v1/emails")]
     [HttpPost("/account/v1/phones")]
     [HttpPost("/account/v1/byplatformid")]
+    // 2023 contact lookup: OPMAPIOEIFG.HHAAAPKCLMN (RecNet.Runtime/OPMAPIOEIFG.txt:11864)
+    // POSTs "account/bulk/" + "email" or "phone" (:11590-11620, verb 2) with the
+    // values as repeated form fields of the same name, and reads the same account
+    // list (List<BLOJAFNJPJI>) as account/bulk. Both suffixes 404'd.
+    [HttpPost("/account/bulk/email")]
+    [HttpPost("/account/bulk/phone")]
     public async Task<IActionResult> Bulk()
     {
         // The watch calls this route family with payloads keyed by
@@ -400,7 +407,7 @@ public class AccountsController(
         {
             var p = await playerService.GetByIdAsync(id);
             if (p is not null)
-                accounts.Add(BuildAccount(p.Id, p.Username, p.DisplayName, p.ProfileImageName));
+                accounts.Add(AccountDtos.Public(p));
         }
         return Ok(accounts);
     }
@@ -432,8 +439,11 @@ public class AccountsController(
     }
 
     // Phone-confirm is the one mutation we don't persist — there's no
-    // SMS provider in the loop. Acknowledge silently.
+    // SMS provider in the loop. Acknowledge silently. The 2023 client
+    // composes the route as "account/me/" + "confirmphone" with POST
+    // (OPMAPIOEIFG.OBAGJBBIFGB) and reads the RecNetResult body.
     [HttpPost("/account/v1/confirmphone")]
+    [HttpPost("/account/me/confirmphone")]
     public IActionResult ConfirmPhone() =>
         Ok(new RecNetResult { Success = true, Error = string.Empty });
 
@@ -628,6 +638,126 @@ public class AccountsController(
         return Ok(new { success = true, error = "" });
     }
 
+    // ── 2023 profile edits ────────────────────────────────────────────
+    // All four go through OPMAPIOEIFG.OBAGJBBIFGB, which builds
+    // "account/me/" + suffix (RecNet.Runtime OPMAPIOEIFG.txt:8579) and
+    // reports "Failed to modify <suffix>" on any non-2xx (:8609). Every call
+    // site passes verb 3 = PUT. The form field name is NOT the suffix — each
+    // comes from the lambda that fills the request:
+    //   emoji            → "displayEmoji"   (OPMAPIOEIFG_NestedType_KPGNAEPGLAC.txt:57)
+    //   personalpronouns → "pronounFlags"   (…_LCCEHLBIOPK.txt:67, boxed Int32)
+    //   identityflags    → "identityFlags"  (…_HHDFMJPLFHG.txt:67, boxed Int32)
+    //   bannerimage      → "imageName"      (…_NJKHNGEPODH.txt:57)
+    // The response body is never parsed (LDGADANDBIO handle), so the new
+    // value reaches the editor's UI and other players only through the
+    // AccountUpdate / SelfAccountUpdate push in NotificationService.
+    // None of these routes existed before, so every edit 404'd.
+
+    /// <summary>PUT <c>/account/me/emoji</c> — form <c>displayEmoji</c>.
+    /// Empty clears the emoji; anything else must be on the
+    /// <c>emojiConfig/whitelistedEmojis</c> list the picker was filled
+    /// from, and is stored in that list's canonical spelling.</summary>
+    [HttpPut("/account/me/emoji")]
+    [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
+    public async Task<IActionResult> ChangeEmoji([FromForm(Name = "displayEmoji")] string? displayEmoji)
+    {
+        var player = await GetCurrentPlayerAsync();
+        if (player is null) return Unauthorized();
+
+        var submitted = displayEmoji?.Trim() ?? string.Empty;
+        string stored;
+        if (submitted.Length == 0)
+        {
+            stored = string.Empty;
+        }
+        else
+        {
+            var canonical = ResolveWhitelistedEmoji(submitted);
+            if (canonical is null)
+                return BadRequest(new RecNetResult { Success = false, Error = "emoji_not_allowed" });
+            stored = canonical;
+        }
+
+        player.DisplayEmoji = stored;
+        await db.SaveChangesAsync();
+        await notifications.AccountChanged(player);
+        return Ok(new RecNetResult { Success = true, Error = string.Empty });
+    }
+
+    /// <summary>Whitelist match that ignores U+FE0F variation selectors, so
+    /// "❤" and "❤️" resolve to the same entry. Returns the list's spelling
+    /// (the client highlights the current pick by string equality against
+    /// the list it fetched).</summary>
+    internal static string? ResolveWhitelistedEmoji(string value)
+    {
+        static string Strip(string s) => s.Replace("️", string.Empty, StringComparison.Ordinal);
+        var needle = Strip(value);
+        foreach (var e in API.Config.V1.ConfigController.WhitelistedEmojiList)
+            if (string.Equals(Strip(e), needle, StringComparison.Ordinal)) return e;
+        return null;
+    }
+
+    /// <summary>PUT <c>/account/me/personalpronouns</c> — form
+    /// <c>pronounFlags</c> (pronoun flags enum as Int32).</summary>
+    [HttpPut("/account/me/personalpronouns")]
+    [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
+    public async Task<IActionResult> ChangePersonalPronouns([FromForm(Name = "pronounFlags")] string? pronounFlags)
+    {
+        var player = await GetCurrentPlayerAsync();
+        if (player is null) return Unauthorized();
+        if (!TryParseFlags(pronounFlags, out var flags))
+            return BadRequest(new RecNetResult { Success = false, Error = "invalid_pronouns" });
+
+        player.PersonalPronouns = flags;
+        await db.SaveChangesAsync();
+        await notifications.AccountChanged(player);
+        return Ok(new RecNetResult { Success = true, Error = string.Empty });
+    }
+
+    /// <summary>PUT <c>/account/me/identityflags</c> — form
+    /// <c>identityFlags</c> (identity flags enum as Int32).</summary>
+    [HttpPut("/account/me/identityflags")]
+    [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
+    public async Task<IActionResult> ChangeIdentityFlags([FromForm(Name = "identityFlags")] string? identityFlags)
+    {
+        var player = await GetCurrentPlayerAsync();
+        if (player is null) return Unauthorized();
+        if (!TryParseFlags(identityFlags, out var flags))
+            return BadRequest(new RecNetResult { Success = false, Error = "invalid_identity_flags" });
+
+        player.IdentityFlags = flags;
+        await db.SaveChangesAsync();
+        await notifications.AccountChanged(player);
+        return Ok(new RecNetResult { Success = true, Error = string.Empty });
+    }
+
+    /// <summary>Flags arrive as the boxed enum's Int32 ToString(). Negative
+    /// values are not valid bitmasks for either enum.</summary>
+    private static bool TryParseFlags(string? raw, out int flags)
+        => int.TryParse(raw?.Trim(), System.Globalization.NumberStyles.Integer,
+               System.Globalization.CultureInfo.InvariantCulture, out flags)
+           && flags >= 0;
+
+    /// <summary>PUT <c>/account/me/bannerimage</c> — form <c>imageName</c>,
+    /// the storage name of an image the player already uploaded (the
+    /// portfolio-banner picker offers the player's own photos). Empty clears
+    /// the banner.</summary>
+    [HttpPut("/account/me/bannerimage")]
+    [Consumes("application/x-www-form-urlencoded", "multipart/form-data")]
+    public async Task<IActionResult> ChangeBannerImage([FromForm(Name = "imageName")] string? imageName)
+    {
+        var player = await GetCurrentPlayerAsync();
+        if (player is null) return Unauthorized();
+        var name = imageName?.Trim() ?? string.Empty;
+        if (name.Length > 256)
+            return BadRequest(new RecNetResult { Success = false, Error = "invalid_image" });
+
+        player.BannerImageName = name.Length == 0 ? null : name;
+        await db.SaveChangesAsync();
+        await notifications.AccountChanged(player);
+        return Ok(new RecNetResult { Success = true, Error = string.Empty });
+    }
+
     // ParentalControl.Deserialize at RVA 0x14543A0 — required keys:
     //   accountId               (int, GetKey)
     //   disallowInAppPurchases  (bool, GetKey)
@@ -679,63 +809,56 @@ public class AccountsController(
 
         var token = Guid.NewGuid().ToString("N");
         var expiresAt = DateTime.UtcNow.AddMinutes(10);
-        await SetPlayerSettingAsync(player.Id, "remote_login_token", $"{token}|{expiresAt:O}");
-        return Ok(new
-        {
-            Success = true,
-            Error = string.Empty,
-            Token = token,
-            LoginToken = token,
-            ExpiresAt = expiresAt,
-        });
+        await SetPlayerSettingAsync(player.Id, RemoteLoginTokenKey, $"{token}|{expiresAt:O}");
+        // FGLDKEJLAKB<System.String> LGKLFFPACGL() (RecNet.Runtime/
+        // LBNJFPOLCDL.txt:8382) deserialises the reply as a BARE JSON string.
+        // The old {Success, Token, ...} object hit the string reader's '"'
+        // check and every "open on the web" link failed with "Failed to
+        // CreateLoginToken". The token is redeemed by connect/token
+        // grant_type=login_token (AuthController.Token).
+        return Content(System.Text.Json.JsonSerializer.Serialize(token), "application/json");
     }
 
+    /// <summary>PlayerSettings key of the one-shot token minted above.
+    /// Value is <c>{token}|{expiresAtUtc:O}</c>.</summary>
+    public const string RemoteLoginTokenKey = "remote_login_token";
+
+    /// <summary>In-game approval of another device's login code.
+    ///
+    /// <c>LDGADANDBIO BJMMDKNPCLD(String)</c> (RecNet.Runtime/LBNJFPOLCDL.txt:7896)
+    /// POSTs the single form field <c>code</c> and reads the reply through
+    /// <c>BFDGEKKNAPB.PEFKBAEAOPD</c> as a <c>{success,error}</c> RecNetResult
+    /// (failure toast "Failed to authorize login"). The code is the
+    /// <c>user_code</c> that <c>connect/deviceauthorization</c> handed the other
+    /// device, which meanwhile polls <c>connect/token</c> with
+    /// <c>grant_type=urn:ietf:params:oauth:grant-type:device_code</c>
+    /// (LBNJFPOLCDL_NestedType_DDNJDALGIME.txt:444-451). Approving binds the
+    /// pending authorization to the CALLER, and that device's next poll is
+    /// issued the caller's tokens (<see cref="DeviceAuthorizations"/>).
+    ///
+    /// This used to look the code up among createlogintoken tokens — which a
+    /// user_code never matches, so every approval 401'd — and answered with a
+    /// token pair, which is not a RecNetResult either.</summary>
     [HttpPost("/account/me/remoteauth")]
     [HttpGet("/account/me/remoteauth")]
     public async Task<IActionResult> RemoteAuth()
     {
-        var token = Request.Query["token"].FirstOrDefault()
-                    ?? Request.Query["loginToken"].FirstOrDefault()
-                    ?? Request.Query["code"].FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(token) && Request.HasFormContentType)
+        var approver = await GetCurrentPlayerAsync();
+        if (approver is null) return Unauthorized();
+
+        var code = Request.Query["code"].FirstOrDefault()
+                   ?? Request.Query["user_code"].FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(code) && Request.HasFormContentType)
         {
             var form = await Request.ReadFormAsync();
-            token = form["token"].FirstOrDefault()
-                    ?? form["loginToken"].FirstOrDefault()
-                    ?? form["code"].FirstOrDefault();
+            code = form["code"].FirstOrDefault() ?? form["user_code"].FirstOrDefault();
         }
+        if (string.IsNullOrWhiteSpace(code))
+            return RecNetResults.Fail("missing_code");
 
-        if (string.IsNullOrWhiteSpace(token))
-        {
-            var player = await GetCurrentPlayerAsync();
-            if (player is null) return Unauthorized();
-            var pair = authService.GenerateTokenPair(player.Id);
-            return Ok(new LoginResponse
-            {
-                AccessToken = pair.AccessToken,
-                RefreshToken = pair.RefreshToken,
-            });
-        }
-
-        var prefix = token.Trim() + "|";
-        var row = await db.PlayerSettings
-            .Where(s => s.Key == "remote_login_token" && s.Value.StartsWith(prefix))
-            .OrderByDescending(s => s.Id)
-            .FirstOrDefaultAsync();
-        if (row is null) return Unauthorized();
-
-        var rawExpiry = row.Value[prefix.Length..];
-        if (!DateTime.TryParse(rawExpiry, out var expiresAt) || expiresAt < DateTime.UtcNow)
-            return Unauthorized();
-
-        db.PlayerSettings.Remove(row);
-        await db.SaveChangesAsync();
-        var (access, refresh) = authService.GenerateTokenPair(row.PlayerId);
-        return Ok(new LoginResponse
-        {
-            AccessToken = access,
-            RefreshToken = refresh,
-        });
+        return await DeviceAuthorizations.ApproveAsync(db, code, approver.Id, DateTime.UtcNow)
+            ? RecNetResults.Ok()
+            : RecNetResults.Fail("invalid_or_expired_code");
     }
 
     [HttpPost("/account/recoverpassword")]
@@ -808,8 +931,12 @@ public class AccountsController(
     /// Unknown accounts get an empty string — "no platform identity" is the
     /// honest answer and keeps the promise resolved rather than rejected.
     /// </summary>
+    // LastPlatformId is a third-party identifier (Steam/Oculus id); without
+    // an auth gate this was an anonymous enumeration oracle over every
+    // account. The 2023 client only ever calls it with a token.
     [HttpGet("/platformid/{accountId:long}")]
     [HttpGet("/account/v1/{accountId:long}/platformid")]
+    [Authorize]
     public async Task<IActionResult> GetPlatformId(long accountId)
     {
         var platformId = await db.Players
@@ -948,8 +1075,15 @@ public class AccountsController(
         var me = this.RequireCurrentPlayerId();
         var visible = await ReadRecentHistoryVisibleBodyAsync();
         await SetPlayerSettingAsync(me, RecentHistoryVisibleKey, visible ? "true" : "false");
+        // OPMAPIOEIFG.PNEDPCJCKHI passes this body to BFDGEKKNAPB.PEFKBAEAOPD
+        // (ExpandRecNetResult) — it is read as {Success, Error}. Without a
+        // Success key the toggle parsed as a failure with a null Error, which
+        // throws "Error message cannot be null" instead of saving quietly.
+        // The settings keys stay for any reader of the old shape.
         return Ok(new
         {
+            Success = true,
+            Error = string.Empty,
             AccountId = (int)me,
             IsRecentHistoryVisible = visible,
         });
@@ -990,35 +1124,4 @@ public class AccountsController(
     // Previously had a /{*path} catch-all that returned [] / {}. Removed —
     // unknown accounts URLs now 404 so we notice them in logs and wire
     // them properly rather than silently masking missing endpoints.
-
-    private static RecNetAccount BuildAccount(long id, string username, string? displayName, string? profileImage = null)
-        => new()
-        {
-            AccountId = (int)id,
-            RawUsername = username,
-            Username = username,
-            DisplayName = displayName ?? username,
-            ProfileImage = profileImage ?? string.Empty,
-            TreatAsJunior = false,
-            HasBirthday = true,
-            Platforms = 1,
-        };
-
-    private static RecNetSelfAccount BuildSelfAccount(long id, string username, string? displayName, string? profileImage = null)
-        => new()
-        {
-            AccountId = (int)id,
-            RawUsername = username,
-            Username = username,
-            DisplayName = displayName ?? username,
-            ProfileImage = profileImage ?? string.Empty,
-            TreatAsJunior = false,
-            HasBirthday = true,
-            Platforms = 1,
-            Email = string.Empty,
-            Phone = string.Empty,
-            Birthday = new DateTime(2000, 1, 1),
-            JuniorState = 0,
-            ParentAccountId = null,
-        };
 }

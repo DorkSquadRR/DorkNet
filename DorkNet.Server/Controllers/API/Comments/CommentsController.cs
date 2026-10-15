@@ -153,22 +153,30 @@ public class CommentsController(DorkNetDbContext db) : ControllerBase
         var me = Me;
         var lastRead = await LastReadAsync(me);
 
-        // Key + owner only: the payload column is irrelevant to counting.
-        var keys = await db.PlayerSettings
-            .Where(s => s.Key.StartsWith(CommentPrefix))
-            .Select(s => new { s.Key, s.PlayerId })
-            .ToListAsync();
-
         var counts = new Dictionary<long, uint>();
         foreach (var id in roomIds) counts[id] = 0u;
 
-        foreach (var k in keys)
+        // One bounded query per requested room instead of materialising the
+        // entire comment keyspace: the room filter and the "your own notes
+        // are never unread" filter both run in SQL; only the numeric
+        // comment-id suffix still needs parsing here. Key + owner only: the
+        // payload column is irrelevant to counting.
+        foreach (var id in roomIds)
         {
-            if (!TrySplitCommentKey(k.Key, out var roomId, out var commentId)) continue;
-            if (!counts.ContainsKey(roomId)) continue;
-            if (k.PlayerId == me) continue;                       // your own notes are never unread
-            if (commentId <= lastRead.GetValueOrDefault(roomId)) continue;
-            counts[roomId]++;
+            var prefix = $"{CommentPrefix}{id}:";
+            var keys = await db.PlayerSettings
+                .Where(s => s.Key.StartsWith(prefix) && s.PlayerId != me)
+                .Select(s => s.Key)
+                .ToListAsync();
+
+            var floor = lastRead.GetValueOrDefault(id);
+            foreach (var key in keys)
+            {
+                if (!TrySplitCommentKey(key, out var roomId, out var commentId)) continue;
+                if (roomId != id) continue;
+                if (commentId <= floor) continue;
+                counts[id]++;
+            }
         }
 
         var result = roomIds
@@ -260,8 +268,11 @@ public class CommentsController(DorkNetDbContext db) : ControllerBase
     /// <see cref="UnreadCounts"/> return non-zero numbers for everyone else).
     ///
     /// <c>OPELMBNJHNO.MCOIDIBFHIP(Int64 roomId, Int64 commentId)</c>
-    /// (OPELMBNJHNO.txt:1375) returns the status-only <c>LDGADANDBIO</c>, not a
-    /// DTO — the body is never parsed, only the status code. Verb is <b>PUT</b>
+    /// (OPELMBNJHNO.txt:1375) returns the untyped <c>LDGADANDBIO</c> promise, but
+    /// it is built from the body parsed as a RecNetResult: the continuation
+    /// <c>&lt;UpdateLatestReadComment&gt;b__9_1(DJMHAFPGLLN)</c>
+    /// (OPELMBNJHNO_NestedType___c.txt:333) null-derefs an empty body and
+    /// rejects on <c>Success</c>=false — see <see cref="RecNetResults"/>. Verb is <b>PUT</b>
     /// (rdx=3 at instr 059, OPELMBNJHNO.txt:1637); both ids are path segments
     /// formatted into "comments/read/{0}/{1}" (:1627) and no field is added, so
     /// the request carries no body at all.
@@ -272,7 +283,7 @@ public class CommentsController(DorkNetDbContext db) : ControllerBase
     {
         await SetLastReadAsync(Me, roomId, commentId);
         await db.SaveChangesAsync();
-        return Ok();
+        return RecNetResults.Ok();
     }
 
     /// <summary>Deletes a comment.

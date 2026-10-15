@@ -64,6 +64,19 @@ an object wrapping one. Bare-scalar endpoints are a recurring source of defects 
 returning `{"Limit":1000}` where the client reads `1000` makes the deserialize
 throw and the feature silently fail.
 
+**The untyped promise is not always status-only.** Many writes return
+`LDGADANDBIO` (no type argument), which reads like "body ignored". About 40 of
+them are not: they pass the response to `BFDGEKKNAPB.PEFKBAEAOPD`
+(`RecNet.Runtime/BFDGEKKNAPB.txt:353`, "ExpandRecNetResult"), which
+deserialises it as `DJMHAFPGLLN` = `{Success, Error}` (formatter
+`LMCCNLLHLCJ.txt:191-218`). An empty 200 (or `null`) parses to null and the
+continuation null-derefs, so the player sees "Failed to …" after the server
+applied the change. A body without `Success` parses as a failure with a null
+`Error`, and `Promise.Rejected(null)` throws `ArgumentException: Error message
+cannot be null`, which shows up in Player.log as an unobserved task exception.
+Search for callers of `BFDGEKKNAPB.PEFKBAEAOPD` before you decide a write
+needs no body. The server helper is `Controllers/RecNetResults.cs`.
+
 Watch for a projection between the wire type and the method return type. 
 `comments/unreadcounts` returns `Dictionary<long,uint>` from the method, but the
 wire payload is `List<UnreadRoomComments>` — a `Func<List<...>, Dictionary<...>>`
@@ -193,8 +206,15 @@ verified against the binary before the change, and the full test suite passes.
 | `PUT player/photonregionpings` | parsed only the 2020 pair shape | also reads one field per region name |
 | `POST player/notifydisconnect` | bound 2020 `otherPlayerId` only | also binds `PlayerId`/`RoomInstanceId` |
 | `PUT player/{statusvisibility,vrmovementmode,avoidjuniors}` | echoed and discarded | persisted per player and read back on heartbeat |
+| `GET player?{ids}` statusVisibility | always 0 (Public); "appear offline" never hid anyone | reports the stored value; Offline hides from everyone else, FriendsOnly / FavoriteFriendsOnly hide from non-qualifying callers |
+| `PUT account/me/{emoji,personalpronouns,identityflags,bannerimage}` | 404 — routes missing ("Failed to modify …") | handlers added; form fields `displayEmoji` / `pronounFlags` / `identityFlags` / `imageName`; values persisted and emitted on every account DTO + pushed as AccountUpdate to all clients |
 | `GET econ/customAvatarItems/v1/itemOwnershipLimit` | object body where the client reads an int | bare JSON integer |
-| `GET api/customAvatarItems/v1/isCreationAllowedForAccount` | object body where the client reads a bool | bare JSON boolean |
+| `GET api/customAvatarItems/v1/isCreationAllowedForAccount` | object body, then (wrongly) a bare boolean | `{Success, Error}` envelope — the client parses DJMHAFPGLLN (converter LMCCNLLHLCJ registers only `Success`/`Error`); the bare boolean is what logged "Failed to query if local account can create Custom Avatar Items" |
+| `GET api/customAvatarItems/v1/minPriceForPublicItem` | object with four hedge keys | bare JSON integer — sent through FDKKOPAPDGF<Int32>, continuation `<GetPricingConfig>b__69_0(Int32 minimumPrice)` |
+| `GET + POST api/avatar/v3/saved{,/set}` | `OutfitSelectionsV2` and `CustomAvatarItems` dropped on save; loading a slot restored the stale V1 selection (the client wears V2 when non-empty) | all eight IMMOJHBENFI keys persisted and served |
+| `POST api/avatar/v{2,3}/gifts/generate` | 415 on the client's form-urlencoded body (seen live) | form-or-JSON binder |
+| `GET api/avatar/v1/lockeditems` | 5-key subset: AvatarItemId 0, no TagList/IsBaseAvatarItem | full IFNGBPJGINL owned-item shape |
+| `GET api/avatar/v4/items` (colored variants) | a colorway reused its base item's AvatarItemId, so owning a base + colorways collided in the id-keyed wardrobe | id hashed from the full descriptor |
 | `GET api/customAvatarItems/v2/fromCreator/{id}` | bare array; client reads {Results,TotalResults} | paged container |
 | `POST econ/customAvatarItems/v1/{id}/purchase` | 404 — route only existed under api/ | econ/ alias added |
 | `GET api/ugcPurchasables/v1/items/room/{roomId}` | 404 — only the ?roomId= form existed | path form added |
@@ -235,10 +255,58 @@ verified against the binary before the change, and the full test suite passes.
 | `SignalR push `Id` (notify)` | enum NAME sent for most ids; client only registered numbers — pushes vanished | numeric by default, with the six string-keyed ids listed explicitly |
 | `SignalR SubscriptionUpdateRoom` | sent as `SubscriptionUpdateRoom`; client listens on `RoomUpdate` | sent as `RoomUpdate` |
 | `Room ban notification` | sent id 24, for which the client has no handler | sent as ModerationKick (22) with IsBan |
-| `Presence on SignalR reconnect` | disconnect pushed offline; nothing ever pushed back online, so a reconnect greyed the player out for the rest of the session | connect re-pushes presence when a room is already known |
+| `Presence on SignalR reconnect` | disconnect pushed offline; nothing ever pushed back online, so a reconnect greyed the player out for the rest of the session | connect pushes presence (online even with no room); a drop while the player still heartbeats waits one activity window before pushing offline |
+| `POST matchmake/none` | re-committed the previous room (or the dorm), so the next heartbeat answered with a room while the client held its offline instance (-1): "presence out-of-sync", offline load cancelled, player dragged back | player is online with no room; any pending join is abandoned; heartbeat answers `roomInstance: null` until the next matchmake |
+| `Presence fan-out to friends` | only the immediate /goto commit pushed; deferred commits (matchmake/dorm, private hops), matchmake/none, logout, failed joins and statusvisibility changes were silent, and `isOnline` was derived from "has a room" | one fan-out (PresenceBroadcastService) for every transition, explicit `isOnline`, stored `statusVisibility`, never sent to the subject |
+| `GET player` (bulk) | `isOnline` required a room; `statusVisibility` hard-coded 0; caller's own row ignored a pending join | online = heartbeat or SignalR; stored visibility; own row matches the heartbeat |
+| `Join watchdog` | 30 s timeout cleared presence in the middle of long room loads, so the next heartbeat bounced the player to the dorm | 3 min backstop that clears the room only (player stays online) |
+| `15 club/{id}/members/* writes, DELETE club/{id}, PUT+DELETE club/home/me` | empty 200; the RecNetResult reader null-derefed, so every join/leave/invite/ban showed "Failed to …" | `{success:true,error:""}` |
+| `announcements/club/{c}/{a}` edit, delete, `/read` | empty 200 / `{Read:true}`; read threw "Error message cannot be null" | RecNetResult |
+| `DELETE api/keepsakes/{id}`, `PUT comments/read/{r}/{c}`, `DELETE subscription/{id}` | empty 200 | RecNetResult |
+| `api/roomcurrencies/v1/deletePurchaseOffer`, `PUT accountprivacysettings/recenthistoryvisibility` | non-RecNetResult body (no `Success`) — rejected with a null message | RecNetResult (privacy keys kept) |
+| `POST api/playerwarnings` (refusals) | failure carried `Message`, not `Error` | `Error` added |
+| `POST account/me/createlogintoken` | object where the client reads a bare string | bare JSON string |
+| `POST account/me/remoteauth` | matched codes against createlogintoken tokens — always 401 — and answered a token pair | approves a device-authorization `user_code` for the caller; RecNetResult |
+| `connect/token` `device_code` / `login_token` grants | both fell into the device-id fallback (approval bypassed / wrong account) | real grants: `authorization_pending` until approved; login token redeemed once for its own account |
+| `PUT api/playerevents/v2/{id}/multiinstance` | broadcast-permission fields are boxed enums (sent as NAMES), parsed as ints → always 0 | names (None/RoomOwners/All) and numbers accepted |
+| `GET api/incentivizedreferrals/referrals` | 404 — built by the LPPEFJMCJFN URL builder, missed by the literal sweep | implemented (paged) |
+| `POST account/bulk/email`, `account/bulk/phone` | 404 | routed to the bulk account lookup |
+| `GET strings` (strings host) | 404 | empty table — no server-side overrides |
+| `gameconfig PlayMenuCarouselOrdering_1` | missing — "Could not find GameConfig" warning, prefab order | served; ids recovered from the build's DisplayOrderPriorityImpl |
 
 Everything else in the per-subsystem Defects sections below is still
-outstanding.
+outstanding — but the sections are stale. A 2026-10 re-check of the
+breaks-gameplay rooms, playerevents, room-currency, clubs, keepsakes and
+storefront entries found all of them fixed except purchase-offer `Order`
+(sent by the client, MIHKAJFMIPE.txt:2664, never persisted; display order only).
+
+### Requests outside the route-literal sweep
+
+The sweep that produced `client-routes-2023.tsv` matched plain literals in
+RecNet.Runtime. These were found later and are now in the inventory:
+leading-slash literals (`/api/playerReputation/v2/bulk`,
+`/api/players/v2/progression/bulk`, `/strings`, `/config/{0}`, `/data/{0}`),
+base-plus-format routes (`api/itemWishlists` + `{0}/v1/wishlist/me/{1}`,
+`api/roomEarningsDistributions` + `{0}/v1/earningsDistribution/{1}`), the
+`LPPEFJMCJFN` URL builder (`api/incentivizedreferrals/referrals`), the
+runtime-composed `account/me/{field}` and `account/bulk/{email,phone}`, and
+the Assembly-CSharp CDN fetch `/sigs/{id}` (JFDPIJFDHAD.txt:1432).
+
+Known and deliberately not served:
+
+- GameLogs host (`HKBNPBMNDGG` 22): `PUT /reports/{guid}`, `/reports/{guid}/userinfo`,
+  `/reports/{guid}/attachments/{name}`, `/Reports/{guid}/Complete`
+  (AICEFGDBCGI.txt:671-1944). This is the "Send Game Log" tool, which is hidden
+  unless gameconfig `Experience.GameLogTool.HideTool` is false — its client
+  default is true (BugReportingVisibilityModel.txt:241-245), and DorkNet does not
+  send the key, so the client never makes these calls.
+- BugReporting host (18): `POST /ado/bug`, `POST /ado/file` — Rec Room's internal
+  Azure DevOps bug filer for staff builds.
+- Third-party hosts baked into the client (Amplitude, RudderStack, Unity user
+  reporting, backtrace.io) are not RecNet services.
+- `/sigs/{id}` answers an empty payload on purpose: it is an encrypted
+  file-signature set for the client's integrity check. The client logs
+  "/sigs/<id> is empty" and boot continues (Player.log, 2026-10-10 session).
 
 ## Subsystems
 
@@ -320,6 +388,8 @@ Handler: `DorkNet.Server\Controllers\Accounts\AccountsController.cs:54`
 
 **Fix.** In AccountsController.GetMe, build the payload from the actual PlayerEntity (Email, Phone, Birthday, IsJunior) and add availableUsernameChanges (e.g. a large int), displayEmoji, bannerImage, personalPronouns (0), identityFlags (0) keys — extend RecNetSelfAccount or return an augmented DTO for the 2023 path.
 
+**Status: FIXED.** Every account read (account/me, account/{id}, account/bulk, account/search, account/create, api/account/v1/me) and the AccountUpdate / SelfAccountUpdate pushes now go through `DorkNet.Server/Services/AccountDtos.cs`, built from the real PlayerEntity: displayEmoji, bannerImage, personalPronouns, identityFlags on the public DTO; email/phone/birthday/juniorState plus availableUsernameChanges (99) on the self DTO.
+
 ##### `DELETE account/me` — VERB_MISMATCH (degraded)
 
 Client's in-game account-deletion action sends DELETE /account/me (OPMAPIOEIFG.txt:8771-8773, verb 4). Server registers only [HttpGet] on /account/me (plus v1/v2 GET aliases) — DELETE returns 405 and the client logs 'Failed to delete local account'.
@@ -341,6 +411,8 @@ Handler: `DorkNet.Server\Controllers\Accounts\AccountsController.cs:341`
 None of these five concrete routes exist. server-routes.txt has no account/me/emoji|personalpronouns|identityflags|bannerimage|confirmphone; confirmphone exists only as POST /account/v1/confirmphone (AccountsController.cs:332) and api/account/v1/confirmphone — the 2023 client concatenates 'account/me/' + suffix (OPMAPIOEIFG.txt:8579), so it 404s. Result: profile-emoji / pronoun / identity-flag / banner-image edits and phone confirmation all fail with 'Failed to modify <suffix>'.
 
 **Fix.** Add handlers in AccountsController: [HttpPut] /account/me/emoji (form 'emoji'), /account/me/personalpronouns (form 'personalpronouns', int), /account/me/identityflags (form 'identityflags', int), /account/me/bannerimage (form 'bannerimage'); [HttpPost] /account/me/confirmphone (route the existing ConfirmPhone action). Persist emoji/bannerimage/pronouns/flags on PlayerEntity so GET /account/me can echo them back (required for the account/me shape fix above).
+
+**Status: FIXED for the four profile edits** (confirmphone still open). The form field names suggested above were wrong — the field is NOT the suffix. Verified per call site lambda: emoji → `displayEmoji` (OPMAPIOEIFG_NestedType_KPGNAEPGLAC.txt:57), personalpronouns → `pronounFlags` (…_LCCEHLBIOPK.txt:67, boxed Int32), identityflags → `identityFlags` (…_HHDFMJPLFHG.txt:67, boxed Int32), bannerimage → `imageName` (…_NJKHNGEPODH.txt:57). All four are PUT (rcx=3 before OPMAPIOEIFG.OBAGJBBIFGB). The response is never parsed, so the new value reaches the editor and other players only through the `AccountUpdate` push (now broadcast to every connected client) and `SelfAccountUpdate` (owner). Emoji is validated against `emojiConfig/whitelistedEmojis` (U+FE0F-insensitive, stored in the list's spelling); empty clears. New Players columns DisplayEmoji / BannerImageName / PersonalPronouns / IdentityFlags (migration PlayerProfile2023Fields + DatabaseBootstrap patch). Tests: `DorkNet.Server.Tests/ProfileEdit2023Tests.cs`.
 
 ##### `POST account/me/createlogintoken` — SHAPE_MISMATCH (degraded)
 
@@ -433,7 +505,7 @@ All 20 client routes have real, verb-matching handlers on DorkNet (GoToControlle
 **Client-side notes.** TRANSPORT/HOST: Every route in this subsystem is issued against the matchmaking host: BNDIAONDFFF..ctor(BestHTTP.HTTPMethods verb, GJDLNNLKDIJ host, string route) with host enum value 3 at every call site (BNDIAONDFFF.txt:74 for the signature; host base URLs come from the nameserver response — PAPLNIPKAMG has a NestedType_NameServerResponse). Verb enum is BestHTTP.HTTPMethods: 0=GET, 2=POST, 3=PUT — decoded from the rdx immediate at each ctor call. Params added via BNDIAONDFFF.AFGEDDANEKP are sent as an application/x-www-form-urlencoded (or multipart when binary present) BODY on POST/PUT via HTTPFormBase.AddField (BNDIAONDFFF.txt:3032,3099), and as a ?k=v&k=v QUERY string only on body-less verbs (the \"?\"/\"&\" concat path, BNDIAONDFFF.txt:3444-3489). DorkNet's [FromForm] bindings therefore match.
 CENTRAL SENDER: All matchmake/* routes except matchmake/none funnel through Matchmaking.HHJFFJEHLOB (Matchmaking.txt:11330, original name GoToHelper): POST, always adds BypassMovementModeRestriction=bool, LoginLock=string, MaxPersistenceVersion=Int32 (from GJGGDBDBCMJ — clamp-relevant, see room-version-clamp work), repeated AdditionalPlayerIds=Int32; a per-route Action<BNDIAONDFFF> closure adds JoinMode / ClientJoinData / AdditionalPlayersAutoFollow / SubRoomId. Response: JSON -> Matchmaking/PCFNLCMMGKB {errorCode:HMIBNIEBEKK enum, roomInstance:HCHDEHIGEBE} -> mapped by <>c.<GoToHelper>b__114_2 to the HMIBNIEBEKK error value the UI consumes ('Matchmaking request failed ({0}): {1}' on failure). The exact JSON key casing of PCFNLCMMGKB/HCHDEHIGEBE is reflection/attribute-driven and NOT recoverable from ISIL; the camelCase errorCode/roomInstance shape served by DorkNet (GoToController.cs:1529-1620) is verified working live against this exact build (matchmake/dorm boot, room joins, sub-room hops all functioning on the march-2023 branch), so treat it as the wire truth.
 2023-vs-2020 MISMATCHES FOUND (both benign, responses ignored, but fix for fidelity): (1) player/notifydisconnect — 2023 sends PlayerId + RoomInstanceId form keys; server binds 2020's otherPlayerId so the logged id is always null (MatchPlayerController.cs:117). (2) player/photonregionpings — 2023 sends one form field per region keyed by REGION NAME (us=42&eu=90...), not the region=/ping= pair arrays the server parses (MatchPlayerController.cs:239+); 2023 pings are silently dropped. Also note verb: 2023 uses PUT here (server already accepts GET/POST/PUT).
-HEARTBEAT: response IS parsed (BDDJOGCKIJO); serve the current roomInstance (never null once in a room) and appVersion as the STRING \"20230317\" or the client reports presence out-of-sync / version mismatch. avoidjuniors GET must return a bare JSON boolean primitive.
+HEARTBEAT: response IS parsed (BDDJOGCKIJO); serve the current roomInstance (never null once in a room) and appVersion as the STRING \"20230317\" or the client reports presence out-of-sync / version mismatch. The compare (RecNet.Runtime/RecNet/Matchmaking.txt:18415-18467): no cached presence = always resync; cached roomInstance null OR RoomInstanceId < 0 (the offline room, HCHDEHIGEBE.GIICPDHJOOH) = in sync only with roomInstance null; otherwise in sync only when HCHDEHIGEBE.DCIJHIPJHOB finds every field equal. The compare is skipped while TryGoToOfflineRoom's matchmake/none is in flight (static flag +0xF8). A PresenceUpdate push about the LOCAL player runs the same apply path (EGPABEDPEJO -> FLAOOBNJAAD), so presence pushes must never go to their subject. avoidjuniors GET must return a bare JSON boolean primitive.
 COVERAGE: all 20 routes in groups.json are real HTTP routes, all are already registered on the DorkNet server (server-routes.txt:812-847); no missing endpoints, only the two request-binding mismatches above.
 
 #### Endpoints
@@ -478,6 +550,8 @@ Verb and form binding are correct ([HttpPut], [FromForm(Name="statusVisibility")
 Handler: `DorkNet.Server/Controllers/Match/MatchPlayerController.cs:168`
 
 **Fix.** Persist the value per player (e.g. a field on PlayerPresenceService state or a Players column), read it back in Heartbeat/SetVrMovementMode responses, and honor it in the friend-presence read path.
+
+**Status: FIXED.** Persisted as PlayerSettings `pref:statusVisibility` and echoed on heartbeat (earlier change). The enum is Public=0 / FriendsOnly=1 / FavoriteFriendsOnly=2 / Offline=3 (dump.cs IPLLHDINPBL), set from the profile's "Set Online Status Visibility" dialog. `GET player?{ids}` (PlayerPresenceController) now reports the stored value — to self as well, which the dialog's current selection depends on — and reports a hidden player exactly like an offline one (isOnline=false, roomInstance=null): Offline to everyone but self, FriendsOnly to non-friends (global-friends toggle honored), FavoriteFriendsOnly to callers the player has not favorited. Still open: the SignalR `PresenceUpdate` push (NotificationService.PlayerPresenceChanged) hard-codes statusVisibility 0 and does not filter recipients, so an appear-offline player's room changes still reach friends live.
 
 ##### `PUT player/vrmovementmode` — STUB (degraded)
 
@@ -1275,7 +1349,7 @@ Verified all 37 real client HTTP calls against the DorkNet server source (every 
 |---|---|---|---|
 | GET | `api/avatar/v1/defaultbaseavataritems` | none | JSON array of the same UnlockedAvatarItem shape as v4/items |
 | GET | `api/avatar/v1/defaultunlocked` | none | Same array shape as v4/items (server aliases it to the same handler) |
-| GET | `api/avatar/v1/lockeditems` | Query: repeated key "desc" carrying avatar-item desc strings (list added via helper 0x181F2E250 with key literal "desc") | JSON array; server ships subset {AvatarItemType, AvatarItemDesc, FriendlyName, Tooltip, Rarity} for each requested desc the caller does NOT own |
+| GET | `api/avatar/v1/lockeditems` | Query: repeated key "desc" carrying avatar-item desc strings (list added via helper 0x181F2E250 with key literal "desc") | JSON array of List<IFNGBPJGINL> — the same element as v4/items (CLIANCNHNIE reader: AvatarItemType, AvatarItemDesc, FriendlyName, Tooltip, Rarity, TagList, AvatarItemId, IsBaseAvatarItem) for each requested desc the caller does NOT own |
 | GET | `api/avatar/v2` | none | Object with keys (exact literals in reader EKHJKDNHOPB, case-tolerant Pascal/camel/lower): OutfitSelections(string), OutfitSelectionsV2(string), FaceFeatures(string), SkinColor(string), HairColor(string), CustomAvatarIte |
 | GET | `api/avatar/v2/gifts` | none | JSON array of gift objects. Server wire (verified live, DorkNet AvatarGiftsController.ToWire): Id(Int64), FromPlayerId(Int64?), ConsumableItemDesc(string), AvatarItemType(Int32), AvatarItemDesc(string, 4-comma-part 'guid |
 | POST | `api/avatar/v2/gifts/consume/` | POST to the literal URL WITH trailing slash (no id in path). Params: "Id" (boxed Int64 gift id), "UnlockedLevel" (boxed Int32) — sent form-urlencoded (server had to accept form; [F | Gift object echo (server returns ToWire(gift)); client treats non-2xx as 'Gift is missing from the list.' error |
@@ -1283,8 +1357,8 @@ Verified all 37 real client HTTP calls against the DorkNet server source (every 
 | POST | `api/avatar/v2/set` | JSON body written by EKHJKDNHOPB writer, PascalCase keys: OutfitSelections, OutfitSelectionsV2, FaceFeatures, SkinColor, HairColor, CustomAvatarItems:[{CustomAvatarItemId, BodyPart | Client fires-and-forgets (void); server echoes AvatarV2Dto |
 | GET | `api/avatar/v2/{playerId}` | none (player id is bare path segment under v2) | Same HHDLNAPEMGP object as api/avatar/v2 |
 | POST | `api/avatar/v3/gifts/generate` | Body params: "GiftContext" (boxed Int32), "Message" (string, optional) | Single gift object (same as v2) |
-| GET | `api/avatar/v3/saved` | none | JSON array of saved outfits. Server DTO: Slot(Int32), PreviewImageName(string), OutfitSelections(string), FaceFeatures(string), SkinColor(string), HairColor(string). NOTE: client BEPMJICDNDD has Int32 + SIX strings + Lis |
-| POST | `api/avatar/v3/saved/set` | JSON body = one BEPMJICDNDD serialised via JsonConvert (ALHIJCJOLCB) then BNDIAONDFFF.FJLLPHFOOJJ; same field set as the GET element | Client ignores body (fire-and-forget task with error toast); server echoes the DTO |
+| GET | `api/avatar/v3/saved` | none | JSON array of BEPMJICDNDD. Converter IMMOJHBENFI keys (IMMOJHBENFI.txt:587-910): Slot(Int32), PreviewImageName, OutfitSelections, OutfitSelectionsV2, FaceFeatures, SkinColor, HairColor (strings), CustomAvatarItems([{CustomAvatarItemId, BodyPart}]). Client stores them in a Dictionary keyed by Slot. The client wears OutfitSelectionsV2 when non-empty, else OutfitSelections (BEPMJICDNDD.NLGCNDMLACA) |
+| POST | `api/avatar/v3/saved/set` | Raw JSON body (application/json) = one BEPMJICDNDD written by IMMOJHBENFI; same eight keys as the GET element. Verb ordinal 2 (FFFIMAGLKEG.txt:4071-4073). No delete route exists in this client | Client ignores body (status only, LDGADANDBIO); server echoes the outfit |
 | GET | `api/avatar/v4/items` | none | JSON array. Server DTO (verified live against this client): AvatarItemType(Int32), AvatarItemDesc(string, MUST have >=4 comma-parts 'guid,,,'), AvatarItemId(Int32 — must be unique+non-zero or wardrobe collapses), Platfor |
 | GET | `api/catalog/v1/all?onlyAvailableSkus=true` | query baked into the literal: onlyAvailableSkus=true | JSON array of SKU objects. Exact client key set not in ISIL (reflection DTO); server ships dual-cased dictionary verified live — required keys include SkuId(Int32 — string here throws FormatException), Slug/Sku, Name, De |
 | POST | `api/consumables/v1/consume` | JSON body = JsonUtility.ToJson(ConsumableItemRequest); server binds {Id(Int64), DeltaCount(Int32)} (client passes Mathf.Abs of the count) | Server returns {Id, Count}; client parse target is a string callback (Action<String>) — tolerant |
@@ -1299,11 +1373,11 @@ Verified all 37 real client HTTP calls against the DorkNet server source (every 
 | DELETE | `api/customAvatarItems/v1/design` | none. SERVER GAP: no DELETE on design — client logs 'Unable to delete custom avatar item design' | status only |
 | GET | `api/customAvatarItems/v1/featured` | none | JSON array of custom-item objects (server ToWire shape as listed for the create endpoint) |
 | GET | `api/customAvatarItems/v1/hot` | none | JSON array of custom-item objects |
-| GET | `api/customAvatarItems/v1/isCreationAllowedForAccount` | none | Client expects a BARE JSON boolean. LIKELY MISMATCH: server returns object {IsCreationAllowed, Allowed} — should be bare true/false like the sibling endpoints |
+| GET | `api/customAvatarItems/v1/isCreationAllowedForAccount` | none | `{"Success": bool, "Error": string|null}` — response type DJMHAFPGLLN (MPBLNLMCEDL.txt:6216-6223), keys from its converter LMCCNLLHLCJ.txt:191-254; the client stores `Success` as can-create (HONEEPBHNLB, :9155-9216). NOT a bare boolean, unlike the two siblings |
 | GET | `api/customAvatarItems/v1/isCreationEnabled` | none | Bare JSON boolean; server correctly returns Content("true","application/json") |
 | GET | `api/customAvatarItems/v1/isRenderingEnabled` | none | Bare JSON boolean; server returns bare true |
 | GET | `api/customAvatarItems/v1/me` | Query params "skip" (boxed Int32), "take" (boxed Int32) | Paged object {Results:[NOAAFNFJPFB...], TotalResults:Int32} (server also emits extra Created/Owned arrays which the client ignores) |
-| GET | `api/customAvatarItems/v1/minPriceForPublicItem` | none | Object with one int field; server hedges with {MinPrice:100, Price:100} — one of the two keys presumably matches the client's property name |
+| GET | `api/customAvatarItems/v1/minPriceForPublicItem` | none | BARE JSON integer — FDKKOPAPDGF<Int32> (MPBLNLMCEDL.txt:6922, same generic token as itemOwnershipLimit) continued by `<GetPricingConfig>b__69_0(Int32 minimumPrice)`; the IHLMDLKOLNB config is built client-side |
 | PUT | `api/customAvatarItems/v1/{id}` | JSON body via FJLLPHFOOJJ carrying the changed fields (name/description/price/publish-state). SERVER GAP: only GET is registered on v1/{id:guid}; PUT 405s | Updated NOAAFNFJPFB object |
 | DELETE | `api/customAvatarItems/v1/{id}` | none (guid in path). SERVER GAP: no DELETE registered — 405 | status only (client fire-and-forget) |
 | POST | `api/customAvatarItems/v1/{id}/report` | JSON body via FJLLPHFOOJJ with report reason enum + free-text (exact keys UNKNOWN — body serialised from method args). SERVER GAP: no report route registered — 404 | status only |
@@ -1360,37 +1434,27 @@ Handler: `none (api-side sibling: DorkNet.Server/Controllers/API/CustomAvatarIte
 
 **Fix.** Add [HttpPost("/econ/customAvatarItems/v1/{id:guid}/purchase")] (rooted route, trailing-slash-tolerant) on CustomAvatarItemsController delegating to the existing Purchase(Guid) action; also read the requestedPrice query param and reject/adjust when it differs from item.Price to keep price-display honesty.
 
-##### `POST api/avatar/v2/gifts/generate` — SHAPE_MISMATCH (degraded)
+##### `POST api/avatar/v2/gifts/generate` — FIXED
 
-Route and verb exist (v2+v3), response ToWire is correct, and GenerateGiftRequest properties match the client's exact body keys (GiftContext/IsGameGift/AlternateGiftContext/Message). BUT the handler binds [FromBody] GenerateGiftRequest? (line 68), which only the JSON input formatter can read. The client builds this request with the same BNDIAONDFFF.AFGEDDANEKP named-param helper as gifts/consume, and the server's own comment on the consume handler (lines 170-184) documents that this helper produced a form-urlencoded body live and that [FromBody] returned HTTP 415 there. The [Consumes(...form-urlencoded...)] attribute on line 67 does NOT add a form formatter — a form-encoded generate body still 415s and the reward chest never spawns a gift; a JSON body works. PLAUSIBLE (not live-confirmed which encoding generate uses; consume is proven form-encoded, so generate likely is too).
+The client's AFGEDDANEKP params go out form-urlencoded; a live trace showed `GiftContext=12000&IsGameGift=True&Message=…` answered 415 while the handler was `[FromBody]`. It now binds through `FormOrJsonModelBinder`.
 
-Handler: `DorkNet.Server/Controllers/API/Avatar/V2/AvatarGiftsController.cs:65`
+Handler: `DorkNet.Server/Controllers/API/Avatar/V2/AvatarGiftsController.cs`
 
-**Fix.** In AvatarGiftsController.Generate, drop [FromBody] and read the body the way ConsumeViaBody does: if Request.HasFormContentType read GiftContext/IsGameGift/AlternateGiftContext/Message from the form, else JSON-parse the raw body (case-insensitive), else fall back to query. Keep the response unchanged.
+##### `POST api/avatar/v3/gifts/generate` — FIXED
 
-##### `POST api/avatar/v3/gifts/generate` — SHAPE_MISMATCH (degraded)
+Same handler and fix as v2 generate.
 
-Same handler as v2 generate ([HttpPost("api/avatar/v3/gifts/generate")] on line 66), so the route/verb the 2023 client uses for reward chests exists — but it shares the exact [FromBody]-vs-form-body risk described for v2 generate (415 on a form-urlencoded body despite the Consumes attribute).
+##### `GET api/avatar/v3/saved` — FIXED
 
-Handler: `DorkNet.Server/Controllers/API/Avatar/V2/AvatarGiftsController.cs:66`
+SavedOutfitDto now carries `OutfitSelectionsV2` and `CustomAvatarItems`, the two IMMOJHBENFI keys it used to drop. Rows saved before the fix read back with V2 empty, which the client treats as "use OutfitSelections".
 
-**Fix.** Same fix as v2 generate (manual form/JSON/query body reading); one change covers both routes.
+Handler: `DorkNet.Server/Controllers/API/Avatar/V3/AvatarSavedOutfitsController.cs`
 
-##### `GET api/avatar/v3/saved` — SHAPE_MISMATCH (degraded)
+##### `POST api/avatar/v3/saved/set` — FIXED
 
-Route/verb OK (v2/v3/v4) and the array element carries Slot/PreviewImageName/OutfitSelections/FaceFeatures/SkinColor/HairColor with exact PascalCase. But SavedOutfitDto (lines 95-103) has NO OutfitSelectionsV2 and NO CustomAvatarItems, while the client outfit DTO BEPMJICDNDD holds Int32 + SIX strings + List<BGNNOMBFMLH>. The 2023 avatar model round-trips OutfitSelectionsV2 + CustomAvatarItems everywhere else (AvatarV2Dto has both), so a saved outfit restores without its V2 selections and without custom shirts — silent data loss on every save slot, no crash (Newtonsoft defaults the missing fields).
+The body is parsed by hand, case-insensitively, so all eight keys persist. Before this, loading a saved slot restored the stale V1 selection (or nothing), because the client wears `OutfitSelectionsV2` whenever it is non-empty (BEPMJICDNDD.NLGCNDMLACA), and every custom shirt in the slot was lost.
 
-Handler: `DorkNet.Server/Controllers/API/Avatar/V3/AvatarSavedOutfitsController.cs:29`
-
-**Fix.** Add [JsonPropertyName("OutfitSelectionsV2")] string and [JsonPropertyName("CustomAvatarItems")] List<CustomAvatarItemRefDto> to SavedOutfitDto (reuse CustomAvatarItemRefDto from AvatarV2Controller). Existing persisted JSON deserializes fine (missing props default).
-
-##### `POST api/avatar/v3/saved/set` — SHAPE_MISMATCH (degraded)
-
-Route/verb OK, [FromBody] binds the client's JSON body, upsert-by-Slot works and echoes the DTO. Same defect as the GET: [FromBody] SavedOutfitDto silently DROPS the client's OutfitSelectionsV2 string and CustomAvatarItems list at bind time (System.Text.Json ignores unknown members), so those parts of the outfit are never persisted. Also note SavedOutfitDto's non-nullable value binding is fine here (all strings + int).
-
-Handler: `DorkNet.Server/Controllers/API/Avatar/V3/AvatarSavedOutfitsController.cs:42`
-
-**Fix.** Same DTO extension as the GET; no handler change needed.
+Handler: `DorkNet.Server/Controllers/API/Avatar/V3/AvatarSavedOutfitsController.cs`
 
 ##### `GET api/consumables/v1/getTransferable/{playerId}` — MISSING (degraded)
 
@@ -1468,13 +1532,11 @@ Handler: `DorkNet.Server/Controllers/API/CustomAvatarItems/CustomAvatarItemsCont
 
 **Fix.** Add [HttpDelete("design")] that removes the caller's design row and returns Ok().
 
-##### `GET api/customAvatarItems/v1/isCreationAllowedForAccount` — SHAPE_MISMATCH (degraded)
+##### `GET api/customAvatarItems/v1/isCreationAllowedForAccount` — FIXED
 
-Handler returns the OBJECT {IsCreationAllowed, Allowed}, but the client method returns FGLDKEJLAKB<System.Boolean> — it parses the body as a BARE JSON boolean. Object-into-Boolean deserialization fails, so the can-create gate errors (likely read as not-allowed) and shirt creation is blocked at the UI gate. CONFIRMED from both sides. The two sibling flags on lines 209-215 already do it correctly with Content("true","application/json").
+The first audit read the method's `FGLDKEJLAKB<Boolean>` return type as the wire type and switched the body to a bare boolean. That was wrong: the request is sent as FDKKOPAPDGF<DJMHAFPGLLN> (MPBLNLMCEDL.txt:6216-6223) and the boolean is projected client-side from field +0x10 (HONEEPBHNLB, :9155-9216). DJMHAFPGLLN's converter LMCCNLLHLCJ registers only `Success` and `Error` (LMCCNLLHLCJ.txt:191-254). The bare `true` failed that parse, and the client logged `Failed to query if local account can create Custom Avatar Items: An error occurred`. The server now returns `{"Success": allowed, "Error": null|reason}`.
 
-Handler: `DorkNet.Server/Controllers/API/CustomAvatarItems/CustomAvatarItemsController.cs:194`
-
-**Fix.** Return Content(allowed ? "true" : "false", "application/json") from IsCreationAllowedForAccount.
+Handler: `DorkNet.Server/Controllers/API/CustomAvatarItems/CustomAvatarItemsController.cs`
 
 ##### `GET api/ugcPurchasables/v1/items/room/{roomId}` — MISSING (degraded)
 
@@ -1484,13 +1546,11 @@ Handler: `DorkNet.Server/Controllers/API/UgcPurchasables/UgcPurchasablesControll
 
 **Fix.** Add [HttpGet("api/ugcPurchasables/v1/items/room/{roomId:long}")] mapped to the existing List logic (roomId from route instead of query).
 
-##### `GET api/customAvatarItems/v1/minPriceForPublicItem` — UNKNOWN (none)
+##### `GET api/customAvatarItems/v1/minPriceForPublicItem` — FIXED
 
-Route/verb OK; server hedges with {MinPrice:100, Price:100}. Client DTO IHLMDLKOLNB is an object with a single Int32 property whose JSON key is not recoverable from ISIL (reflection DTO) — whether either hedge key matches is UNKNOWN. If neither matches, the client silently falls back to the DTO's static default rather than crashing (int defaults to 0 under Newtonsoft missing-key semantics), so worst case is a wrong minimum-price validation, not a crash.
+The wire is a bare Int32, not an IHLMDLKOLNB object. HCBOHHEACPK sends FDKKOPAPDGF<Int32> (MPBLNLMCEDL.txt:6922, the same generic token as the bare-Int32 itemOwnershipLimit call at :2981), and the continuation is `<GetPricingConfig>b__69_0(Int32 minimumPrice)` (MPBLNLMCEDL_NestedType___c.txt:286). The server now returns a bare `100`.
 
-Handler: `DorkNet.Server/Controllers/API/CustomAvatarItems/CustomAvatarItemsController.cs:217`
-
-**Fix.** None provable. If live testing shows the min-price gate misbehaving, dump the real key from a live Newtonsoft trace or the metadata name in the decompile and align.
+Handler: `DorkNet.Server/Controllers/API/CustomAvatarItems/CustomAvatarItemsController.cs`
 
 ### Clubs, threads, chat and comments
 
@@ -3371,7 +3431,7 @@ Trigger-verification caveat: gameplay-flow attributions are grounded in the clie
 | GET | `api/config/v1/cohortnux/{cohortId}` | none (cohort id in path, Int32) | JSON array of {ButtonNumber:Int32, Version:Int32 (enum MDPAPEEJFED), Override:Int32 (enum IAEGEKLOMHF), CustomTitle:String, CustomDescription:String, CustomRoomName:String, DefaultTitle:String, DefaultDescription:String, |
 | GET | `api/config/v1/freegiftbutton` | none | bare JSON boolean: true\|false |
 | GET | `api/config/v2` | none | Object with exactly 8 recognized keys (each accepted in PascalCase/camelCase/lowercase): LevelProgressionMaps: [{Level:Int32, RequiredXp:Int32, GiftDropId:Int32?}], DailyObjectives: OIMDBINAEGE[][] i.e. array-of-arrays o |
-| GET | `api/gameconfigs/v1/all` | none | JSON array of {Key:String, Value:String, StartTime:DateTime? (ISO8601), EndTime:DateTime?} — tri-casing accepted |
+| GET | `api/gameconfigs/v1/all` | none | JSON array of {Key:String, Value:String, StartTime:DateTime? (ISO8601), EndTime:DateTime?} — tri-casing accepted. Carries the `UGC.CircuitsV2.Limit.*` family that fills `RecRoom.CircuitsV2.Config.LimitConfig`, including the per-frame RPC/byte budgets — see `docs/recroom-2023-circuitsv2-limits.md` |
 | GET | `api/testcasemanagement/v1/testcase/{id}` | none (string id concatenated into path) | {Id:String, Key:String, Title:String, Description:String, RoomName:String, Status:Int32 (enum LIHDCCJNKGC), AssignedPlayerNames:[String], Tags:[String], JiraUrl:String, Comments:[{Comment:String, CreatedAt:DateTime}]} —  |
 | POST | `api/testcasemanagement/v1/testcase/{id}/claim` | none (empty body) | none consumed (BNDIAONDFFF.KDOPJCNKOOK = fire, ignore body); 2xx status only |
 | POST | `api/testcasemanagement/v1/testcase/{id}/comment` | raw JSON body = JsonConvert.SerializeObject(comment) → a JSON string literal, e.g. "\"my comment\"" | none consumed; 2xx status only |

@@ -401,8 +401,10 @@ public class PhotosController(
             itemIds.AddRange(injectedIds.Where(pinned.Contains));
         }
 
+        // Utc kind explicitly: the ticks came from a UtcNow-derived CreatedAt,
+        // and Npgsql refuses to write an Unspecified DateTime to timestamptz.
         DateTime? cutoffAt = resumed && cursorTicks > 0 && cursorTicks <= DateTime.MaxValue.Ticks
-            ? new DateTime(cursorTicks)
+            ? new DateTime(cursorTicks, DateTimeKind.Utc)
             : (DateTime?)null;
         var cutoffId = resumed ? cursorId : 0L;
         if (phase < 0) phase = 0;

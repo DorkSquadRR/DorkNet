@@ -177,7 +177,10 @@ public class SubscriptionsController(
         }
 
         await db.SaveChangesAsync();
-        return Ok();
+        // The client reads this body as DJMHAFPGLLN, the {success,error}
+        // RecNetResult (FGLDKEJLAKB<DJMHAFPGLLN> at IKMMOCKDKAF.txt LPFOPPHGDHG,
+        // instr 098) — answer in that shape rather than an empty 200.
+        return RecNetResults.Ok();
     }
 
     /// <summary>

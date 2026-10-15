@@ -108,5 +108,14 @@ public class ServerSettingsEntity
     /// admins curate the base-room list from the SPA without a redeploy.</summary>
     public string BaseRoomNamesJson { get; set; } = string.Empty;
 
+    /// <summary>Admin-managed CircuitsV2 creation limits, served to the
+    /// client as the <c>UGC.CircuitsV2.Limit.*</c> gameconfig keys. The
+    /// network entry carries the per-frame RPC and byte budgets a circuit
+    /// may spend; DorkNet ships them effectively unlimited, where retail
+    /// shipped 5 RPCs/frame and 1024 bytes/60 frames. Stored as JSON so
+    /// new limit keys don't need a table migration.
+    /// See <see cref="Services.CircuitsV2LimitSettings"/>.</summary>
+    public string CircuitsV2LimitsJson { get; set; } = string.Empty;
+
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

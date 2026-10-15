@@ -129,14 +129,19 @@ public class ConfigController(ConfigService configService) : ControllerBase
     /// Returns a broad default set so the picker is populated.</summary>
     [HttpGet("/emojiConfig/whitelistedEmojis")]
     [Microsoft.AspNetCore.Authorization.AllowAnonymous]
-    public IActionResult WhitelistedEmojis() => Ok(new[]
+    public IActionResult WhitelistedEmojis() => Ok(WhitelistedEmojiList);
+
+    /// <summary>The emoji allow-list served above. Also the validation set
+    /// for <c>PUT account/me/emoji</c>, so a player can only pick an emoji
+    /// the client's own picker offered.</summary>
+    public static readonly IReadOnlyList<string> WhitelistedEmojiList = new[]
     {
         "😀", "😁", "😂", "🤣", "😊", "😇", "🙂", "😉", "😍", "😘",
         "😜", "🤪", "😎", "🤩", "🥳", "😏", "😢", "😭", "😡", "🤯",
         "😱", "😴", "🤔", "🤗", "🙄", "😬", "👍", "👎", "👏", "🙌",
         "🙏", "💪", "✌️", "🤞", "👋", "🤝", "❤️", "🔥", "⭐", "✨",
         "🎉", "🎊", "💯", "😈", "👻", "🤖", "🎮", "🏆",
-    });
+    };
 
     /// <summary>GET <c>api/config/v1/freegiftbutton</c> — the
     /// 2020.12 client deserializes this endpoint as a raw Boolean.

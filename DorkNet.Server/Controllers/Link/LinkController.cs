@@ -223,7 +223,11 @@ public class LinkController(DorkNetDbContext db, ILogger<LinkController> logger)
 
         payload.Uses++;
         // AutoRenewHours present ⇒ the code renews rather than ages out.
-        if (req.ValidHours is > 0) payload.ExpiresAt = DateTime.UtcNow.AddHours(req.ValidHours.Value);
+        // Clamped: this route is anonymous and the value is client-supplied,
+        // so an unbounded renewal would let anyone holding the code extend
+        // its life indefinitely past what the creator chose.
+        if (req.ValidHours is > 0)
+            payload.ExpiresAt = DateTime.UtcNow.AddHours(Math.Min(req.ValidHours.Value, 720));
 
         var encoded = JsonSerializer.Serialize(payload);
         if (encoded.Length <= ValueLimit) row.Value = encoded;
