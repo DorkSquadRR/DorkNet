@@ -1,6 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
 using System.Text.Json.Serialization;
+using Microsoft.EntityFrameworkCore;
 using DorkNet.Server.Auth;
+using DorkNet.Server.Data;
 using DorkNet.Server.Services;
 
 namespace DorkNet.Server.Controllers.Match;
@@ -36,10 +38,19 @@ namespace DorkNet.Server.Controllers.Match;
 /// </summary>
 [ApiController]
 public class PlayerPresenceController(
-    PlayerPresenceService presence) : ControllerBase
+    PlayerPresenceService presence,
+    PresenceBroadcastService presenceFanout,
+    JoinTimeoutService joinTimeouts,
+    DorkNetDbContext db,
+    ServerSettingsService settings) : ControllerBase
 {
+    /// <summary>PlayerSettings key written by <c>PUT /player/statusvisibility</c>
+    /// (MatchPlayerController.PrefStatusVisibility — same literal; the
+    /// round-trip is pinned by a regression test).</summary>
+    public const string PrefStatusVisibility = PresenceBroadcastService.StatusVisibilityPrefKey;
+
     [HttpGet("/player")]
-    public ActionResult<List<PlayerPresenceDto>> GetPresences()
+    public async Task<ActionResult<List<PlayerPresenceDto>>> GetPresences()
     {
         // The watch sends two URL flavours for this endpoint:
         //   1. Bulk: <c>/player?{id1}&amp;{id2}&amp;{id3}</c> — bare keys,
@@ -81,31 +92,39 @@ public class PlayerPresenceController(
         // mid-coroutine. Only redact for OTHER players where the
         // privacy concern actually applies.
         var callerId = this.CurrentPlayerId();
-        var callerRoom = callerId is long cid ? presence.GetRoom(cid) : null;
+        var callerRoom = callerId is long cid ? SelfRoom(cid) : null;
+        var visibility = await LoadVisibilityAsync(ids);
+        var hiddenFromCaller = await ResolveHiddenAsync(callerId, ids, visibility);
         var result = ids.Select(id =>
         {
-            var room = presence.GetRoom(id);
-            // Other players need both a room presence and an active
-            // live signal. Use the recent-heartbeat marker as the
-            // truth source: SignalR can drop while the player is still
-            // heartbeating, or linger after the game is gone. Presence
-            // keys intentionally live for minutes to survive long room
-            // loads, so using them alone leaves friends stuck online
-            // after a graceful disconnect.
             var isSelf = callerId == id;
-            var active = isSelf || presence.IsRecentlyActive(id);
-            var isOnline = room is not null && active;
+            // The caller's own row must say exactly what their heartbeat
+            // says (pending-join target, or null in the offline room): the
+            // client compares its cached self presence field by field
+            // (HCHDEHIGEBE.DCIJHIPJHOB) and treats any difference as
+            // out-of-sync.
+            var room = isSelf ? callerRoom : presence.GetRoom(id);
+            // Online = a live signal (recent heartbeat, or a SignalR
+            // connection), NOT "has a room". Presence keys live for minutes
+            // to survive long room loads, so a room alone would leave friends
+            // stuck online after the game is gone; and a player in the offline
+            // room after matchmake/none has no room but is very much online
+            // (the 2023 DTO carries isOnline on its own; see
+            // NotificationService.BuildPresenceUpdatePayload).
+            // A player who chose "appear offline" (or friends/favorites
+            // only, when the caller doesn't qualify) is reported exactly
+            // like a genuinely offline player: no room, isOnline=false.
+            var isOnline = (isSelf || presenceFanout.IsOnline(id)) && !hiddenFromCaller.Contains(id);
+            if (!isOnline) room = null;
             return new PlayerPresenceDto
             {
                 PlayerId         = (int)id,
-                // StatusVisibility is the player's *preference* for who may
-                // see them online. The enum is Everyone=0 / FriendsOnly=1 /
-                // Nobody=2 — so the previous value 1 (mislabeled "Visible")
-                // actually meant FriendsOnly, and anyone who wasn't your
-                // friend saw you as OFFLINE. On a private server everyone
-                // should see everyone, so report Everyone (0). IsOnline=false
-                // still gates the "Online" badge for offline players.
-                StatusVisibility = 0,           // Everyone
+                // The player's stored online-status visibility. Self MUST
+                // see its own stored value: the profile dialog's current
+                // selection is read from the cached self presence, and a
+                // hard-coded 0 here snapped it back to Public after every
+                // presence refresh.
+                StatusVisibility = visibility.GetValueOrDefault(id, PresenceVisibility.Public),
                 DeviceClass      = 0,           // Desktop / unknown — not VR
                 VrMovementMode   = 0,
                 // Full instance details are safe, and necessary, when the
@@ -122,6 +141,58 @@ public class PlayerPresenceController(
         }).ToList();
 
         return Ok(result);
+    }
+
+    /// <summary>The caller's own room as their heartbeat reports it.</summary>
+    private RoomInstanceDto? SelfRoom(long playerId)
+    {
+        if (joinTimeouts.GetPending(playerId) is { DeferPresenceCommit: true } pending)
+            return pending.TargetRoom;
+        if (presence.IsInNoRoom(playerId)) return null;
+        return presence.GetRoom(playerId);
+    }
+
+    private Task<Dictionary<long, int>> LoadVisibilityAsync(HashSet<long> ids) =>
+        PresenceBroadcastService.GetStatusVisibilitiesAsync(db, ids);
+
+    /// <summary>Ids whose online status the caller may not see. The caller
+    /// always sees itself; anonymous callers only see Public players.</summary>
+    private async Task<HashSet<long>> ResolveHiddenAsync(
+        long? callerId, HashSet<long> ids, Dictionary<long, int> visibility)
+    {
+        var hidden = new HashSet<long>();
+        var restricted = visibility
+            .Where(kv => kv.Value != PresenceVisibility.Public && kv.Key != callerId)
+            .ToList();
+        if (restricted.Count == 0) return hidden;
+
+        if (callerId is not long me)
+        {
+            foreach (var kv in restricted) hidden.Add(kv.Key);
+            return hidden;
+        }
+
+        HashSet<long>? friends = null;
+        HashSet<long>? favoritedMe = null;
+        foreach (var (target, vis) in restricted)
+        {
+            if (vis == PresenceVisibility.Offline) { hidden.Add(target); continue; }
+
+            friends ??= (await RelationshipQueries.EffectiveFriendIdsAsync(db, settings, me)).ToHashSet();
+            if (!friends.Contains(target)) { hidden.Add(target); continue; }
+
+            if (vis == PresenceVisibility.FavoriteFriendsOnly)
+            {
+                // Favorited lives on the favoriter's own row
+                // (RequesterId = favoriter), as RelationshipsController.BuildMerged reads it.
+                favoritedMe ??= (await db.Relationships
+                    .Where(r => r.TargetId == me && r.Favorited && ids.Contains(r.RequesterId))
+                    .Select(r => r.RequesterId)
+                    .ToListAsync()).ToHashSet();
+                if (!favoritedMe.Contains(target)) hidden.Add(target);
+            }
+        }
+        return hidden;
     }
 
     private static bool ShouldExposeFullRoom(
@@ -151,8 +222,8 @@ public class PlayerPresenceDto
     [JsonPropertyName("playerId")]
     public int PlayerId { get; set; }
 
-    /// <summary>PlayerStatusVisibility enum (int):
-    /// 0 = Hidden / Offline-appearing, 1 = Visible, 2 = FriendsOnly.</summary>
+    /// <summary>Online-status visibility enum (int, 2023 client):
+    /// 0 = Public, 1 = FriendsOnly, 2 = FavoriteFriendsOnly, 3 = Offline.</summary>
     [JsonPropertyName("statusVisibility")]
     public int StatusVisibility { get; set; }
 

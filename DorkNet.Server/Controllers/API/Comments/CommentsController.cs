@@ -268,8 +268,11 @@ public class CommentsController(DorkNetDbContext db) : ControllerBase
     /// <see cref="UnreadCounts"/> return non-zero numbers for everyone else).
     ///
     /// <c>OPELMBNJHNO.MCOIDIBFHIP(Int64 roomId, Int64 commentId)</c>
-    /// (OPELMBNJHNO.txt:1375) returns the status-only <c>LDGADANDBIO</c>, not a
-    /// DTO — the body is never parsed, only the status code. Verb is <b>PUT</b>
+    /// (OPELMBNJHNO.txt:1375) returns the untyped <c>LDGADANDBIO</c> promise, but
+    /// it is built from the body parsed as a RecNetResult: the continuation
+    /// <c>&lt;UpdateLatestReadComment&gt;b__9_1(DJMHAFPGLLN)</c>
+    /// (OPELMBNJHNO_NestedType___c.txt:333) null-derefs an empty body and
+    /// rejects on <c>Success</c>=false — see <see cref="RecNetResults"/>. Verb is <b>PUT</b>
     /// (rdx=3 at instr 059, OPELMBNJHNO.txt:1637); both ids are path segments
     /// formatted into "comments/read/{0}/{1}" (:1627) and no field is added, so
     /// the request carries no body at all.
@@ -280,7 +283,7 @@ public class CommentsController(DorkNetDbContext db) : ControllerBase
     {
         await SetLastReadAsync(Me, roomId, commentId);
         await db.SaveChangesAsync();
-        return Ok();
+        return RecNetResults.Ok();
     }
 
     /// <summary>Deletes a comment.

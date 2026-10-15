@@ -10,9 +10,27 @@ namespace DorkNet.Server.Services;
 public sealed class JoinTimeoutService(
     PlayerPresenceService presence,
     NotificationService notifications,
+    PresenceBroadcastService fanout,
     ILogger<JoinTimeoutService> logger)
 {
-    private static readonly TimeSpan Timeout = TimeSpan.FromSeconds(30);
+    /// <summary>
+    /// How long a join may stay unreported before the server gives up on it.
+    ///
+    /// This used to be 30 seconds, which is shorter than a real 2023 room
+    /// load: the client reports its join result only after the room's assets
+    /// have downloaded and the player has spawned, and a large maker room
+    /// regularly takes longer than that (in the field: matchmake/room at
+    /// 09:16:35, Photon joined at 09:16:41, the load still running at 09:17:33).
+    /// The watchdog then cleared presence mid-load, the next heartbeat found
+    /// no room and answered with the dorm, and the client logged "presence
+    /// heartbeat response indicates local presence is out-of-sync" and
+    /// cancelled the load ("OnPlayerPresenceUpdate is cancelling room load").
+    ///
+    /// The 2023 client reports its own failures (reportjoinresult with
+    /// FailedTo*) and runs its fallback chain, so this is only a backstop for
+    /// a client that silently stopped mid-join.
+    /// </summary>
+    public static TimeSpan Timeout { get; } = TimeSpan.FromMinutes(3);
     private readonly ConcurrentDictionary<long, PendingJoin> _pending = new();
 
     public void MarkPending(long playerId, RoomInstanceDto? room, bool deferPresenceCommit = false)
@@ -39,6 +57,10 @@ public sealed class JoinTimeoutService(
 
         _ = WatchAsync(playerId, pending);
     }
+
+    /// <summary>Drop the player's pending join without touching presence —
+    /// the client abandoned it (matchmake/none, logout).</summary>
+    public void Cancel(long playerId, string reason) => ClearForPlayer(playerId, reason);
 
     public (RoomInstanceDto TargetRoom, bool DeferPresenceCommit)? GetPending(long playerId)
     {
@@ -75,11 +97,15 @@ public sealed class JoinTimeoutService(
             return Task.CompletedTask;
         }
 
-        presence.Clear(playerId);
+        // Room only: the player is still online and about to run the
+        // client's fallback chain. A full Clear also dropped the activity
+        // marker, so friends saw them go offline after every failed join.
+        presence.ClearRoom(playerId);
         logger.LogWarning(
             "[join-watchdog] cleared failed join player={PlayerId} room={RoomId}/{RoomName} instance={InstanceId} outcome={Outcome}",
             playerId, failedRoom.RoomId, failedRoom.Name, instanceId, outcome);
-        return Task.CompletedTask;
+        // Whatever room friends were last told about is gone; correct them.
+        return fanout.PublishCurrentAsync(playerId);
     }
 
     private async Task WatchAsync(long playerId, PendingJoin pending)
@@ -110,8 +136,9 @@ public sealed class JoinTimeoutService(
             return;
         }
 
-        presence.Clear(playerId);
+        presence.ClearRoom(playerId);
         await notifications.KickPlayerAsync(playerId, "Room join timed out. Returning to dorm.");
+        await fanout.PublishCurrentAsync(playerId);
         logger.LogWarning(
             "[join-watchdog] timed out player={PlayerId} room={RoomId}/{RoomName} instance={InstanceId}",
             playerId, pending.TargetRoom.RoomId, pending.TargetRoom.Name, pending.InstanceId);

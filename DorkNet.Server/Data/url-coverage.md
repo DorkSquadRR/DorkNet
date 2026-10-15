@@ -111,7 +111,7 @@ Note: counts are approximate because several client URLs (`api/avatar/v3/saved`,
 
 | Verb | URL | Status | Handler |
 |---|---|---|---|
-| GET  | `api/gameconfigs/v1/all` | STUB | `GameConfigurationsController.GameConfigsAll` (also shadowed by `AllEndpointsController.GameConfigs` — the explicit `gameconfigs/v1/all` route wins). Returns `[]`. |
+| GET  | `api/gameconfigs/v1/all` | REAL | `GameConfigurationsController.GetAll` (also shadowed by `AllEndpointsController.GameConfigs` — the explicit `gameconfigs/v1/all` route wins). Serves the admin-managed key/value set from `ServerSettingsService.GetGameConfigurationsAsync`: Rec Center doors, the typed keys confirmed in the 2020.12 decomp, the `UGC.CircuitsV2.Limit.*` family (see `docs/recroom-2023-circuitsv2-limits.md`), and `PlayMenuCarouselOrdering_1` (the 2023 play-menu carousel priority map; without it the client logs "Could not find GameConfig for PlayMenuCarouselOrdering_1" and keeps prefab order). |
 
 ### `api/groups/`
 
@@ -390,6 +390,18 @@ These all live on `match.rec.net` (locally: `match.localhost`).
 | POST | `matchmake/dorm` | REAL | `Match.MatchController.MatchmakeDorm` — builds the caller's personal-dorm `RoomInstance` |
 | POST | `matchmake/none` | REAL | `Match.MatchController.MatchmakeNone` — returns the caller's current room (or dorm) without changing it |
 | POST | `player/heartbeat` | REAL | `Match.MatchPlayerController.Heartbeat` — refreshes the caller's `PlayerPresenceService` entry; also has a duplicate in `ApiNamespaceStubsController.Heartbeat` for the api-host case |
+
+2023 additions on the auth / accounts / strings hosts:
+
+| Verb | URL | Status | Handler |
+|---|---|---|---|
+| POST | `connect/token` `grant_type=urn:ietf:params:oauth:grant-type:device_code` | REAL | `Auth.AuthController.Token` via `DeviceAuthorizations.RedeemAsync` — 400 `authorization_pending` until approved, then the approver's token pair; single use |
+| POST | `connect/token` `grant_type=login_token` | REAL | `Auth.AuthController.Token` — redeems an `account/me/createlogintoken` token for its own `account_id`; single use |
+| POST | `account/me/createlogintoken` | REAL | `Accounts.AccountsController.CreateLoginToken` — bare JSON string (the client reads `FGLDKEJLAKB<String>`) |
+| POST | `account/me/remoteauth` | REAL | `Accounts.AccountsController.RemoteAuth` — approves a device `user_code` for the caller; `{success,error}` RecNetResult |
+| POST | `account/bulk/email`, `account/bulk/phone` | REAL | `Accounts.AccountsController.Bulk` — contact lookup, repeated `email` / `phone` form fields, account list |
+| GET | `strings?locale&scopePrefix|scope&eTag` | REAL | `Strings.StringsController.GetServerStrings` — empty table (no server-side string overrides) instead of a 404 |
+| GET | `api/incentivizedreferrals/referrals?take&continuationToken` | REAL | `IncentivizedReferralsController.Referrals` — `{Referrals:[{InviteeAccountId,CreatedAt,VerifiedAt}],ContinuationToken}` |
 
 ### CDN host (`cdn.rec.net` / `storage` / `data`)
 

@@ -170,45 +170,25 @@ public class NotificationService(
         }
     }
 
-    /// <summary>Push fresh account payloads to the affected player's
-    /// watch. The 2020 client caches Account/SelfAccount objects in memory;
-    /// without this, username and display-name edits persist server-side
-    /// but the current session keeps rendering the stale cached names until
-    /// a full relog rebuilds the account cache.</summary>
+    /// <summary>Push fresh account payloads after a profile mutation.
+    /// The owner gets <c>SelfAccountUpdate</c> (private self DTO) and every
+    /// connected client gets <c>AccountUpdate</c> (public DTO). The 2023
+    /// client subscribes to both strings (RecNet.Runtime
+    /// OPMAPIOEIFG.txt:267 "AccountUpdate" → Action&lt;Account&gt;, :279
+    /// "SelfAccountUpdate" → Action&lt;SelfAccount&gt;) and refreshes its
+    /// cached account from the payload — the profile-edit PUTs return no
+    /// account, so this push is the ONLY way the new emoji / banner /
+    /// pronouns / identity flags reach the editor's own UI and anyone else
+    /// already looking at the profile. Sending AccountUpdate to the owner
+    /// alone (the previous behaviour) left every other player rendering the
+    /// stale cached account until relog.</summary>
     public Task AccountChanged(PlayerEntity player)
     {
-        var account = new RecNetAccount
-        {
-            AccountId = (int)player.Id,
-            RawUsername = player.Username,
-            Username = player.Username,
-            DisplayName = string.IsNullOrWhiteSpace(player.DisplayName) ? player.Username : player.DisplayName,
-            ProfileImage = player.ProfileImageName ?? string.Empty,
-            TreatAsJunior = player.IsJunior,
-            HasBirthday = true,
-            Platforms = 1,
-            CreatedAt = player.CreatedAt,
-        };
-        var selfAccount = new RecNetSelfAccount
-        {
-            AccountId = account.AccountId,
-            RawUsername = account.RawUsername,
-            Username = account.Username,
-            DisplayName = account.DisplayName,
-            ProfileImage = account.ProfileImage,
-            TreatAsJunior = account.TreatAsJunior,
-            HasBirthday = account.HasBirthday,
-            Platforms = account.Platforms,
-            CreatedAt = account.CreatedAt,
-            Email = player.Email ?? string.Empty,
-            Phone = player.Phone ?? string.Empty,
-            Birthday = player.Birthday ?? new DateTime(2000, 1, 1),
-            JuniorState = player.IsJunior ? 1 : 0,
-            ParentAccountId = null,
-        };
+        var account = AccountDtos.Public(player);
+        var selfAccount = AccountDtos.Self(player);
 
         return Task.WhenAll(
-            NotifyAsync(player.Id, PushNotificationId.SubscriptionUpdateProfile, account),
+            BroadcastAsync(PushNotificationId.SubscriptionUpdateProfile, account),
             NotifyTypedAsync(player.Id, "SelfAccountUpdate", selfAccount));
     }
 
@@ -271,17 +251,49 @@ public class NotificationService(
     /// the runtime-type path can pick the wrong contract under certain
     /// option combos and emit an empty <c>{}</c> body — which silently
     /// drops the presence update at the watch.</summary>
-    public async Task PlayerPresenceChanged(IEnumerable<long> friendIds, long playerId, RoomInstanceDto? room)
+    public async Task PlayerPresenceChanged(
+        IEnumerable<long> friendIds,
+        long playerId,
+        RoomInstanceDto? room,
+        bool? isOnline = null,
+        int statusVisibility = 0)
     {
         var groups = friendIds.Select(NotifyHub.GroupForPlayer).ToArray();
         if (groups.Length == 0) return;
 
-        var redacted = RoomInstanceDto.Redact(room);
+        var payload = BuildPresenceUpdatePayload(playerId, room, isOnline, statusVisibility);
+
+        logger.LogDebug(
+            "[notify] presence push player={PlayerId} → {FriendCount} friend(s), payload={Payload}",
+            playerId, groups.Length, payload);
+
+        await hub.Clients.Groups(groups).SendAsync(HubMethod, payload);
+    }
+
+    /// <summary>The PresenceUpdate envelope for one player, as a JSON string.
+    ///
+    /// <paramref name="isOnline"/> is independent of the room: the 2023
+    /// presence DTO stores it in its own field (LCEHINCCHOB +0x50,
+    /// RecNet.Runtime/LCEHINCCHOB.txt:635-653) and DNKHCBFPLJG treats
+    /// "online with no room" as a real state — a player in the offline dorm
+    /// after matchmake/none. Deriving it from the room, as this used to, sent
+    /// such players to their friends as OFFLINE. When omitted it still falls
+    /// back to "has a room" for callers that only know about room moves.
+    /// An offline frame never carries a room.</summary>
+    public static string BuildPresenceUpdatePayload(
+        long playerId,
+        RoomInstanceDto? room,
+        bool? isOnline = null,
+        int statusVisibility = 0)
+    {
+        var online = isOnline ?? room is not null;
+        var redacted = online ? RoomInstanceDto.Redact(room) : null;
         var msg = new System.Text.Json.Nodes.JsonObject
         {
             ["playerId"]         = (int)playerId,
-            // Everyone=0 (was 1=FriendsOnly, which hid you from non-friends).
-            ["statusVisibility"] = 0,
+            // The player's stored /player/statusvisibility choice (default
+            // 0 = Everyone), the same value their own heartbeat reports.
+            ["statusVisibility"] = statusVisibility,
             ["deviceClass"]      = 0,
             ["vrMovementMode"]   = 0,
             ["roomInstance"]     = redacted is null
@@ -307,7 +319,7 @@ public class NotificationService(
                     ["EncryptVoiceChat"] = redacted.EncryptVoiceChat,
                 },
             // 2020.12 PlayerPresence.Deserialize requires these.
-            ["isOnline"]         = redacted is not null,
+            ["isOnline"]         = online,
             // 2023.03.21 client build version; must match the joining
             // client's own version or it reports a version mismatch. MUST be
             // a STRING ("20230317"): the client's presence DTO reads
@@ -325,13 +337,7 @@ public class NotificationService(
             ["Id"]  = WireName(PushNotificationId.SubscriptionUpdatePresence),
             ["Msg"] = msg,
         };
-        var payload = envelope.ToJsonString();
-
-        logger.LogDebug(
-            "[notify] presence push player={PlayerId} → {FriendCount} friend(s), payload={Payload}",
-            playerId, groups.Length, payload);
-
-        await hub.Clients.Groups(groups).SendAsync(HubMethod, payload);
+        return envelope.ToJsonString();
     }
 
     public Task PlayerCameOnline(IEnumerable<long> friendIds, long playerId, RoomInstanceDto? room) =>

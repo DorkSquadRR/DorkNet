@@ -42,8 +42,7 @@ public class NotifyHub(
     OnlinePresenceService presence,
     PlayerPresenceService playerRooms,
     NotificationService notifications,
-    DorkNetDbContext db,
-    ServerSettingsService serverSettings,
+    PresenceBroadcastService presenceFanout,
     ILogger<NotifyHub> logger) : Hub
 {
     /// <summary>SignalR group name for a given player id. Use this
@@ -108,18 +107,11 @@ public class NotifyHub(
             // friend's list for the rest of the session even though they were
             // still playing.
             //
-            // Only push when a room is already known. The presence payload
-            // derives isOnline from roomInstance being non-null, so a push with
-            // no room reads as OFFLINE — worse than staying quiet. On a fresh
-            // boot there is no room yet and the /goto that follows sends the
-            // real presence anyway; this branch is for reconnects, where the
-            // cached room is exactly what friends need to see again.
-            if (cameOnline && playerRooms.GetRoom(id) is { } room)
-            {
-                var friendIds = await RelationshipQueries.EffectiveFriendIdsAsync(db, serverSettings, id);
-                if (friendIds.Count > 0)
-                    await notifications.PlayerCameOnline(friendIds, id, room);
-            }
+            // isOnline is sent explicitly now, so this no longer needs a
+            // known room: a player who connects before matchmaking, or who is
+            // sitting in the offline room, is online with roomInstance null.
+            if (cameOnline)
+                await presenceFanout.PublishCurrentAsync(id);
         }
         else
         {
@@ -139,9 +131,17 @@ public class NotifyHub(
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, GroupForPlayer(id));
             if (wentOffline)
             {
-                var friendIds = await RelationshipQueries.EffectiveFriendIdsAsync(db, serverSettings, id);
-                if (friendIds.Count > 0)
-                    await notifications.PlayerWentOffline(friendIds, id);
+                // The socket can drop under a live session (the server or a
+                // proxy closes it; the client logs "RecNet HubConnection error:
+                // ... TCP Stream closed unexpectedly by the remote server" and
+                // reconnects by itself). While the player is still
+                // heartbeating, wait one activity window before calling them
+                // offline; a real exit either logs out (immediate offline push)
+                // or stops heartbeating and is caught by the deferred check.
+                if (playerRooms.IsRecentlyActive(id))
+                    presenceFanout.ScheduleOfflineCheck(id);
+                else
+                    await presenceFanout.PublishOfflineAsync(id);
             }
             logger.LogInformation(
                 "[hub] disconnected player={PlayerId} conn={ConnectionId} wentOffline={WentOffline} error={Error}",

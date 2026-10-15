@@ -48,14 +48,18 @@ public class PlayerWarningsController(DorkNetDbContext db) : ControllerBase
             .Where(p => p.Id == me)
             .Select(p => (bool?)(p.IsAdmin || p.IsDeveloper || p.IsCommunityTeam))
             .FirstOrDefaultAsync();
+        // Both calls are read as DJMHAFPGLLN = {Success, Error} (the formatter,
+        // RecNet.Runtime/LMCCNLLHLCJ.txt:191-218, knows no "Message" key). A
+        // failure without Error reached Promise.Rejected(null) and threw
+        // "Error message cannot be null" instead of showing the reason.
         if (moderator != true)
-            return Ok(new { Success = false, Message = "not_authorized" });
+            return Ok(new { Success = false, Error = "not_authorized", Message = "not_authorized" });
 
         var target = warnedPlayerId
                      ?? (long.TryParse(Request.Query["WarnedPlayerId"].FirstOrDefault(), out var q) ? q : 0);
-        if (target <= 0) return Ok(new { Success = false, Message = "missing_player" });
+        if (target <= 0) return Ok(new { Success = false, Error = "missing_player", Message = "missing_player" });
         if (!await db.Players.AnyAsync(p => p.Id == target))
-            return Ok(new { Success = false, Message = "player_not_found" });
+            return Ok(new { Success = false, Error = "player_not_found", Message = "player_not_found" });
 
         // Same "warning:{id}|message|category|createdAt|acknowledged" layout the
         // GET list handler parses in ToWarningWire.
@@ -75,7 +79,7 @@ public class PlayerWarningsController(DorkNetDbContext db) : ControllerBase
                 "false"),
         });
         await db.SaveChangesAsync();
-        return Ok(new { Success = true, Message = string.Empty, WarningId = id });
+        return Ok(new { Success = true, Error = string.Empty, Message = string.Empty, WarningId = id });
     }
 
     /// <summary>The 2023-03-21 client's acknowledge call takes NO arguments —
@@ -104,19 +108,19 @@ public class PlayerWarningsController(DorkNetDbContext db) : ControllerBase
                 .OrderByDescending(s => s.Id)
                 .ToListAsync();
             row = rows.FirstOrDefault(s => !ToWarningWire(s).Acknowledged);
-            if (row is null) return Ok(new { Success = true, Message = string.Empty });
+            if (row is null) return Ok(new { Success = true, Error = string.Empty, Message = string.Empty });
         }
         else
         {
             row = await db.PlayerSettings
                 .FirstOrDefaultAsync(s => s.PlayerId == me && s.Key == $"warning:{id}");
-            if (row is null) return Ok(new { Success = true, Message = string.Empty });
+            if (row is null) return Ok(new { Success = true, Error = string.Empty, Message = string.Empty });
         }
 
         var parts = row.Value.Split('|');
         row.Value = string.Join('|', parts.Take(3).Append("true"));
         await db.SaveChangesAsync();
-        return Ok(new { Success = true, Message = string.Empty, WarningId = row.Key["warning:".Length..] });
+        return Ok(new { Success = true, Error = string.Empty, Message = string.Empty, WarningId = row.Key["warning:".Length..] });
     }
 
     private static WarningWire ToWarningWire(DorkNet.Server.Data.Entities.PlayerSettingEntity row)
