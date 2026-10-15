@@ -167,6 +167,7 @@ public class AvatarItemsController(
             // miss and silently drop every owned colored item (the contest
             // hat "I bought it but it never shows in my wardrobe" bug).
             if (!catalog.Items.TryGetValue(entry.BaseGuid, out var item)) continue;
+            if (item.IsBaseAvatarItem) continue; // custom-clothing template, not clothing
 
             var slot = catalog.SlotByGuid.TryGetValue(entry.BaseGuid, out var value) ? value : -1;
             perSlot.TryGetValue(slot, out var count);
@@ -277,6 +278,8 @@ public class AvatarItemsController(
         foreach (var item in catalog.Items.Values)
         {
             if (result.Count >= maxItems) return result;
+            // Custom-clothing templates aren't ownable clothing.
+            if (item.IsBaseAvatarItem) continue;
             result.Add(item);
         }
         // Colored variants aren't in the base avatar_item_lookup catalog, so
@@ -326,14 +329,33 @@ public class AvatarItemsController(
         return result;
     }
 
+    /// <summary>The custom-clothing templates ("base avatar items") and
+    /// their RecNet AvatarItemIds, as the real service served them. The
+    /// client flags every row of <c>defaultbaseavataritems</c> as a base
+    /// item (AvatarItemData.IsBaseAvatarItem, keyed by AvatarItemId in
+    /// OutfitManager.AODPBDNAGII) and leaves base items out of the owned
+    /// rebuild (MBPOFMEHDIJ), so they never read as owned clothing. This
+    /// endpoint used to return the first 100 catalog items, which turned
+    /// ordinary items (80sHipHopJacket, Beard Close, ...) into templates
+    /// that showed a price even when owned and equipped.</summary>
+    public static readonly IReadOnlyDictionary<string, int> BaseAvatarItemIds =
+        new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["c5d70cb4-71dd-4fe4-b719-34fe2073c611"] = 2184, // UGCTee_Shirt
+            ["95a519de-f2cb-429c-b014-508477f20d42"] = 2918, // UGCPulloverHoodie_Shirt
+        };
+
+    public static bool IsBaseAvatarItemGuid(string? guid) =>
+        !string.IsNullOrEmpty(guid) && BaseAvatarItemIds.ContainsKey(guid);
+
     [HttpGet("api/avatar/v1/defaultbaseavataritems")]
     [AllowAnonymous]
     public IActionResult DefaultBaseAvatarItems()
     {
-        var rows = _catalog.Value.Items.Values
-            .OrderBy(i => i.AvatarItemType)
-            .ThenBy(i => i.FriendlyName)
-            .Take(100)
+        var items = _catalog.Value.Items;
+        var rows = BaseAvatarItemIds.Keys
+            .Where(items.ContainsKey)
+            .Select(g => items[g])
             .ToList();
         return Ok(rows);
     }
@@ -607,13 +629,13 @@ public class AvatarItemsController(
                 // GUID as a color GUID and log "Can not find hair dye color".
                 AvatarItemType = AvatarItemType.Outfit,
                 AvatarItemDesc = row.Guid + ",,,",
-                AvatarItemId = StableAvatarItemId(row.Guid),
+                AvatarItemId = BaseAvatarItemIds.TryGetValue(row.Guid, out var baseId) ? baseId : StableAvatarItemId(row.Guid),
                 PlatformMask = unchecked((int)0xFFFFFFFF),
                 FriendlyName = pretty,
                 Tooltip = string.Empty,
                 Rarity = 0,
                 TagList = string.Empty,
-                IsBaseAvatarItem = false,
+                IsBaseAvatarItem = IsBaseAvatarItemGuid(row.Guid),
             };
             if (!bySlot.TryGetValue(row.OutfitType, out var lst))
                 bySlot[row.OutfitType] = lst = new List<string>();
@@ -626,7 +648,7 @@ public class AvatarItemsController(
         var defaults = dump.DefaultUnlockedVariants
             .Where(v => string.IsNullOrEmpty(v.Swatch) && string.IsNullOrEmpty(v.Mask) && string.IsNullOrEmpty(v.Decal))
             .Select(v => v.Item)
-            .Where(g => !string.IsNullOrEmpty(g) && items.ContainsKey(g))
+            .Where(g => !string.IsNullOrEmpty(g) && items.ContainsKey(g) && !IsBaseAvatarItemGuid(g))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
