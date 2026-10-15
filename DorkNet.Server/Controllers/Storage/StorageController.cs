@@ -65,6 +65,12 @@ public class StorageController(
 
     [HttpPost("/upload", Order = -2000)]
     [Consumes("multipart/form-data")]
+    // Kestrel's default 30,000,000-byte body cap would 413 the room save of
+    // a big circuits room now that the served CircuitsV2 chip limit is 30000
+    // (docs/recroom-2023-circuitsv2-limits.md). 100 MB matches the admin
+    // import endpoints and Cloudflare's own per-request ceiling.
+    [RequestSizeLimit(100_000_000)]
+    [RequestFormLimits(MultipartBodyLengthLimit = 100_000_000)]
     public async Task<IActionResult> Upload()
     {
         // Form parsing — ASP.NET Core deserialises the multipart body

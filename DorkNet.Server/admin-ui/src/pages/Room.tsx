@@ -165,6 +165,7 @@ function GeneralTab({ room, onSaved }: { room: RoomDetail; onSaved: () => void }
   const [description, setDescription] = useState(room.description);
   const [accessibility, setAccessibility] = useState(room.accessibility);
   const [cloningAllowed, setCloningAllowed] = useState(room.cloningAllowed);
+  const [isAGRoom, setIsAGRoom] = useState(room.isAGRoom);
   const [tagsCsv, setTagsCsv] = useState(room.tagsCsv);
   const [hotScore, setHotScore] = useState(String(room.hotScore));
   const [imageName, setImageName] = useState(room.imageName);
@@ -176,6 +177,7 @@ function GeneralTab({ room, onSaved }: { room: RoomDetail; onSaved: () => void }
     setDescription(room.description);
     setAccessibility(room.accessibility);
     setCloningAllowed(room.cloningAllowed);
+    setIsAGRoom(room.isAGRoom);
     setTagsCsv(room.tagsCsv);
     setHotScore(String(room.hotScore));
     setImageName(room.imageName);
@@ -193,6 +195,7 @@ function GeneralTab({ room, onSaved }: { room: RoomDetail; onSaved: () => void }
           Description: description,
           Accessibility: accessibility,
           CloningAllowed: cloningAllowed,
+          IsAGRoom: isAGRoom,
           TagsCsv: tagsCsv,
           HotScore: Number.isFinite(hot) ? hot : undefined,
           ImageName: imageName,
@@ -282,6 +285,14 @@ function GeneralTab({ room, onSaved }: { room: RoomDetail; onSaved: () => void }
           onChange={e => setCloningAllowed(e.target.checked)}
         />
         <span>Cloning allowed</span>
+      </label>
+      <label className="flex items-center gap-2 text-sm" title="What the client reads as IsRRO. On: load the baked scene from the client's assets and consult the client's built-in per-original table (which forbids creation in Rec Royale). Off: treat as a custom room — roles and blob decide. Flip a CLONE of an original off to test editable Rec Royale.">
+        <input
+          type="checkbox"
+          checked={isAGRoom}
+          onChange={e => setIsAGRoom(e.target.checked)}
+        />
+        <span>Rec Room Original (IsRRO) — baked scene + client creation table</span>
       </label>
       <div className="flex gap-2 pt-2 border-t border-ink-800">
         <button onClick={save} disabled={busy} className="btn-primary text-xs">
@@ -563,6 +574,14 @@ interface SubRoom {
   canMatchmakeInto: boolean;
   isSandbox: boolean;
   dataBlobName: string;
+  /** What the client is actually told to download: scene blob, else room
+   *  blob, else synthetic default — or '' for a baked Rec Room Original
+   *  with no blob enabled (scene geometry only, no Maker Pen / chips). */
+  effectiveBlobName: string;
+  isBakedOriginal: boolean;
+  /** No RoomScenes row exists yet (seeded baked originals); the entry
+   *  scene is synthesised on read and created by "Enable Maker Pen blob". */
+  isVirtual?: boolean;
 }
 
 // Per-sub-room player caps. Distinct from the room's own MaxCapacity, which is
@@ -576,6 +595,60 @@ function SubRoomsTab({ roomId, roomCapacity }: { roomId: number; roomCapacity: n
   const { data, loading, error, refresh } = useApi<SubRoom[]>(`/rooms/${roomId}/subrooms`);
   const [edits, setEdits] = useState<Record<number, string>>({});
   const [saving, setSaving] = useState<number | null>(null);
+  const [blobBusy, setBlobBusy] = useState<number | null>(null);
+  const [resetArmed, setResetArmed] = useState<number | null>(null);
+
+  // Baked Rec Room Originals ship with no data blob, so the client never
+  // runs its room-data path there (no Maker Pen, no CV2 chips, no saves).
+  // "Enable" stamps the synthetic default name the CDN already answers with
+  // the RRO-editable blob; "Reset" clears the pointers back to scene-only.
+  // Attach a real PersistedRoomData save (any client version) to a sub-room:
+  // the server rewrites it for this room (activity id, 2023 version clamp,
+  // drops output log / sub-room id / unknown fields; "basics" keeps only the
+  // game-role + game-rule objects and strips circuits).
+  const [uploadMode, setUploadMode] = useState<'full' | 'basics'>('basics');
+  const uploadBlob = async (sub: SubRoom, file: File) => {
+    setBlobBusy(sub.subRoomId);
+    try {
+      const fd = new FormData();
+      fd.append('file', file, file.name);
+      const res = await api<{ dataBlobName: string; summary: { viewsIn: number; viewsKept: number; versionIn: number; versionOut: number } }>(
+        `/rooms/${roomId}/subrooms/${sub.subRoomId}/blob/upload?mode=${uploadMode}`,
+        { method: 'POST', formData: fd, timeoutMs: 120000 },
+      );
+      toast.push(
+        `Uploaded ${res.dataBlobName}: ${res.summary.viewsKept}/${res.summary.viewsIn} objects kept, version ${res.summary.versionIn} → ${res.summary.versionOut}`,
+        'success',
+      );
+      refresh();
+    } catch (e) {
+      toast.push((e as Error).message, 'error');
+    } finally {
+      setBlobBusy(null);
+    }
+  };
+
+  const setBlob = async (sub: SubRoom, action: 'enable' | 'reset') => {
+    setBlobBusy(sub.subRoomId);
+    try {
+      const res = await api<{ effectiveBlobName: string; changed: boolean }>(
+        `/rooms/${roomId}/subrooms/${sub.subRoomId}/blob/${action}`,
+        { method: 'POST' },
+      );
+      toast.push(
+        action === 'enable'
+          ? `${sub.name || `Sub-room ${sub.subRoomId}`} now loads ${res.effectiveBlobName}`
+          : `${sub.name || `Sub-room ${sub.subRoomId}`} reset to the baked scene (no blob)`,
+        'success',
+      );
+      setResetArmed(null);
+      refresh();
+    } catch (e) {
+      toast.push((e as Error).message, 'error');
+    } finally {
+      setBlobBusy(null);
+    }
+  };
 
   const save = async (sub: SubRoom) => {
     const raw = edits[sub.subRoomId];
@@ -631,8 +704,71 @@ function SubRoomsTab({ roomId, roomCapacity }: { roomId: number; roomCapacity: n
                     {sub.isSandbox && <span className="badge-neutral">Sandbox</span>}
                     {!sub.canMatchmakeInto && <span className="badge-banned">No matchmaking</span>}
                   </div>
-                  {sub.dataBlobName && (
-                    <div className="text-xs text-ink-500 font-mono truncate mt-0.5">{sub.dataBlobName}</div>
+                  <div className="text-xs text-ink-500 font-mono truncate mt-0.5">
+                    {sub.effectiveBlobName
+                      ? sub.effectiveBlobName
+                      : sub.isBakedOriginal
+                        ? 'no data blob — baked scene only (no Maker Pen / chips)'
+                        : '(synthetic default blob)'}
+                  </div>
+                  {sub.isBakedOriginal && (
+                    <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                      <label className="text-xs text-ink-400">Upload save</label>
+                      <select
+                        value={uploadMode}
+                        onChange={e => setUploadMode(e.target.value as 'full' | 'basics')}
+                        className="input text-xs py-0.5 w-40"
+                        title="basics = keep only the game-role and game-rule objects and strip circuits (a newer CircuitsV2 graph is rejected by the 2023 client); full = keep every object"
+                      >
+                        <option value="basics">basics (roles + game rule)</option>
+                        <option value="full">full (every object)</option>
+                      </select>
+                      <input
+                        type="file"
+                        accept=".binpb,.room,.dat,.bin"
+                        disabled={blobBusy === sub.subRoomId}
+                        onChange={e => {
+                          const f = e.target.files?.[0];
+                          if (f) uploadBlob(sub, f);
+                          e.target.value = '';
+                        }}
+                        className="text-xs"
+                      />
+                    </div>
+                  )}
+                  {sub.isBakedOriginal && (
+                    <div className="flex items-center gap-2 mt-1.5">
+                      {!sub.dataBlobName ? (
+                        <button
+                          onClick={() => setBlob(sub, 'enable')}
+                          disabled={blobBusy === sub.subRoomId}
+                          className="btn-secondary text-xs"
+                          title="Serve a room data blob for this baked sub-room so Maker Pen, CV2 chips and saves work. The first in-game save replaces it with a real upload."
+                        >
+                          {blobBusy === sub.subRoomId ? 'Enabling…' : 'Enable Maker Pen blob'}
+                        </button>
+                      ) : resetArmed === sub.subRoomId ? (
+                        <>
+                          <span className="text-xs text-danger">Drops the blob pointer; saved blobs stay restorable.</span>
+                          <button
+                            onClick={() => setBlob(sub, 'reset')}
+                            disabled={blobBusy === sub.subRoomId}
+                            className="btn-danger text-xs"
+                          >
+                            {blobBusy === sub.subRoomId ? 'Resetting…' : 'Confirm reset'}
+                          </button>
+                          <button onClick={() => setResetArmed(null)} className="btn-secondary text-xs">Cancel</button>
+                        </>
+                      ) : (
+                        <button
+                          onClick={() => setResetArmed(sub.subRoomId)}
+                          className="btn-secondary text-xs"
+                          title="Go back to the baked scene with no data blob (escape hatch if a save broke the room)."
+                        >
+                          Reset to baked scene
+                        </button>
+                      )}
+                    </div>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
@@ -647,8 +783,9 @@ function SubRoomsTab({ roomId, roomCapacity }: { roomId: number; roomCapacity: n
                   />
                   <button
                     onClick={() => save(sub)}
-                    disabled={!dirty || saving === sub.subRoomId}
+                    disabled={!dirty || saving === sub.subRoomId || sub.isVirtual}
                     className="btn-primary text-xs"
+                    title={sub.isVirtual ? 'This room has no sub-room row yet — enable the blob first' : undefined}
                   >
                     {saving === sub.subRoomId ? 'Saving…' : 'Save'}
                   </button>
