@@ -69,8 +69,11 @@ pitfall in their Quest client notes.
 3. Image signing key configured (`ImageSignatureService`), as for PC.
 4. Build with `ServerHost=<apex>`, the Photon ids and region baked in, passing
    `-Obb` so you get a release folder (`DorkNet-<ver>.xapk` plus
-   `install.cmd`/`install.sh`). Players run the installer with the headset
-   plugged in; the app appears as **DorkNet** under Unknown Sources.
+   `install.cmd`/`install.sh`). Players install it from your site's
+   **Quest** page (`https://<apex>/quest`, Chrome or Edge over USB) or with the
+   installer scripts; the app appears as **DorkNet** under Unknown Sources.
+   Share the `.xapk` however you like: the page reads it from the player's own
+   disk, so your server never hosts game files.
 
 No server component is Quest-specific beyond the placeholder-platform-id
 handling above.

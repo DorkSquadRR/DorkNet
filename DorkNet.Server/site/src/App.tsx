@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router';
 import { Header } from './components/Header';
 import { Home } from './pages/Home';
@@ -8,6 +9,9 @@ import { PlayerProfile } from './pages/PlayerProfile';
 import { Rooms } from './pages/Rooms';
 import { Join } from './pages/Join';
 import { NotFound } from './pages/NotFound';
+
+// The Quest installer pulls in the WebUSB/ADB stack; load it only on /quest.
+const Quest = lazy(() => import('./pages/Quest').then((m) => ({ default: m.Quest })));
 
 export function App() {
   return (
@@ -22,6 +26,7 @@ export function App() {
           <Route path="/players/:id" element={<PlayerProfile />} />
           <Route path="/rooms" element={<Rooms />} />
           <Route path="/join" element={<Join />} />
+          <Route path="/quest" element={<Suspense fallback={null}><Quest /></Suspense>} />
           {/* Legacy paths from the vanilla-JS feed.localhost site */}
           <Route path="/p/:id" element={<RedirectPhoto />} />
           <Route path="/u/:id" element={<RedirectPlayer />} />
