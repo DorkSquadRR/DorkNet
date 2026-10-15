@@ -215,6 +215,42 @@ public sealed class OwnedAvatarItemsTests : IClassFixture<DorkNetServerFactory>
         }
     }
 
+    // Beard_Close: one of the client's defaultUnlockedVariants.
+    private const string DefaultItemGuid = "8d10cc78-6b00-45f3-affb-205e9cc5b03f";
+
+    [Fact]
+    public async Task Default_unlocked_items_are_owned_by_every_player()
+    {
+        // The client replaces its unlocked set with each list it downloads,
+        // so v4/items must carry the free default items or they show a price.
+        using var setup = ApiClient();
+        var player = await GameClientSessionFactory.CreateAsync(setup, _factory.ApexDomain);
+        using var client = ApiClient(player);
+
+        var items = await GetJsonAsync(client, "/api/avatar/v4/items");
+        var descs = items.EnumerateArray().Select(x => x.GetProperty("AvatarItemDesc").GetString()!).ToList();
+        Assert.Contains($"{DefaultItemGuid},,,", descs, StringComparer.OrdinalIgnoreCase);
+        // A default item the starter inventory also holds appears once.
+        Assert.Equal(descs.Count, descs.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        var ids = items.EnumerateArray().Select(x => x.GetProperty("AvatarItemId").GetInt32()).ToList();
+        Assert.Equal(ids.Count, ids.Distinct().Count());
+
+        var locked = await GetJsonAsync(client, $"/api/avatar/v1/lockeditems?avatarItemDescs={DefaultItemGuid},,,");
+        Assert.Equal(0, locked.GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Default_unlocked_endpoint_serves_defaults_before_login()
+    {
+        using var anonymous = ApiClient();
+        var items = await GetJsonAsync(anonymous, "/api/avatar/v1/defaultunlocked");
+        var descs = items.EnumerateArray().Select(x => x.GetProperty("AvatarItemDesc").GetString()!).ToList();
+        Assert.Contains($"{DefaultItemGuid},,,", descs, StringComparer.OrdinalIgnoreCase);
+        Assert.Equal(
+            DorkNet.Server.Controllers.API.Avatar.V4.AvatarItemsController.DefaultUnlockedGuids.Count,
+            descs.Count);
+    }
+
     private HttpClient ApiClient(GameClientSession? session = null)
     {
         var client = _factory.CreateClient(new() { AllowAutoRedirect = false });

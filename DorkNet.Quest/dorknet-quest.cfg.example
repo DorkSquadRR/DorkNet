@@ -1,0 +1,74 @@
+# DorkNet.Quest build configuration.
+#
+# Copy to dorknet-quest.cfg (git-ignored) and edit. scripts/build.ps1 bakes
+# these into libdorknet.so at compile time. Omit a key to keep the built-in
+# default. This same file can be pushed to
+#   /sdcard/Android/data/<PackageName>/files/dorknet-quest.cfg
+# to override on-device without a rebuild.
+
+# ---- deployment ----
+
+# The apex your DorkNet server is reachable at. The client's service hosts are
+# rewritten onto it: api.rec.net -> api.<ServerHost>, auth.rec.net ->
+# auth.<ServerHost>, ns.rec.net -> ns.<ServerHost>, and so on. The ns response
+# then supplies every other service URL. Your DNS must resolve each subdomain
+# (ns, api, auth, match, chat, cdn, config, ...) and the TLS cert must cover
+# them. No default -- required.
+#
+# For a server on DorkNet's hyphen host style (Domain:HostStyle = hyphen, e.g.
+# ns-dev.dork.sh), give a template instead: ServerHost = {service}-dev.dork.sh
+ServerHost = dork.sh
+
+# Android package name for the patched build, so it coexists with the store
+# app and uses its own OBB path. Keep this stable: Meta ties platform tokens to
+# package + signing cert, and the runtime-config path derives from it.
+PackageName = net.dorknet.RecRoom
+
+# Name shown in the headset library (Unknown Sources). Build-time only.
+AppName = DorkNet
+
+# ---- Meta (Oculus) platform ----
+
+# Your registered Meta app id. Set it for the Meta build: real entitlement and
+# Meta login run against an app your players own. Leave BLANK for the
+# no-Meta-account build -- the platform entitlement/login path is steered to the
+# client's own username/password screen. Blank sends platform id 1 from every
+# headset; DorkNet's server treats that as a placeholder and keys accounts by
+# device id (see PlayerService.IsPlaceholderPlatformId), so players are NOT
+# merged. Never add a server rule that accepts platform id 1 as an identity.
+OculusAppId =
+
+# ---- Photon ----
+
+# Your own Photon app ids (dashboard.photonengine.com). Rec Room's originals
+# reject external clients. Leave an id blank to keep the client's own (dead)
+# value -- multiplayer will not connect until these are set. No defaults.
+PhotonAppId =
+PhotonVoiceAppId =
+PhotonChatAppId =
+
+# Optional self-hosted Photon name server (blank / 0 = Photon Cloud).
+PhotonNameServer =
+PhotonNameServerPort = 0
+
+# Photon Cloud region. Must match the PC clients' PhotonCloudRegion (ClientMod
+# config), or Quest and PC players connect to different masters and never meet.
+PhotonRegion = us
+
+# ---- client behaviour ----
+
+# Accept the self-hosted TLS chain and skip Rec Room's certificate pinning.
+# Required for a self-hosted server; turn off only if you front it with a cert
+# chain the client's bundled CA set trusts AND you reproduce Rec Room's pins.
+EnableTlsTrustBypass = true
+
+# Accept image Content-Signatures the server signs with its own key.
+AcceptUnsignedImages = true
+
+# ---- diagnostics (adb logcat -s DORKNET) ----
+
+LogHttp = true
+# WARNING: Debug logs request/response BODIES, including auth tokens and
+# passwords. Leave off except when debugging, and don't share the logs.
+Debug = false
+LogHttpBodyMax = 10000

@@ -1,0 +1,116 @@
+{
+  "versionName": "20230317",
+  "versionCode": "2128210",
+  "il2cppSha256": "842a496cc59948af03fe435e0abe0a173cbf2a6bf439be48096ad2b2c2dccbb9",
+  "hookBytes": 20,
+  "targets": {
+    "http_send_request": {
+      "rva": 108025384,
+      "length": 456,
+      "fingerprint": "0x8cd03afe41eecdef",
+      "why": "Rewrites <service>.rec.net hosts to <service>.<ServerHost> before a request is queued."
+    },
+    "http_call_callback": {
+      "rva": 108061608,
+      "length": 424,
+      "fingerprint": "0x98ed61ac83527269",
+      "why": "Logs each finished request's status (and the body of non-2xx responses)."
+    },
+    "oculus_get_app_id": {
+      "rva": 166405008,
+      "length": 32,
+      "fingerprint": "0xaa5a50a8d4246c46",
+      "why": "Returns the operator's Meta app id when OculusAppId is set."
+    },
+    "oculus_get_mobile_app_id": {
+      "rva": 166380836,
+      "length": 32,
+      "fingerprint": "0x5f5d3bc64dedb8de",
+      "why": "Same as get_AppID; the Quest build reads this getter."
+    },
+    "photon_app_settings": {
+      "rva": 69268008,
+      "length": 196,
+      "fingerprint": "0xc8050d166579e43b",
+      "why": "Builds Photon.Realtime.AppSettings with Rec Room's hardcoded Realtime/Voice app ids (PC: same class+method). Postfixed to set the operator's ids."
+    },
+    "tls_unity_verify": {
+      "rva": 159789160,
+      "length": 884,
+      "fingerprint": "0xf8d4a696f15e6f0e",
+      "why": "Platform TLS trust decision (Mono's bundled CA set). Forced to success when TlsTrustBypass is on."
+    },
+    "tls_bc_notify_server_certificate": {
+      "rva": 103301824,
+      "length": 284,
+      "fingerprint": "0x7f061bfc843e881f",
+      "why": "BestHTTP BouncyCastle trust hook (PC ClientMod skips the same method). No-op when TlsTrustBypass is on."
+    },
+    "pin_nameserver": {
+      "rva": 96989180,
+      "length": 332,
+      "fingerprint": "0x659c928fe96e1008",
+      "why": "Name-server client's certificate callback: chain status + SPKI pin compare. Always accepted (pins never match a self-hosted server)."
+    },
+    "pin_https": {
+      "rva": 103249928,
+      "length": 1032,
+      "fingerprint": "0x943a238f04d54362",
+      "why": "SPKI pinning for every RecNet request; a miss reports NetworkCertificateMismatch through FPIBGPIAOBI. Always accepted."
+    },
+    "pin_bc_verifier": {
+      "rva": 82659376,
+      "length": 1128,
+      "fingerprint": "0x60415d1d29a7315d",
+      "why": "The same pin check as an ICertificateVerifyer for the BouncyCastle path. Always accepted."
+    },
+    "image_signature_verify": {
+      "rva": 97302848,
+      "length": 732,
+      "fingerprint": "0xe1549ef6f4691a33",
+      "why": "RSA-SHA1 check of image Content-Signature against Rec Room's baked public key. Accepted when AcceptUnsignedImages is on."
+    },
+    "hile_warning_callback": {
+      "rva": 75750004,
+      "length": 352,
+      "fingerprint": "0xccf510feeada40d9",
+      "why": "Cheat-warning dialog/quit callback. Skipped, as on PC."
+    },
+    "unknown_dll_callback": {
+      "rva": 57998052,
+      "length": 112,
+      "fingerprint": "0x84e1fed3a70e7560",
+      "why": "Unknown-library detection callback (the injected hook library is one). Skipped, as on PC (PC closure class is PNHDGEKCJCH)."
+    },
+    "file_hash_callback": {
+      "rva": 52872472,
+      "length": 1052,
+      "fingerprint": "0x03a8b6f1b373e600",
+      "why": "File-hash checker result callback (the APK is re-signed). Skipped, as on PC."
+    },
+    "toxmod_can_initialize": {
+      "rva": 55928080,
+      "length": 1040,
+      "fingerprint": "0xf72dd6f5dbb16216",
+      "why": "Third-party voice moderation service; forced false, as on PC."
+    },
+    "cheat_report": {
+      "rva": 106127656,
+      "length": 2248,
+      "fingerprint": "0x9c1e0ef53e5a3ec8",
+      "why": "Log-only: names any integrity report so a new one is visible in logcat."
+    },
+    "fatal_application_quit": {
+      "rva": 55748824,
+      "length": 348,
+      "fingerprint": "0x8cd03afe41eecdef",
+      "why": "Log-only: prints the quit reason and caller."
+    },
+    "try_application_quit": {
+      "rva": 55748412,
+      "length": 412,
+      "fingerprint": "0xb12b0044ac4f844f",
+      "why": "Log-only: prints the quit code and caller."
+    }
+  }
+}

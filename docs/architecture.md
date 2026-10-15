@@ -50,6 +50,7 @@ DorkNet.sln
 | `DorkNet.Services.Moderation` | Bug reporting, player reporting, sanitize, path-routed admin API, testcase routes | .NET 9 |
 | `DorkNet.Services.Web` | Public site, admin static host, same-origin admin browser API, feed static host, site API | .NET 9 |
 | `DorkNet.ClientMod` | MelonLoader 0.6.x IL2CPP mod — the client patcher, JSON config | .NET 6 |
+| `DorkNet.Quest` | native hook library + build scripts for the Meta Quest client | C++/arm64 |
 
 `ClientMod` applies the client-side patches needed to point the 2020
 watch at a DorkNet server: URI rewrite (`.rec.net` → configured apex),
@@ -58,6 +59,13 @@ MelonLoader 0.6.x and reads its settings from a JSON config under
 `MelonLoader/UserData/`. Opt-in extras (all off by default) live in the
 same config: Desktop Screen-Share FPS, RRO quest party size, and Rec
 Royale night mode (see the README and `recroom-2023-scene-moods.md`).
+
+`DorkNet.Quest` does the same jobs for the Meta Quest (Android/IL2CPP)
+2023.03.21 client, where there is no MelonLoader: one native library
+(`libdorknet.so`) is injected via a `DT_NEEDED` entry on `libmain.so`
+and installs arm64 inline hooks (host rewrite, Photon ids, TLS/pin and
+image-signature bypass, integrity-callback neutralisation). See
+[`quest.md`](quest.md).
 
 ---
 
