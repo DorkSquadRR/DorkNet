@@ -1191,6 +1191,32 @@ public class StoreService(DorkNetDbContext db, LevelService level, IConfiguratio
     /// id-lists (toptoday) resolve against the gift-drop cache.</summary>
     public static int PurchasableItemIdFor(StoreItemEntity i) => (int)(i.Id & 0x7fffffff);
 
+    /// <summary>Shop metadata for an avatar item, keyed by the exact
+    /// AvatarItemDesc a shop tile carries.</summary>
+    public sealed record AvatarItemStoreInfo(string FriendlyName, string Tooltip, int Rarity);
+
+    /// <summary>FriendlyName / Tooltip / Rarity of every avatar-item and
+    /// hair-dye shop tile, keyed by the same AvatarItemDesc
+    /// <see cref="BuildGiftDrop"/> sends (ordinal: colour-variant
+    /// combination ids are case-sensitive). The owned-items list uses it so
+    /// an item reads the same in the wardrobe as in the shop.</summary>
+    public static async Task<Dictionary<string, AvatarItemStoreInfo>> LoadAvatarItemStoreInfoAsync(DorkNetDbContext db)
+    {
+        var rows = await db.StoreItems.AsNoTracking()
+            .Select(i => new { i.Slug, i.DisplayName, i.Description, i.Category })
+            .ToListAsync();
+        var info = new Dictionary<string, AvatarItemStoreInfo>(StringComparer.Ordinal);
+        foreach (var row in rows)
+        {
+            string desc;
+            if (TryGetHairDyePayload(row.Slug, out _, out var hairColorGuid)) desc = hairColorGuid;
+            else if (!TryGetAvatarItemPayload(row.Slug, out _, out desc)) continue;
+            if (string.IsNullOrEmpty(desc)) continue;
+            info.TryAdd(desc, new AvatarItemStoreInfo(row.DisplayName ?? string.Empty, row.Description ?? string.Empty, MapRarity(row.Category)));
+        }
+        return info;
+    }
+
     /// <summary>GiftManager.GiftRarity wire values:
     /// None=-1, Common=0, Uncommon=10, Rare=20, Epic=30, Legendary=50.</summary>
     private static int MapRarity(string? category) => category?.ToLowerInvariant() switch

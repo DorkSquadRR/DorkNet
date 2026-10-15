@@ -115,10 +115,10 @@ public class AvatarItemsController(
         // reverts to the real per-player wardrobe below. Bounded by the same
         // maxItems ceiling so a future watch build can't be over-fed.
         if (await serverSettings.IsAllAvatarItemsOwnedEnabledAsync())
-            return Ok(BuildEntireCatalogOwned(maxItems));
+            return await WithStoreInfoAsync(BuildEntireCatalogOwned(maxItems));
 
         var pid = this.CurrentPlayerId();
-        if (pid is not long me) return Ok(BuildDefaultUnlocked(maxItems));
+        if (pid is not long me) return await WithStoreInfoAsync(BuildDefaultUnlocked(maxItems));
 
         var avatar = await db.Avatars
             .Where(a => a.PlayerId == me)
@@ -134,7 +134,7 @@ public class AvatarItemsController(
             .Where(slug => StoreService.TryGetHairDyePayload(slug, out _))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-        if (owned.Count == 0 && ownedHairDyes.Count == 0) return Ok(BuildDefaultUnlocked(maxItems));
+        if (owned.Count == 0 && ownedHairDyes.Count == 0) return await WithStoreInfoAsync(BuildDefaultUnlocked(maxItems));
 
         var catalog = _catalog.Value;
         var equipped = ParseEquippedItemGuids(avatar?.OutfitSelections);
@@ -226,7 +226,34 @@ public class AvatarItemsController(
                 IsBaseAvatarItem = false,
             });
         }
-        return Ok(result);
+        return await WithStoreInfoAsync(result);
+    }
+
+    /// <summary>Give each owned row the same FriendlyName, Tooltip and
+    /// Rarity its shop tile shows. The client keeps this list's metadata
+    /// per item, and the catalog dump only carries asset names (e.g.
+    /// "(Shirt_Winter)" for colour variants) with no rarity or tooltip, so
+    /// the owned list disagreed with the shop for most items. Rows with no
+    /// shop tile keep the catalog name. Catalog DTOs are shared, so matched
+    /// rows are copied, never mutated.</summary>
+    private async Task<List<UnlockedAvatarItemDto>> WithStoreInfoAsync(List<UnlockedAvatarItemDto> rows)
+    {
+        var info = await StoreService.LoadAvatarItemStoreInfoAsync(db);
+        if (info.Count == 0) return rows;
+        return rows.Select(r => info.TryGetValue(r.AvatarItemDesc, out var s)
+            ? new UnlockedAvatarItemDto
+            {
+                AvatarItemType = r.AvatarItemType,
+                AvatarItemDesc = r.AvatarItemDesc,
+                AvatarItemId = r.AvatarItemId,
+                PlatformMask = r.PlatformMask,
+                FriendlyName = string.IsNullOrWhiteSpace(s.FriendlyName) ? r.FriendlyName : s.FriendlyName,
+                Tooltip = s.Tooltip,
+                Rarity = s.Rarity,
+                TagList = r.TagList,
+                IsBaseAvatarItem = r.IsBaseAvatarItem,
+            }
+            : r).ToList();
     }
 
     /// <summary>The free items every player owns
@@ -379,8 +406,8 @@ public class AvatarItemsController(
             .Select(guid => catalog.TryGetValue(guid, out var item) ? item : null)
             .Where(item => item is not null)
             .Select(item => item!)
-            .ToArray();
-        return Ok(rows);
+            .ToList();
+        return Ok(await WithStoreInfoAsync(rows));
     }
 
     /// <summary>Per-OutfitType slot index → list of GUIDs in that slot.
