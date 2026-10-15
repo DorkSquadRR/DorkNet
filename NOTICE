@@ -47,6 +47,11 @@ Third-party components
   text is kept alongside the sources at
   DorkNet.Quest/src/third_party/And64InlineHook/LICENSE.
 
+  The public site's Quest installer page (DorkNet.Server/site, /quest)
+  bundles Tango (@yume-chan/adb, adb-daemon-webusb, adb-credential-web,
+  android-bin, stream-extra) by Simon Chan, under the MIT License
+  (https://github.com/yume-chan/ya-webadb).
+
 --------------------------------------------------------------------------
 
 Acknowledgements

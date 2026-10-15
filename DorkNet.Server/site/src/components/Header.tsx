@@ -8,6 +8,7 @@ const NAV = [
   { to: '/players', label: 'Players' },
   { to: '/rooms', label: 'Rooms' },
   { to: '/join', label: 'Join' },
+  { to: '/quest', label: 'Quest' },
 ];
 
 export function Header() {

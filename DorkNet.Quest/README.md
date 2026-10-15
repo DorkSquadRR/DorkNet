@@ -129,7 +129,18 @@ the running `libil2cpp.so`, so a table can never be applied to the wrong build.
 
 ## Install
 
-From a release folder, one command does everything (finds adb and the headset,
+**From the browser (easiest).** Open the **Quest** page of your DorkNet site
+(`https://<apex>/quest`) in Chrome or Edge on a computer, plug the headset in
+over USB, pick the `.xapk`, click **Connect**, accept "Allow USB debugging" in
+the headset, then **Install**. The page talks to the headset over WebUSB
+(Tango, `@yume-chan/adb`): it installs the APK, copies the OBB to its install
+path (skipped if an identical one is already there) and launches the app. The
+`.xapk` never leaves the player's computer; the server hosts no game files.
+Close SideQuest / Meta Quest Developer Hub, or run `adb kill-server`, first:
+only one program can hold the headset's USB connection. Firefox, Safari and
+phones don't support WebUSB.
+
+**From a release folder**, one command does everything (finds adb and the headset,
 installs the APK, copies the OBB to the right path, skips the OBB if it is
 already there, and launches the app):
 

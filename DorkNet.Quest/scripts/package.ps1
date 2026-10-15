@@ -150,7 +150,9 @@ $($manifest.name) $verName - Rec Room for DorkNet (Meta Quest)
 
 1. Turn on developer mode for your headset (Meta Horizon phone app), plug it
    in over USB and accept "Allow USB debugging" inside the headset.
-2. Install:
+2. Install. Easiest: open the Quest page of your DorkNet server's website
+   (https://<server>/quest) in Chrome or Edge, pick this .xapk and follow the
+   steps. Or use the scripts here:
      Windows:        double-click install.cmd
      macOS / Linux:  ./install.sh
    The installer needs adb (Android platform-tools) on PATH or in
