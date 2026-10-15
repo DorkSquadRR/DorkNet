@@ -208,8 +208,10 @@ public class KeepsakesController(DorkNetDbContext db, DomainConfig domain) : Con
     /// <c>DELETE api/keepsakes/{guid}</c> - <c>NCCLEJPIABA.JBKENCNIEPA(System.Guid)</c> builds
     /// <c>String.Format("{0}/{1}", "api/keepsakes", guid)</c> and passes verb 4 (DELETE) to the
     /// BNDIAONDFFF ctor (NCCLEJPIABA.txt:1544, 1687-1698 - <c>Move rdx, 4</c>). Its return type is
-    /// the non-generic <c>LDGADANDBIO</c> promise, so no response body is deserialised; a bare 200
-    /// is enough. Client-side the tool refuses unless the caller is at least a room co-owner
+    /// the non-generic <c>LDGADANDBIO</c> promise, but that promise comes from
+    /// <c>BFDGEKKNAPB.PEFKBAEAOPD</c> (ExpandRecNetResult) — the body IS parsed, as a
+    /// <c>{success,error}</c> RecNetResult, and an empty 200 null-derefs into a failed delete.
+    /// See <see cref="RecNetResults"/>. Client-side the tool refuses unless the caller is at least a room co-owner
     /// ("Must be at least a room co-owner to modify keepsakes.",
     /// RecRoom.Keepsakes.Runtime/PDFJLLECNBE.txt:3363), which we re-check server-side.
     /// </summary>
@@ -235,7 +237,7 @@ public class KeepsakesController(DorkNetDbContext db, DomainConfig domain) : Con
         db.Keepsakes.RemoveRange(orphanedCollections
             .Where(k => TryParseCollectionKey(k.EventKey, out _, out var id) && id == keepsakeInstanceId));
         await db.SaveChangesAsync();
-        return Ok();
+        return RecNetResults.Ok();
     }
 
     /// <summary>

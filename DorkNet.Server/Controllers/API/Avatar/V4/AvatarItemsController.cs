@@ -173,7 +173,12 @@ public class AvatarItemsController(
                 {
                     AvatarItemType = item.AvatarItemType,
                     AvatarItemDesc = ToWatchDesc(entry.FullDesc),
-                    AvatarItemId = item.AvatarItemId,
+                    // Hash the FULL desc, as the toggle-on path does: a
+                    // player can own the base item and several colorways of
+                    // it at once (entries dedupe by FullDesc), and reusing the
+                    // base id made them collide in the client's id-keyed
+                    // wardrobe.
+                    AvatarItemId = StableAvatarItemIdFull(ToWatchDesc(entry.FullDesc)),
                     PlatformMask = item.PlatformMask,
                     FriendlyName = item.FriendlyName,
                     Tooltip = item.Tooltip,
@@ -328,20 +333,19 @@ public class AvatarItemsController(
                 owned.Add(guid);
         }
 
+        // The client parses this as List<IFNGBPJGINL> — the SAME element as
+        // v4/items (FFFIMAGLKEG.txt:3222-3465, NBLIDNCEELM), read by
+        // CLIANCNHNIE which registers TagList / AvatarItemId /
+        // IsBaseAvatarItem too (CLIANCNHNIE.txt). The old 5-key subset left
+        // every locked row at AvatarItemId 0 with a null TagList, so ship
+        // the full catalog DTO.
         var catalog = _catalog.Value.Items;
         var rows = requested
             .Where(guid => !owned.Contains(guid))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Select(guid => catalog.TryGetValue(guid, out var item) ? item : null)
             .Where(item => item is not null)
-            .Select(item => new
-            {
-                item!.AvatarItemType,
-                item.AvatarItemDesc,
-                item.FriendlyName,
-                item.Tooltip,
-                item.Rarity,
-            })
+            .Select(item => item!)
             .ToArray();
         return Ok(rows);
     }
@@ -561,9 +565,8 @@ public class AvatarItemsController(
     /// <summary>Stable, deterministic, non-zero 31-bit id for an owned
     /// avatar item, derived from its base GUID (FNV-1a). The 2023 client
     /// keys the wardrobe by <c>AvatarItemId</c>, so it must be unique per
-    /// item and stable across restarts. Colored variants reuse their base
-    /// item's id (a player owns the base OR a variant, never both in the
-    /// list), so no collision.</summary>
+    /// item and stable across restarts. Colored variants must NOT use this — a player can own the base and
+    /// several colorways together; see <see cref="StableAvatarItemIdFull"/>.</summary>
     public static int StableAvatarItemId(string? avatarItemDescOrGuid)
     {
         var guid = (avatarItemDescOrGuid ?? string.Empty).Split(',')[0];

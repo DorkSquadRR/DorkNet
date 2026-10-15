@@ -523,3 +523,45 @@ POST	thread/{0}/snooze	social-clubs-chat
 GET	unity_assets/{0}/{1}/{2}	inventions-media
 GET	voice/config	moderation-safety
 GET	voice/requiresModeration	moderation-safety
+# Requests the plain route-literal sweep missed. Each verified in the ISIL:
+#  - leading-slash literals (RecNet.Runtime): LCOCDKINDMN_NestedType_CIPKPLFLIPC.txt:218,
+#    PBOGNAPEBAI_NestedType_JKNCNOHGPHK.txt:251 (GET under 100 ids, POST at 100+),
+#    NHILNDLLLHH.txt:329/801, OKOOJMAOKFE.txt:561, MNANGNGKKDA_NestedType_JAMKPNKPJPD.txt:179
+#  - Assembly-CSharp CDN fetch: JFDPIJFDHAD.txt:1432 (/sigs/<id>, boot file-signature check)
+#  - DELETE subscription/{0}: IKMMOCKDKAF.txt LPFOPPHGDHG (verb 4)
+#  - account/me/{field}: composed at runtime by OPMAPIOEIFG.OBAGJBBIFGB("account/me/" + field);
+#    verbs from each caller (username/displayname/bio/birthday/emoji/personalpronouns/identityflags/bannerimage PUT=3,
+#    email/phone/confirmphone POST=2).
+GET	api/playerReputation/v2/bulk	identity-account
+POST	api/playerReputation/v2/bulk	identity-account
+GET	api/players/v2/progression/bulk	identity-account
+POST	api/players/v2/progression/bulk	identity-account
+GET	strings	config-telemetry
+GET	config/{0}	config-telemetry
+GET	data/{0}	config-telemetry
+GET	sigs/{0}	config-telemetry
+DELETE	subscription/{0}	commerce-subscription
+PUT	account/me/username	identity-account
+PUT	account/me/displayname	identity-account
+PUT	account/me/bio	identity-account
+PUT	account/me/birthday	identity-account
+POST	account/me/email	identity-account
+POST	account/me/phone	identity-account
+PUT	account/me/emoji	identity-account
+PUT	account/me/personalpronouns	identity-account
+PUT	account/me/identityflags	identity-account
+PUT	account/me/bannerimage	identity-account
+POST	account/me/confirmphone	identity-account
+# Routes composed from a base literal plus a format/segment (BPAIBFBKKCN.txt:51-53, HPEBLAHNBLC.txt:38-40,
+# and the LPPEFJMCJFN URL builder in LINKIECPDML.txt:677-737).
+GET	api/itemWishlists/v1/wishlist/me	avatar-inventory
+GET	api/itemWishlists/v1/wishlist/{0}	avatar-inventory
+PUT	api/itemWishlists/v1/wishlist/me/{0}	avatar-inventory
+DELETE	api/itemWishlists/v1/wishlist/me/{0}	avatar-inventory
+GET	api/roomEarningsDistributions/v1/earningsDistribution/{0}	progression-misc
+GET	api/incentivizedreferrals/referrals	progression-misc
+# Contact lookup (OPMAPIOEIFG.txt:11590-11620) and composed paths (FFFIMAGLKEG.txt:137, NOGJJIIENIL.txt:29).
+POST	account/bulk/email	identity-account
+POST	account/bulk/phone	identity-account
+POST	api/avatar/v2/gifts/consume	avatar-inventory
+GET	video/{0}	config-telemetry

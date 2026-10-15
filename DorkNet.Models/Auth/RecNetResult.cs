@@ -88,6 +88,36 @@ public class RecNetAccount
     // Missing → LitJson throws and 2020.12 surfaces "Malformed Response".
     [JsonPropertyName("createdAt")]
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    // 2023-03-21 account reader (RecNet.Runtime CICAKEDCJLA / MJKDDBKGNOP /
+    // AEGCKMKICFG) registers these keys in three casings each, e.g.
+    // "DisplayEmoji"/"displayEmoji"/"displayemoji" (CICAKEDCJLA.txt:1398-1550).
+    // Missing keys default on the client, which is why profile emoji,
+    // banner, pronouns and identity flags never rendered for anyone.
+    private string displayEmoji = string.Empty;
+    private string bannerImage = string.Empty;
+
+    [JsonPropertyName("displayEmoji")]
+    public string DisplayEmoji
+    {
+        get => displayEmoji;
+        set => displayEmoji = value ?? string.Empty;
+    }
+
+    [JsonPropertyName("bannerImage")]
+    public string BannerImage
+    {
+        get => bannerImage;
+        set => bannerImage = value ?? string.Empty;
+    }
+
+    /// <summary>Pronoun flags enum, serialized as its Int32 value.</summary>
+    [JsonPropertyName("personalPronouns")]
+    public int PersonalPronouns { get; set; }
+
+    /// <summary>Identity flags enum, serialized as its Int32 value.</summary>
+    [JsonPropertyName("identityFlags")]
+    public int IdentityFlags { get; set; }
 }
 
 /// <summary>
@@ -112,6 +142,13 @@ public class RecNetSelfAccount : RecNetAccount
 
     [JsonPropertyName("parentAccountId")]
     public int? ParentAccountId { get; set; } = null;
+
+    // 2023 self-account reader key (CICAKEDCJLA.txt:1310). An absent key
+    // defaults to 0, which the settings UI renders as "no username changes
+    // left". DorkNet does not rate-limit username changes, so report a
+    // generous allowance.
+    [JsonPropertyName("availableUsernameChanges")]
+    public int AvailableUsernameChanges { get; set; } = 99;
 }
 
 /// <summary>

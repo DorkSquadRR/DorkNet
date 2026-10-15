@@ -50,7 +50,18 @@ public class AvatarGiftsController(
         return Ok(rows.Select(ToWire));
     }
 
-    public sealed record GenerateGiftRequest(int? GiftContext, bool? IsGameGift, int? AlternateGiftContext, string? Message);
+    /// <summary>Body keys are the client's AFGEDDANEKP param literals
+    /// (GiftContext / IsGameGift / AlternateGiftContext / Message). A class
+    /// with settable properties, not a positional record, because
+    /// <see cref="Binding.FormOrJsonModelBinder"/> constructs it empty and
+    /// fills it.</summary>
+    public sealed class GenerateGiftRequest
+    {
+        public int? GiftContext { get; set; }
+        public bool? IsGameGift { get; set; }
+        public int? AlternateGiftContext { get; set; }
+        public string? Message { get; set; }
+    }
 
     /// <summary>POST <c>api/avatar/v2/gifts/generate</c> — the end-of-
     /// activity gift box (chest). For a game/quest gift (IsGameGift) the
@@ -64,8 +75,13 @@ public class AvatarGiftsController(
     // POST 404'd, breaking reward chests on that path). Same request body.
     [HttpPost("api/avatar/v2/gifts/generate")]
     [HttpPost("api/avatar/v3/gifts/generate")]
+    // The client adds each field with AFGEDDANEKP (FFFIMAGLKEG.txt:1930-2013,
+    // POST = ordinal 2), which goes out form-urlencoded: a live trace showed
+    // `GiftContext=12000&IsGameGift=True&Message=…` answered 415 while this
+    // was [FromBody]. The form-or-JSON binder accepts either encoding.
     [Consumes("application/json", "application/x-www-form-urlencoded", "multipart/form-data")]
-    public async Task<IActionResult> Generate([FromBody] GenerateGiftRequest? req)
+    public async Task<IActionResult> Generate(
+        [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] GenerateGiftRequest? req)
     {
         var pid = this.RequireCurrentPlayerId();
         var isGameGift = req?.IsGameGift ?? false;

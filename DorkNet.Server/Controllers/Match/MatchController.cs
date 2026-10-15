@@ -22,6 +22,7 @@ public class MatchController(
     PlayerPresenceService presence,
     PrivateInstanceService privateInstances,
     JoinTimeoutService joinTimeouts,
+    PresenceBroadcastService presenceFanout,
     RoomService rooms,
     DorkNetDbContext db,
     ILogger<MatchController> logger) : ControllerBase
@@ -67,6 +68,12 @@ public class MatchController(
                     completed.Value.TargetRoom.Name,
                     completed.Value.TargetRoom.RoomInstanceId,
                     completed.Value.DeferPresenceCommit);
+                // A deferred join (matchmake/dorm, private-instance hop)
+                // commits HERE, not at matchmake time, so this is the only
+                // point friends can learn about the move. Immediate commits
+                // were already announced by /goto.
+                if (completed.Value.DeferPresenceCommit)
+                    await presenceFanout.PublishCurrentAsync(pid);
             }
             else
             {
@@ -88,36 +95,48 @@ public class MatchController(
         return Ok();
     }
 
+    /// <summary>POST <c>matchmake/none</c> — "leave room". The 2023 client's
+    /// only caller is TryGoToOfflineRoom
+    /// (RecNet.Runtime/RecNet/Matchmaking.txt:12677-13279): it has already
+    /// switched its own cached presence to the local offline instance
+    /// (RoomInstanceId -1) before posting this, and it discards the reply
+    /// (<c>&lt;TryGoToOfflineRoom&gt;b__119_0</c> returns a constant).
+    ///
+    /// So the player is now online in no room, and that is what presence must
+    /// say. This used to re-commit the previous room (or the dorm) instead:
+    /// the next heartbeat then answered with a room while the client held the
+    /// offline instance, the client logged "presence heartbeat response
+    /// indicates local presence is out-of-sync", cancelled its offline load
+    /// ("OnPlayerPresenceUpdate is cancelling room load for -1") and chased the
+    /// server's room — and friends kept seeing the room the player had left.
+    ///
+    /// A join still pending is abandoned too: the client only goes offline
+    /// after giving up on it (fallback chain after a Photon timeout), and
+    /// echoing its target from the heartbeat would pull the player back.</summary>
     [HttpPost("/matchmake/none")]
     public async Task<IActionResult> MatchmakeNone()
     {
         var pid = this.CurrentPlayerId() ?? 0;
         if (pid == 0) return Unauthorized();
 
+        var previous = presence.GetRoom(pid);
         var pending = joinTimeouts.GetPending(pid);
-        if (pending is { DeferPresenceCommit: true })
-        {
-            presence.MarkActive(pid);
-            logger.LogInformation(
-                "[matchmake-none] player={Player} has deferred pending room={Room} instance={Instance}; not committing presence",
-                pid,
-                pending.Value.TargetRoom.RoomId,
-                pending.Value.TargetRoom.RoomInstanceId);
-            return Ok(new MatchmakingResponseDto
-            {
-                ErrorCode = 0,
-                RoomInstance = pending.Value.TargetRoom,
-            });
-        }
-
-        var current = presence.GetRoom(pid) ?? await BuildDormRoomInstanceAsync(pid);
-        presence.SetRoom(pid, current);
+        joinTimeouts.Cancel(pid, "matchmake-none");
+        presence.SetNoRoom(pid);
         presence.MarkActive(pid);
-        logger.LogInformation("[matchmake-none] player={Player}", pid);
+        presence.EndBootDormGrace(pid);
+        logger.LogInformation(
+            "[matchmake-none] player={Player} left room={Room} instance={Instance} abandonedPending={Pending}; online with no room",
+            pid, previous?.RoomId, previous?.RoomInstanceId, pending?.TargetRoom.RoomInstanceId);
+
+        await presenceFanout.PublishCurrentAsync(pid);
+
+        // The client ignores this body; keep a well-formed instance in it so
+        // the shared MatchmakingResponse reader never sees a null object.
         return Ok(new MatchmakingResponseDto
         {
             ErrorCode = 0,
-            RoomInstance = current,
+            RoomInstance = previous ?? pending?.TargetRoom ?? await BuildDormRoomInstanceAsync(pid),
         });
     }
 

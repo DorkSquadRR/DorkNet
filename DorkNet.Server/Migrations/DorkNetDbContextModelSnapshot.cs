@@ -1819,6 +1819,10 @@ namespace DorkNet.Server.Migrations
                     b.Property<DateTime?>("BannedUntil")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("BannerImageName")
+                        .HasMaxLength(256)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Bio")
                         .IsRequired()
                         .HasMaxLength(512)
@@ -1842,6 +1846,11 @@ namespace DorkNet.Server.Migrations
                         .HasMaxLength(128)
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("DisplayEmoji")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("DisplayName")
                         .IsRequired()
                         .HasMaxLength(64)
@@ -1850,6 +1859,9 @@ namespace DorkNet.Server.Migrations
                     b.Property<string>("Email")
                         .HasMaxLength(256)
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("IdentityFlags")
+                        .HasColumnType("INTEGER");
 
                     b.Property<bool>("IsAdmin")
                         .HasColumnType("INTEGER");
@@ -1891,6 +1903,9 @@ namespace DorkNet.Server.Migrations
                     b.Property<string>("PasswordHash")
                         .HasMaxLength(128)
                         .HasColumnType("TEXT");
+
+                    b.Property<int>("PersonalPronouns")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("Phone")
                         .HasMaxLength(32)
@@ -3231,6 +3246,10 @@ namespace DorkNet.Server.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("CharadesSlotBindingsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("CircuitsV2LimitsJson")
                         .IsRequired()
                         .HasColumnType("TEXT");
 

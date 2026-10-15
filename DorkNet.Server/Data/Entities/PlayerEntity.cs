@@ -116,6 +116,29 @@ public class PlayerEntity
     [MaxLength(32)]
     public string? Phone { get; set; }
 
+    // ── 2023 profile fields ──────────────────────────────────────────────
+    // Written by PUT account/me/{emoji,bannerimage,personalpronouns,
+    // identityflags} and read back on every account DTO (account/me,
+    // account/{id}, account/bulk, search, AccountUpdate push) under the
+    // keys displayEmoji / bannerImage / personalPronouns / identityFlags.
+
+    /// <summary>Emoji shown beside the display name ("" = none).</summary>
+    [MaxLength(32)]
+    public string DisplayEmoji { get; set; } = string.Empty;
+
+    /// <summary>Profile banner image name (a storage image the player
+    /// already uploaded, e.g. one of their photos). Null = no banner.</summary>
+    [MaxLength(256)]
+    public string? BannerImageName { get; set; }
+
+    /// <summary>Pronoun bitmask (client flags enum: SheHer=1, HeHim=2,
+    /// TheyThem=4, ZeHir=8, ZeZir=16, XeXem=32).</summary>
+    public int PersonalPronouns { get; set; } = 0;
+
+    /// <summary>Identity-flag bitmask (client flags enum: LGBTQIA=1,
+    /// Transgender=2, Bisexual=4, …).</summary>
+    public int IdentityFlags { get; set; } = 0;
+
     // Navigation
     public AvatarEntity? Avatar { get; set; }
     public List<PlayerSettingEntity> Settings { get; set; } = [];

@@ -24,6 +24,7 @@ public class MatchPlayerController(
     RoomService rooms,
     PrivateInstanceService privateInstances,
     JoinTimeoutService joinTimeouts,
+    PresenceBroadcastService presenceFanout,
     IConfiguration config,
     DorkNetDbContext db,
     ILogger<MatchPlayerController> log) : ControllerBase
@@ -87,13 +88,20 @@ public class MatchPlayerController(
     /// <summary>
     /// POST /player/logout — fires when the client gives up on a session
     /// (e.g. Photon connection couldn't be established, client aborts).
-    /// Clear the cached presence so the next /goto starts fresh.
+    /// Clear the cached presence so the next /goto starts fresh, and tell
+    /// friends right away — otherwise they keep seeing the player in their
+    /// last room until a bulk poll happens to notice.
     /// </summary>
     [HttpPost("/player/logout")]
-    public IActionResult PlayerLogout()
+    public async Task<IActionResult> PlayerLogout()
     {
         var playerId = TryGetCurrentPlayerId();
-        if (playerId != 0) presence.Clear(playerId);
+        if (playerId != 0)
+        {
+            joinTimeouts.Cancel(playerId, "logout");
+            presence.Clear(playerId);
+            await presenceFanout.PublishOfflineAsync(playerId);
+        }
         return Ok(new { success = true, error = "" });
     }
 
@@ -178,7 +186,15 @@ public class MatchPlayerController(
     public async Task<ActionResult<PresenceDto>> SetStatusVisibility([FromForm(Name = "statusVisibility")] int? value)
     {
         var playerId = TryGetCurrentPlayerId();
-        if (value is int v) await SetPlayerPrefAsync(playerId, PrefStatusVisibility, v.ToString());
+        if (value is int v)
+        {
+            await SetPlayerPrefAsync(playerId, PrefStatusVisibility, v.ToString());
+            // Friends only. The client does not apply this response to its own
+            // cached presence, and a PresenceUpdate about the local player runs
+            // the same apply-and-rejoin path as an out-of-sync heartbeat
+            // (Matchmaking.EGPABEDPEJO -> FLAOOBNJAAD, Matchmaking.txt:6917), so no self push.
+            await presenceFanout.PublishCurrentAsync(playerId);
+        }
         var room = await GetPresenceRoomForResponseAsync(playerId);
         return Ok(new PresenceDto
         {
@@ -212,7 +228,7 @@ public class MatchPlayerController(
     // back in the response and was then dropped, so the setting reverted on the
     // next heartbeat and never survived a restart. They live in PlayerSettings
     // (no schema change needed) and are read back wherever presence is built.
-    private const string PrefStatusVisibility = "pref:statusVisibility";
+    private const string PrefStatusVisibility = PresenceBroadcastService.StatusVisibilityPrefKey;
     private const string PrefVrMovementMode   = "pref:vrMovementMode";
     private const string PrefAvoidJuniors     = "pref:avoidJuniors";
 
@@ -395,6 +411,21 @@ public class MatchPlayerController(
 
         if (room is null)
         {
+            // The player went to the offline room (matchmake/none). Their
+            // client now holds RoomInstanceId -1, which the heartbeat compare
+            // treats as "no room" (HCHDEHIGEBE.GIICPDHJOOH, sign bit of the id;
+            // RecNet.Runtime/RecNet/Matchmaking.txt:18415-18437) and is only in
+            // sync with a null roomInstance. The dorm fallback below would
+            // read as out-of-sync and drag the player out of the offline room.
+            if (presence.IsInNoRoom(playerId))
+            {
+                presence.TouchNoRoom(playerId);
+                log.LogInformation(
+                    "[player-heartbeat] player={PlayerId} online in no room (left via matchmake/none); returning null roomInstance",
+                    playerId);
+                return null;
+            }
+
             if (presence.IsBootDormGraceActive(playerId))
             {
                 log.LogInformation(
@@ -426,6 +457,7 @@ public class MatchPlayerController(
                     playerId, fallback.RoomId, fallback.DataBlob);
                 presence.SetRoom(playerId, fallback);
                 presence.MarkActive(playerId);
+                await presenceFanout.PublishCurrentAsync(playerId);
                 return fallback;
             }
             log.LogInformation("[player-heartbeat] player={PlayerId} room=null", playerId);
