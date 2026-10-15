@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router';
 import { get } from '../lib/api';
 import type { SitePlayerCard } from '../lib/types';
 import { PlayerAvatar } from '../components/PlayerAvatar';

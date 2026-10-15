@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router';
 import { get } from '../lib/api';
 import type { SitePhoto, SitePlayerDetail, SiteRoom } from '../lib/types';
 import { PlayerAvatar } from '../components/PlayerAvatar';
