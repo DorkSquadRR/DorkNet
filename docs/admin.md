@@ -139,6 +139,45 @@ in S3 is modified. Toggle endpoint:
 `{"Disabled": bool}`. Clamped responses are served with a 60s edge TTL so
 flipping the toggle lands within a minute.
 
+## CircuitsV2 limits (`/settings`)
+
+`ServerSettingsEntity.CircuitsV2LimitsJson` backs the
+`UGC.CircuitsV2.Limit.*` gameconfig keys the client reads into
+`RecRoom.CircuitsV2.Config.LimitConfig`. The panel's headline setting is
+the network budget: retail allows a circuit **5 RPCs per frame** and
+**1024 bytes per 60 frames**, and silently **drops** every send past
+that, which is the usual cause of a busy CV2 room appearing to desync.
+DorkNet ships both budgets at 1,000,000,000.
+
+Two things about this are counter-intuitive enough to be worth stating:
+
+- The budgets are spent over a rolling window measured in **frames**, so
+  widening a window makes the limit *stricter*, not looser. Raise the
+  budget, not the window.
+- The **byte** budget is checked before the **RPC** budget, so raising
+  `Rpcs` on its own leaves circuits blocked. Both have to move together.
+- `InkPerChip` is a **cost** charged against a 30000-ink room cap that is
+  hard-coded in the client, so lowering it is what gives circuits more
+  room. DorkNet ships it at 0.
+
+The room-size limits ship at about 10x retail: Compute 500000, Chips
+30000, CloudValues 1000, and UnculledChips/VisibleChips 3000.
+CloudValuesAutosaveSeconds stays at 300.
+
+Values are clamped on save, and most of the clamps are crash guards
+rather than taste. `Rpcs` of 0 divides by zero in the client's CV2 debug
+subscreen. A time window allocates one array slot per frame, so an
+unbounded window is an out-of-memory kill at circuit init. Chips sets
+the size of four list preallocations. InkPerChip × CloudValues is an
+unchecked int multiply. Compute is the client's only runaway-loop
+guard, so it has to stay finite. Full
+reasoning and the disassembly it came from are in
+`docs/recroom-2023-circuitsv2-limits.md`.
+
+Endpoints: `GET`/`POST api/admin/v1/settings/circuits-limits`. The client
+builds its rate limiter once when circuits start, so **players must
+rejoin their room** before a change takes effect.
+
 ## Per-sub-room max players (`/rooms` → room detail)
 
 Player caps are two separate settings, and conflating them is the easy
@@ -178,6 +217,124 @@ keeps the two settings from disagreeing about what is a legal value.
 Enforcement caveat carried over from `RoomEntity.MaxCapacity`: this is the
 advertised cap. The client never sets Photon `RoomOptions.MaxPlayers`, so
 hard enforcement still needs a ClientMod Photon patch.
+
+## RRO room data blob — Maker Pen and chips in a Rec Room Original (`/rooms` → room detail → Sub-rooms)
+
+Baked Rec Room Originals (Rec Royale, Paintball, Laser Tag, …) are seeded
+with an empty `RoomSceneEntity.DataBlobName` and empty
+`RoomEntity.CurrentDataBlobName`. Every details builder and matchmaking
+resolver (`RoomsController.CurrentOrSyntheticDataBlobName`,
+`GoToController.ResolveInitialDataBlobAsync`,
+`MatchPlayerController`) turns that into an empty `DataBlob`, and the 2023
+client reads an empty blob name as "this room has no room data": it skips
+the persistence download entirely, so there are no room roles (no Maker
+Pen despite the CDN's RRO role overlay), no CV2 room-settings chips, no
+room mood engine and no saves. Real Rec Room served these rooms a blob —
+Rec Royale's game-rule chip (`RecRoyaleSolos_GameRuleWrapperCircuit` /
+`RecRoyaleSquads_GameRuleWrapperCircuit`, prefabs in `resources.assets`)
+is delivered that way; the Frontier scene has no baked game rule.
+
+The Sub-rooms tab shows, per sub-room, the blob the client will actually
+be told to download (`effectiveBlobName`) and, for baked originals, two
+actions:
+
+- **Enable Maker Pen blob** — `POST api/admin/v1/rooms/{id}/subrooms/{subRoomId}/blob/enable`.
+  Stamps the synthetic default name (`room_{id}_dorknet_v8.dat` for the
+  entry scene, `room_{id}_dorknet_v8_sub{n}.dat` otherwise) on the scene
+  and, for sub-room 0, on the room. No resolver changes are involved: they
+  already return a non-empty name verbatim, and `CdnController` already
+  answers that name for AG rooms with the RRO-editable blob (permissive
+  room roles, no objects) while nothing is saved. `IsRRO` is derived from
+  `IsAGRoom`, so the client keeps loading the baked map and only
+  additionally fetches the blob. Idempotent; a no-op on a sub-room that
+  already has a blob. Seeded originals such as Rec Royale have **no
+  `RoomScenes` row at all** ("Scenes 0"); the list synthesises a virtual
+  "Home" entry (`isVirtual: true`, max players = room capacity) and enable
+  creates the real row with the game-side defaults
+  (`RoomsController.GetOrCreateSceneForMutationAsync`).
+  What the CDN hands back for that name while nothing is saved is a
+  **per-room stub** built by `RoomDataBlobService.BuildRroEditableBlob`:
+  the skeleton of a real save (Rec Center's `room_100_v1.dat` was the
+  reference) — `version` 16 (the client's ceiling; the old roles-only stub
+  was stamped 19 and the client fetched it and silently loaded the room
+  with no roles, i.e. no Maker Pen), `activity_id` = the room's
+  `LocationReplicationId`, `last_save_time`, empty connectable graph /
+  object model, scene settings and the four `room_mood_*` blocks, plus the
+  permissive role collection. The miss path now runs the same 2023
+  version clamp as the S3-hit path. It also carries the room's own three
+  **game-role objects** (a default role named after the room, plus the
+  built-in "In-Game" and "Eliminated" roles, well-known GUIDs shared by
+  every room save — Rec Center and Stunt Runner both have exactly these).
+  The 2023 client grants Maker Pen off the player's *game* role
+  (`ICreatorRole.CreatorRoleCanUseMakerPen` on `GameRole`), so a blob with
+  no role objects leaves even a co-owner with nothing to hold — that was
+  the second reason "enable + co-owner" still showed no Maker Pen. The
+  default role sets `can_use_maker_pen` to true, matching the permissive
+  room-role overlay; the built-in roles mirror the reference saves.
+  For the two Rec Royale rooms the stub also carries the room's
+  **game-rule chip** (`RecRoyaleSolos_GameRuleWrapperCircuit` prefab id
+  `983db81a…`, `RecRoyaleSquads_…` `857f7500…`, read from the client's
+  spawnable-tool table; a saved Squads chip is header + prefab id + tag +
+  node id + an empty wrapper payload), so the match logic exists on first
+  join without anyone spawning it by hand.
+- **Upload save** — `POST api/admin/v1/rooms/{id}/subrooms/{subRoomId}/blob/upload?mode=full|basics`,
+  multipart `file` = a real `PersistedRoomData` save from ANY client
+  version (`.binpb` / `.room` / `.dat`, e.g. a RecNet export of a custom
+  Rec Royale room). The server rewrites it for this room
+  (`RoomDataBlobService.PrepareUploadedRoomBlob`): `activity_id` → the
+  room's `LocationReplicationId`, drops `output_log`, `sub_room_id` and
+  every field the 2023 schema doesn't know, clamps the header versions to
+  the 2023 maxima, and in `basics` mode keeps only the game-role (field 50)
+  and game-rule (fields 40/41) objects while stripping the circuit payloads
+  (`circuit_data`, connectable graph, `circuit_v2_data` — a newer
+  CircuitsV2 graph is rejected by the client's own CV2 version gate no
+  matter what). Stored under a fresh `room_{id}_upload_*.dat`, recorded in
+  `RoomDataBlobs`, and the sub-room (and room, for sub-room 0) is pointed
+  at it. On serve the CDN applies the RRO role overlay and clamp exactly
+  as for Rec Center's saved blob. Response carries a `summary`
+  (`viewsIn/viewsKept/roleViews/gameRuleViews/versionIn/versionOut`).
+- **Reset to baked scene** — `POST api/admin/v1/rooms/{id}/subrooms/{subRoomId}/blob/reset`.
+  Clears both pointers. This is the escape hatch if a save left the room
+  unplayable. Saved blobs stay in `RoomDataBlobs`, so the in-game restore
+  list can bring one back later.
+
+Both are audited (`enable_subroom_blob`, `reset_subroom_blob`). Who can
+then save the room in game is the normal rule in `SaveDataCore`: owner,
+any admin, or an accepted co-owner (`RoomRoles.Role == 0`). Grant a
+co-owner role from the Roles tab if a non-admin should be able to save.
+
+Procedure that makes Rec Royale playable AND editable:
+
+1. Enable the blob on the Solos room's sub-room 0 (and the Squads room's).
+2. Join as an admin; the Maker Pen is available. Spawn the room's game-rule
+   chip (`RecRoyaleSolos_GameRuleWrapperCircuit` in Solos,
+   `RecRoyaleSquads_GameRuleWrapperCircuit` in Squads) — via the palette's
+   Game Rules section, or the debug console's `DebugSpawnTool` if it is not
+   listed — then save. Without that chip there is no `BattleRoyaleManager`
+   in the scene and the match never starts.
+3. From then on the saved blob (with the game-rule chip and whatever
+   room-settings chips were placed) is what everyone loads. If a save
+   breaks the room, Reset to baked scene.
+
+Tests: `RroRoomBlobTests`.
+
+### Why Rec Royale still has no Maker Pen after all of the above
+
+The Maker Pen permission check (`AGMBHDNGOEH.IJEIEBGJJLB`) first runs a
+room precondition (`LALJEMHEIBH`) that, via `MLKAFHHHEGA.GHPIBJPNOFF` →
+`PNPLLCBBMJP.JGPBNEHFLJA`, looks the current room up in
+`AGRoomRuntimeConfig` — a table **baked into the client's
+`resources.assets`** — and returns a per-original boolean. Rec Center and
+Stunt Runner allow creation there; Rec Royale does not. No blob, role or
+server response changes that table, and it is consulted only for rooms the
+client considers originals (`IsRRO` = our `IsAGRoom`).
+
+Server-side experiment: clone Rec Royale, flip the clone's **Rec Room
+Original (IsRRO)** checkbox off on the General tab
+(`rooms/{id}/props` `IsAGRoom: false`), upload a real save to it, join. If
+the client still loads the Frontier scene for a non-original, Rec Royale
+becomes an editable template; if the scene fails to load, the table gate
+has to be bypassed client-side (ClientMod postfix on `GHPIBJPNOFF`).
 
 ## Test cases ↔ GitHub issues
 
