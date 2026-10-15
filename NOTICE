@@ -37,3 +37,21 @@ covered by AGPL §13 — you must:
      changes you have made relative to the upstream version.
 
 The full text of the AGPL-3.0 license is in LICENSE.
+
+--------------------------------------------------------------------------
+
+Third-party components
+
+  DorkNet.Quest vendors And64InlineHook (src/third_party/And64InlineHook/),
+  an arm64 inline-hook helper by Rprop, under the MIT License. Its license
+  text is kept alongside the sources at
+  DorkNet.Quest/src/third_party/And64InlineHook/LICENSE.
+
+--------------------------------------------------------------------------
+
+Acknowledgements
+
+  RecFlare (https://github.com/recflare, by djdevin) is an independent
+  open-source 2023 Rec Room server and Quest client. DorkNet.Quest follows
+  its native-hook loading approach, and its implementation served as a
+  cross-check for several 2023 wire contracts. No RecFlare code is included.
