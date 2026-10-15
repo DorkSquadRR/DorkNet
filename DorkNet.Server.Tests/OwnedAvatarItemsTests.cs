@@ -215,6 +215,48 @@ public sealed class OwnedAvatarItemsTests : IClassFixture<DorkNetServerFactory>
         }
     }
 
+    [Fact]
+    public async Task Owned_items_carry_the_same_name_tooltip_and_rarity_as_their_shop_tile()
+    {
+        using var setup = ApiClient();
+        var player = await GameClientSessionFactory.CreateAsync(setup, _factory.ApexDomain);
+
+        await using (var scope = _factory.Services.CreateAsyncScope())
+            await scope.ServiceProvider.GetRequiredService<DorkNet.Server.Services.ServerSettingsService>()
+                .SetAllAvatarItemsOwnedEnabledAsync(true);
+        try
+        {
+            using var client = ApiClient(player);
+            var owned = await GetJsonAsync(client, "/api/avatar/v4/items");
+            var shop = await GetJsonAsync(client, "/api/storefronts/v3/giftdropstore/3");
+
+            var tiles = new Dictionary<string, JsonElement>(StringComparer.Ordinal);
+            foreach (var row in shop.GetProperty("StoreItems").EnumerateArray())
+            {
+                var drop = row.GetProperty("GiftDrop");
+                var desc = drop.GetProperty("AvatarItemDesc").GetString();
+                if (!string.IsNullOrEmpty(desc)) tiles.TryAdd(desc, drop);
+            }
+
+            var matched = 0;
+            foreach (var item in owned.EnumerateArray())
+            {
+                if (!tiles.TryGetValue(item.GetProperty("AvatarItemDesc").GetString()!, out var tile)) continue;
+                matched++;
+                Assert.Equal(tile.GetProperty("FriendlyName").GetString(), item.GetProperty("FriendlyName").GetString());
+                Assert.Equal(tile.GetProperty("Tooltip").GetString(), item.GetProperty("Tooltip").GetString());
+                Assert.Equal(tile.GetProperty("Rarity").GetInt32(), item.GetProperty("Rarity").GetInt32());
+            }
+            Assert.True(matched > 0, "no owned item matched a shop tile");
+        }
+        finally
+        {
+            await using var scope = _factory.Services.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<DorkNet.Server.Services.ServerSettingsService>()
+                .SetAllAvatarItemsOwnedEnabledAsync(false);
+        }
+    }
+
     // Beard_Close: one of the client's defaultUnlockedVariants.
     private const string DefaultItemGuid = "8d10cc78-6b00-45f3-affb-205e9cc5b03f";
 
