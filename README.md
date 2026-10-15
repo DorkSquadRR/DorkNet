@@ -167,11 +167,14 @@ account. Each hook checks a fingerprint of its target first, so the patch
 refuses to apply to any other build.
 
 You supply your own extracted APK and OBB; no game binaries are
-redistributed. Build, install and troubleshooting steps are in
-[DorkNet.Quest/README.md](DorkNet.Quest/README.md), and the operator view
-is in [docs/quest.md](docs/quest.md).
+redistributed. The build can package itself as a `.xapk` that players
+install from the **Quest** page of your DorkNet site (`https://<apex>/quest`)
+in Chrome or Edge over USB, with no adb or SideQuest. Build, install and
+troubleshooting steps are in [DorkNet.Quest/README.md](DorkNet.Quest/README.md),
+and the operator view is in [docs/quest.md](docs/quest.md).
 
-> The Quest build is new and has not yet been tested on a headset.
+> Tested on a Quest 2: the hooks arm, the client reaches the server and the
+> browser installer works. Full in-game play has not been verified yet.
 
 ### Debugging (opt-in — `DorkNet.DebugMod`)
 
