@@ -59,7 +59,15 @@ namespace DorkNet.Server.Controllers.API.Avatar.V4;
 /// makes every store item appear owned. We instead intersect the
 /// caller's <see cref="AvatarEntity.InventoryJson"/> with the master
 /// catalog so the watch sees only items the player actually owns.
-/// Anonymous calls return [].
+///
+/// DEFAULT-UNLOCKED items: the 2023 client REPLACES its unlocked set with
+/// each list it downloads (OutfitManager.GFEIDFKKNMO clears field +0x70,
+/// then refills it; IsAvatarItemUnlocked is a HashSet lookup on that
+/// field). It never merges in its own baked default list, so the server
+/// must include the free starter items (avatar_item_lookup.json
+/// <c>default_unlocked_variants</c>) in every response. Without them a
+/// default item such as Beard Close showed a price in the outfit menu.
+/// Anonymous calls (<c>defaultunlocked</c> before login) get the defaults.
 /// </summary>
 [ApiController]
 public class AvatarItemsController(
@@ -110,7 +118,7 @@ public class AvatarItemsController(
             return Ok(BuildEntireCatalogOwned(maxItems));
 
         var pid = this.CurrentPlayerId();
-        if (pid is not long me) return Ok(new List<UnlockedAvatarItemDto>());
+        if (pid is not long me) return Ok(BuildDefaultUnlocked(maxItems));
 
         var avatar = await db.Avatars
             .Where(a => a.PlayerId == me)
@@ -126,7 +134,7 @@ public class AvatarItemsController(
             .Where(slug => StoreService.TryGetHairDyePayload(slug, out _))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
-        if (owned.Count == 0 && ownedHairDyes.Count == 0) return Ok(new List<UnlockedAvatarItemDto>());
+        if (owned.Count == 0 && ownedHairDyes.Count == 0) return Ok(BuildDefaultUnlocked(maxItems));
 
         var catalog = _catalog.Value;
         var equipped = ParseEquippedItemGuids(avatar?.OutfitSelections);
@@ -142,7 +150,10 @@ public class AvatarItemsController(
             .ThenByDescending(x => x.OriginalIndex)
             .Select(x => x.Entry);
 
-        var maxOutfitItems = Math.Max(0, maxItems - ownedHairDyes.Count);
+        // Room is kept for the default-unlocked items so a large wardrobe
+        // can't push them out (they'd show as buyable again).
+        var maxOutfitItems = Math.Max(0, maxItems - ownedHairDyes.Count - catalog.DefaultUnlocked.Count);
+        var emittedBase = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var perSlot = new Dictionary<int, int>();
         var result = new List<UnlockedAvatarItemDto>(Math.Min(owned.Count, maxItems));
         foreach (var entry in ordered)
@@ -162,6 +173,8 @@ public class AvatarItemsController(
             if (count >= maxPerSlot && !equipped.Contains(entry.BaseGuid)) continue;
 
             perSlot[slot] = count + 1;
+            if (string.Equals(entry.FullDesc, entry.BaseGuid, StringComparison.OrdinalIgnoreCase))
+                emittedBase.Add(entry.BaseGuid);
             // Preserve the bought color: a bare entry (FullDesc == BaseGuid)
             // emits the catalog DTO as-is ("{guid},,,"); a colored entry
             // overrides AvatarItemDesc with the stored swatch/mask desc so
@@ -189,6 +202,12 @@ public class AvatarItemsController(
             if (result.Count >= maxItems) break;
         }
 
+        foreach (var guid in catalog.DefaultUnlocked)
+        {
+            if (result.Count >= maxItems) break;
+            if (emittedBase.Add(guid)) result.Add(catalog.Items[guid]);
+        }
+
         foreach (var slug in ownedHairDyes)
         {
             if (result.Count >= maxItems) break;
@@ -208,6 +227,14 @@ public class AvatarItemsController(
             });
         }
         return Ok(result);
+    }
+
+    /// <summary>The free items every player owns
+    /// (<c>default_unlocked_variants</c>), capped at <paramref name="maxItems"/>.</summary>
+    private static List<UnlockedAvatarItemDto> BuildDefaultUnlocked(int maxItems)
+    {
+        var catalog = _catalog.Value;
+        return catalog.DefaultUnlocked.Take(maxItems).Select(g => catalog.Items[g]).ToList();
     }
 
     /// <summary>The full owned set when the "everyone owns all avatar
@@ -295,6 +322,10 @@ public class AvatarItemsController(
     /// data against the same safe list.</summary>
     public static IReadOnlySet<string> SafeGuids => _catalog.Value.SafeGuids;
 
+    /// <summary>Base GUIDs of the free items every player owns
+    /// (<c>default_unlocked_variants</c> in avatar_item_lookup.json).</summary>
+    public static IReadOnlyList<string> DefaultUnlockedGuids => _catalog.Value.DefaultUnlocked;
+
     /// <summary>Master catalog of all renderable items, keyed by
     /// GUID. Used by callers that need item metadata (slot type,
     /// name, hair-color flags) outside of the per-player ownership
@@ -332,6 +363,8 @@ public class AvatarItemsController(
             foreach (var guid in ParseInventory(invJson))
                 owned.Add(guid);
         }
+        // Free default items are owned by everyone, logged in or not.
+        owned.UnionWith(_catalog.Value.DefaultUnlocked);
 
         // The client parses this as List<IFNGBPJGINL> — the SAME element as
         // v4/items (FFFIMAGLKEG.txt:3222-3465, NBLIDNCEELM), read by
@@ -485,7 +518,8 @@ public class AvatarItemsController(
         IReadOnlyDictionary<string, UnlockedAvatarItemDto> Items,
         IReadOnlySet<string> SafeGuids,
         IReadOnlyDictionary<int, List<string>> BySlot,
-        IReadOnlyDictionary<string, int> SlotByGuid);
+        IReadOnlyDictionary<string, int> SlotByGuid,
+        IReadOnlyList<string> DefaultUnlocked);
 
     private static CatalogData LoadCatalog()
     {
@@ -512,7 +546,8 @@ public class AvatarItemsController(
             new Dictionary<string, UnlockedAvatarItemDto>(),
             new HashSet<string>(),
             new Dictionary<int, List<string>>(),
-            new Dictionary<string, int>());
+            new Dictionary<string, int>(),
+            Array.Empty<string>());
 
         using var fs = System.IO.File.OpenRead(path);
         var dump = JsonSerializer.Deserialize<LookupFile>(fs,
@@ -559,7 +594,16 @@ public class AvatarItemsController(
             slotByGuid[row.Guid] = row.OutfitType;
         }
 
-        return new CatalogData(items, safe, bySlot, slotByGuid);
+        // Default-unlocked entries are all plain base items (no swatch, mask
+        // or decal) in the March dump; only keep ones the catalog can render.
+        var defaults = dump.DefaultUnlockedVariants
+            .Where(v => string.IsNullOrEmpty(v.Swatch) && string.IsNullOrEmpty(v.Mask) && string.IsNullOrEmpty(v.Decal))
+            .Select(v => v.Item)
+            .Where(g => !string.IsNullOrEmpty(g) && items.ContainsKey(g))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        return new CatalogData(items, safe, bySlot, slotByGuid, defaults);
     }
 
     /// <summary>Stable, deterministic, non-zero 31-bit id for an owned
@@ -621,6 +665,19 @@ public class AvatarItemsController(
         public List<string> SwatchGuids { get; set; } = new();
         [JsonPropertyName("decal_guids")]
         public List<string> DecalGuids { get; set; } = new();
+
+        // The client config's defaultUnlockedVariants: free items every
+        // player owns.
+        [JsonPropertyName("default_unlocked_variants")]
+        public List<LookupVariant> DefaultUnlockedVariants { get; set; } = new();
+    }
+
+    private sealed class LookupVariant
+    {
+        [JsonPropertyName("item")]   public string Item { get; set; } = string.Empty;
+        [JsonPropertyName("mask")]   public string Mask { get; set; } = string.Empty;
+        [JsonPropertyName("swatch")] public string Swatch { get; set; } = string.Empty;
+        [JsonPropertyName("decal")]  public string Decal { get; set; } = string.Empty;
     }
 
     private sealed class LookupItem

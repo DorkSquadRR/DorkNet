@@ -215,6 +215,7 @@ verified against the binary before the change, and the full test suite passes.
 | `POST api/avatar/v{2,3}/gifts/generate` | 415 on the client's form-urlencoded body (seen live) | form-or-JSON binder |
 | `GET api/avatar/v1/lockeditems` | 5-key subset: AvatarItemId 0, no TagList/IsBaseAvatarItem | full IFNGBPJGINL owned-item shape |
 | `GET api/avatar/v4/items` (colored variants) | a colorway reused its base item's AvatarItemId, so owning a base + colorways collided in the id-keyed wardrobe | id hashed from the full descriptor |
+| `GET api/avatar/v4/items` / `defaultunlocked` / `lockeditems` (default items) | the client REPLACES its unlocked set with each downloaded list (OutfitManager.GFEIDFKKNMO clears field +0x70) and never merges its own defaults, so the free `default_unlocked_variants` items (e.g. Beard Close) showed a price | every list includes the 239 default items; `defaultunlocked` serves them before login; `lockeditems` never reports them |
 | `GET api/customAvatarItems/v2/fromCreator/{id}` | bare array; client reads {Results,TotalResults} | paged container |
 | `POST econ/customAvatarItems/v1/{id}/purchase` | 404 — route only existed under api/ | econ/ alias added |
 | `GET api/ugcPurchasables/v1/items/room/{roomId}` | 404 — only the ?roomId= form existed | path form added |
@@ -1348,7 +1349,7 @@ Verified all 37 real client HTTP calls against the DorkNet server source (every 
 | Verb | Route | Request | Response |
 |---|---|---|---|
 | GET | `api/avatar/v1/defaultbaseavataritems` | none | JSON array of the same UnlockedAvatarItem shape as v4/items |
-| GET | `api/avatar/v1/defaultunlocked` | none | Same array shape as v4/items (server aliases it to the same handler) |
+| GET | `api/avatar/v1/defaultunlocked` | none | Same array shape as v4/items (server aliases it to the same handler; logged out it returns the `default_unlocked_variants` items, logged in the full owned set including them) |
 | GET | `api/avatar/v1/lockeditems` | Query: repeated key "desc" carrying avatar-item desc strings (list added via helper 0x181F2E250 with key literal "desc") | JSON array of List<IFNGBPJGINL> — the same element as v4/items (CLIANCNHNIE reader: AvatarItemType, AvatarItemDesc, FriendlyName, Tooltip, Rarity, TagList, AvatarItemId, IsBaseAvatarItem) for each requested desc the caller does NOT own |
 | GET | `api/avatar/v2` | none | Object with keys (exact literals in reader EKHJKDNHOPB, case-tolerant Pascal/camel/lower): OutfitSelections(string), OutfitSelectionsV2(string), FaceFeatures(string), SkinColor(string), HairColor(string), CustomAvatarIte |
 | GET | `api/avatar/v2/gifts` | none | JSON array of gift objects. Server wire (verified live, DorkNet AvatarGiftsController.ToWire): Id(Int64), FromPlayerId(Int64?), ConsumableItemDesc(string), AvatarItemType(Int32), AvatarItemDesc(string, 4-comma-part 'guid |
