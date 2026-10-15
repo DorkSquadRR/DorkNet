@@ -1,13 +1,13 @@
 # DorkNet — `march-2023-03-21`
 
-This is the **December 2020.12.18** branch of DorkNet — a self-hostable
+This is the **March 2023** branch of DorkNet — a self-hostable
 reimplementation of the Rec Room backend tuned to the wire protocol of
-the **Rec Room 2020.12.18** client build.
+the **Rec Room 2023.03.21** PC client build (`appVersion` `20230317`).
 
 > ⚠️ **Not affiliated with Rec Room Inc. or Against Gravity.**
 > See [DISCLAIMER](../../blob/main/DISCLAIMER.md). DorkNet ships no Rec
 > Room game assets or modified binaries — you supply your own
-> legally-acquired Rec Room 2020.12.18 install.
+> legally-acquired Rec Room 2023.03.21 install.
 
 If you're not sure which DorkNet branch you want, start at the
 [main branch's chart](../../blob/main/BRANCHES.md). The launcher on
@@ -19,23 +19,44 @@ main also auto-detects your install.
 
 | | |
 |---|---|
-| **Client build** | Rec Room 2020.12.18 |
-| **Version key** (sent as `X-DorkNet-Version` header) | `december_2020_12_18` |
-| **Version plugin** | `DorkNet.Server/Versions/Late2020/Late2020VersionPlugin.cs` |
-| **Schema** | One EF `Initial` migration; SQLite + Postgres both work |
+| **Client build** | Rec Room 2023.03.21 (PC, IL2CPP); reports `appVersion` `20230317` |
+| **Accepted build IDs** (`api/versioncheck/v4?v=`, mapped in `appsettings.json` → `BuildIdToVersionKey`) | `20230317`, `20230321` |
+| **Version key** (sent as `X-DorkNet-Version` header) | `march_2023_03_21` |
+| **Version plugin** | `DorkNet.Server/Versions/Late2020/Late2020VersionPlugin.cs` (generation `March2023`; the folder name is historical) |
+| **Schema** | EF migrations plus an idempotent schema bootstrap; SQLite + Postgres both work |
 | **Runtime topology** | Gateway-fronted microservices with dedicated service slices and a monolith fallback |
-| **Diverges from `march-2020-03-10` by** | ~170 files |
+| **Diverges from `december-2020-12-18` by** | ~220 files |
 
-Subsystems present on this branch that the March branch doesn't have:
+This branch serves **only** the 2023 client. It does not advertise or
+answer the older 2020 build keys; 2020 and 2018 clients have their own
+branches.
 
-- Chat threads + group DMs (`ChatThreads`, `ChatThreadMembers`)
-- Clubs surface (`clubs.{apex}/*` — announcements, categories, subscriptions)
-- Playlists (curated + user-created)
-- Weekly challenges
-- Room keys (purchasable room access)
-- Room roles (per-room co-owner / moderator / host grants)
-- Leaderboard channel metadata
-- Loading-screen tips
+What the 2023 client gets here that the 2020 branches don't have:
+
+- **Every 2023 client route.** All HTTP routes the 2023.03.21 client can
+  issue reach a handler under the verb it actually uses, and
+  `DorkNet.Server.Tests/ClientRouteCoverageTests.cs` fails the build if one
+  regresses. Routes, verbs and wire shapes are in
+  [docs/recroom-2023-client-api-complete.md](docs/recroom-2023-client-api-complete.md).
+- **Realtime over the SignalR hub** (`hub/v1` on the notify host): numeric
+  push ids, presence updates to friends that honour each player's
+  online-status visibility, and account updates when someone edits their
+  profile.
+- **Room saves and sub-rooms** through the storage host, plus cloning and
+  private instances:
+  [docs/recroom-2023-room-save.md](docs/recroom-2023-room-save.md).
+- **CircuitsV2 limits** served as gameconfig and lifted well past retail
+  (network budgets, chips, compute, cloud values, ink):
+  [docs/recroom-2023-circuitsv2-limits.md](docs/recroom-2023-circuitsv2-limits.md).
+- **Room shops**: room consumables, room currencies and room keys:
+  [docs/recroom-2023-room-consumables.md](docs/recroom-2023-room-consumables.md).
+- **2023 wardrobe**: owned items, color variants keyed by combination GUID,
+  saved outfits and custom avatar items (custom shirts).
+- **2023 profile**: bio, display emoji, pronouns, identity flags, banner
+  image and online-status visibility.
+- Inventions, clubs (roles, permissions, gallery), chat threads, playlists,
+  quest reward chests, leaderboards, and the influencer and moderation
+  surfaces.
 
 ---
 
@@ -50,7 +71,7 @@ dotnet tool install --global dotnet-ef
 **2. Clone this branch:**
 
 ```pwsh
-git clone --branch december-2020-12-18 https://github.com/DorkSquadRR/DorkNet
+git clone --branch march-2023-03-21 https://github.com/DorkSquadRR/DorkNet
 cd DorkNet
 ```
 
@@ -92,53 +113,50 @@ notes, see
 
 ## Patching your client
 
-```pwsh
-.\tools\install-melon.ps1 `
-  -RecRoomPath "C:\Path\To\Recroom_Release_Data" `
-  -PhotonAppId "<your-photon-realtime-app-id>" `
-  -PhotonVoiceAppId "<your-photon-voice-app-id>"
+The 2023.03.21 PC build is laid out like this:
+
+```
+<install>/
+  RecRoom.exe          <- the game; run this
+  RecRoom_Data/        <- globalgamemanagers, resources.assets, levelN
 ```
 
-This installs the MelonLoader mod (`DorkNet.ClientMod`) into the
-client's `Mods/` folder and writes its config to
-`MelonLoader/UserData/dorknet-clientmod.json`. The mod rewrites all
-`*.rec.net` URIs to your configured DorkNet apex, swaps the Photon
-AppIds, and bypasses TLS verification on the client's HTTPS calls so
-self-signed certs work. (First run prints "launch the game once"; do
-that, then re-run with `-ResumeBuild` to finish — see the script's
-`-?` help.)
+The client is IL2CPP, so it is patched at runtime with **MelonLoader
+0.6.x** and the `DorkNet.ClientMod` mod:
 
-### Standalone Quest build (experimental)
+1. Install MelonLoader 0.6.x into the install folder, launch
+   `RecRoom.exe` once so MelonLoader generates its IL2CPP assemblies, then
+   quit.
+2. Build the mod and copy it into `Mods\` next to `RecRoom.exe`:
 
-The December Quest APK is also IL2CPP and can build the same
-`DorkNet.ClientMod` source against LemonLoader's Android runtime. The
-current Quest path is still device-tested manually: build the mod as a
-net8 LemonLoader DLL, install it into a LemonLoader-patched APK, then
-sideload the resigned APK.
+   ```pwsh
+   $env:DOTNET_ROOT = "C:\Program Files\dotnet"
+   dotnet build .\DorkNet.ClientMod -c Release
+   Copy-Item .\DorkNet.ClientMod\bin\Release\DorkNet.ClientMod.dll "<install>\Mods\"
+   ```
 
-From this branch:
+   Close the game first; the copy fails while `RecRoom.exe` holds the DLL.
+3. Copy `DorkNet.ClientMod\dorknet-clientmod.json.template` to
+   `<install>\UserData\dorknet-clientmod.json` (MelonLoader 0.6 keeps
+   `UserData\` at the install root), then fill in your DorkNet apex and
+   Photon AppIds. The config is read once at startup.
 
-```pwsh
-dotnet build .\DorkNet.ClientMod\DorkNet.ClientMod.csproj `
-  -p:TargetFrameworks=net8.0 `
-  -p:MelonLoaderDir="C:\path\to\LemonLoader\melon_data\MelonLoader"
-```
+The mod rewrites all `*.rec.net` URIs to your DorkNet apex, swaps the
+Photon AppIds (they are hard-coded in the IL2CPP binary, so this has to
+happen at runtime), and can bypass TLS verification on the client's HTTPS
+calls so self-signed certs work.
 
-Output lands at
-`DorkNet.ClientMod\bin\Debug\net8.0\DorkNet.ClientMod.dll`. Desktop
-builds still default to net6 and keep the historical flat output path.
+> `tools\install-melon.ps1` automates these steps for the **2020** layout
+> (`Recroom_Release.exe` / `Recroom_Release_Data`). It does not recognise
+> the 2023 `RecRoom.exe` / `RecRoom_Data` layout yet, so use the manual
+> steps above for 2023.
 
-Quest notes:
+### Quest
 
-- Target package: `com.AgainstGravity.RecRoom`.
-- Use a public HTTPS DorkNet host; keep `"EnableTlsTrustBypass": false`
-  for Quest builds.
-- The Dec Photon hooks are discovered from the unique
-  `PUNNetworkManager` methods returning `AppSettings` and
-  `AuthenticationValues`, with the known Dec obfuscated names as fallback.
-- Standalone APK patching/resigning is not yet wrapped by
-  `install-melon.ps1`; this is the porting path, not a public one-click
-  installer yet.
+A Quest client for this branch is in progress and not usable yet. The
+archive holds a Quest build of the same release (version `20230317`), so
+Quest and PC players will be on matching versions once it lands. Until
+then, this branch supports the PC client only.
 
 ### Debugging (opt-in — `DorkNet.DebugMod`)
 
@@ -203,6 +221,87 @@ that gets networked to joiners. The patch also relaxes the quest spawn
 filter for extra players, so player indexes above the four baked spawn
 slots can reuse existing quest spawn points instead of being left out.
 Default `0` (off).
+
+### Rec Royale night mode (opt-in)
+
+Rec Royale never shipped a night variant, but the client carries the room
+"mood" engine (`RecRoom.Core.Scene.SceneMoodSettings`) and ready-made
+night `MoodSetting` assets in `resources.assets`. Set
+`"RecRoyaleNightMode"` in `dorknet-clientmod.json` and the mod applies one
+of those moods (sky dome, sun, fog, bloom and colour grading) as soon as
+the `RecRoyale_Frontier` scene finishes loading, and unlocks the weapon
+flashlight prefab while it is on:
+
+```json
+{
+  "RecRoyaleNightMode": true,
+  "RecRoyaleNightMood": "Night_Calm_Outdoor_Mood",
+  "RecRoyaleNightScenes": ["RecRoyale"],
+  "RecRoyaleNightFlashlights": true,
+  "RecRoyaleNightFog": false,
+  "RecRoyaleNightExposure": -3.5,
+  "RecRoyaleNightSunScale": 0.15,
+  "RecRoyaleNightAmbientScale": 0.2,
+  "RecRoyaleNightForcePostProcessing": true,
+  "RecRoyaleNightMatchSunLights": true,
+  "RecRoyaleNightDisableFog": false,
+  "RecRoyaleNightHideObjects": ["Cloud"],
+  "RecRoyaleNightToggleKey": "N"
+}
+```
+
+`RecRoyaleNightDisableFog` turns fog off entirely while night is on
+(`RenderSettings.fog` forced off and the mood's fog block pushed out of
+range); it is ignored when `RecRoyaleNightFog` is `true`.
+`RecRoyaleNightHideObjects` hides every renderer whose object or material
+name contains one of the entries; the default hides Frontier's daytime
+cloud meshes (`CloudPlane`, `Clouds`, the `_Cloud_RecRoyale_Frontier_Mat`
+static batch). Both are restored on toggle-off or scene change.
+
+The mood engine only ever drives `RenderSettings.sun`, which on Frontier
+is the sun-disc light, not the map's key light, so daylight would keep
+casting. `RecRoyaleNightMatchSunLights` (default `true`) copies the
+engine-driven sun's rotation and colour onto every other directional
+light and scales their intensity by `RecRoyaleNightSunScale`.
+
+Two more RRO quirks the mod works around: the mood skybox material the
+engine swaps in (`MoodConfig.SkyBoxMaterial`) is not loaded outside
+custom-room scenes, so the mod builds one on the `Custom/SkyBox` shader
+and hands it to the engine (otherwise the sky is plain black and the
+engine refuses to touch sky colours or the sun); and post-exposure only
+shows when the scene Volume is on and the camera renders
+post-processing, which `RecRoyaleNightForcePostProcessing` (default
+`true`) forces while night mode is active.
+
+Brightness: RRO maps are lightmapped, and baked lighting ignores the sun
+and ambient changes a mood makes, so the mod also darkens the mood data
+itself before applying it. `RecRoyaleNightExposure` is an EV offset added
+to the mood's colour-grading post-exposure (a full-frame post effect, so
+it dims lightmapped surfaces too; `0` = mood default), and
+`RecRoyaleNightSunScale` / `RecRoyaleNightAmbientScale` multiply the
+mood's sun and ambient intensities (`1` = unchanged). Raise the exposure
+toward `0` if it is too dark.
+
+RRO scenes have no room data blob, so the mood engine starts disabled
+there; the mod replays the room-data loader's bring-up (disable, capture
+the scene's own lighting, enable), points `RenderSettings.sun` at the
+scene's directional light (Frontier ships without the reference, which
+would otherwise skip every sun change), and re-captures once the mood
+skybox material is in place so the sky colours apply. `RecRoyaleNightFog`
+is off by default: the mood's fog block is swapped for one captured from
+the scene, so fog stays as the map author left it.
+
+Shipped moods: `Night_Calm_Outdoor_Mood` ("Calm Night"),
+`Night_Spooky_Outdoor_Mood` ("Spooky Night"), `Night_Wild_Outdoor_Mood`
+("Wild Night"), `Night_StuntRunner_Outdoor_Mood` and `OuterSpace_Mood`.
+`RecRoyaleNightToggleKey` is an optional `UnityEngine.KeyCode` name that
+flips night on/off in-game (off restores the scene's own mood); setting a
+key also arms the feature when `RecRoyaleNightMode` is `false`. This is
+purely **client-side**: the mod calls the mood engine's apply step
+directly and never touches the networked room-mood index, so other players
+keep their own view. Baked lightmaps are not changed, so interiors stay
+lit; the mood's colour grading does the darkening. Default `false` (off).
+Wire-level notes: `docs/recroom-2023-scene-moods.md`.
 
 ---
 
@@ -275,8 +374,8 @@ troubleshooting, see [docs/admin.md](docs/admin.md).
 
 ## Database & migrations
 
-One EF migration (`Migrations/<timestamp>_Initial.cs`) captures the
-schema. SQLite dev DBs apply it via `Database.Migrate()`; Postgres uses
+The consolidated `Initial` migration plus the migrations added since
+(`Migrations/`) capture the schema. SQLite dev DBs apply it via `Database.Migrate()`; Postgres uses
 `EnsureCreated()` behind a transaction-scoped advisory lock. The
 entity model is the single source of truth — to add a column, edit the
 entity, boot, done (on SQLite — Postgres prod needs a migration).
@@ -344,11 +443,12 @@ public internet:
 - **First account becomes admin.** The first account created on a fresh DB is
   granted `IsAdmin` so there's always a root admin. On a public server, create
   your admin account first and verify no one else beat you to it.
-- **Online status = Everyone.** Presence reports `StatusVisibility = 0`
-  (Everyone) so every player appears online to every other player, matching
-  the [everyone-is-friends](#everyone-is-friends-toggle) convenience. A public
-  server may instead want to persist and honor each player's own visibility
-  preference.
+- **Online status visibility.** Each player's in-game choice (Public,
+  Friends only, Favorite friends only, Appear offline) is stored and
+  honoured by both `GET /player` and the live presence pushes. Players who
+  never pick one are Public. "Friends only" follows the
+  [everyone-is-friends](#everyone-is-friends-toggle) toggle, so with that
+  toggle on it shows them to everyone.
 - **Room / matchmaking capacity.** New matchmade sessions and subrooms default
   to **8** players and are capped at **40** (`GameSessionService`,
   `RoomSceneEntity.MaxPlayers`, admin `MaxCapacity` clamp). The in-game "Max
@@ -371,8 +471,9 @@ LAN/friends infrastructure unless you harden the items above.
 See [main's CONTRIBUTING guide](../../blob/main/CONTRIBUTING.md) for
 the project-wide rules.
 
-Branch-specific: schema changes on this branch don't flow to
-`march-2020-03-10` automatically. If a fix applies to both, cherry-pick
+Branch-specific: this is the repo's default branch, and Dependabot and
+server PRs target it. Schema changes here don't flow to the 2020 or 2018
+branches automatically. If a fix applies to more than one, cherry-pick
 it across. Don't rebase across branches.
 
 ---

@@ -139,10 +139,31 @@ interface DiscoveredGameConfigSettings {
   updatedAt: string;
 }
 
+interface CircuitsV2NetworkLimit {
+  numPlayersForActivation: number;
+  bytes: number;
+  bytesTimeWindowFrame60s: number;
+  rpcs: number;
+  rpcTimeWindowFrame60s: number;
+}
+
+interface CircuitsV2LimitSettings {
+  network: CircuitsV2NetworkLimit[];
+  compute: number;
+  chips: number;
+  cloudValues: number;
+  cloudValuesAutosaveSeconds: number;
+  unculledChips: number;
+  visibleChips: number;
+  inkPerChip: number;
+  updatedAt: string;
+}
+
 export function Settings({ embedded }: { embedded?: boolean } = {}) {
   const [settings, setSettings] = useState<ServerSettings | null>(null);
   const [weekly, setWeekly] = useState<WeeklyChallengeSettings | null>(null);
   const [gameConfigs, setGameConfigs] = useState<DiscoveredGameConfigSettings | null>(null);
+  const [circuits, setCircuits] = useState<CircuitsV2LimitSettings | null>(null);
   const [rewardOptions, setRewardOptions] = useState<RewardOptions>({
     avatarItems: [],
     consumables: [],
@@ -152,20 +173,23 @@ export function Settings({ embedded }: { embedded?: boolean } = {}) {
   const [busy, setBusy] = useState(false);
   const [weeklyBusy, setWeeklyBusy] = useState(false);
   const [gameConfigBusy, setGameConfigBusy] = useState(false);
+  const [circuitsBusy, setCircuitsBusy] = useState(false);
   const toast = useToast();
 
   const load = async () => {
     try {
-      const [s, w, rewards, configs] = await Promise.all([
+      const [s, w, rewards, configs, limits] = await Promise.all([
         get<ServerSettings>('/settings'),
         get<WeeklyChallengeSettings>('/settings/weekly-challenges'),
         get<RewardOptions>('/settings/weekly-challenges/reward-options'),
         get<DiscoveredGameConfigSettings>('/settings/gameconfigs'),
+        get<CircuitsV2LimitSettings>('/settings/circuits-limits'),
       ]);
       setSettings(s);
       setWeekly(w);
       setRewardOptions(rewards);
       setGameConfigs(configs);
+      setCircuits(limits);
       setErr(null);
     } catch (e) {
       setErr((e as Error).message);
@@ -470,6 +494,39 @@ export function Settings({ embedded }: { embedded?: boolean } = {}) {
     }
   };
 
+  const updateCircuits = (patch: Partial<CircuitsV2LimitSettings>) => {
+    setCircuits((current) => current ? { ...current, ...patch } : current);
+  };
+
+  const updateCircuitsNetwork = (index: number, patch: Partial<CircuitsV2NetworkLimit>) => {
+    setCircuits((current) => current
+      ? {
+          ...current,
+          network: current.network.map((entry, i) => i === index ? { ...entry, ...patch } : entry),
+        }
+      : current);
+  };
+
+  const saveCircuits = async (reset = false) => {
+    if (!circuits && !reset) return;
+    setCircuitsBusy(true);
+    try {
+      const body = reset ? defaultCircuitsLimits() : circuits;
+      const updated = await api<CircuitsV2LimitSettings>('/settings/circuits-limits', {
+        method: 'POST',
+        body,
+      });
+      setCircuits(updated);
+      toast.push(
+        reset ? 'CircuitsV2 limits reset.' : 'CircuitsV2 limits saved. Players must rejoin their room.',
+        'success');
+    } catch (e) {
+      toast.push((e as Error).message, 'error');
+    } finally {
+      setCircuitsBusy(false);
+    }
+  };
+
   const refreshBtn = (
     <button onClick={load} className="btn-secondary text-xs" disabled={busy}>
       <RefreshCw className={busy ? 'animate-spin' : ''} />
@@ -662,6 +719,17 @@ export function Settings({ embedded }: { embedded?: boolean } = {}) {
           onChange={updateGameConfigs}
           onSave={() => saveGameConfigs(false)}
           onReset={() => saveGameConfigs(true)}
+        />
+      )}
+
+      {circuits && (
+        <CircuitsV2LimitsPanel
+          settings={circuits}
+          busy={circuitsBusy}
+          onChange={updateCircuits}
+          onNetworkChange={updateCircuitsNetwork}
+          onSave={() => saveCircuits(false)}
+          onReset={() => saveCircuits(true)}
         />
       )}
 
@@ -1068,19 +1136,168 @@ function DiscoveredGameConfigsPanel({
   );
 }
 
+function CircuitsV2LimitsPanel({
+  settings,
+  busy,
+  onChange,
+  onNetworkChange,
+  onSave,
+  onReset,
+}: {
+  settings: CircuitsV2LimitSettings;
+  busy: boolean;
+  onChange: (patch: Partial<CircuitsV2LimitSettings>) => void;
+  onNetworkChange: (index: number, patch: Partial<CircuitsV2NetworkLimit>) => void;
+  onSave: () => void;
+  onReset: () => void;
+}) {
+  const number = (key: keyof CircuitsV2LimitSettings, value: string) => {
+    const n = Number.parseFloat(value);
+    onChange({ [key]: Number.isFinite(n) ? n : 0 } as Partial<CircuitsV2LimitSettings>);
+  };
+
+  const netNumber = (index: number, key: keyof CircuitsV2NetworkLimit, value: string) => {
+    const n = Number.parseInt(value, 10);
+    onNetworkChange(index, { [key]: Number.isFinite(n) ? n : 0 } as Partial<CircuitsV2NetworkLimit>);
+  };
+
+  return (
+    <div className="card !p-5 max-w-5xl mt-5">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-sm font-semibold text-ink-50">CircuitsV2 limits</h2>
+          <p className="mt-1 text-xs text-ink-400">
+            Served as the <span className="font-mono">UGC.CircuitsV2.Limit.*</span> gameconfig keys.
+            Retail budgets a circuit 5 RPCs per frame and 1024 bytes per second and silently drops
+            everything past that; DorkNet ships both effectively unlimited, and raises the room-size
+            limits below about 10x past retail. Clients read these once
+            when circuits start, so players must rejoin their room to pick up a change.
+          </p>
+          <p className="mt-2 text-[11px] text-ink-500">
+            Last changed {new Date(settings.updatedAt).toLocaleString()}.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button onClick={onReset} disabled={busy} className="btn-secondary text-xs">
+            <RefreshCw />
+            Defaults
+          </button>
+          <button onClick={onSave} disabled={busy} className="btn-primary text-xs">
+            {busy ? 'Saving...' : 'Save'}
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+        {settings.network.map((entry, index) => (
+          <div key={index} className="rounded-lg border border-ink-800 bg-ink-950/30 p-4 lg:col-span-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-400">
+              Network budget{settings.network.length > 1 ? ` — from ${entry.numPlayersForActivation} players` : ''}
+            </h3>
+            <p className="mt-1 text-[11px] text-ink-500">
+              Each budget is spent over a rolling window measured in frames, so a window of 1 means
+              per frame and 60 means roughly per second at 60fps. Widening a window makes the limit
+              stricter, not looser — raise the budget instead.
+            </p>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <NumberConfig
+                label="Rpcs"
+                value={entry.rpcs}
+                onChange={(v) => netNumber(index, 'rpcs', v)}
+              />
+              <NumberConfig
+                label="RpcTimeWindowFrame60s"
+                value={entry.rpcTimeWindowFrame60s}
+                onChange={(v) => netNumber(index, 'rpcTimeWindowFrame60s', v)}
+              />
+              <NumberConfig
+                label="Bytes"
+                value={entry.bytes}
+                onChange={(v) => netNumber(index, 'bytes', v)}
+              />
+              <NumberConfig
+                label="BytesTimeWindowFrame60s"
+                value={entry.bytesTimeWindowFrame60s}
+                onChange={(v) => netNumber(index, 'bytesTimeWindowFrame60s', v)}
+              />
+            </div>
+          </div>
+        ))}
+
+        <div className="rounded-lg border border-ink-800 bg-ink-950/30 p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-400">Circuit budget</h3>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <NumberConfig
+              label="Compute"
+              value={settings.compute}
+              hint="Per-frame CPU budget for all circuits in the room. Retail 50000. Keep it finite: it is what stops a runaway loop. Max 10,000,000."
+              onChange={(v) => number('compute', v)}
+            />
+            <NumberConfig
+              label="Chips"
+              value={settings.chips}
+              hint="Room chip cap. Retail 3000. Max 1,000,000."
+              onChange={(v) => number('chips', v)}
+            />
+            <NumberConfig
+              label="UnculledChips"
+              value={settings.unculledChips}
+              hint="Chips past this count get culled. Retail 500. Higher costs frame time."
+              onChange={(v) => number('unculledChips', v)}
+            />
+            <NumberConfig
+              label="VisibleChips"
+              value={settings.visibleChips}
+              hint="Visible-chip limit. Retail 500. Above Chips, adding a chip also charges InkPerChip."
+              onChange={(v) => number('visibleChips', v)}
+            />
+            <NumberConfig
+              label="InkPerChip"
+              value={settings.inkPerChip}
+              hint="Ink COST per chip against the fixed 30000-ink room cap. Retail 15; 0 = chips use no ink. Max 30,000."
+              onChange={(v) => number('inkPerChip', v)}
+            />
+          </div>
+        </div>
+
+        <div className="rounded-lg border border-ink-800 bg-ink-950/30 p-4">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-400">Cloud variables</h3>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <NumberConfig
+              label="CloudValues"
+              value={settings.cloudValues}
+              hint="Room cloud-variable cap. Retail 100. Max 10,000."
+              onChange={(v) => number('cloudValues', v)}
+            />
+            <NumberConfig
+              label="CloudValuesAutosaveSeconds"
+              value={settings.cloudValuesAutosaveSeconds}
+              hint="Seconds between player save-data autosaves. Retail 300. Lower means more save traffic."
+              onChange={(v) => number('cloudValuesAutosaveSeconds', v)}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function NumberConfig({
   label,
   value,
+  hint,
   onChange,
 }: {
   label: string;
   value: number;
+  hint?: string;
   onChange: (value: string) => void;
 }) {
   return (
     <label className="block">
       <span className="label font-mono normal-case tracking-normal">{label}</span>
       <input className="input mt-1" type="number" value={value} onChange={(e) => onChange(e.target.value)} />
+      {hint && <span className="mt-1 block text-[11px] text-ink-500">{hint}</span>}
     </label>
   );
 }
@@ -1126,6 +1343,26 @@ function JsonConfig({
       />
     </label>
   );
+}
+
+function defaultCircuitsLimits(): CircuitsV2LimitSettings {
+  return {
+    network: [{
+      numPlayersForActivation: 0,
+      bytes: 1_000_000_000,
+      bytesTimeWindowFrame60s: 60,
+      rpcs: 1_000_000_000,
+      rpcTimeWindowFrame60s: 1,
+    }],
+    compute: 500_000,
+    chips: 30_000,
+    cloudValues: 1_000,
+    cloudValuesAutosaveSeconds: 300,
+    unculledChips: 3_000,
+    visibleChips: 3_000,
+    inkPerChip: 0,
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 function defaultGameConfigs(): DiscoveredGameConfigSettings {

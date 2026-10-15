@@ -91,11 +91,13 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
     /// 2023 client sends the target club in a form-urlencoded
     /// <c>clubId</c> field (boxed <c>Nullable&lt;Int64&gt;</c> pushed through
     /// <c>BNDIAONDFFF.AFGEDDANEKP</c> at <c>IKMMOCKDKAF.txt:16923-16927</c>)
-    /// and parses NO response DTO — the issuing method is
-    /// <c>LDGADANDBIO JOPMBFIFFBB(Nullable&lt;Int64&gt;)</c>, the status-only
-    /// promise type, so an empty 200 is the contract. Verb ordinal 3 (PUT)
-    /// is the HasValue branch of the same method at :16911; the null branch
-    /// is the DELETE below (:16838).</summary>
+    /// — the issuing method is <c>LDGADANDBIO JOPMBFIFFBB(Nullable&lt;Int64&gt;)</c>.
+    /// Despite the untyped promise the body IS parsed: both branches hand
+    /// the response to <c>BFDGEKKNAPB.PEFKBAEAOPD</c> (:16858, :16943), the
+    /// <c>{success,error}</c> RecNetResult reader, so an empty 200 surfaced as
+    /// a failure (<see cref="RecNetResults"/>). Verb ordinal 3 (PUT) is the
+    /// HasValue branch of the same method at :16911; the null branch is the
+    /// DELETE below (:16838).</summary>
     [HttpPut("/club/home/me")]
     [Authorize]
     public async Task<IActionResult> HomeMeSet()
@@ -116,11 +118,11 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
             clubId = fromQuery;
         if (clubId <= 0) return BadRequest(new { error = "missing_club_id" });
         if (!await clubs.SetHomeClubAsync(pid, clubId)) return NotFound();
-        return Ok();
+        return RecNetResults.Ok();
     }
 
     /// <summary>DELETE <c>/club/home/me</c> — "Remove Home Clubhouse Room".
-    /// No body, no response DTO (<c>IKMMOCKDKAF.txt:16830-16841</c>: route
+    /// No request body; RecNetResult reply (<c>IKMMOCKDKAF.txt:16830-16858</c>: route
     /// literal, host 13, verb ordinal 4, error string "Failed to Remove Home
     /// Clubhouse Room"). Idempotent so a double-tap is harmless.</summary>
     [HttpDelete("/club/home/me")]
@@ -128,7 +130,7 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
     public async Task<IActionResult> HomeMeClear()
     {
         await clubs.ClearHomeClubAsync(Me);
-        return Ok();
+        return RecNetResults.Ok();
     }
 
     [HttpGet("/club/mine/member")]
@@ -347,7 +349,7 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
     {
         var pid = Me;
         await clubs.MarkAnnouncementReadAsync(pid, announcementId);
-        return Ok(new { Read = true });
+        return RecNetResults.Ok();
     }
 
     // ── Single-club reads ─────────────────────────────────────────────
@@ -369,8 +371,11 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
     /// the club NAME used only for the client-side confirmation copy and is
     /// never transmitted; the request is a bare DELETE with no body
     /// (<c>IKMMOCKDKAF.txt:17107-17120</c>, verb ordinal 4, host 13, error
-    /// string "Failed to Delete Club"). <c>LDGADANDBIO</c> is the status-only
-    /// promise so an empty 200 is the whole contract.
+    /// string "Failed to Delete Club"). The promise is built by
+    /// <c>BFDGEKKNAPB.PEFKBAEAOPD</c> (ExpandRecNetResult, :17137), so the
+    /// body is a <c>{success,error}</c> RecNetResult — an empty 200 made the
+    /// client report "Failed to Delete Club" after the club was gone. See
+    /// <see cref="RecNetResults"/>.
     ///
     /// Owner-only, and a soft delete — see
     /// <see cref="ClubService.DisbandAsync"/>.</summary>
@@ -382,7 +387,7 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
         {
             var disbanded = await clubs.DisbandAsync(clubId, Me);
             if (disbanded is null) return NotFound();
-            return Ok();
+            return RecNetResults.Ok();
         }
         catch (UnauthorizedAccessException) { return Forbid(); }
     }
@@ -1144,7 +1149,15 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
     /// is reachable — see <see cref="ToWireMemberRequest"/>.</summary>
     private static int RequestStatusFor(ClubMembershipEntity row) => 1;
 
-    // ── Member mutations (void / IPromise) ───────────────────────────
+    // ── Member mutations ─────────────────────────────────────────────
+    //
+    // Every one of these goes through the client's shared club-write helper
+    // IKMMOCKDKAF.JNFEEDLCGHH ("Failed to " + action), which hands the
+    // response to BFDGEKKNAPB.PEFKBAEAOPD (IKMMOCKDKAF.txt:26696) — the
+    // RecNetResult reader. They are not status-only: an empty 200 parses to
+    // null and the client shows "Failed to request to join club" (etc.) after
+    // the server has applied the change. Success bodies are
+    // RecNetResults.Ok().
 
     /// <summary>POST <c>/club/{id}/members/requesttojoin</c> — caller
     /// asks to join. For Open clubs we promote straight to Member; for
@@ -1169,7 +1182,7 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
         };
         if (perms == -1) return Forbid();
         await clubs.UpsertMembershipAsync(clubId, Me, perms);
-        return Ok();
+        return RecNetResults.Ok();
     }
 
     /// <summary>POST <c>/club/{id}/members/directJoin</c> — same as
@@ -1183,7 +1196,7 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
         var club = await clubs.GetByIdAsync(clubId);
         if (club is null) return NotFound();
         await clubs.UpsertMembershipAsync(clubId, Me, 0);
-        return Ok();
+        return RecNetResults.Ok();
     }
 
     /// <summary>POST <c>/club/{id}/members/leave</c> — caller leaves
@@ -1198,7 +1211,7 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
         if (club.CreatorPlayerId == Me)
             return BadRequest(new { error = "owner_must_transfer_first" });
         await clubs.RemoveMembershipAsync(clubId, Me);
-        return Ok();
+        return RecNetResults.Ok();
     }
 
     /// <summary>POST <c>/club/{id}/members/invite</c> — caller invites
@@ -1220,7 +1233,7 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
         var target = req.PlayerId ?? req.AccountId ?? 0;
         if (target == 0) return BadRequest(new { error = "missing_player_id" });
         await clubs.UpsertMembershipAsync(clubId, target, 128); // Pending
-        return Ok();
+        return RecNetResults.Ok();
     }
 
     /// <summary>POST <c>/club/{id}/members/invitemembers</c> — bulk
@@ -1241,7 +1254,7 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
         var ids = (req.PlayerIds ?? req.AccountIds ?? new List<int>()).Distinct().ToList();
         foreach (var pid in ids)
             await clubs.UpsertMembershipAsync(clubId, pid, 128);
-        return Ok();
+        return RecNetResults.Ok();
     }
 
     /// <summary>POST <c>/club/{id}/members/acceptinvite</c> — caller
@@ -1254,7 +1267,7 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
         if (row is null) return NotFound();
         if ((row.Permissions & 128) == 0) return BadRequest(new { error = "no_pending_invite" });
         await clubs.UpsertMembershipAsync(clubId, Me, 0); // Member
-        return Ok();
+        return RecNetResults.Ok();
     }
 
     /// <summary>POST <c>/club/{id}/members/declineinvite</c> — caller
@@ -1264,7 +1277,7 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
     public async Task<IActionResult> MemberDeclineInvite(long clubId)
     {
         await clubs.RemoveMembershipAsync(clubId, Me);
-        return Ok();
+        return RecNetResults.Ok();
     }
 
     public sealed class MemberTargetRequest
@@ -1288,7 +1301,7 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
         if (row is null) return NotFound();
         if ((row.Permissions & 128) == 0) return BadRequest(new { error = "no_pending_request" });
         await clubs.UpsertMembershipAsync(clubId, target, 0);
-        return Ok();
+        return RecNetResults.Ok();
     }
 
     public sealed class BulkTargetRequest
@@ -1309,7 +1322,7 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
             if (row is null || (row.Permissions & 128) == 0) continue;
             await clubs.UpsertMembershipAsync(clubId, pid, 0);
         }
-        return Ok();
+        return RecNetResults.Ok();
     }
 
     [HttpPost("/club/{clubId:long}/members/denyrequest")]
@@ -1320,7 +1333,7 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
         var target = req.PlayerId ?? req.AccountId ?? 0;
         if (target == 0) return BadRequest(new { error = "missing_player_id" });
         await clubs.RemoveMembershipAsync(clubId, target);
-        return Ok();
+        return RecNetResults.Ok();
     }
 
     [HttpPost("/club/{clubId:long}/members/denyrequests")]
@@ -1331,7 +1344,7 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
         var ids = (req.PlayerIds ?? req.AccountIds ?? new List<int>()).Distinct().ToList();
         foreach (var pid in ids)
             await clubs.RemoveMembershipAsync(clubId, pid);
-        return Ok();
+        return RecNetResults.Ok();
     }
 
     [HttpPost("/club/{clubId:long}/members/remove")]
@@ -1346,7 +1359,7 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
         if (target == club.CreatorPlayerId)
             return BadRequest(new { error = "cannot_remove_owner" });
         await clubs.RemoveMembershipAsync(clubId, target);
-        return Ok();
+        return RecNetResults.Ok();
     }
 
     /// <summary>POST <c>/club/{id}/members/ban</c> — kick + prevent
@@ -1364,7 +1377,7 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
         if (target == club.CreatorPlayerId)
             return BadRequest(new { error = "cannot_ban_owner" });
         await clubs.UpsertMembershipAsync(clubId, target, 256); // Ban marker
-        return Ok();
+        return RecNetResults.Ok();
     }
 
     [HttpPost("/club/{clubId:long}/members/unban")]
@@ -1375,7 +1388,7 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
         var target = req.PlayerId ?? req.AccountId ?? 0;
         if (target == 0) return BadRequest(new { error = "missing_player_id" });
         await clubs.RemoveMembershipAsync(clubId, target);
-        return Ok();
+        return RecNetResults.Ok();
     }
 
     /// <summary>POST <c>/club/{id}/members/changetype</c> — promote /
@@ -1396,7 +1409,7 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
         if (target == club.CreatorPlayerId)
             return BadRequest(new { error = "cannot_change_owner_role" });
         await clubs.UpsertMembershipAsync(clubId, target, ClubService.PermsFromMembershipType(newType));
-        return Ok();
+        return RecNetResults.Ok();
     }
 
     // ── members/bulk + clubreporting ─────────────────────────────────
@@ -1513,7 +1526,7 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
     public async Task<IActionResult> AnnouncementDelete(long clubId, long announcementId)
     {
         if (!await clubs.DeleteAnnouncementAsync(clubId, announcementId, Me)) return Forbid();
-        return Ok();
+        return RecNetResults.Ok();
     }
 
     /// <summary>PUT <c>/announcements/club/{clubId}/{announcementId}</c> — EDIT
@@ -1529,7 +1542,7 @@ public class ClubsController(ClubService clubs, DorkNetDbContext db) : Controlle
         var (title, body, imageName) = await ReadAnnouncementFieldsAsync();
         if (!await clubs.UpdateAnnouncementAsync(clubId, announcementId, Me, title, body, imageName))
             return Forbid();
-        return Ok();
+        return RecNetResults.Ok();
     }
 
     /// <summary>POST <c>/announcements/club/{clubId}</c> — CREATE an

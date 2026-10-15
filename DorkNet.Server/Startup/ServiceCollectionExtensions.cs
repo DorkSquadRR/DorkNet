@@ -234,6 +234,8 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<PlayerPresenceService>();
         services.AddSingleton<JoinTimeoutService>();
         services.AddSingleton<OnlinePresenceService>();
+        // Friend presence fan-out; resolves its scoped DB per push.
+        services.AddSingleton<PresenceBroadcastService>();
         services.AddSingleton<PlayerLogService>();
         // S3-compatible object storage (Garage in production, MinIO/disk in dev)
         // — holds profile images + room-blob bytes. Stateless wrapper around

@@ -48,6 +48,7 @@ public class PlayerPresenceService
     private readonly ConcurrentDictionary<long, DateTimeOffset> _localRoomExpires = new();
     private readonly ConcurrentDictionary<long, DateTimeOffset> _localActiveExpires = new();
     private readonly ConcurrentDictionary<long, DateTimeOffset> _localBootDormGraceExpires = new();
+    private readonly ConcurrentDictionary<long, DateTimeOffset> _localNoRoomExpires = new();
     private readonly IConnectionMultiplexer? _redis;
     private readonly ILogger<PlayerPresenceService>? _log;
 
@@ -101,7 +102,9 @@ public class PlayerPresenceService
             try
             {
                 var json = JsonSerializer.Serialize(room, JsonOpts);
-                mux.GetDatabase().StringSet(Key(playerId), json, PresenceTtl);
+                var db = mux.GetDatabase();
+                db.StringSet(Key(playerId), json, PresenceTtl);
+                db.KeyDelete(NoRoomKey(playerId));
                 _log?.LogDebug("[presence] set redis player={PlayerId} room={Room} bytes={Bytes}",
                     playerId, room?.Name ?? "<null>", json.Length);
             }
@@ -117,6 +120,7 @@ public class PlayerPresenceService
         {
             _local[playerId] = room;
             _localRoomExpires[playerId] = DateTimeOffset.UtcNow.Add(PresenceTtl);
+            _localNoRoomExpires.TryRemove(playerId, out _);
             _log?.LogDebug("[presence] set local player={PlayerId} room={Room}",
                 playerId, room?.Name ?? "<null>");
         }
@@ -333,6 +337,7 @@ public class PlayerPresenceService
             db.KeyDelete(Key(playerId));
             db.KeyDelete(ActiveKey(playerId));
             db.KeyDelete(BootDormGraceKey(playerId));
+            db.KeyDelete(NoRoomKey(playerId));
             db.SetRemove(ActiveSetKey, playerId);
         }
         else
@@ -341,7 +346,117 @@ public class PlayerPresenceService
             _localRoomExpires.TryRemove(playerId, out _);
             _localActiveExpires.TryRemove(playerId, out _);
             _localBootDormGraceExpires.TryRemove(playerId, out _);
+            _localNoRoomExpires.TryRemove(playerId, out _);
         }
+    }
+
+    /// <summary>Forget the player's room but keep everything that says they
+    /// are still here (activity marker, login lock, boot grace). Used when a
+    /// join fails or times out: the player is still online and about to run
+    /// the client's fallback chain, so friends must not see them go offline,
+    /// they just must not see a room the player never reached.</summary>
+    public void ClearRoom(long playerId)
+    {
+        if (_redis is { } mux)
+        {
+            try
+            {
+                mux.GetDatabase().KeyDelete(Key(playerId));
+            }
+            catch (Exception ex)
+            {
+                _log?.LogWarning(ex, "[presence] redis room DEL failed for player={PlayerId}", playerId);
+            }
+            return;
+        }
+
+        _local.TryRemove(playerId, out _);
+        _localRoomExpires.TryRemove(playerId, out _);
+    }
+
+    /// <summary>
+    /// Record that the player deliberately left online matchmaking: they are
+    /// online, but in no room instance.
+    ///
+    /// The 2023 client does this in TryGoToOfflineRoom
+    /// (RecNet.Runtime/RecNet/Matchmaking.txt:12677, the only caller of
+    /// <c>matchmake/none</c> at :13279): it swaps its cached presence to the
+    /// local offline instance (RoomInstanceId -1) and posts matchmake/none,
+    /// ignoring the reply (<c>&lt;TryGoToOfflineRoom&gt;b__119_0</c> returns a
+    /// constant). From then on the heartbeat handler
+    /// (Matchmaking.txt:18103, compare at :18415-18467) treats a negative RoomInstanceId like no
+    /// room (HCHDEHIGEBE.GIICPDHJOOH = <c>RoomInstanceId &lt; 0</c>) and is
+    /// only in sync while the server answers <c>roomInstance: null</c>. Any
+    /// room here — the old one, or a synthesised dorm — reads as out-of-sync
+    /// and the client cancels its offline load to chase the server's room.
+    /// The marker keeps the heartbeat's dorm fallback from firing for this
+    /// player until they matchmake somewhere again.
+    /// </summary>
+    public void SetNoRoom(long playerId)
+    {
+        if (_redis is { } mux)
+        {
+            try
+            {
+                var db = mux.GetDatabase();
+                db.KeyDelete(Key(playerId));
+                db.StringSet(NoRoomKey(playerId), "1", PresenceTtl);
+            }
+            catch (Exception ex)
+            {
+                _log?.LogWarning(ex, "[presence] redis no-room SET failed for player={PlayerId}", playerId);
+            }
+            return;
+        }
+
+        _local.TryRemove(playerId, out _);
+        _localRoomExpires.TryRemove(playerId, out _);
+        _localNoRoomExpires[playerId] = DateTimeOffset.UtcNow.Add(PresenceTtl);
+    }
+
+    /// <summary>True while the player is online with no room after
+    /// <see cref="SetNoRoom"/>. Cleared by the next <see cref="SetRoom"/> or
+    /// <see cref="Clear"/>.</summary>
+    public bool IsInNoRoom(long playerId)
+    {
+        if (_redis is { } mux)
+        {
+            try
+            {
+                return mux.GetDatabase().KeyExists(NoRoomKey(playerId));
+            }
+            catch (Exception ex)
+            {
+                _log?.LogWarning(ex, "[presence] redis no-room GET failed for player={PlayerId}", playerId);
+                return false;
+            }
+        }
+
+        if (!_localNoRoomExpires.TryGetValue(playerId, out var expires)) return false;
+        if (expires > DateTimeOffset.UtcNow) return true;
+        _localNoRoomExpires.TryRemove(playerId, out _);
+        return false;
+    }
+
+    /// <summary>Keep the no-room marker alive while the player keeps
+    /// heartbeating from the offline room.</summary>
+    public void TouchNoRoom(long playerId)
+    {
+        if (_redis is { } mux)
+        {
+            try
+            {
+                mux.GetDatabase().KeyExpire(NoRoomKey(playerId), PresenceTtl);
+            }
+            catch (Exception ex)
+            {
+                _log?.LogWarning(ex, "[presence] redis no-room EXPIRE failed for player={PlayerId}", playerId);
+            }
+            return;
+        }
+
+        if (_localNoRoomExpires.ContainsKey(playerId))
+            _localNoRoomExpires[playerId] = DateTimeOffset.UtcNow.Add(PresenceTtl);
     }
 
     /// <summary>List the currently-active instances of a given room,
@@ -386,6 +501,7 @@ public class PlayerPresenceService
     private static string Key(long playerId) => $"presence:{playerId}";
     private static string ActiveKey(long playerId) => $"presence-active:{playerId}";
     private static string BootDormGraceKey(long playerId) => $"presence-boot-dorm-grace:{playerId}";
+    private static string NoRoomKey(long playerId) => $"presence-noroom:{playerId}";
     private const string ActiveSetKey = "presence-active";
 
     // ── LoginLock single-session enforcement ─────────────────────────

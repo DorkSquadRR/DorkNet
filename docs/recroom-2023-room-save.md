@@ -132,6 +132,74 @@ role-holder (co-owner/mod/host), nor an instance invitee return
 `errorCode=4` (RoomDoesNotExist) so private rooms don't leak their
 existence. Tests: `PrivateRoomInstanceTests.cs`.
 
+## Baked Rec Room Originals and data blobs (Rec Royale)
+
+Baked RRO rooms are seeded with empty `DataBlobName` / `CurrentDataBlobName`,
+which the details builders and matchmaking resolvers pass through as an
+empty `DataBlob`. The 2023 client treats that as "no room data": it never
+downloads a blob, so the room has no room roles (no Maker Pen even though
+the CDN overlays permissive roles for AG rooms), no CV2 room-settings
+chips, no mood engine and nothing to save into. `IsRRO` (= `IsAGRoom`) is
+independent of the blob, so a baked room CAN carry one: the client loads
+the baked map from its own assets and layers the blob's persistence views
+on top — exactly how Rec Center behaves.
+
+Rec Royale needs this to be a game at all: the Frontier scene has no baked
+game rule (contrast `PaintballTeamBattle_GameRuleWrapperCircuit`, which is
+baked into the paintball scene). Its rule is the Maker Pen chip
+`RecRoyaleSolos_GameRuleWrapperCircuit` / `RecRoyaleSquads_GameRuleWrapperCircuit`
+(`BattleRoyaleGameRuleWrapper : GameRuleCircuitWrapperTool`), which real
+Rec Room delivered inside the room blob. Without it there is no
+`BattleRoyaleManager` in the scene.
+
+Stub shape matters. Until something is saved the CDN synthesises the blob,
+and the client fetches it through `RecNet.Rooms.GetRoomData` and rejects
+one it deems unusable — a clone surfaces that as the bare "Failed to copy
+room", a baked room as a silent load with no room roles (no Maker Pen).
+Compared against Rec Center's working `room_100_v1.dat`, the old stub was
+stamped `PersistedRoomVersion` 19 (client ceiling 16; only the S3-hit path
+clamped) and lacked the save skeleton (`last_save_time`, `activity_id` =
+LocationReplicationId, connectable graph, scene settings, object model,
+`room_mood_*`). `RoomDataBlobService.BuildRroEditableBlob` now emits that
+skeleton per room at version 16.
+
+Second requirement — game-role objects. Both reference saves carry three
+`PersistenceViewData` entries whose `game_role_node_data` (field 50) holds a
+`PlayerGameRoleData`: the room's default role (Rec Center: "Rec Center",
+Stunt Runner: "StuntRunner"; GUID `c48bac02-…` in both), "In-Game"
+(`role_id` 2097152, GUID `2c721342-…`) and "Eliminated" (`role_id`
+4194304, rank 1015, `can_move` false, GUID `0b9ec39e-…`). Their
+`spawnable_tool_data.prefab_id` is the GameRoleNode chip prefab
+(`c46e1535…` raw). Since 2023 permissions hang off the player's GameRole,
+a blob without these leaves a co-owner with no Maker Pen. The stub now
+generates Rec Royale's own set (view ids derived from the activity id).
+
+Game-rule chip. A newer-client export of a custom Rec Royale room showed
+the saved `RecRoyaleSquads_GameRuleWrapperCircuit` chip is minimal:
+`spawnable_tool_data.prefab_id` `857f7500…`, `tagged_tool_data` tag
+`recroyalesquadsgameruleci` (prefab name lower-cased, 25 chars),
+`circuit_node_data.id`, and an EMPTY `game_rule_wrapper_data` (field 41).
+Prefab ids live in the client's spawnable-tool table in
+`resources.assets`: after `SpawnableTool_Runtime_<ENUM>` comes a 20-byte
+hash (len-prefixed), two u32s, then the 16-byte prefab id (len-prefixed),
+then the enum again, display name and tag. Extracted:
+Solos `983db81a68927f419edb0daf1243e93e`, Squads
+`857f750016ca77408ae9f72f9877748a` (matches the save), StuntRunner
+`28276d92470ff34ab05f72b2707a04d1`. Stunt Runner's other rule-ish object
+(`84eb8434…`, `game_configuration_data` field 40) is the generic Game
+Configuration chip, optional — `GameConfigurationTool` falls back to its
+baked asset. The stub emits the wrapper chip for the two Rec Royale rooms.
+
+Attaching a real save: `POST api/admin/v1/rooms/{id}/subrooms/{sub}/blob/upload`
+(multipart `file`, `?mode=basics|full`) rewrites any-version
+`PersistedRoomData` for the room — see `docs/admin.md` → "Upload save".
+Used to A/B a generated stub against a genuine custom-Rec-Royale save.
+
+Admin switch: `POST api/admin/v1/rooms/{id}/subrooms/{sub}/blob/enable`
+stamps `RoomService.SyntheticDefaultRoomDataBlobName(id)` on the scene and
+room; `.../blob/reset` clears it. See `docs/admin.md` → "RRO room data
+blob" for the full procedure (enable → spawn the game-rule chip → save).
+
 ## Related 2023 quirks fixed alongside
 
 - **Play-menu search** (`IBEOONPEELF.SearchRooms`): calls

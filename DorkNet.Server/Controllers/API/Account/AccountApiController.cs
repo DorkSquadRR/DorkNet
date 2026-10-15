@@ -57,17 +57,7 @@ public class AccountApiController(
         {
             Success = true,
             Error = string.Empty,
-            Account = new RecNetAccount
-            {
-                AccountId = (int)player.Id,
-                RawUsername = player.Username,
-                Username = player.Username,
-                DisplayName = player.DisplayName ?? player.Username,
-                ProfileImage = string.Empty,
-                TreatAsJunior = false,
-                HasBirthday = true,
-                Platforms = 1,
-            },
+            Account = AccountDtos.Public(player),
         });
     }
 
@@ -77,22 +67,7 @@ public class AccountApiController(
     {
         var player = await GetCurrentPlayerAsync();
         if (player is null) return Unauthorized();
-        return Ok(new RecNetSelfAccount
-        {
-            AccountId = (int)player.Id,
-            RawUsername = player.Username,
-            Username = player.Username,
-            DisplayName = player.DisplayName ?? player.Username,
-            ProfileImage = player.ProfileImageName ?? string.Empty,
-            TreatAsJunior = false,
-            HasBirthday = true,
-            Platforms = 1,
-            Email = player.Email ?? string.Empty,
-            Phone = string.Empty,
-            Birthday = new DateTime(2000, 1, 1),
-            JuniorState = 0,
-            ParentAccountId = null,
-        });
+        return Ok(AccountDtos.Self(player));
     }
 
     /// <summary>

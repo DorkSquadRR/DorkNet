@@ -66,8 +66,13 @@ public sealed class GameClientEndpointContractTests :
         if (!string.Equals(route.Method, "DELETE", StringComparison.OrdinalIgnoreCase))
             return false;
 
+        // Case-insensitive to match the method comparison above: a route
+        // declared "Account/v1/me" would otherwise slip through and delete
+        // the probe player mid-run.
         var template = route.Template.Trim('/');
-        return template is "account/me" or "account/v1/me" or "account/v2/me";
+        return template.Equals("account/me", StringComparison.OrdinalIgnoreCase)
+            || template.Equals("account/v1/me", StringComparison.OrdinalIgnoreCase)
+            || template.Equals("account/v2/me", StringComparison.OrdinalIgnoreCase);
     }
 
     private static async Task<EndpointProbeResult> ProbeAsync(

@@ -584,6 +584,20 @@ public class ImagesController(
         // ReportEntity has no TargetPhotoId column, so the photo id + blob name
         // ride in the message text the same way club reports carry "[club {id}]"
         // — a moderator needs the actual image to act on the report.
+        //
+        // One open report per (reporter, photo): the call is fire-and-forget
+        // and the client can't tell 200 from 404, so retries and re-opens are
+        // likely — same guard as the custom-avatar-item report path.
+        var marker = $"[photo {photo.Id} ";
+        var duplicate = await db.Reports.AnyAsync(r =>
+            r.ReporterPlayerId == reporter && r.ResolvedAt == null && r.Message.StartsWith(marker));
+        if (duplicate)
+        {
+            logger.LogInformation(
+                "[images] duplicate report of photo {PhotoId} by {Reporter} ignored", photo.Id, reporter);
+            return Ok(new RecNetResult { Success = true, Error = string.Empty });
+        }
+
         var message = $"[photo {photo.Id} {photo.BlobName}] reported from the in-game photo viewer";
         db.Reports.Add(new ReportEntity
         {

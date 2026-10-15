@@ -1145,10 +1145,17 @@ public class PlayerEventsController(
         extras.SupportMultiInstanceRoomChat =
             await ReadBoolFieldAsync("supportsMultiInstanceRoomChat", "supportMultiInstanceRoomChat",
                 "SupportMultiInstanceRoomChat") ?? false;
-        extras.DefaultBroadcastPermissions =
-            await ReadIntFieldAsync("defaultBroadcastPermissions", "DefaultBroadcastPermissions") ?? 0;
-        extras.CanRequestBroadcastPermissions =
-            await ReadIntFieldAsync("canRequestBroadcastPermissions", "CanRequestBroadcastPermissions") ?? 0;
+        // These two are boxed enums (typeof(AKFCIMLMAKA) at
+        // CBKANFIOBCF_NestedType_EONGJBMLEFO.txt:117-165), and a boxed non-string
+        // field goes through Object.ToString (BNDIAONDFFF.txt:947, ISIL 107-110),
+        // so they arrive as member NAMES. int.TryParse failed on every one and
+        // the settings were always stored as 0.
+        extras.DefaultBroadcastPermissions = ParseBroadcastPermissions(
+            await ReadStringFieldAsync("defaultBroadcastPermissions", "DefaultBroadcastPermissions"))
+            ?? extras.DefaultBroadcastPermissions;
+        extras.CanRequestBroadcastPermissions = ParseBroadcastPermissions(
+            await ReadStringFieldAsync("canRequestBroadcastPermissions", "CanRequestBroadcastPermissions"))
+            ?? extras.CanRequestBroadcastPermissions;
 
         await SaveExtrasAsync(evt, extras);
         return Ok(await WrapperAsync(evt));
@@ -1435,6 +1442,33 @@ public class PlayerEventsController(
         return long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)
             ? parsed
             : null;
+    }
+
+    /// <summary>Broadcast-permission mode as a number. Members per the
+    /// 2023.06.21 dump (enum KJJFEBEMPKM, mapped by
+    /// EventsConfig.BroadcastPermissionsModeFriendlyNameMapping): None = 0,
+    /// RoomOwners = 256, All = Int32.MaxValue. Accepts the number itself (JSON
+    /// bodies send numbers), a member name, or a comma-joined flags string.
+    /// Null when the value is absent or unrecognised, so the stored setting is
+    /// kept rather than silently zeroed.</summary>
+    public static int? ParseBroadcastPermissions(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        if (int.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)) return n;
+        var total = 0;
+        foreach (var part in raw.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            int? value = part.ToLowerInvariant() switch
+            {
+                "none" => 0,
+                "roomowners" => 256,
+                "all" => int.MaxValue,
+                _ => null,
+            };
+            if (value is null) return null;
+            total |= value.Value;
+        }
+        return total;
     }
 
     private async Task<int?> ReadIntFieldAsync(params string[] names)

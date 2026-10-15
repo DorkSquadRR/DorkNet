@@ -101,7 +101,9 @@ public class AuthController(
         [FromForm] int platform = 0,
         [FromForm] string? platformId = null,
         [FromForm(Name = "platform_id")] string? platform_id_snake = null,
-        [FromForm] long? account_id = null)
+        [FromForm] long? account_id = null,
+        [FromForm] string? device_code = null,
+        [FromForm] string? login_token = null)
     {
         // The client mixes camelCase and snake_case parameter naming
         // depending on grant type — accept both and merge.
@@ -137,6 +139,55 @@ public class AuthController(
             await playerService.TagPlatformAsync(picked.Id, platform, effPlatformId);
             var (acc1, refr1) = authService.GenerateTokenPair(picked.Id);
             return TokenOk(acc1, refr1);
+        }
+
+        // Device-authorization poll (LBNJFPOLCDL_NestedType_DDNJDALGIME.txt:444-451).
+        // The client keeps polling on HTTP 400 with error authorization_pending
+        // or slow_down (LBNJFPOLCDL_NestedType_JAEKFNKDNCP.txt:97-116); any other
+        // error ends the attempt. This grant used to fall through to the
+        // device-id fallback, which signed the polling device straight in as
+        // whatever account its device id mapped to — no approval involved.
+        if (string.Equals(grant_type, DeviceCodeGrantType, StringComparison.Ordinal))
+        {
+            var (status, approverId) = await DeviceAuthorizations.RedeemAsync(db, device_code, DateTime.UtcNow);
+            switch (status)
+            {
+                case DeviceAuthorizations.RedeemStatus.Pending:
+                    return BadRequest(new { error = "authorization_pending" });
+                case DeviceAuthorizations.RedeemStatus.Expired:
+                    return BadRequest(new { error = "expired_token" });
+                case DeviceAuthorizations.RedeemStatus.Invalid:
+                    return BadRequest(new { error = "invalid_grant" });
+            }
+            var approver = await playerService.GetByIdAsync(approverId);
+            if (approver is null) return BadRequest(new { error = "invalid_grant" });
+            await TryAwardLoginXpAsync(approver.Id);
+            var (accD, refrD) = authService.GenerateTokenPair(approver.Id);
+            return TokenOk(accD, refrD);
+        }
+
+        // One-shot token from account/me/createlogintoken, redeemed with the
+        // account it was minted for (LBNJFPOLCDL.txt:7593-7606: grant_type,
+        // account_id, login_token). Also used to fall through to the device-id
+        // fallback, ignoring both account_id and the token.
+        if (string.Equals(grant_type, "login_token", StringComparison.Ordinal))
+        {
+            if (account_id is not long tokenAccountId || string.IsNullOrWhiteSpace(login_token))
+                return BadRequest(new { error = "invalid_request", error_description = "invalid login_token" });
+            var prefix = login_token.Trim() + "|";
+            var row = await db.PlayerSettings.FirstOrDefaultAsync(s =>
+                s.PlayerId == tokenAccountId
+                && s.Key == Accounts.AccountsController.RemoteLoginTokenKey
+                && s.Value.StartsWith(prefix));
+            if (row is null
+                || !DateTime.TryParse(row.Value[prefix.Length..], null,
+                    System.Globalization.DateTimeStyles.RoundtripKind, out var tokenExpiry)
+                || tokenExpiry < DateTime.UtcNow)
+                return BadRequest(new { error = "invalid_grant", error_description = "invalid login_token" });
+            db.PlayerSettings.Remove(row);
+            await db.SaveChangesAsync();
+            var (accL, refrL) = authService.GenerateTokenPair(tokenAccountId);
+            return TokenOk(accL, refrL);
         }
 
         if (string.Equals(grant_type, "refresh_token", StringComparison.OrdinalIgnoreCase))
@@ -364,25 +415,19 @@ public class AuthController(
     [HttpGet("/connect/deviceauthorization")]
     public async Task<IActionResult> DeviceAuthorization()
     {
-        var deviceCode = Guid.NewGuid().ToString("N");
-        var userCode = deviceCode[..8].ToUpperInvariant();
-        db.PlayerSettings.Add(new PlayerSettingEntity
-        {
-            PlayerId = RelationshipQueries.SystemAccountId,
-            Key = $"deviceauthorization:{deviceCode}",
-            Value = $"{userCode}|{DateTime.UtcNow.AddMinutes(15):O}",
-        });
-        await db.SaveChangesAsync();
+        var created = await DeviceAuthorizations.CreateAsync(db, DateTime.UtcNow);
         return Ok(new
         {
-            device_code = deviceCode,
-            user_code = userCode,
+            device_code = created.DeviceCode,
+            user_code = created.UserCode,
             verification_uri = $"https://{domain.Sub("auth")}/device",
-            verification_uri_complete = $"https://{domain.Sub("auth")}/device?user_code={userCode}",
-            expires_in = 900,
+            verification_uri_complete = $"https://{domain.Sub("auth")}/device?user_code={created.UserCode}",
+            expires_in = created.ExpiresInSeconds,
             interval = 5,
         });
     }
+
+    public const string DeviceCodeGrantType = "urn:ietf:params:oauth:grant-type:device_code";
 
     private static CachedLogin ToCachedLogin(PlayerEntity p, int platform, string platformId) => new()
     {

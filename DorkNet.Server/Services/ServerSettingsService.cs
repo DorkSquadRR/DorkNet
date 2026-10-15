@@ -1,6 +1,7 @@
 using DorkNet.Server.Data;
 using DorkNet.Server.Data.Entities;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 using System.Text.Json;
 
 namespace DorkNet.Server.Services;
@@ -175,7 +176,25 @@ public class ServerSettingsService(DorkNetDbContext db)
         var row = await GetAsync();
         return ToGameConfigurations(
             ToRecCenterDoors(row),
-            ToDiscoveredGameConfigs(row));
+            ToDiscoveredGameConfigs(row),
+            ToCircuitsV2Limits(row));
+    }
+
+    public async Task<CircuitsV2LimitSettings> GetCircuitsV2LimitsAsync()
+    {
+        var row = await GetAsync();
+        return ToCircuitsV2Limits(row);
+    }
+
+    public async Task<CircuitsV2LimitSettings> SetCircuitsV2LimitsAsync(
+        CircuitsV2LimitSettings settings)
+    {
+        var normalized = NormalizeCircuitsV2Limits(settings);
+        var existing = await GetTrackedRowAsync();
+        existing.CircuitsV2LimitsJson = JsonSerializer.Serialize(normalized, JsonOptions);
+        existing.UpdatedAt = DateTime.UtcNow;
+        await db.SaveChangesAsync();
+        return normalized with { UpdatedAt = existing.UpdatedAt };
     }
 
     public async Task<PlayMenuTagSettings> SetPlayMenuTagsAsync(
@@ -663,9 +682,86 @@ public class ServerSettingsService(DorkNetDbContext db)
             SplitTestSegmentProbabilities: "{}",
             UpdatedAt: DateTime.UtcNow);
 
+    /// <summary>
+    /// Retail shipped one network entry — 5 RPCs per frame, 1024 bytes per
+    /// 60 frames — which is what makes busy CircuitsV2 rooms drop chip
+    /// sends. DorkNet ships the budgets effectively unlimited instead, and
+    /// raises the room-size limits to values the client survives with
+    /// headroom (each is justified in docs/recroom-2023-circuitsv2-limits.md):
+    /// <list type="bullet">
+    /// <item>Compute 50000 → 500000: the per-frame CPU budget shared by
+    /// every circuit in the room. It is the only thing that stops a runaway
+    /// loop, so it stays finite.</item>
+    /// <item>Chips 3000 → 30000: the room's chip cap ("Too many
+    /// chips.").</item>
+    /// <item>CloudValues 100 → 1000: the room's cloud-variable cap.</item>
+    /// <item>UnculledChips / VisibleChips 500 → 3000: chips past these
+    /// counts get culled, so every chip of a retail-sized room stays
+    /// visible.</item>
+    /// <item>InkPerChip 15 → 0: this is an ink COST, charged against the
+    /// client's hard-coded 30000-ink room cap, so lowering it is the
+    /// increase. 0 means chips stop eating room ink.</item>
+    /// </list>
+    /// CloudValuesAutosaveSeconds stays at retail's 300: it is a save
+    /// cadence, not a capacity limit. Admins can dial any of it back from
+    /// the SPA.
+    /// </summary>
+    public static CircuitsV2LimitSettings DefaultCircuitsV2Limits() =>
+        new(
+            Network:
+            [
+                new(
+                    NumPlayersForActivation: 0,
+                    Bytes: UnlimitedBudget,
+                    BytesTimeWindowFrame60s: 60,
+                    Rpcs: UnlimitedBudget,
+                    RpcTimeWindowFrame60s: 1),
+            ],
+            Compute: 500_000,
+            Chips: 30_000,
+            CloudValues: 1_000,
+            CloudValuesAutosaveSeconds: 300f,
+            UnculledChips: 3_000,
+            VisibleChips: 3_000,
+            InkPerChip: 0,
+            UpdatedAt: DateTime.UtcNow);
+
+    /// <summary>The budget value that stands in for "unlimited". The client
+    /// only ever compares a running counter against it, so any large int
+    /// works; this leaves 2x headroom under int.MaxValue.</summary>
+    private const int UnlimitedBudget = 1_000_000_000;
+
+    /// <summary>Time windows size a <c>new int[N]</c> ring buffer — one
+    /// bucket per frame — inside the client's rate limiter, so a huge
+    /// window is an allocation, not a bigger budget. 3600 frames (a minute
+    /// at 60fps) is 14KB and far past anything useful.</summary>
+    private const int MaxTimeWindowFrames = 3600;
+
+    /// <summary>Play-menu carousel order. <c>PlayMenuCarouselModel.TryGetDisplayPriorityMap</c>
+    /// looks this exact key up (literal at Assembly-CSharp/RRUI/Data/PlayMenuCarouselModel.txt:547)
+    /// and, when it is absent, logs "Could not find GameConfig for PlayMenuCarouselOrdering_1"
+    /// (:758) and leaves the carousels in prefab order. The value is split on ';' then '='
+    /// into id → Int32 priority (:603, :632, :655); <c>PlayMenuCarouselController.DisplayOrderPriorityImpl</c>
+    /// then reorders the carousel children with SetSiblingIndex.
+    ///
+    /// The ids are the carousel ids serialized on that component in the 2023-03-21 build's
+    /// Addressables bundle (3900770abc33861326d1865e454c0901.bundle, MonoBehaviour
+    /// PlayMenuCarouselController/DisplayOrderPriorityImpl): continueplaying, friendsplaying,
+    /// myclubhouses, myevents, mysubscriptions, recommended, hotrooms, topcreators, featured,
+    /// myfavorites, recroomoriginals, new, limitedtimeevent. Priorities follow the live
+    /// service's 2023 "PlayMenuCarouselOrdering_3" segment (higher first), with the
+    /// time-limited event carousel put on top.</summary>
+    public const string PlayMenuCarouselOrderingKey = "PlayMenuCarouselOrdering_1";
+
+    public const string PlayMenuCarouselOrdering =
+        "limitedtimeevent=15;hotrooms=14;new=13;recroomoriginals=12;continueplaying=11;" +
+        "myfavorites=10;friendsplaying=9;recommended=8;mysubscriptions=7;featured=5;" +
+        "myclubhouses=4;myevents=3;topcreators=2";
+
     public static IReadOnlyList<GameConfigurationSetting> ToGameConfigurations(
         RecCenterDoorSettings doors,
-        DiscoveredGameConfigSettings discovered)
+        DiscoveredGameConfigSettings discovered,
+        CircuitsV2LimitSettings circuits)
     {
         var rows = new List<GameConfigurationSetting>();
         foreach (var door in NormalizeRecCenterDoors(doors.Doors).Doors)
@@ -690,8 +786,26 @@ public class ServerSettingsService(DorkNetDbContext db)
             new("splitTestSoftOverrides", gameConfig.SplitTestSoftOverrides),
             new("splitTestHardOverrides", gameConfig.SplitTestHardOverrides),
             new("splitTestSegmentProbabilities", gameConfig.SplitTestSegmentProbabilities),
+            new(PlayMenuCarouselOrderingKey, PlayMenuCarouselOrdering),
+        ]);
+
+        var limits = NormalizeCircuitsV2Limits(circuits);
+        rows.AddRange([
+            new("UGC.CircuitsV2.Limit.Network", JsonSerializer.Serialize(limits.Network, JsonOptions)),
+            new("UGC.CircuitsV2.Limit.Compute", Int(limits.Compute)),
+            new("UGC.CircuitsV2.Limit.Chips", Int(limits.Chips)),
+            new("UGC.CircuitsV2.Limit.CloudValues", Int(limits.CloudValues)),
+            new("UGC.CircuitsV2.Limit.CloudValuesAutosaveSeconds",
+                limits.CloudValuesAutosaveSeconds.ToString("0.###", CultureInfo.InvariantCulture)),
+            new("UGC.CircuitsV2.Limit.UnculledChips", Int(limits.UnculledChips)),
+            new("UGC.CircuitsV2.Limit.VisibleChips", Int(limits.VisibleChips)),
+            new("UGC.CircuitsV2.Limit.InkPerChip", Int(limits.InkPerChip)),
         ]);
         return rows;
+
+        // The client parses every scalar with int/float.TryParse under
+        // InvariantCulture, so no thousands separators.
+        static string Int(int value) => value.ToString(CultureInfo.InvariantCulture);
     }
 
     private static PlayMenuTagSettings NormalizePlayMenuTags(
@@ -800,6 +914,104 @@ public class ServerSettingsService(DorkNetDbContext db)
             SplitTestSegmentProbabilities: JsonObjectOrDefault(settings.SplitTestSegmentProbabilities),
             UpdatedAt: DateTime.UtcNow);
     }
+
+    /// <summary>
+    /// Clamps the limits to what the client can actually survive. Four of
+    /// these are crash guards rather than taste:
+    /// <list type="bullet">
+    /// <item>Rpcs of 0 divides by zero in the CircuitsV2 debug subscreen,
+    /// which renders <c>RpcRecentMax / Rpcs</c>.</item>
+    /// <item>A time window sizes a per-frame ring buffer, so an
+    /// unbounded value is an out-of-memory kill at circuit init.</item>
+    /// <item>Chips sizes four list preallocations in the chip-culling
+    /// manager, and InkPerChip × CloudValues is an unchecked int multiply,
+    /// so both are capped.</item>
+    /// <item>The client rejects the whole network array — falling back to
+    /// the retail 5-RPC budget — unless some entry has
+    /// NumPlayersForActivation 0, so the lowest entry is forced to 0.</item>
+    /// </list>
+    /// </summary>
+    private static CircuitsV2LimitSettings NormalizeCircuitsV2Limits(
+        CircuitsV2LimitSettings settings)
+    {
+        var seen = new HashSet<int>();
+        var network = (settings.Network ?? [])
+            .Where(entry => entry is not null)
+            .Select(entry => new CircuitsV2NetworkLimit(
+                NumPlayersForActivation: Math.Clamp(entry.NumPlayersForActivation, 0, 1000),
+                Bytes: Math.Clamp(entry.Bytes, 1, UnlimitedBudget),
+                BytesTimeWindowFrame60s: Math.Clamp(entry.BytesTimeWindowFrame60s, 1, MaxTimeWindowFrames),
+                Rpcs: Math.Clamp(entry.Rpcs, 1, UnlimitedBudget),
+                RpcTimeWindowFrame60s: Math.Clamp(entry.RpcTimeWindowFrame60s, 1, MaxTimeWindowFrames)))
+            .OrderBy(entry => entry.NumPlayersForActivation)
+            .Where(entry => seen.Add(entry.NumPlayersForActivation))
+            .Take(16)
+            .ToList();
+
+        if (network.Count == 0)
+            network = DefaultCircuitsV2Limits().Network;
+        else if (network[0].NumPlayersForActivation != 0)
+            network[0] = network[0] with { NumPlayersForActivation = 0 };
+
+        return new CircuitsV2LimitSettings(
+            Network: network,
+            // Compute is the per-frame CPU budget: CircuitsV2Manager's frame
+            // tick (CircuitsV2Manager.txt OCGDEIJJBAG ISIL 240, :21241)
+            // builds a fresh BENFNKBKHEA(Compute) every frame, which sums
+            // four int counters and compares them <= the budget
+            // (Circuits.V2/BENFNKBKHEA.txt). Nothing is allocated from it,
+            // but it is the only runaway-loop guard: a budget near
+            // int.MaxValue lets the summed counters wrap negative and never
+            // trip. 10M keeps 200x headroom under int.MaxValue.
+            Compute: Math.Clamp(settings.Compute, 1, 10_000_000),
+            // The chip-culling manager's ctor preallocates four
+            // List<Chip>(Chips) (PAFDMBHNMBP.txt .ctor ISIL 053-108), so
+            // 0 or a negative is an ArgumentOutOfRange and 1M is 32MB of
+            // pointer arrays — the ceiling.
+            Chips: Math.Clamp(settings.Chips, 1, 1_000_000),
+            // CalculateActiveResourceCost computes
+            // inkCost += InkPerChip * Math.Min(numChips, CloudValues) in
+            // plain int (CreationManager.txt ISIL 389-415, :6136-6162).
+            // With InkPerChip capped at 30000 below, 10000 keeps that
+            // product at 3e8, well under int.MaxValue.
+            CloudValues: Math.Clamp(settings.CloudValues, 0, 10_000),
+            // A non-finite value would serialize as "NaN"/"Infinity", which
+            // the client's float.TryParse happily accepts.
+            CloudValuesAutosaveSeconds: float.IsFinite(settings.CloudValuesAutosaveSeconds)
+                ? Math.Clamp(settings.CloudValuesAutosaveSeconds, 1f, 3600f)
+                : 300f,
+            UnculledChips: Math.Clamp(settings.UnculledChips, 1, 1_000_000),
+            VisibleChips: Math.Clamp(settings.VisibleChips, 1, 1_000_000),
+            // InkPerChip is an ink cost against the room's hard-coded
+            // 30000-ink cap (CostInfo(0x7530, 64, 101, Chips, CloudValues)
+            // in CreationManager.OnCircuitsV2LimitsRefreshed, ISIL 060,
+            // :3374). Past 30000 a single chip is unaffordable, and the
+            // cap also bounds the int multiply noted on CloudValues. No
+            // client code divides by it, so 0 is safe.
+            InkPerChip: Math.Clamp(settings.InkPerChip, 0, 30_000),
+            UpdatedAt: DateTime.UtcNow);
+    }
+
+    private static CircuitsV2LimitSettings ToCircuitsV2Limits(ServerSettingsEntity row)
+    {
+        if (!string.IsNullOrWhiteSpace(row.CircuitsV2LimitsJson))
+        {
+            try
+            {
+                var parsed = JsonSerializer.Deserialize<CircuitsV2LimitSettings>(
+                    row.CircuitsV2LimitsJson,
+                    JsonOptions);
+                if (parsed is not null)
+                    return NormalizeCircuitsV2Limits(parsed) with { UpdatedAt = row.UpdatedAt };
+            }
+            catch
+            {
+                // Bad settings should not break gameconfig bootstrap.
+            }
+        }
+
+        return DefaultCircuitsV2Limits() with { UpdatedAt = row.UpdatedAt };
+    }
 }
 
 public sealed record WeeklyChallengeSettings(
@@ -847,6 +1059,38 @@ public sealed record GameConfigurationSetting(
     string Value,
     DateTime? StartTime = null,
     DateTime? EndTime = null);
+
+/// <summary>
+/// One entry of the <c>UGC.CircuitsV2.Limit.Network</c> array. The client
+/// sorts entries ascending by <see cref="NumPlayersForActivation"/> and
+/// activates the highest one whose threshold is at or below the room's max
+/// player capacity, so a single entry with a threshold of 0 applies
+/// everywhere. Field names are the literal JSON keys the client's
+/// Newtonsoft reader binds to <c>LimitConfig.NetworkConfig</c>.
+/// </summary>
+public sealed record CircuitsV2NetworkLimit(
+    int NumPlayersForActivation,
+    int Bytes,
+    int BytesTimeWindowFrame60s,
+    int Rpcs,
+    int RpcTimeWindowFrame60s);
+
+/// <summary>
+/// The <c>UGC.CircuitsV2.Limit.*</c> gameconfig family, read by
+/// <c>RecRoom.CircuitsV2.Config.LimitConfig</c>. Every field maps to one
+/// key; the client falls back to its baked-in defaults for any key the
+/// server omits or sends unparseably.
+/// </summary>
+public sealed record CircuitsV2LimitSettings(
+    List<CircuitsV2NetworkLimit> Network,
+    int Compute,
+    int Chips,
+    int CloudValues,
+    float CloudValuesAutosaveSeconds,
+    int UnculledChips,
+    int VisibleChips,
+    int InkPerChip,
+    DateTime UpdatedAt);
 
 public sealed record DiscoveredGameConfigSettings(
     int FriendsPostGamePromptUnderFriendCount,
