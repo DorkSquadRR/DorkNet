@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react';
-import { Navigate, useLocation } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router';
 import { getToken, subscribeAuth } from '../lib/auth';
 
 // Gate every authenticated route. We re-render on any auth state
