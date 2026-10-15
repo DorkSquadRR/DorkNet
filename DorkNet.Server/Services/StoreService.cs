@@ -179,7 +179,11 @@ public class StoreService(DorkNetDbContext db, LevelService level, IConfiguratio
             foreach (var row in stale)
             {
                 var guid = row.Slug.Substring("wardrobe-".Length);
-                if (!safe.Contains(guid)) toDelete.Add(row.Id);
+                // Custom-clothing templates aren't sold; drop rows seeded
+                // before they were excluded.
+                if (!safe.Contains(guid) ||
+                    DorkNet.Server.Controllers.API.Avatar.V4.AvatarItemsController.IsBaseAvatarItemGuid(guid))
+                    toDelete.Add(row.Id);
             }
             if (toDelete.Count > 0)
             {
@@ -690,6 +694,9 @@ public class StoreService(DorkNetDbContext db, LevelService level, IConfiguratio
         var added = false;
         foreach (var (guid, dto) in catalog)
         {
+            // The UGC templates are the base of custom clothing, not shop
+            // items (the real store never listed them).
+            if (dto.IsBaseAvatarItem) continue;
             var slug = $"wardrobe-{guid}";
             if (existingSlugs.Contains(slug)) continue;
             existingSlugs.Add(slug);
