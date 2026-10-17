@@ -89,8 +89,15 @@ body — the same `roomserver/` prefix as every other room mutation from
 that client. A bare-only `rooms/{id}/clone` route 404s with an empty
 body, which the client's promise layer surfaces as a message-less
 `Failed to copy room: Exception of type 'CEMNLBKJABA' was thrown`.
-The response must be the FULL room-details object (`FGCPNAACHIK`,
-same shape as `GET roomserver/rooms/{id}`), not a status wrapper.
+The response is the legacy `{success, value, error}` envelope, the same
+one "save room" and "restore subroom save" use: the clone goes through the
+same RecNet rooms helper (`NLDBPDCNNCF.BDBHCEGKGDC`, which takes an op
+name). `value` is the FULL room-details object (`FGCPNAACHIK`, same shape
+as `GET roomserver/rooms/{id}`). A bare room-details body has no `success`,
+so the client rejects it with an empty error and shows the same
+message-less `Failed to copy room`, even though the room was created.
+Refusals (unknown source, cloning not allowed) are HTTP 200 with
+`success: false` and the message in `error`.
 
 Blob semantics on clone (`RoomsModerationController.BareClone`):
 
