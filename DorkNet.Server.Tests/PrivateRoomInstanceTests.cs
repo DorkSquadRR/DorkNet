@@ -42,7 +42,7 @@ public sealed class PrivateRoomInstanceTests : IClassFixture<DorkNetServerFactor
         var text = await resp.Content.ReadAsStringAsync();
         Assert.True(resp.IsSuccessStatusCode, $"{(int)resp.StatusCode}: {text}");
         using var json = JsonDocument.Parse(text);
-        var cloneId = json.RootElement.GetProperty("RoomId").GetInt64();
+        var cloneId = json.RootElement.GetProperty("value").GetProperty("RoomId").GetInt64();
 
         await using var scope = _factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<DorkNetDbContext>();

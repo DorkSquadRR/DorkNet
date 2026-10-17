@@ -10,13 +10,15 @@ using Microsoft.Extensions.DependencyInjection;
 namespace DorkNet.Server.Tests;
 
 /// <summary>
-/// The 2023 "copy room" flow POSTs <c>rooms/{id}/clone</c> and deserialises the
-/// reply into <c>FGCPNAACHIK</c> — the SAME type <c>GET rooms/{id}</c> returns
-/// (RecNet.Runtime/NLDBPDCNNCF.txt:4676 declares
+/// The 2023 "copy room" flow POSTs <c>rooms/{id}/clone</c> and reads the reply
+/// as the <c>{success, value, error}</c> envelope (the same RecNet rooms helper
+/// as "save room"), whose <c>value</c> is <c>FGCPNAACHIK</c> — the SAME type
+/// <c>GET rooms/{id}</c> returns (RecNet.Runtime/NLDBPDCNNCF.txt:4676 declares
 /// <c>Task&lt;FGCPNAACHIK&gt; GDHIIAHCBMN(Int64, String, CancellationToken)</c>,
-/// with the route literal on :4802).
+/// with the route literal on :4802). A bare room with no <c>success</c> is
+/// rejected with an empty error.
 ///
-/// So the two responses must be shape-identical. When they drift, the server
+/// So <c>value</c> and the GET response must be shape-identical. When they drift, the server
 /// still answers 200 and the client throws while reading it — and because the
 /// clone promise's exception is never observed, it surfaces from the finalizer
 /// thread seconds later as a bare "Failed to copy room: Exception of type
@@ -63,8 +65,12 @@ public sealed class RoomCloneShapeTests : IClassFixture<DorkNetServerFactory>
         }
 
         var getBody = await ReadJsonAsync(client, HttpMethod.Get, $"/rooms/{sourceId}");
-        var cloneBody = await ReadJsonAsync(client, HttpMethod.Post, $"/rooms/{sourceId}/clone",
+        var cloneEnvelope = await ReadJsonAsync(client, HttpMethod.Post, $"/rooms/{sourceId}/clone",
             new FormUrlEncodedContent([new KeyValuePair<string, string>("name", $"Copy{Guid.NewGuid():N}"[..20])]));
+        // The client reads clone through the {success, value, error} envelope.
+        Assert.True(cloneEnvelope.GetProperty("success").GetBoolean(), cloneEnvelope.ToString());
+        Assert.Equal("", cloneEnvelope.GetProperty("error").GetString());
+        var cloneBody = cloneEnvelope.GetProperty("value");
 
         var expected = getBody.EnumerateObject().Select(p => p.Name).ToHashSet(StringComparer.Ordinal);
         var actual = cloneBody.EnumerateObject().Select(p => p.Name).ToHashSet(StringComparer.Ordinal);
@@ -157,7 +163,7 @@ public sealed class RoomCloneShapeTests : IClassFixture<DorkNetServerFactory>
 
         var clone = await ReadJsonAsync(client, HttpMethod.Post, $"/rooms/{sourceId}/clone",
             new FormUrlEncodedContent([new KeyValuePair<string, string>("name", $"Copy{Guid.NewGuid():N}"[..20])]));
-        var cloneId = clone.GetProperty("RoomId").GetInt64();
+        var cloneId = clone.GetProperty("value").GetProperty("RoomId").GetInt64();
 
         await using (var scope = factory.Services.CreateAsyncScope())
         {
@@ -201,6 +207,24 @@ public sealed class RoomCloneShapeTests : IClassFixture<DorkNetServerFactory>
 
         public Task<bool> ExistsAsync(string bucket, string key, CancellationToken ct = default) =>
             Task.FromResult(_objects.ContainsKey($"{bucket}/{key}"));
+    }
+
+    [Fact]
+    public async Task Clone_refusal_is_a_200_envelope_with_a_message()
+    {
+        using var client = Client();
+        var session = await GameClientSessionFactory.CreateAsync(client, _factory.ApexDomain);
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", session.AccessToken);
+
+        // No room has this id, so the clone is refused; the client shows
+        // `error`, which a bare 404 would leave empty.
+        var envelope = await ReadJsonAsync(client, HttpMethod.Post, "/rooms/987654321987/clone",
+            new FormUrlEncodedContent([new KeyValuePair<string, string>("name", "NoSuchSource")]));
+
+        Assert.False(envelope.GetProperty("success").GetBoolean());
+        Assert.False(string.IsNullOrEmpty(envelope.GetProperty("error").GetString()));
+        Assert.Equal(JsonValueKind.Null, envelope.GetProperty("value").ValueKind);
     }
 
     private static async Task<JsonElement> ReadJsonAsync(
