@@ -267,8 +267,10 @@ public sealed class RoomSave2023Tests : IClassFixture<DorkNetServerFactory>
         Assert.True(resp.IsSuccessStatusCode, $"clone of {sourceId} -> {(int)resp.StatusCode}: {text}");
 
         using var json = JsonDocument.Parse(text);
-        var root = json.RootElement;
-        // Full room-details shape (FGCPNAACHIK), not a status wrapper.
+        // {success, value, error} envelope around the full room-details
+        // shape (FGCPNAACHIK).
+        Assert.True(json.RootElement.GetProperty("success").GetBoolean(), text);
+        var root = json.RootElement.GetProperty("value");
         foreach (var key in new[] { "RoomId", "SubRooms", "Roles" })
             Assert.True(root.TryGetProperty(key, out _), $"clone response missing '{key}': {text}");
         return root.GetProperty("RoomId").GetInt64();

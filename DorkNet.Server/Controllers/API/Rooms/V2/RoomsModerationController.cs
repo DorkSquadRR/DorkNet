@@ -1375,13 +1375,13 @@ public class RoomsModerationController(
     {
         var newName = await ReadCloneNameAsync();
         var source = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
-        if (source is null) return NotFound();
+        if (source is null) return CloneResult(null, "That room doesn't exist.");
         // RRO/AG rooms are first-party templates meant to be cloned — the
         // room-creation "base room" picker starts a new build by cloning one
         // (RecCenter, MakerRoom, …). Their seed rows have CloningAllowed=false,
-        // so without the IsAGRoom exception every base-room create 403s.
+        // so without the IsAGRoom exception every base-room create is refused.
         if (!source.CloningAllowed && !source.IsAGRoom && source.CreatorPlayerId != Me)
-            return Forbid();
+            return CloneResult(null, "You can't clone this room!");
 
         if (string.IsNullOrWhiteSpace(newName))
             newName = $"{source.Name}Copy";
@@ -1517,17 +1517,22 @@ public class RoomsModerationController(
 
         await GiveCloneItsOwnBlobsAsync(clone, sourceScenes, clonedScenes, Me);
 
-        // The 2023 client's clone (RecNet.Runtime NLDBPDCNNCF.GDHIIAHCBMN)
-        // deserializes the response as the FULL room-details object
-        // (FGCPNAACHIK — the same type get-by-id / rename return on the
-        // roomserver host), NOT the slim list-room shape. This is the
-        // roomserver-family path (rooms/{id}/clone), so use
-        // BuildRoomServerDetails — the exact shape GET rooms/{id} returns for
-        // the 2023 client. Returning ToWireRoom (or the wrong details variant)
-        // made the strict reader fail → "Failed to copy room: Failed to clone
-        // room".
-        return Ok(RoomsController.BuildRoomServerDetails(clone, clonedScenes));
+        // The value is the FULL room-details object (FGCPNAACHIK), the exact
+        // shape GET rooms/{id} returns for the 2023 client — not the slim
+        // list-room shape, which made the strict reader fail.
+        return CloneResult(RoomsController.BuildRoomServerDetails(clone, clonedScenes));
     }
+    /// <summary>Reply for <c>rooms/{id}/clone</c>. The 2023 client sends the
+    /// clone through the same RecNet rooms helper as "save room" and "restore
+    /// subroom save" (NLDBPDCNNCF.BDBHCEGKGDC with an op name), which reads the
+    /// legacy <c>{success, value, error}</c> envelope. A bare room-details body
+    /// has no <c>success</c>, so the client rejects it with an empty error:
+    /// "Failed to copy room: Exception of type 'CEMNLBKJABA' was thrown", even
+    /// though the room was created. Refusals are 200 with success=false and a
+    /// message the client shows.</summary>
+    private OkObjectResult CloneResult(object? room, string error = "") =>
+        Ok(new { success = error.Length == 0, value = room, error });
+
     /// <summary>Give a freshly-cloned room its OWN copy of the source's save
     /// data instead of pointing its scenes at the source's blob.
     ///

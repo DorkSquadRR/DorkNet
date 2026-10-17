@@ -659,7 +659,7 @@ Diffed all 45 real HTTP routes of the 2023-03-21 client's rooms subsystem agains
 | GET + POST | `rooms/{0}/bans` | GET: none. POST 'ban players': form fields id (repeated Int32 account ids) + banMask (Int32 enum DCDPJPHBHOA) | GET → [IBHAKOOKEEE {"AccountId": Int32, "BannedByAccountId": Int32, "BanStartTime": DateTime string}]. POST → none parsed. |
 | POST | `rooms/{0}/bans/import` | form field: sourceRoomId (Int64) | none parsed; return 200 |
 | DELETE | `rooms/{0}/bans/{1}` | form field: banMask (Int32 enum) | none parsed; return 200 |
-| POST | `rooms/{0}/clone` | x-www-form-urlencoded field: name (String) — new room name | FGCPNAACHIK FULL room details of the clone (not a status wrapper); client 404→empty-body surfaces as message-less 'Failed to copy room' |
+| POST | `rooms/{0}/clone` | x-www-form-urlencoded field: name (String) — new room name | `{success, value, error}` envelope with `value` = FGCPNAACHIK FULL room details of the clone (same helper as "save room"; a bare room has no `success` and is rejected with an empty error). Client 404→empty-body also surfaces as message-less 'Failed to copy room' |
 | PUT | `rooms/{0}/cloning` | form field: cloningAllowed (Boolean) | FGCPNAACHIK full room details |
 | PUT | `rooms/{0}/comments` | form field: disable (Boolean) — key is 'disable', maps to DisableRoomComments | FGCPNAACHIK full room details |
 | PUT | `rooms/{0}/creator` | form field: accountId (Int32) | FGCPNAACHIK full room details |
