@@ -156,6 +156,14 @@ public class Mod : MelonMod
         // "N"). Empty = no hotkey. A hotkey also arms the feature when
         // RecRoyaleNightMode is false, so it can be switched on in-game.
         public static string RecRoyaleNightToggleKey = "";
+
+        // A client with no remembered account for this machine. false: the
+        // title screen opens the sign-in page so the player logs into their
+        // existing account. true: Rec Room's own behaviour, which creates a
+        // new account automatically -- only useful when the server allows
+        // sign-ups (otherwise the title screen keeps retrying and failing).
+        // See TitleScreenLoginPatches.
+        public static bool   AutoCreateAccount = false;
     }
     public override void OnInitializeMelon()
     {
@@ -223,6 +231,14 @@ public class Mod : MelonMod
             QuestTeamSize.TryPatchSpawnIndexNormalizers(HarmonyInstance);
             TryPatchByName("GameSpawnManager", "KMPAOJGOOCH",
                            postfix: nameof(QuestTeamSize.RelaxEmptySpawnFilter_Postfix));
+        }
+
+        // Title-screen auto-login: with no remembered account, open the
+        // sign-in page instead of creating a new account.
+        if (!Cfg.AutoCreateAccount)
+        {
+            TryPatchByName("RRUI.Data.TitleScreenFlowModel", "IAKHIJIHAPJ",
+                           prefix: nameof(TitleScreenLoginPatches.AutoLogin_Prefix));
         }
 
         // Rec Royale night mode: armed when enabled OR when a hotkey is set
@@ -457,6 +473,7 @@ public class Mod : MelonMod
             if (TryGetConfigValue(r, "DesktopScreenShareRaisePhotonRate", out v)) Cfg.DesktopScreenShareRaisePhotonRate = v.GetBoolean();
             if (TryGetConfigValue(r, "DesktopScreenShareResolution", out v))      Cfg.DesktopScreenShareResolution = v.GetInt32();
             if (TryGetConfigValue(r, "DesktopScreenShareQuality", out v))         Cfg.DesktopScreenShareQuality = v.GetInt32();
+            if (TryGetConfigValue(r, "AutoCreateAccount", out v))                 Cfg.AutoCreateAccount = v.GetBoolean();
             if (TryGetConfigValue(r, "QuestMaxTeamSize", out v))                  Cfg.QuestMaxTeamSize = v.GetInt32();
             if (TryGetConfigValue(r, "QuestMaxTeamSizeRooms", out v) && v.ValueKind == JsonValueKind.Array)
             {
@@ -901,6 +918,50 @@ internal static class FileHashCheckerPatches
     public static bool InitializeCallback_Prefix(object? result)
     {
         return false;
+    }
+}
+internal static class TitleScreenLoginPatches
+{
+    // TitleScreenFlowModel.IAKHIJIHAPJ(cachedLogin) is the boot-time
+    // auto-login: the title screen downloads this machine's remembered
+    // accounts (CFILOMKCAPL), picks one (BFHOLLPGBPB) and logs into it here.
+    // With none (null) it creates a brand-new account instead (PJMGFADOEEM ->
+    // grant_type create_account). A server with sign-ups off refuses that, the
+    // error handler (IBDFENJNMAA) shows the connection-error page and the flow
+    // tries again, forever. Open the sign-in page instead (GoToLogin, what the
+    // "Log in" button does). ManuallyLogin carries the player into the game
+    // from there on its own, so the boot step gets a promise that never
+    // settles (MAMJDBJDFAF, the game's non-generic promise).
+    private static Type? _promiseType;
+
+    public static bool AutoLogin_Prefix(object __instance, object? __0, MethodBase __originalMethod, ref object? __result)
+    {
+        if (__0 is not null || Mod.Cfg.AutoCreateAccount) return true;
+        try
+        {
+            _promiseType ??= Mod.ResolveType("MAMJDBJDFAF");
+            var goToLogin = __instance.GetType().GetMethod("GoToLogin", BindingFlags.Public | BindingFlags.Instance, null, Type.EmptyTypes, null);
+            if (_promiseType is null || goToLogin is null)
+            {
+                Mod.Log.Warning("[title] no remembered account, but the sign-in page could not be opened; creating one as Rec Room does");
+                return true;
+            }
+            // Il2CppInterop wraps the interface return type (LDGADANDBIO) as
+            // its own class, so hand back the new promise's native object
+            // wrapped in that type.
+            var pending = (Il2CppObjectBase)Activator.CreateInstance(_promiseType)!;
+            var returnType = ((MethodInfo)__originalMethod).ReturnType;
+            var result = Activator.CreateInstance(returnType, pending.Pointer);
+            goToLogin.Invoke(__instance, null);
+            __result = result;
+            Mod.Log.Msg("[title] no remembered account; opened the sign-in page instead of creating a new account");
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Mod.Log.Warning($"[title] sign-in redirect failed, creating an account as Rec Room does: {ex.Message}");
+            return true;
+        }
     }
 }
 internal static class ToxModPatches

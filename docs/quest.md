@@ -55,6 +55,17 @@ an account, never matched by the cached-login lookup
 players are keyed by `deviceId` alone, exactly like the PC Steam-emulator path.
 A real Meta platform id (the Meta build) still tags and lists normally.
 
+Because the placeholder never lists a remembered account, the title screen
+would normally create a new account on every fresh headset. With
+`AutoCreateAccount = false` (the default) the hook library opens the sign-in
+page instead, so players log into their existing DorkNet account; set it to
+`true` only on a server that allows sign-ups.
+
+On a headset that reaches Meta, the Oculus platform also refuses the
+"logged-in user" request for the renamed app ("Unable to load Oculus user
+account"). The no-Meta build passes that refusal and hands the game the same
+placeholder user id `1`.
+
 Thanks to [RecFlare](https://github.com/recflare) for documenting this
 pitfall in their Quest client notes.
 

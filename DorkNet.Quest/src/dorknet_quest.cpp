@@ -59,6 +59,7 @@ static int  g_photon_port        = DN_PHOTON_PORT;
 static char g_photon_region[16]  = DN_PHOTON_REGION;
 static bool g_tls_bypass         = DN_TLS_TRUST_BYPASS;
 static bool g_accept_images      = DN_ACCEPT_UNSIGNED_IMAGES;
+static bool g_auto_create_account = DN_AUTO_CREATE_ACCOUNT;
 static bool g_log_http           = DN_LOG_HTTP;
 static bool g_debug_http         = DN_DEBUG_HTTP;
 static int  g_body_max           = DN_LOG_BODY_MAX;
@@ -89,8 +90,12 @@ static const size_t kArrayDataOff   = 0x20;
 // Oculus platform message types (dump.cs ONGCNIAMKCG.DJCEHCFKHME).
 static const unsigned kMsgEntitlementGetIsViewerEntitled = 409688241u;
 static const unsigned kMsgUserGetUserProof = 578880643u;
+static const unsigned kMsgUserGetLoggedInUser = 1131361373u;
 static const char *kPlaceholderNonce = "dorknet-no-platform-account";
 static const unsigned long long kNoPlatformUserId = 1ULL;
+// Stand-in ovrUserHandle for a GetLoggedInUser that Meta refused. Only our
+// hooked ovr_User_* accessors ever see it; they never pass it to the SDK.
+static void *const kPlaceholderUser = (void *)0x2;
 
 static const size_t kLogChunk = 1500;
 static const uint32_t kUnityTlsSuccess = 0;  // UNITYTLS_X509VERIFY_SUCCESS / UNITYTLS_SUCCESS
@@ -103,12 +108,22 @@ typedef void *(*il2cpp_class_get_method_from_name_t)(void *klass, const char *na
 typedef void *(*il2cpp_object_new_t)(void *klass);
 typedef void *(*il2cpp_string_new_t)(const char *str);
 typedef void *(*il2cpp_runtime_invoke_t)(void *method, void *obj, void **params, void **exc);
+typedef void *(*il2cpp_domain_get_t)();
+typedef void **(*il2cpp_domain_get_assemblies_t)(void *domain, size_t *size);
+typedef void *(*il2cpp_assembly_get_image_t)(void *assembly);
+typedef const char *(*il2cpp_image_get_name_t)(void *image);
+typedef void *(*il2cpp_class_from_name_t)(void *image, const char *ns, const char *name);
 
 static il2cpp_object_get_class_t il2cpp_object_get_class;
 static il2cpp_class_get_method_from_name_t il2cpp_class_get_method_from_name;
 static il2cpp_object_new_t il2cpp_object_new;
 static il2cpp_string_new_t il2cpp_string_new;
 static il2cpp_runtime_invoke_t il2cpp_runtime_invoke;
+static il2cpp_domain_get_t il2cpp_domain_get;
+static il2cpp_domain_get_assemblies_t il2cpp_domain_get_assemblies;
+static il2cpp_assembly_get_image_t il2cpp_assembly_get_image;
+static il2cpp_image_get_name_t il2cpp_image_get_name;
+static il2cpp_class_from_name_t il2cpp_class_from_name;
 
 static uintptr_t g_il2cpp_base;
 
@@ -137,6 +152,30 @@ static const unsigned char *invoke_bytes(void *obj, const char *method, size_t *
     if (!arr || exc) return nullptr;
     *len = (size_t) * (uint64_t *)((char *)arr + kArrayLengthOff);
     return (const unsigned char *)((char *)arr + kArrayDataOff);
+}
+
+static bool invoke_void(void *obj, const char *method) {
+    if (!obj) return false;
+    void *cls = il2cpp_object_get_class(obj);
+    if (!cls) return false;
+    void *m = il2cpp_class_get_method_from_name(cls, method, 0);
+    if (!m) return false;
+    void *exc = nullptr;
+    il2cpp_runtime_invoke(m, obj, nullptr, &exc);
+    return !exc;
+}
+
+static void *find_class(const char *image_name, const char *ns, const char *name) {
+    if (!il2cpp_domain_get || !il2cpp_domain_get_assemblies || !il2cpp_assembly_get_image ||
+        !il2cpp_image_get_name || !il2cpp_class_from_name) return nullptr;
+    size_t n = 0;
+    void **assemblies = il2cpp_domain_get_assemblies(il2cpp_domain_get(), &n);
+    for (size_t i = 0; assemblies && i < n; i++) {
+        void *image = il2cpp_assembly_get_image(assemblies[i]);
+        const char *iname = image ? il2cpp_image_get_name(image) : nullptr;
+        if (iname && !strcmp(iname, image_name)) return il2cpp_class_from_name(image, ns, name);
+    }
+    return nullptr;
 }
 
 static void invoke_str(void *obj, const char *method, char *out, size_t cap) {
@@ -438,13 +477,72 @@ typedef unsigned (*ovr_GetType_t)(void *m);
 static ovr_IsError_t orig_ovr_IsError;
 static ovr_GetType_t ovr_GetType;
 
+static bool is_bypassed_type(unsigned t) {
+    return t == kMsgEntitlementGetIsViewerEntitled || t == kMsgUserGetUserProof ||
+           t == kMsgUserGetLoggedInUser;
+}
+
+// The SDK's Message constructor checks IsError twice: on the message, and --
+// when that passes -- on ovr_Message_GetNativeMessage(message). The inner
+// message carries the platform's refusal too but doesn't report the outer
+// type, so remember the inner handle of a bypassed message (same thread, the
+// constructor asks about it immediately) and pass it as well.
+static __thread void *t_bypassed_native;
+static __thread unsigned t_bypassed_type;
+
 static bool hk_ovr_IsError(void *m) {
     bool real = orig_ovr_IsError(m);
-    if (!real || !ovr_GetType) return real;
-    unsigned t = ovr_GetType(m);
-    if (t == kMsgEntitlementGetIsViewerEntitled || t == kMsgUserGetUserProof) return false;
+    if (!real) return real;
+    if (m && m == t_bypassed_native) return false;
+    if (ovr_GetType && is_bypassed_type(ovr_GetType(m))) return false;
     return real;
 }
+
+typedef void *(*ovr_GetNativeMessage_t)(void *m);
+static ovr_GetNativeMessage_t orig_ovr_GetNativeMessage;
+static void *hk_ovr_GetNativeMessage(void *m) {
+    void *native = orig_ovr_GetNativeMessage(m);
+    unsigned t = ovr_GetType ? ovr_GetType(m) : 0;
+    t_bypassed_native = is_bypassed_type(t) ? native : nullptr;
+    t_bypassed_type = t;
+    return native;
+}
+
+// OculusPlatformManager.LoadUser asks for the logged-in user; on a headset
+// that reaches Meta, Meta refuses it for this re-packaged app, LoadUser
+// rejects ("GetLoggedInUser failed") and Initialize shows "Unable to load
+// Oculus user account". A headset that can't reach Meta gets a cached user
+// and never hits this. Answer a refused request with a placeholder user whose
+// ID is kNoPlatformUserId -- the same placeholder the server already treats
+// as "no platform account" (PlayerService.IsPlaceholderPlatformId).
+static void *(*orig_ovr_Message_GetUser)(void *m);
+static void *hk_ovr_Message_GetUser(void *m) {
+    void *u = orig_ovr_Message_GetUser ? orig_ovr_Message_GetUser(m) : nullptr;
+    if (u) return u;
+    // The SDK reads the user from the inner native message
+    // (GetUser(GetNativeMessage(msg))), so match that handle as well.
+    bool logged_in_user = (m && m == t_bypassed_native && t_bypassed_type == kMsgUserGetLoggedInUser) ||
+                          (ovr_GetType && ovr_GetType(m) == kMsgUserGetLoggedInUser);
+    if (!logged_in_user) return u;
+    LOGI("GetLoggedInUser refused by the platform; using the no-platform placeholder user");
+    return kPlaceholderUser;
+}
+
+// Accessors the SDK's User model reads. Real users pass straight through; the
+// placeholder gets empty strings and zero values.
+#define DN_USER_STR_ACCESSOR(name)                                             static const char *(*orig_##name)(void *u);                                static const char *hk_##name(void *u) {                                        if (u == kPlaceholderUser) return "";                                      return orig_##name ? orig_##name(u) : "";                              }
+#define DN_USER_VAL_ACCESSOR(name)                                             static uintptr_t (*orig_##name)(void *u);                                  static uintptr_t hk_##name(void *u) {                                          if (u == kPlaceholderUser) return 0;                                       return orig_##name ? orig_##name(u) : 0;                               }
+DN_USER_STR_ACCESSOR(ovr_User_GetDisplayName)
+DN_USER_STR_ACCESSOR(ovr_User_GetOculusID)
+DN_USER_STR_ACCESSOR(ovr_User_GetImageUrl)
+DN_USER_STR_ACCESSOR(ovr_User_GetSmallImageUrl)
+DN_USER_STR_ACCESSOR(ovr_User_GetInviteToken)
+DN_USER_STR_ACCESSOR(ovr_User_GetPresence)
+DN_USER_STR_ACCESSOR(ovr_User_GetPresenceDeeplinkMessage)
+DN_USER_STR_ACCESSOR(ovr_User_GetPresenceDestinationApiName)
+DN_USER_STR_ACCESSOR(ovr_User_GetPresenceLobbySessionId)
+DN_USER_STR_ACCESSOR(ovr_User_GetPresenceMatchSessionId)
+DN_USER_VAL_ACCESSOR(ovr_User_GetPresenceStatus)  // ovrUserPresenceStatus: 0 = Unknown
 
 static void *(*orig_ovr_GetUserProof)(void *m);
 static void *hk_ovr_GetUserProof(void *m) {
@@ -469,8 +567,44 @@ static unsigned long long hk_ovr_GetLoggedInUserID() {
 
 static unsigned long long (*orig_ovr_User_GetID)(void *u);
 static unsigned long long hk_ovr_User_GetID(void *u) {
+    if (u == kPlaceholderUser) return kNoPlatformUserId;
     unsigned long long real = orig_ovr_User_GetID ? orig_ovr_User_GetID(u) : 0;
     return real ? real : kNoPlatformUserId;
+}
+
+// ------------------------------------------------------------ title screen --
+
+// TitleScreenFlowModel.IAKHIJIHAPJ(cachedLogin) is the boot-time auto-login:
+// the title screen downloads the headset's remembered accounts and logs into
+// one; with none (null) it creates a brand-new account instead
+// (PJMGFADOEEM -> grant_type create_account). A server with sign-ups off
+// refuses that, the error handler shows the connection-error page and the
+// flow tries again, forever. Unless AutoCreateAccount is on, open the sign-in
+// page instead (TitleScreenFlowModel.GoToLogin, what the "Log in" button
+// does). ManuallyLogin carries the player into the game from there on its own,
+// so the boot step gets a promise that never settles.
+static void *(*orig_TitleAutoLogin)(void *thiz, void *cached, void *method);
+static void *new_pending_promise() {
+    // MAMJDBJDFAF: the game's non-generic promise (RecRoom.Promises.Runtime);
+    // a fresh one stays pending.
+    static void *cls = find_class("RecRoom.Promises.Runtime.dll", "", "MAMJDBJDFAF");
+    if (!cls) return nullptr;
+    void *ctor = il2cpp_class_get_method_from_name(cls, ".ctor", 0);
+    if (!ctor) return nullptr;
+    void *p = il2cpp_object_new(cls);
+    void *exc = nullptr;
+    if (p) il2cpp_runtime_invoke(ctor, p, nullptr, &exc);
+    return exc ? nullptr : p;
+}
+static void *hk_TitleAutoLogin(void *thiz, void *cached, void *method) {
+    if (cached || g_auto_create_account) return orig_TitleAutoLogin(thiz, cached, method);
+    void *pending = new_pending_promise();
+    if (!pending || !invoke_void(thiz, "GoToLogin")) {
+        LOGE("no remembered account, but the sign-in page could not be opened; creating one as Rec Room does");
+        return orig_TitleAutoLogin(thiz, cached, method);
+    }
+    LOGI("no remembered account on this headset; opened the sign-in page instead of creating a new account");
+    return pending;
 }
 
 // ----------------------------------------------------------------- init ------
@@ -516,6 +650,12 @@ static bool resolve_il2cpp(void *h) {
     SYM(il2cpp_string_new)
     SYM(il2cpp_runtime_invoke)
 #undef SYM
+    // Optional: only the title-screen sign-in redirect needs these.
+    il2cpp_domain_get = (il2cpp_domain_get_t)dlsym(h, "il2cpp_domain_get");
+    il2cpp_domain_get_assemblies = (il2cpp_domain_get_assemblies_t)dlsym(h, "il2cpp_domain_get_assemblies");
+    il2cpp_assembly_get_image = (il2cpp_assembly_get_image_t)dlsym(h, "il2cpp_assembly_get_image");
+    il2cpp_image_get_name = (il2cpp_image_get_name_t)dlsym(h, "il2cpp_image_get_name");
+    il2cpp_class_from_name = (il2cpp_class_from_name_t)dlsym(h, "il2cpp_class_from_name");
     return true;
 }
 
@@ -537,6 +677,8 @@ static void arm_oculus_platform_bypass() {
         return;
     }
     void *a;
+    if ((a = dlsym(ovr, "ovr_Message_GetNativeMessage")))
+        A64HookFunction(a, (void *)hk_ovr_GetNativeMessage, (void **)&orig_ovr_GetNativeMessage);
     if ((a = dlsym(ovr, "ovr_GetLoggedInUserID")))
         A64HookFunction(a, (void *)hk_ovr_GetLoggedInUserID, (void **)&orig_ovr_GetLoggedInUserID);
     if ((a = dlsym(ovr, "ovr_User_GetID")))
@@ -545,6 +687,21 @@ static void arm_oculus_platform_bypass() {
         A64HookFunction(a, (void *)hk_ovr_GetUserProof, (void **)&orig_ovr_GetUserProof);
     if ((a = dlsym(ovr, "ovr_UserProof_GetNonce")))
         A64HookFunction(a, (void *)hk_ovr_GetNonce, (void **)&orig_ovr_GetNonce);
+    if ((a = dlsym(ovr, "ovr_Message_GetUser")))
+        A64HookFunction(a, (void *)hk_ovr_Message_GetUser, (void **)&orig_ovr_Message_GetUser);
+#define DN_HOOK_USER(name)     if ((a = dlsym(ovr, #name))) A64HookFunction(a, (void *)hk_##name, (void **)&orig_##name);
+    DN_HOOK_USER(ovr_User_GetDisplayName)
+    DN_HOOK_USER(ovr_User_GetOculusID)
+    DN_HOOK_USER(ovr_User_GetImageUrl)
+    DN_HOOK_USER(ovr_User_GetSmallImageUrl)
+    DN_HOOK_USER(ovr_User_GetInviteToken)
+    DN_HOOK_USER(ovr_User_GetPresence)
+    DN_HOOK_USER(ovr_User_GetPresenceDeeplinkMessage)
+    DN_HOOK_USER(ovr_User_GetPresenceDestinationApiName)
+    DN_HOOK_USER(ovr_User_GetPresenceLobbySessionId)
+    DN_HOOK_USER(ovr_User_GetPresenceMatchSessionId)
+    DN_HOOK_USER(ovr_User_GetPresenceStatus)
+#undef DN_HOOK_USER
 }
 
 static void *init_thread(void *) {
@@ -562,7 +719,7 @@ static void *init_thread(void *) {
                            g_photon_realtime, g_photon_voice, g_photon_chat,
                            g_photon_server, sizeof(g_photon_server), &g_photon_port,
                            g_photon_region, sizeof(g_photon_region),
-                           &g_tls_bypass, &g_accept_images, &g_log_http, &g_debug_http, &g_body_max);
+                           &g_tls_bypass, &g_accept_images, &g_auto_create_account, &g_log_http, &g_debug_http, &g_body_max);
 
     LOGI("DorkNet.Quest init: build %s/%s il2cpp @ 0x%lx; host-rewrite -> *.%s",
          DN_TARGET_VERSION_NAME, DN_TARGET_VERSION_CODE, (unsigned long)g_il2cpp_base, g_server_host);
@@ -585,6 +742,8 @@ static void *init_thread(void *) {
         arm(&dn_targets.pin_https, (void *)hk_pin_true4b, nullptr);
         arm(&dn_targets.pin_bc_verifier, (void *)hk_pin_true4, nullptr);
     }
+
+    arm(&dn_targets.title_auto_login, (void *)hk_TitleAutoLogin, (void **)&orig_TitleAutoLogin);
 
     if (g_accept_images)
         arm(&dn_targets.image_signature_verify, (void *)hk_image_true, nullptr);
