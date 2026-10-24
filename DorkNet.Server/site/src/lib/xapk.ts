@@ -1,5 +1,5 @@
 // Read a DorkNet .xapk (zip) straight from a File the player picked, without
-// loading it into memory. DorkNet.Quest/scripts/package.ps1 stores the APK and
+// loading it into memory. DorkNet.Quest/scripts/build.py stores the APK and
 // the OBB uncompressed, so those entries are plain byte ranges of the file and
 // stream out with Blob.slice(); manifest.json is deflated and goes through
 // DecompressionStream. Handles zip64 so packages over 4 GB still open.

@@ -43,10 +43,10 @@ jobs:
           Compress-Archive -Path publish/server/* `
             -DestinationPath dorknet-server-${{ env.VERSION_KEY }}-win-x64.zip
 
-      # ── Client patcher zip (built via tools/build-patcher-zip.ps1) ───
+      # ── Client patcher zip (built via tools/build_pc.py) ─────────────
       - name: Build client patcher zip
         run: |
-          .\tools\build-patcher-zip.ps1 -VersionKey ${{ env.VERSION_KEY }}
+          python tools/build_pc.py patcher --version-key ${{ env.VERSION_KEY }}
 
       # ── Publish both as Release assets ───────────────────────────────
       - name: Upload Release assets
