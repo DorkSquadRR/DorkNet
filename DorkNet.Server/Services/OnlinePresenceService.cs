@@ -148,6 +148,34 @@ public class OnlinePresenceService
         lock (set) return set.ToArray();
     }
 
+    /// <summary>Connection ids of every player in <paramref name="playerIds"/>,
+    /// in one go: the Redis lookups are issued together, so the multiplexer
+    /// pipelines them into one round trip instead of one per player.</summary>
+    public async Task<IReadOnlyCollection<string>> GetConnectionsAsync(IEnumerable<long> playerIds)
+    {
+        var ids = playerIds.Distinct().ToArray();
+        if (ids.Length == 0) return Array.Empty<string>();
+        if (_redis is { } mux)
+        {
+            try
+            {
+                var db = mux.GetDatabase();
+                var sets = await Task.WhenAll(ids.Select(id => db.SetMembersAsync(ConnsKey(id))));
+                return sets.SelectMany(s => s).Select(v => v.ToString()).ToArray();
+            }
+            catch
+            {
+                // Redis sick → fall through to the local fallback, as
+                // GetConnections does.
+            }
+        }
+        var result = new List<string>();
+        foreach (var id in ids)
+            if (_localConns.TryGetValue(id, out var set))
+                lock (set) result.AddRange(set);
+        return result;
+    }
+
     /// <summary>Snapshot of currently-online player ids across the
     /// cluster. Returns an empty array when nobody's online; never null.
     /// Callers typically <c>.ToHashSet()</c> the result for membership

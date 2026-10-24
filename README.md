@@ -38,10 +38,12 @@ What the 2023 client gets here that the 2020 branches don't have:
   `DorkNet.Server.Tests/ClientRouteCoverageTests.cs` fails the build if one
   regresses. Routes, verbs and wire shapes are in
   [docs/recroom-2023-client-api-complete.md](docs/recroom-2023-client-api-complete.md).
-- **Realtime over the SignalR hub** (`hub/v1` on the notify host): numeric
-  push ids, presence updates to friends that honour each player's
-  online-status visibility, and account updates when someone edits their
-  profile.
+- **Realtime over the SignalR hub** (`hub/v1` on the notify host): every
+  push matches the client's own reader — friends, messages, kicks and
+  logouts, gifts, balances, consumables, player events, level-ups and
+  account updates — and presence reaches both friends and any player who
+  subscribed to you, honouring your online-status visibility:
+  [docs/recroom-2023-notifications.md](docs/recroom-2023-notifications.md).
 - **Room saves and sub-rooms** through the storage host, plus cloning and
   private instances:
   [docs/recroom-2023-room-save.md](docs/recroom-2023-room-save.md).

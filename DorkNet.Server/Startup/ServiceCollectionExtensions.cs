@@ -416,15 +416,18 @@ public static class ServiceCollectionExtensions
             kopts.Limits.MinResponseDataRate = null;
         });
 
-        // Keepalive cadence: server pings every 10s, gives the client 60s
-        // to ack before declaring the connection dead. The 10s ping forces
-        // frame traffic well below every proxy timeout we've seen in the
-        // path (Cloudflare edge ~100s, cloudflared 600s, Coolify/Traefik
-        // 180s, Kestrel 130s).
+        // Keepalive cadence: the server pings every 10s, which keeps frame
+        // traffic well below every proxy timeout we've seen in the path
+        // (Cloudflare edge ~100s, cloudflared 600s, Coolify/Traefik 180s,
+        // Kestrel 130s). The 2023 client pings every 15s, but from its main
+        // thread, so a long room-load hitch pauses its pings. It has no
+        // timeout of its own and reconnects at most 3 times per login, so a
+        // healthy socket the server drops can leave it without live
+        // notifications for the rest of the session. Give it 180s.
         var signalR = builder.Services.AddSignalR(opts =>
         {
             opts.KeepAliveInterval = TimeSpan.FromSeconds(10);
-            opts.ClientTimeoutInterval = TimeSpan.FromSeconds(60);
+            opts.ClientTimeoutInterval = TimeSpan.FromSeconds(180);
             opts.HandshakeTimeout = TimeSpan.FromSeconds(15);
             // Allow large gift / community-board payloads (default 32 KB
             // truncates anything bigger and disconnects the client).

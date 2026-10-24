@@ -279,11 +279,11 @@ public class InventoryController(
         if (row.Quantity == 0) db.PlayerInventory.Remove(row);
         await db.SaveChangesAsync();
 
+        // A consume always changes an existing mapping, so it is always
+        // ConsumableMappingRemoved (71) carrying the count that is left;
+        // Added (70) would make the client treat it as a new stack.
         await notifications.NotifyAsync(pid,
-            row.Quantity > 0
-                ? PushNotificationId.ConsumableMappingAdded
-                : PushNotificationId.ConsumableMappingRemoved,
-            new { row.Id, row.ItemSlug, row.Quantity });
+            PushNotificationId.ConsumableMappingRemoved, ConsumableMappingWire(row));
         return Ok(new { row.Id, Count = row.Quantity });
     }
 
@@ -332,8 +332,7 @@ public class InventoryController(
         if (source.Quantity == 0) db.PlayerInventory.Remove(source);
         await db.SaveChangesAsync();
         await notifications.NotifyAsync(recipient,
-            PushNotificationId.ConsumableMappingAdded,
-            new { target.Id, target.ItemSlug, target.Quantity });
+            PushNotificationId.ConsumableMappingAdded, ConsumableMappingWire(target));
         return Ok(new { Success = true, SourceCount = Math.Max(0, source.Quantity), RecipientCount = target.Quantity });
     }
 
@@ -448,6 +447,26 @@ public class InventoryController(
             IsEquipped = inv.IsActive,
         };
     }
+
+    /// <summary>ConsumableMapping push payload ("70" Added / "71" Removed):
+    /// exactly the client's mapping DTO <c>CGCALDBHLGD</c> (formatter
+    /// <c>JICIOMDBPDO</c>) — Id (Int64), ConsumableItemDesc (STRING, not an
+    /// object), Count, InitialCount, CreatedAt, ActiveDurationMinutes (Int32?),
+    /// IsActive, IsTransferable. The old <c>{Id, ItemSlug, Quantity}</c> parsed
+    /// as a mapping with no item and a count of 0.</summary>
+    public static object ConsumableMappingWire(PlayerInventoryEntity inv) => new
+    {
+        inv.Id,
+        ConsumableItemDesc = StoreService.TryGetConsumableItemDesc(inv.ItemSlug, out var desc) ? desc : inv.ItemSlug,
+        Count = inv.Quantity,
+        InitialCount = inv.Quantity, // the original purchase count isn't tracked
+        CreatedAt = inv.AcquiredAt,
+        ActiveDurationMinutes = (int?)null,
+        inv.IsActive,
+        // Same as GET api/consumables/v2/getUnlocked, so a push never flips
+        // what the inventory list says.
+        IsTransferable = false,
+    };
 
     private static object ToConsumableWire(PlayerInventoryEntity inv, StoreItemEntity item)
     {

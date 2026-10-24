@@ -120,17 +120,19 @@ Defect classes:
 ## Realtime (SignalR) surface
 
 Not every request is HTTP. The client opens a SignalR hub at `{0}hub/v1`
-(`RecNet.Runtime/OMHPBIEHOHN`, negotiate + `hub/v1`).
+(`RecNet.Runtime/OMHPBIEHOHN`, negotiate + `hub/v1`). The full push
+contract — every handler key, its payload, and what DorkNet sends — is in
+[recroom-2023-notifications.md](recroom-2023-notifications.md).
 
 - Server→client messages arrive on the hub method named **`"Notification"`**
   (singular) carrying a **single `string`** argument whose content is JSON
   `{"Id":..., "Msg":...}`. The handler is registered as `Action<string>`.
   Sending `ReceiveNotification`, or passing an object instead of a string,
   makes every push silently vanish.
-- Client→server: `SubscribeToPlayers` / `UnsubscribeFromPlayers`, plus
-  `"SubscribeTo"` / `"UnsubscribeFrom"` prefixes composed at runtime.
-- Presence pushes are routed by the friend graph server-side, so the
-  subscription calls are advisory rather than load-bearing.
+- Client→server: `SubscribeToPlayers` (`{PlayerIds}`), plus
+  `SubscribeTo` / `UnsubscribeFrom` (`{Channels}`, always empty).
+- `SubscribeToPlayers` is load-bearing: it is how the client gets presence
+  for players who aren't friends (people in the room, an open profile).
 
 ### Push dispatch keys — the numeric-vs-name trap
 
@@ -160,10 +162,11 @@ So **send the number**, except for these six, which are string-keyed:
 | 95 CommunityBoardUpdate | `CommunityBoardUpdate` |
 
 Ids the 2023 client registers NO handler for — sending them is a no-op:
-4, 15 (numeric form), 21, **24 ModerationRoomBan**, 40, 85. Room bans must
-therefore go out as `ModerationKick` (22) with `IsBan` set; the moderation
+4, 15 (numeric form), 21, **24 ModerationRoomBan**, 40, 85. The moderation
 manager registers only 22, `ModerationUnkick` and 23
-(`RecNet.Runtime/FPIBGPIAOBI.txt:310,323,335`).
+(`RecNet.Runtime/FPIBGPIAOBI.txt:310,323,335`), and a kick (22) only sends
+the player to their dorm, so bans go out as `Logout` (6) with Reason 4
+(Banned); see recroom-2023-notifications.md.
 
 Ids the client handles that this server never sends (dead client features,
 available if wanted): 3, 5, 23, 32, 60, 110, 120, 121, plus a long tail of
@@ -173,12 +176,12 @@ string channels — `GoToFailure`, `PhotonAccessToken`, `AppVersionUpdate`,
 
 ### Hub methods
 
-The client invokes exactly one server method: `SubscribeToPlayers`, with a
-`{PlayerIds: List<int>}` payload, fire-and-forget. The `SubscribeTo`/
-`UnsubscribeFrom` composition exists in the binary but has no callers in
-this build, and `UnsubscribeFromPlayers` does not appear at all — the
-server's extra hub methods are unused but harmless. Presence is routed
-server-side by the friend graph, so these calls are advisory.
+The client sends `SubscribeToPlayers` with a `{PlayerIds: List<int>}`
+payload, fire-and-forget, on every (re)connect and whenever the set changes.
+The `SubscribeTo`/`UnsubscribeFrom` composition runs on connect but its
+channel set is always empty, and `UnsubscribeFromPlayers` does not appear at
+all. The server keeps each connection's subscriptions as `presence:{id}`
+SignalR groups and pushes those players' presence to them.
 
 ### Negotiate
 
@@ -257,7 +260,8 @@ verified against the binary before the change, and the full test suite passes.
 | `playlists accessibility/levelvoting/restrictions/warning` | PUT 405, and values were discarded | PUT added and values persisted |
 | `SignalR push `Id` (notify)` | enum NAME sent for most ids; client only registered numbers — pushes vanished | numeric by default, with the six string-keyed ids listed explicitly |
 | `SignalR SubscriptionUpdateRoom` | sent as `SubscriptionUpdateRoom`; client listens on `RoomUpdate` | sent as `RoomUpdate` |
-| `Room ban notification` | sent id 24, for which the client has no handler | sent as ModerationKick (22) with IsBan |
+| `Room ban notification` | sent id 24, for which the client has no handler | sent as ModerationKick (22) with IsBan (later replaced by Logout Reason 4, below) |
+| `Notification payloads (Oct 2026 audit)` | RelationshipChanged sent `{Reason, From}`; ModerationKick used the nested 2020 shape and lost every reason; bans, deletes and takeovers only kicked to the dorm; Logout sent an enum NAME and was dropped; ServerMaintenance sent `{Message}`; ConsumableMapping, PlayerEvent 80/81/83, admin RoomUpdate and level-up pushes had wrong or missing payloads; SubscribeToPlayers was ignored | every payload matches the client DTO; bans/deletes/takeovers are Logout with a numeric Reason; SubscribeToPlayers drives `presence:{id}` groups; see recroom-2023-notifications.md |
 | `Presence on SignalR reconnect` | disconnect pushed offline; nothing ever pushed back online, so a reconnect greyed the player out for the rest of the session | connect pushes presence (online even with no room); a drop while the player still heartbeats waits one activity window before pushing offline |
 | `POST matchmake/none` | re-committed the previous room (or the dorm), so the next heartbeat answered with a room while the client held its offline instance (-1): "presence out-of-sync", offline load cancelled, player dragged back | player is online with no room; any pending join is abandoned; heartbeat answers `roomInstance: null` until the next matchmake |
 | `Presence fan-out to friends` | only the immediate /goto commit pushed; deferred commits (matchmake/dorm, private hops), matchmake/none, logout, failed joins and statusvisibility changes were silent, and `isOnline` was derived from "has a room" | one fan-out (PresenceBroadcastService) for every transition, explicit `isOnline`, stored `statusVisibility`, never sent to the subject |

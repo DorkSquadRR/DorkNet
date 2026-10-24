@@ -212,25 +212,17 @@ public class NotificationService(
 
     // ── Higher-level event helpers ─────────────────────────────────────
 
-    public Task FriendRequestReceived(long targetPlayerId, long fromPlayerId) =>
-        NotifyAsync(targetPlayerId, PushNotificationId.RelationshipChanged,
-            new { Reason = "FriendRequestReceived", From = fromPlayerId });
-
-    public Task FriendRequestAccepted(long requesterPlayerId, long byPlayerId) =>
-        NotifyAsync(requesterPlayerId, PushNotificationId.RelationshipChanged,
-            new { Reason = "FriendRequestAccepted", By = byPlayerId });
-
-    public Task FriendRequestDeclined(long requesterPlayerId, long byPlayerId) =>
-        NotifyAsync(requesterPlayerId, PushNotificationId.RelationshipChanged,
-            new { Reason = "FriendRequestDeclined", By = byPlayerId });
-
-    public Task FriendRemoved(long otherPlayerId, long byPlayerId) =>
-        NotifyAsync(otherPlayerId, PushNotificationId.RelationshipChanged,
-            new { Reason = "FriendRemoved", By = byPlayerId });
-
-    public Task FriendBlocked(long blockedPlayerId, long byPlayerId) =>
-        NotifyAsync(blockedPlayerId, PushNotificationId.RelationshipChanged,
-            new { Reason = "FriendBlocked", By = byPlayerId });
+    /// <summary>Push one relationship row to <paramref name="recipientPlayerId"/>.
+    /// <paramref name="relationship"/> must be the recipient's OWN view of the
+    /// pair — the same <c>{PlayerID, RelationshipType, Muted, Ignored,
+    /// Favorited}</c> object <c>api/relationships/v2/get</c> returns. The 2023
+    /// handler (<c>EEGNOHOELBG.FOCBJAIDCBB</c>, Relationship
+    /// <c>ECGNEHMCGCN</c>) stores it under its <c>PlayerID</c> and raises the
+    /// changed event, which refreshes the friends list and the client's
+    /// SubscribeToPlayers set. Any other shape parses as PlayerID 0 and the
+    /// real row never updates.</summary>
+    public Task RelationshipChanged(long recipientPlayerId, object relationship) =>
+        NotifyAsync(recipientPlayerId, PushNotificationId.RelationshipChanged, relationship);
 
     /// <summary>Push a presence delta so subscribed friends re-render
     /// their friend-list row without waiting for the watch's 15-45 s
@@ -268,6 +260,23 @@ public class NotificationService(
             playerId, groups.Length, payload);
 
         await hub.Clients.Groups(groups).SendAsync(HubMethod, payload);
+    }
+
+    /// <summary>Push one player's presence to every connection that subscribed
+    /// to them with <c>SubscribeToPlayers</c>, except
+    /// <paramref name="excludeConnectionIds"/> — the subject's own connections
+    /// (a frame about the local player moves them) and anyone already sent the
+    /// frame through their friend group.</summary>
+    public async Task PresenceToSubscribersAsync(
+        long playerId,
+        RoomInstanceDto? room,
+        bool isOnline,
+        int statusVisibility,
+        IReadOnlyList<string> excludeConnectionIds)
+    {
+        var payload = BuildPresenceUpdatePayload(playerId, room, isOnline, statusVisibility);
+        await hub.Clients.GroupExcept(NotifyHub.PresenceGroupForPlayer(playerId), excludeConnectionIds)
+            .SendAsync(HubMethod, payload);
     }
 
     /// <summary>The PresenceUpdate envelope for one player, as a JSON string.
@@ -349,86 +358,85 @@ public class NotificationService(
     public Task PlayerEnteredRoom(IEnumerable<long> friendIds, long playerId, RoomInstanceDto room) =>
         PlayerPresenceChanged(friendIds, playerId, room);
 
-    /// <summary>Force every currently-connected SignalR session for
-    /// <paramref name="playerId"/> to disconnect via the watch's
-    /// ModerationKick flow. Wire path verified against decompilation:
-    ///   <c>PushNotificationId.ModerationKick = 22</c> is registered
-    ///   by <c>LCCEEFHOBEN.OFFLOPLJBBG</c> via the enum overload.
-    ///   <c>LCCEEFHOBEN.KEIAFMLIMFA(Dictionary)</c> reads
-    ///   <c>Msg.Reason</c> as a ModerationBlockDetail object, then
-    ///   calls <c>PODFHPNOHGB</c> / <c>BootLocalPlayerToDormRoom</c>.
-    ///
-    /// Used by <see cref="Controllers.Match.MatchPlayerController.PlayerLogin"/>
-    /// to enforce single-session-per-account: when a second login on
-    /// the same account replaces the LoginLock, the older SignalR
-    /// connections are kicked. The new session hasn't called
-    /// <c>negotiate</c> yet (it happens AFTER /player/login on the
-    /// boot sequence), so the kick only hits old sessions.
-    /// </summary>
-    public Task KickStaleSession(long playerId, string reason) =>
-        NotifyAsync(playerId, PushNotificationId.ModerationKick,
-            ModerationKickPayload(reason, isBan: false, source: "session_replaced"));
+    /// <summary>Client logout reasons (<c>Logout</c> "6" payload <c>Reason</c>,
+    /// enum <c>MPJOEALLGHE</c>, read by formatter <c>PBEDEFHAHID</c>). The
+    /// value must go out as a NUMBER: release builds obfuscate enum names, so a
+    /// string like "AdminPasswordReset" fails the parse and the whole push is
+    /// dropped. <c>SessionManager.JNNAOHMNGEM</c> shows its own "signed in
+    /// elsewhere" text for <see cref="SessionTakeover"/>, then returns the
+    /// client to the boot scene for every reason.</summary>
+    public enum LogoutReason
+    {
+        Unknown = 0,
+        UserInitiated = 1,
+        SessionTakeover = 2,
+        ForciblyLoggedOut = 3,
+        Banned = 4,
+    }
 
-    public Task KickPlayerAsync(long playerId, string reason, bool isBan = false) =>
-        NotifyAsync(playerId, PushNotificationId.ModerationKick,
-            ModerationKickPayload(reason, isBan, source: "admin_kick"));
+    /// <summary>Log every session of <paramref name="playerId"/> out to the
+    /// boot scene. Use this, not a kick, when the player must not stay signed
+    /// in: a ModerationKick only sends them to their dorm.</summary>
+    public Task LogoutAsync(long playerId, LogoutReason reason) =>
+        NotifyAsync(playerId, PushNotificationId.Logout, new { Reason = (int)reason });
 
-    /// <summary>Push a ModerationKick to a specific set of SignalR
-    /// connection ids — used by <see cref="DorkNet.Server.Hubs.NotifyHub.OnConnectedAsync"/>
-    /// to evict the previous session when a new device connects on the
-    /// same account. Targets specific ids (not the player group) so
-    /// the brand-new connection joining the group right after this
-    /// returns can't accidentally receive its own eviction notice.
-    /// Works across replicas because SignalR's Redis backplane routes
+    /// <summary>Single-session-per-account: when a second login replaces the
+    /// LoginLock, log the older session out. The new session hasn't called
+    /// <c>negotiate</c> yet (it happens AFTER /player/login on the boot
+    /// sequence), so only the old session's connections receive it.</summary>
+    public Task LogoutStaleSession(long playerId) =>
+        LogoutAsync(playerId, LogoutReason.SessionTakeover);
+
+    /// <summary>The same takeover logout, sent to specific SignalR connection
+    /// ids — used by <see cref="DorkNet.Server.Hubs.NotifyHub.OnConnectedAsync"/>
+    /// to evict the previous session when a new device connects on the same
+    /// account. Targets ids (not the player group) so the brand-new
+    /// connection, which joins the group right after, never receives it. Works
+    /// across replicas because the Redis backplane routes
     /// <c>Clients.Clients(ids)</c> to whichever node owns each id.</summary>
-    public Task KickConnectionsAsync(IReadOnlyCollection<string> connectionIds, string reason)
+    public Task LogoutConnectionsAsync(IReadOnlyCollection<string> connectionIds)
     {
         if (connectionIds.Count == 0) return Task.CompletedTask;
-        var payload = Serialize(PushNotificationId.ModerationKick,
-            ModerationKickPayload(reason, isBan: false, source: "session_replaced"));
+        var payload = Serialize(PushNotificationId.Logout, new { Reason = (int)LogoutReason.SessionTakeover });
         return hub.Clients.Clients(connectionIds).SendAsync(HubMethod, payload);
     }
 
-    private static object ModerationKickPayload(string reason, bool isBan, string source)
+    /// <summary>Kick <paramref name="playerId"/> back to their dorm with
+    /// <paramref name="reason"/> shown in the kick dialog. The player stays
+    /// signed in; use <see cref="LogoutAsync"/> for bans and deletions.
+    /// Pass the room instance the player is in as
+    /// <paramref name="gameSessionId"/> to have the client announce the kick
+    /// to that room.</summary>
+    public Task KickPlayerAsync(long playerId, string reason, long gameSessionId = 0) =>
+        NotifyAsync(playerId, PushNotificationId.ModerationKick, ModerationKickPayload(reason, gameSessionId));
+
+    /// <summary>ModerationKick "22" payload: the FLAT moderation block
+    /// <c>PIBLFGPOCIB</c> (formatter <c>LAIJIAIHGCO</c>). The kick handler
+    /// (<c>SessionManager</c> HandleModerationKicked) starts from its own
+    /// "Kicked to Dormroom" text and only adds a reason as
+    /// a "Reason: " line from <c>VoteKickReason</c> when <c>ReportCategory</c> is 10
+    /// (VoteKick) and <c>IsHostKick</c> is false; <c>Message</c> is never
+    /// shown. When <c>GameSessionId</c> is the kicked player's current room
+    /// instance it also broadcasts the kick to that room, and
+    /// <c>Duration</c> &gt; 0 starts a timeout, so it stays 0. The old nested
+    /// <c>{Reason:{…}}</c> shape (from the 2020 client) parsed to all defaults,
+    /// which booted the player but dropped every reason.</summary>
+    private static object ModerationKickPayload(string reason, long gameSessionId)
     {
-        var message = string.IsNullOrWhiteSpace(reason)
-            ? "Kicked to Dormroom"
-            : reason.Trim();
-
-        var blockDetail = new
-        {
-            ReportCategory = 10, // PlayerReporting.ReportCategory.VoteKick
-            Duration = 0,
-            GameSessionId = 0L,
-            Message = message,
-            IsHostKick = true,
-            PlayerIdReporter = 1,
-            IsBan = isBan,
-            VoteKickReason = message,
-        };
-
+        var message = string.IsNullOrWhiteSpace(reason) ? "Kicked to Dormroom" : reason.Trim();
         return new
         {
-            Reason = blockDetail,
-            DisplayReason = message,
-            BannedByPlayerId = 1,
-            Source = source,
+            ReportCategory = 10, // VoteKick: the only category that shows a reason
+            Duration = 0,
+            GameSessionId = gameSessionId,
+            IsHostKick = false,
+            Message = message,
+            PlayerIdReporter = (int?)null,
+            IsBan = false,
+            IsVoiceModAutoban = false,
+            IsWarning = false,
+            VoteKickReason = message,
+            TimeoutStartedAt = (DateTime?)null,
         };
     }
-
-    /// <summary>Notify a private-instance owner that someone tried to
-    /// follow them in via "Go to Player" but was rejected for not
-    /// being on the invite list. Reuses the MessageReceived channel
-    /// since the watch already renders that as an inbox toast — no
-    /// new client-side handler needed. The body wording surfaces it
-    /// as "Player X tried to join your private match" so the owner
-    /// knows to send an explicit invite if they want to let them in.</summary>
-    public Task PrivateInstanceJoinRejected(long ownerPlayerId, long attemptedByPlayerId) =>
-        NotifyAsync(ownerPlayerId, PushNotificationId.MessageReceived,
-            new
-            {
-                Reason = "PrivateInstanceJoinRejected",
-                AttemptedBy = attemptedByPlayerId,
-                Preview = $"Player {attemptedByPlayerId} tried to join your private match",
-            });
 }
