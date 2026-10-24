@@ -39,6 +39,7 @@ public class GoToController(
     RoomService rooms,
     DorkNet.Server.Data.DorkNetDbContext db,
     NotificationService notifications,
+    SystemNotificationService systemNotifications,
     JoinTimeoutService joinTimeouts,
     ServerSettingsService serverSettings,
     PresenceBroadcastService presenceFanout,
@@ -877,11 +878,12 @@ public class GoToController(
                 logger.LogWarning(
                     "[goto-player] caller {Caller} tried to follow {Target} into private instance {Id} but isn't invited; rejecting",
                     callerId, playerId, theirRoom.RoomInstanceId);
-                // Notify the OWNER that someone tried to follow them in.
-                // Helps surface the rejection so the owner knows there's
-                // an interested party — they can choose to send an invite.
-                await notifications.PrivateInstanceJoinRejected(
-                    ownerPlayerId: playerId, attemptedByPlayerId: callerId ?? 0);
+                // Tell the OWNER someone tried to follow them in, as the
+                // client's own "wants to join" message (RequestGameInvite,
+                // from the caller), so they can send an invite.
+                if (callerId is long requester)
+                    await systemNotifications.SendAsync(playerId,
+                        SystemNotificationService.MessageType.RequestGameInvite, fromPlayerId: requester);
                 return Ok(new MatchmakingResponseDto
                 {
                     ErrorCode = 26, // RoomInstanceIsPrivate

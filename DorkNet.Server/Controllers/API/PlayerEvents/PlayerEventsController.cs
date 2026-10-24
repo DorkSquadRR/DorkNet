@@ -34,6 +34,7 @@ namespace DorkNet.Server.Controllers.API.PlayerEvents;
 public class PlayerEventsController(
     DorkNetDbContext db,
     NotificationService notifications,
+    SystemNotificationService systemNotifications,
     PlayerPresenceService presence) : ControllerBase
 {
     private long Me => this.RequireCurrentPlayerId();
@@ -817,7 +818,7 @@ public class PlayerEventsController(
         var extras = (await LoadExtrasAsync(new[] { evt }))[evt.Id];
         await ApplyBodyToExtrasAsync(extras);
         await SaveExtrasAsync(evt, extras);
-        await NotifyAttendeesAsync(evt, PushNotificationId.PlayerEventUpdated);
+        await NotifyEventUpdatedAsync(evt);
         return Ok(await WrapperAsync(evt));
     }
 
@@ -901,10 +902,7 @@ public class PlayerEventsController(
 
         // Tell the creator someone RSVP'd. They can ignore but the
         // watch will refresh their event detail card.
-        if (ev.CreatorPlayerId != Me)
-            await notifications.NotifyAsync(ev.CreatorPlayerId,
-                PushNotificationId.PlayerEventResponseChanged,
-                new { ev.Id, From = Me, body.Response });
+        await NotifyResponseChangedAsync(ev, row);
         // Left as the historical shape on purpose: this route is 2020-only
         // (the 2023 client GETs .../responses and POSTs v1/respond instead),
         // so there is no 2023 DTO to match here.
@@ -947,10 +945,15 @@ public class PlayerEventsController(
         var existing = await db.PlayerEventResponses
             .FirstOrDefaultAsync(r => r.PlayerId == Me && r.EventId == evt);
         if (existing is null)
-            db.PlayerEventResponses.Add(new PlayerEventResponseEntity { PlayerId = Me, EventId = evt, Response = response });
+        {
+            existing = new PlayerEventResponseEntity { PlayerId = Me, EventId = evt, Response = response };
+            db.PlayerEventResponses.Add(existing);
+        }
         else
             existing.Response = response;
         await db.SaveChangesAsync();
+        var responded = await db.PlayerEvents.FirstAsync(e => e.Id == evt);
+        await NotifyResponseChangedAsync(responded, existing);
         return RespondResult(legacyForm, 0 /*Success*/);
     }
 
@@ -968,9 +971,18 @@ public class PlayerEventsController(
         var eventId = await ReadLongFieldAsync("PlayerEventId", "playerEventId", "EventId", "eventId");
         if (eventId is not long evt) return RespondResult(legacyForm, 2 /*NoSuchEvent*/);
 
-        await db.PlayerEventResponses
+        var deleted = await db.PlayerEventResponses
             .Where(r => r.PlayerId == Me && r.EventId == evt)
             .ExecuteDeleteAsync();
+        if (deleted > 0)
+        {
+            // PlayerEventResponseDeleted "84" carries only PlayerEventId.
+            var creator = await db.PlayerEvents.Where(e => e.Id == evt)
+                .Select(e => (long?)e.CreatorPlayerId).FirstOrDefaultAsync();
+            if (creator is long c && c != Me)
+                await notifications.NotifyAsync(c, PushNotificationId.PlayerEventResponseDeleted,
+                    new { PlayerEventId = evt });
+        }
         return RespondResult(legacyForm, 0 /*Success*/);
     }
 
@@ -993,6 +1005,7 @@ public class PlayerEventsController(
         // has to echo the event that was deleted.
         var extras = (await LoadExtrasAsync(new[] { evt }))[id];
         var attendees = (await AttendeeCountsAsync(new[] { id })).GetValueOrDefault(id);
+        var notify = await AttendeeIdsAsync(evt);
 
         db.PlayerEvents.Remove(evt);
         await db.PlayerEventResponses.Where(r => r.EventId == id).ExecuteDeleteAsync();
@@ -1000,6 +1013,7 @@ public class PlayerEventsController(
             .Where(s => s.Key == ExtrasKey(id) || s.Key == ClubKey(id))
             .ExecuteDeleteAsync();
         await db.SaveChangesAsync();
+        await NotifyEventDeletedAsync(id, notify);
         return Ok(Wrapper(evt, extras, attendees));
     }
 
@@ -1021,6 +1035,7 @@ public class PlayerEventsController(
         evt.Title = Clamp(value.Trim(), 128);
         evt.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
+        await NotifyEventUpdatedAsync(evt);
         return Ok(await WrapperAsync(evt));
     }
 
@@ -1034,6 +1049,7 @@ public class PlayerEventsController(
         evt.Description = Clamp(value.Trim(), 2000);
         evt.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
+        await NotifyEventUpdatedAsync(evt);
         return Ok(await WrapperAsync(evt));
     }
 
@@ -1056,6 +1072,7 @@ public class PlayerEventsController(
         var extras = (await LoadExtrasAsync(new[] { evt }))[evt.Id];
         extras.SubRoomId = await ReadLongFieldAsync("subRoomId", "SubRoomId");
         await SaveExtrasAsync(evt, extras);
+        await NotifyEventUpdatedAsync(evt);
         return Ok(await WrapperAsync(evt));
     }
 
@@ -1072,6 +1089,7 @@ public class PlayerEventsController(
         if (start is null && end is null) return BadRequest("missing_time");
         evt.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
+        await NotifyEventUpdatedAsync(evt);
         return Ok(await WrapperAsync(evt));
     }
 
@@ -1085,6 +1103,7 @@ public class PlayerEventsController(
         var extras = (await LoadExtrasAsync(new[] { evt }))[evt.Id];
         extras.ImageName = Clamp(value.Trim(), 128);
         await SaveExtrasAsync(evt, extras);
+        await NotifyEventUpdatedAsync(evt);
         return Ok(await WrapperAsync(evt));
     }
 
@@ -1099,6 +1118,7 @@ public class PlayerEventsController(
         var extras = (await LoadExtrasAsync(new[] { evt }))[evt.Id];
         extras.Accessibility = accessibility;
         await SaveExtrasAsync(evt, extras);
+        await NotifyEventUpdatedAsync(evt);
         return Ok(await WrapperAsync(evt));
     }
 
@@ -1120,6 +1140,7 @@ public class PlayerEventsController(
         var extras = (await LoadExtrasAsync(new[] { evt }))[evt.Id];
         extras.Tags = tags;
         await SaveExtrasAsync(evt, extras);
+        await NotifyEventUpdatedAsync(evt);
         return Ok(await WrapperAsync(evt));
     }
 
@@ -1158,6 +1179,7 @@ public class PlayerEventsController(
             ?? extras.CanRequestBroadcastPermissions;
 
         await SaveExtrasAsync(evt, extras);
+        await NotifyEventUpdatedAsync(evt);
         return Ok(await WrapperAsync(evt));
     }
 
@@ -1188,6 +1210,7 @@ public class PlayerEventsController(
         }
 
         await SaveExtrasAsync(evt, extras);
+        await NotifyEventUpdatedAsync(evt);
         return Ok(await WrapperAsync(evt));
     }
 
@@ -1197,6 +1220,7 @@ public class PlayerEventsController(
         var ev = await db.PlayerEvents.FirstOrDefaultAsync(e => e.Id == eventId);
         if (ev is null) return NotFound();
         if (ev.CreatorPlayerId != Me) return Forbid();
+        var notify = await AttendeeIdsAsync(ev);
         db.PlayerEvents.Remove(ev);
         // Cascade-clean the responses; SQLite has no FK cascade
         // configured here so do it manually.
@@ -1206,6 +1230,7 @@ public class PlayerEventsController(
         await db.PlayerSettings
             .Where(s => s.Key == ExtrasKey(eventId) || s.Key == ClubKey(eventId))
             .ExecuteDeleteAsync();
+        await NotifyEventDeletedAsync(eventId, notify);
         return Ok();
     }
 
@@ -1244,6 +1269,7 @@ public class PlayerEventsController(
         var failed = new List<object>();
         var sender = Me;
         var inviteText = $"You're invited to '{ev.Title}' starting {ev.StartsAt:u}.";
+        var eventWire = await ToWireOneAsync(ev);
         foreach (var rid in req.InvitedPlayerIds.Distinct())
         {
             var exists = await db.Players.AnyAsync(p => p.Id == rid);
@@ -1252,17 +1278,15 @@ public class PlayerEventsController(
                 failed.Add(new { InvitedPlayerId = rid, Result = 1 });
                 continue;
             }
-            db.Messages.Add(new MessageEntity
-            {
-                SenderPlayerId = sender,
-                RecipientPlayerId = rid,
-                Body = inviteText,
-            });
-            await notifications.NotifyAsync(rid,
-                PushNotificationId.PlayerEventCreated,
-                new { ev.Id, ev.Title, ev.StartsAt, From = sender });
+            // The invite as a text message from the host, stored and pushed
+            // live (it used to be stored only, so it appeared after a relog).
+            await systemNotifications.SendAsync(rid,
+                SystemNotificationService.MessageType.TextMessage, fromPlayerId: sender, data: inviteText);
+            // And the event itself, so it shows in the invitee's event list:
+            // PlayerEventCreated "80" carries the full event (MDCBEPJCJPO) —
+            // the same object GET api/playerevents/v2/{id} returns.
+            await notifications.NotifyAsync(rid, PushNotificationId.PlayerEventCreated, eventWire);
         }
-        await db.SaveChangesAsync();
         return Ok(new { FailedInvites = failed, Result = 0 });
     }
 
@@ -1289,21 +1313,56 @@ public class PlayerEventsController(
             "BroadcastingRoomInstanceId", "broadcastingRoomInstanceId");
         await SaveExtrasAsync(evt, extras);
 
-        // Attendees' event cards key off BroadcastingRoomInstanceId, so nudge
-        // them to re-fetch instead of sending a chat message.
-        await NotifyAttendeesAsync(evt, PushNotificationId.PlayerEventStateChanged);
+        // Attendees' event cards key off BroadcastingRoomInstanceId, so send
+        // them the updated event.
+        await NotifyEventUpdatedAsync(evt);
         return Ok(await WrapperAsync(evt));
     }
 
-    private async Task NotifyAttendeesAsync(PlayerEventEntity evt, PushNotificationId id)
-    {
-        var recipients = await db.PlayerEventResponses
+    /// <summary>Everyone who answered the event with anything but NotGoing,
+    /// except its creator.</summary>
+    private async Task<List<long>> AttendeeIdsAsync(PlayerEventEntity evt) =>
+        (await db.PlayerEventResponses
             .Where(r => r.EventId == evt.Id && r.Response != NotGoingResponse)
             .Select(r => r.PlayerId)
             .Distinct()
-            .ToListAsync();
-        foreach (var playerId in recipients.Where(p => p != evt.CreatorPlayerId))
-            await notifications.NotifyAsync(playerId, id, new { PlayerEventId = evt.Id, evt.Title });
+            .ToListAsync())
+        .Where(p => p != evt.CreatorPlayerId)
+        .ToList();
+
+    /// <summary>PlayerEventUpdated "81" to the attendees, carrying the full
+    /// event (MDCBEPJCJPO, formatter CENEMCMGDKG) — the same object
+    /// GET api/playerevents/v2/{id} returns; the client replaces its cached
+    /// event with it. The old <c>{PlayerEventId, Title}</c> overwrote the
+    /// cached event with an empty name and default times, and the
+    /// PlayerEventStateChanged (85) used for broadcasts has no client handler
+    /// at all.</summary>
+    private async Task NotifyEventUpdatedAsync(PlayerEventEntity evt)
+    {
+        var recipients = await AttendeeIdsAsync(evt);
+        if (recipients.Count == 0) return;
+        var wire = await ToWireOneAsync(evt);
+        foreach (var playerId in recipients)
+            await notifications.NotifyAsync(playerId, PushNotificationId.PlayerEventUpdated, wire);
+    }
+
+    /// <summary>PlayerEventDeleted "82" ({PlayerEventId}) to the players who
+    /// were attending, collected before the rows were removed.</summary>
+    private async Task NotifyEventDeletedAsync(long eventId, IEnumerable<long> recipients)
+    {
+        foreach (var playerId in recipients)
+            await notifications.NotifyAsync(playerId, PushNotificationId.PlayerEventDeleted,
+                new { PlayerEventId = eventId });
+    }
+
+    /// <summary>PlayerEventResponseChanged "83" to the event's creator:
+    /// <c>{PlayerEvent, PlayerEventResponse}</c> (COAGAJPELCG), each the same
+    /// object the event and response REST routes return.</summary>
+    private async Task NotifyResponseChangedAsync(PlayerEventEntity evt, PlayerEventResponseEntity response)
+    {
+        if (evt.CreatorPlayerId == response.PlayerId) return;
+        await notifications.NotifyAsync(evt.CreatorPlayerId, PushNotificationId.PlayerEventResponseChanged,
+            new { PlayerEvent = await ToWireOneAsync(evt), PlayerEventResponse = ResponseWire(response) });
     }
 
     // ── Report ───────────────────────────────────────────────────────────

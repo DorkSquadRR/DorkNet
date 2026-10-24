@@ -56,9 +56,12 @@ public class FreeGiftsController(DorkNetDbContext db, NotificationService notifi
         await db.SaveChangesAsync();
         foreach (var row in created)
         {
+            // The full gift package, as GET api/avatar/v2/gifts lists it: the
+            // client consumes a gift by its Id, which the old hand-built
+            // payload didn't carry.
             await notifications.NotifyAsync(row.RecipientPlayerId,
                 PushNotificationId.GiftPackageReceived,
-                new { FromPlayerId = sender, CurrencyType = currencyType, Currency = currency, Xp = xp, Message = message });
+                DorkNet.Server.Controllers.API.Avatar.V2.AvatarGiftsController.ToWire(row.Gift));
         }
 
         return Ok(new { Success = true, Sent = created.Count });

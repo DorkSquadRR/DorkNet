@@ -69,17 +69,15 @@ public class MatchPlayerController(
             if (replaced)
             {
                 log.LogWarning(
-                    "[{Scope}] concurrent session for player={PlayerId}; takeOver={TakeOver}; kicking old session(s) via ModerationKick push",
+                    "[{Scope}] concurrent session for player={PlayerId}; takeOver={TakeOver}; logging old session(s) out",
                     logScope, playerId, takeOverExclusiveSession);
                 // The new session hasn't opened its SignalR socket yet
-                // (negotiate fires AFTER /player/login on the watch's
-                // boot sequence — verified in the live trace), so the
-                // ModerationKick push hits only the OLDER session's
-                // existing connections. They'll show the "you've been
-                // kicked" dialog and gracefully disconnect via the
-                // watch's LocalModerationKickSelf path.
-                await notifications.KickStaleSession(playerId,
-                    "Your account was signed in on another device.");
+                // (negotiate fires AFTER /player/login on the boot
+                // sequence — verified in the live trace), so the Logout
+                // push (Reason SessionTakeover) reaches only the OLDER
+                // session, which shows the client's own "signed in
+                // elsewhere" message and returns to the boot scene.
+                await notifications.LogoutStaleSession(playerId);
             }
         }
         return Ok(Array.Empty<object>());
