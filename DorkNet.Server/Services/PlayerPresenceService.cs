@@ -105,6 +105,15 @@ public class PlayerPresenceService
                 var db = mux.GetDatabase();
                 db.StringSet(Key(playerId), json, PresenceTtl);
                 db.KeyDelete(NoRoomKey(playerId));
+                // Per-room membership index for the instance browser
+                // (EnumerateActiveInstances). Members are validated against
+                // the player's live presence on read, so a player who moved
+                // on is pruned lazily instead of needing the old room here.
+                if (room is not null && room.RoomId > 0)
+                {
+                    db.SetAdd(RoomIndexKey(room.RoomId), playerId);
+                    db.KeyExpire(RoomIndexKey(room.RoomId), PresenceTtl + PresenceTtl);
+                }
                 _log?.LogDebug("[presence] set redis player={PlayerId} room={Room} bytes={Bytes}",
                     playerId, room?.Name ?? "<null>", json.Length);
             }
@@ -459,44 +468,96 @@ public class PlayerPresenceService
             _localNoRoomExpires[playerId] = DateTimeOffset.UtcNow.Add(PresenceTtl);
     }
 
-    /// <summary>List the currently-active instances of a given room,
-    /// grouped by PhotonRoomId, with the player ids currently presenced
-    /// in each. Drives the watch's RoomInstanceBrowser
-    /// (<c>GET match.*/room/{id}/instances</c>) so players can see
-    /// which instance their friends are in.
+    /// <summary>List the live instances of a given room, grouped by
+    /// PhotonRoomId (or RoomInstanceId when a row has none), with the player
+    /// ids currently presenced in each. Drives the room instance browser
+    /// (<c>GET match.*/room/{id}/instances</c>) and the event instance list.
     ///
-    /// Redis caveat: without a secondary index per room we'd need a
-    /// SCAN over every presence key — too expensive to do on each
-    /// request. For now the Redis path returns empty and the local
-    /// in-process dictionary is the source of truth. Single-instance
-    /// deployments work; multi-replica Redis deployments need a
-    /// per-room set index to be added before the browser is reliable
-    /// there.</summary>
-    public IEnumerable<(RoomInstanceDto Room, List<long> PlayerIds)> EnumerateActiveInstances(long roomId)
+    /// <para>Only players whose presence is still live count: an expired
+    /// room presence (<see cref="PresenceTtl"/>) is dropped, and so is a
+    /// player whose activity marker (<see cref="ActivityTtl"/>, refreshed by
+    /// every heartbeat and join) has lapsed. A client that crashed keeps its
+    /// room presence for up to ten minutes, but it is not in the instance and
+    /// must not inflate the player count or keep an empty instance listed.</para>
+    ///
+    /// <para><b>Redis.</b> <see cref="SetRoom"/> records each player in a
+    /// per-room set (<c>presence-room:{roomId}</c>); this reads that set and
+    /// validates every member against their current presence, pruning the
+    /// ones that have moved on or expired. Without the index the Redis path
+    /// had nothing to enumerate and returned an empty list on every
+    /// multi-replica deployment.</para>
+    ///
+    /// <para>Private instances are skipped unless
+    /// <paramref name="includePrivate"/> is set; callers that include them
+    /// must apply their own visibility rule.</para></summary>
+    public IEnumerable<(RoomInstanceDto Room, List<long> PlayerIds)> EnumerateActiveInstances(
+        long roomId, bool includePrivate = false)
     {
-        if (_redis is not null) return Array.Empty<(RoomInstanceDto, List<long>)>();
-        var groups = new Dictionary<string, (RoomInstanceDto Room, List<long> PlayerIds)>(StringComparer.Ordinal);
-        foreach (var kv in _local)
+        var members = new List<(long PlayerId, RoomInstanceDto Room)>();
+        if (_redis is { } mux)
         {
-            var room = kv.Value;
-            if (room is null || room.RoomId != roomId) continue;
-            // Skip private instances — those are surfaced separately
-            // in the controller via PrivateInstanceService so we never
-            // leak a photonRoomId for an invite-only match into the
-            // public browser.
-            if (room.IsPrivate) continue;
-            var key = string.IsNullOrEmpty(room.PhotonRoomId)
-                ? $"<{room.RoomInstanceId}>"
-                : room.PhotonRoomId;
+            try
+            {
+                var db = mux.GetDatabase();
+                var stale = new List<RedisValue>();
+                foreach (var member in db.SetMembers(RoomIndexKey(roomId)))
+                {
+                    if (!long.TryParse(member.ToString(), out var playerId))
+                    {
+                        stale.Add(member);
+                        continue;
+                    }
+                    var room = GetRoom(playerId);
+                    if (room is null || room.RoomId != roomId)
+                    {
+                        stale.Add(member);
+                        continue;
+                    }
+                    members.Add((playerId, room));
+                }
+                if (stale.Count > 0)
+                    db.SetRemove(RoomIndexKey(roomId), stale.ToArray());
+            }
+            catch (Exception ex)
+            {
+                _log?.LogWarning(ex, "[presence] redis room index scan failed room={RoomId}", roomId);
+                return Array.Empty<(RoomInstanceDto, List<long>)>();
+            }
+        }
+        else
+        {
+            foreach (var playerId in _local.Keys.ToList())
+            {
+                var room = GetRoom(playerId); // honours the room TTL
+                if (room is not null && room.RoomId == roomId)
+                    members.Add((playerId, room));
+            }
+        }
+
+        var groups = new Dictionary<string, (RoomInstanceDto Room, List<long> PlayerIds)>(StringComparer.Ordinal);
+        foreach (var (playerId, room) in members)
+        {
+            if (room.IsPrivate && !includePrivate) continue;
+            if (!IsRecentlyActive(playerId)) continue;
+            var key = InstanceKey(room);
             if (!groups.TryGetValue(key, out var entry))
             {
                 entry = (room, new List<long>());
                 groups[key] = entry;
             }
-            entry.PlayerIds.Add(kv.Key);
+            entry.PlayerIds.Add(playerId);
         }
         return groups.Values;
     }
+
+    /// <summary>The identity two presence rows share when they are in the
+    /// same live instance: the Photon room, else the instance id.</summary>
+    public static string InstanceKey(RoomInstanceDto room)
+        => string.IsNullOrEmpty(room.PhotonRoomId)
+            ? "<" + room.RoomInstanceId + ">"
+            : room.PhotonRoomId;
+
+    private static string RoomIndexKey(long roomId) => "presence-room:" + roomId;
 
     private static string Key(long playerId) => $"presence:{playerId}";
     private static string ActiveKey(long playerId) => $"presence-active:{playerId}";

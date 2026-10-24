@@ -311,7 +311,7 @@ public class NotificationService(
                 {
                     ["roomInstanceId"]   = redacted.RoomInstanceId,
                     ["roomId"]           = redacted.RoomId,
-                    ["subRoomId"]        = redacted.SubRoomId,
+                    ["subRoomId"]        = redacted.WireSubRoomId,
                     ["roomInstanceType"] = redacted.RoomInstanceType,
                     ["location"]         = redacted.Location,
                     ["dataBlob"]         = redacted.DataBlob,
