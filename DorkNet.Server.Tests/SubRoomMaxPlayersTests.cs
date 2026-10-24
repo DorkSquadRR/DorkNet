@@ -58,7 +58,9 @@ public sealed class SubRoomMaxPlayersTests : IClassFixture<DorkNetServerFactory>
             await db.SaveChangesAsync();
         }
 
-        // ── in-game: the owner's slider on sub-room 1 only ──────────────────
+        // ── in-game: the owner's slider on the second sub-room only ─────────
+        // The client addresses it by its wire SubRoomId, OrderIndex + 1 = 2
+        // (RoomSceneIds — the client will not load a sub-room whose id is 0).
         // Sent exactly as the client sends it. NLDBPDCNNCF.MNBPCGJNLNP(Int64,
         // Int64, Int32) builds a BLNOGFGHIIF whose single JSON key is
         // "maxPlayers" and issues it with verb 3 = PUT — NOT the form encoding
@@ -66,7 +68,7 @@ public sealed class SubRoomMaxPlayersTests : IClassFixture<DorkNetServerFactory>
         // real client's body went unread.
         using var ownerClient = Client("rooms", owner);
         using var slider = await ownerClient.PutAsJsonAsync(
-            $"/rooms/{roomId}/subrooms/1/maxplayers", new { maxPlayers = 24 });
+            $"/rooms/{roomId}/subrooms/2/maxplayers", new { maxPlayers = 24 });
         var sliderBody = await slider.Content.ReadAsStringAsync();
         Assert.True(slider.IsSuccessStatusCode,
             $"owner PUT maxplayers -> {(int)slider.StatusCode}: {sliderBody}");
@@ -75,10 +77,11 @@ public sealed class SubRoomMaxPlayersTests : IClassFixture<DorkNetServerFactory>
         // shape — so the slider's own response has to carry the new value.
         var echoed = JsonDocument.Parse(sliderBody).RootElement
             .GetProperty("SubRooms").EnumerateArray()
-            .First(e => e.GetProperty("SubRoomId").GetInt64() == 1);
+            .First(e => e.GetProperty("SubRoomId").GetInt64() == 2);
         Assert.Equal(24, echoed.GetProperty("MaxPlayers").GetInt32());
 
         // ── admin: reads what the owner just set, then edits sub-room 0 ─────
+        // (the admin API addresses sub-rooms by OrderIndex)
         using var adminClient = Client("admin", admin);
         var listed = await GetJsonAsync(adminClient, $"/api/admin/v1/rooms/{roomId}/subrooms");
         var subRooms = listed.EnumerateArray()
@@ -99,8 +102,9 @@ public sealed class SubRoomMaxPlayersTests : IClassFixture<DorkNetServerFactory>
             .ToDictionary(e => e.GetProperty("SubRoomId").GetInt64(),
                           e => e.GetProperty("MaxPlayers").GetInt32());
 
-        Assert.Equal(40, wire[0]);
-        Assert.Equal(24, wire[1]);
+        // Wire ids are OrderIndex + 1.
+        Assert.Equal(40, wire[1]);
+        Assert.Equal(24, wire[2]);
 
         // The room-level figure is the room's advertised capacity, NOT a copy
         // of sub-room 0 — otherwise the admin edit above would have moved it.

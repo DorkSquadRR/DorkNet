@@ -1254,8 +1254,10 @@ public class InventionsController(
         if (!canPush) return Forbid();
 
         var subRoomId = req.SubRoomId;
+        // Wire SubRoomId (OrderIndex + 1) → the scene's OrderIndex.
+        var sceneOrderIndex = Services.RoomSceneIds.ToOrderIndex(subRoomId);
         var scene = await db.RoomScenes
-            .FirstOrDefaultAsync(s => s.RoomId == room.Id && s.OrderIndex == subRoomId);
+            .FirstOrDefaultAsync(s => s.RoomId == room.Id && s.OrderIndex == sceneOrderIndex);
 
         var subRoomDataFilename = Clamp((req.SubRoomData?.Filename ?? string.Empty).Trim(), 128);
         if (subRoomDataFilename.Length == 0)
@@ -1269,7 +1271,7 @@ public class InventionsController(
         if (subRoomBlob is null)
             return BadRequest(new { Error = "unknown SubRoomData.Filename" });
         if (subRoomBlob.RoomId == 0) subRoomBlob.RoomId = room.Id;
-        subRoomBlob.SubRoomId ??= subRoomId;
+        subRoomBlob.SubRoomId ??= sceneOrderIndex;
 
         var roomDataFilename = Clamp((req.RoomData?.Filename ?? string.Empty).Trim(), 128);
         if (roomDataFilename.Length > 0)

@@ -140,65 +140,47 @@ public class MatchController(
         });
     }
 
+    /// <summary>GET <c>photon_access_token</c> — read by the room-permissions
+    /// runtime as <c>ALIIIAGAPND {RoomInstanceId, PhotonAccessToken,
+    /// Permissions}</c> (NLDBPDCNNCF.CEOPCANHPPH, verb 0, issued from the
+    /// rooms client, hence the <c>roomserver/</c> twin).
+    /// <c>Permissions</c> is the role-permission matrix of the sub-room the
+    /// player is in: the defaults plus whatever the room's editors saved with
+    /// <c>PUT rooms/{id}/subrooms/{sub}/permissions</c>
+    /// (<see cref="RoomPermissionMatrix"/>). It must not be empty: with no
+    /// Permissions the client falls into its persisted-role migration path,
+    /// which NREs during first spawn.</summary>
     [HttpGet("/photon_access_token")]
-    public IActionResult PhotonAccessToken()
+    [HttpGet("/roomserver/photon_access_token")]
+    public async Task<IActionResult> PhotonAccessToken()
     {
         var pid = this.RequireCurrentPlayerId();
         var appId = config["Photon:AppId"] ?? string.Empty;
         var voiceAppId = config["Photon:VoiceAppId"] ?? string.Empty;
         var region = (config["Photon:CloudRegion"] ?? "us").ToLowerInvariant();
         var currentRoom = presence.GetRoom(pid);
-        var permissions = BuildPhotonPermissionSeed();
+        var permissions = currentRoom is null
+            ? RoomPermissionMatrix.Merge(Array.Empty<RoomRolePermissionEntity>())
+            : await RoomPermissionMatrix.LoadAsync(db, currentRoom.RoomId, currentRoom.SubRoomId);
         logger.LogInformation(
-            "[photon-token] player={PlayerId} roomInstance={RoomInstanceId} permissions={PermissionCount}",
-            pid, currentRoom?.RoomInstanceId ?? 0L, permissions.Length);
-        return Ok(new Dictionary<string, object>
-        {
-            // 2023 deserializes this endpoint as ALIIIAGAPND before room
-            // permissions initialization. If Permissions is missing/empty,
-            // OMJKHJLFOCO falls into the persisted-role migration path that
-            // currently NREs during first spawn.
-            ["RoomInstanceId"] = currentRoom?.RoomInstanceId ?? 0L,
-            ["PhotonAccessToken"] = string.Empty,
-            ["Permissions"] = permissions,
+            "[photon-token] player={PlayerId} room={RoomId} sub={SubRoomId} roomInstance={RoomInstanceId} permissions={PermissionCount}",
+            pid, currentRoom?.RoomId ?? 0L, currentRoom?.SubRoomId ?? 0L, currentRoom?.RoomInstanceId ?? 0L, permissions.Count);
 
-            // Existing custom-auth/app-id shape kept for Photon auth callers.
-            ["ResultCode"] = 1,
-            ["Message"] = string.Empty,
-            ["UserId"] = pid.ToString(System.Globalization.CultureInfo.InvariantCulture),
-            ["PhotonAppId"] = appId,
-            ["PhotonVoiceAppId"] = voiceAppId,
-            ["AppId"] = appId,
-            ["VoiceAppId"] = voiceAppId,
-            ["CloudRegion"] = region,
-            ["Region"] = region,
-            ["Token"] = string.Empty,
-        });
+        var body = RoomPermissionMatrix.AccessTokenBody(currentRoom?.RoomInstanceId ?? 0L, permissions);
+        // Existing custom-auth/app-id shape kept for Photon auth callers; the
+        // ALIIIAGAPND reader ignores keys it does not register.
+        body["ResultCode"] = 1;
+        body["Message"] = string.Empty;
+        body["UserId"] = pid.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        body["PhotonAppId"] = appId;
+        body["PhotonVoiceAppId"] = voiceAppId;
+        body["AppId"] = appId;
+        body["VoiceAppId"] = voiceAppId;
+        body["CloudRegion"] = region;
+        body["Region"] = region;
+        body["Token"] = string.Empty;
+        return Ok(body);
     }
-
-    private static object[] BuildPhotonPermissionSeed()
-        =>
-        [
-            BuildPhotonPermission(13, 30),  // Can Use Maker Pen
-            BuildPhotonPermission(20, 30),  // Can Spawn Inventions
-            BuildPhotonPermission(21, 30),  // Can Spawn Consumables
-            BuildPhotonPermission(22, 30),  // Can Use Room Reset Button
-            BuildPhotonPermission(23, 30),  // Can Use Play Gizmos Toggle
-            BuildPhotonPermission(13, 255), // Creator alias
-            BuildPhotonPermission(20, 255),
-            BuildPhotonPermission(21, 255),
-            BuildPhotonPermission(22, 255),
-            BuildPhotonPermission(23, 255),
-        ];
-
-    private static object BuildPhotonPermission(int permission, int role) => new
-    {
-        Permission = permission.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        Role = role,
-        Override = true,
-        Type = 0,
-        Value = "true",
-    };
 
     [HttpPost("/matchmake/dorm")]
     public async Task<IActionResult> MatchmakeDorm()
@@ -490,97 +472,125 @@ public class MatchController(
         return Ok(session);
     }
 
-    /// <summary>GET <c>match.*/room/{id}/instances</c> — the
-    /// "RoomInstanceBrowser" the watch shows when you tap a room tile.
-    /// Returns the currently-active instances so the player can see
-    /// which one their friends are in (and join it) instead of being
-    /// matchmade into a fresh empty room. Verified URL at
-    /// Matchmaking.txt:6286; response is a
-    /// <c>List&lt;SimpleRoomInstance&gt;</c> per
-    /// <c>SimpleRoomInstance.cs</c>: RoomInstanceId/RoomId/SubRoomId,
-    /// IsFull, CreatedAt, PlayerIds, SubroomName, PlayerCount,
-    /// HasModPresent, HashedInstanceId.
+    /// <summary>GET <c>match.*/room/{id}/instances</c> — the room instance
+    /// browser.
     ///
-    /// We derive instances from PlayerPresenceService's per-player
-    /// RoomInstanceDto: every distinct PhotonRoomId in the same RoomId
-    /// is one instance, with the players currently presenced there.
-    /// PrivateInstances are surfaced as well so the inviter and
-    /// invitee see the same room in the browser.</summary>
+    /// <para><b>Client contract.</b> <c>RecNet.Matchmaking.KAIPGDGACGG(long)</c>
+    /// (RecNet.Runtime/RecNet/Matchmaking.txt:13966, route at :14237, verb 0 =
+    /// GET on the matchmaking host) returns <c>List&lt;PNDCMIMEJLD&gt;</c>, a bare
+    /// array. The reader (JPNMBICAMEE.txt) takes exactly RoomInstanceId,
+    /// RoomId, SubRoomId, IsFull, CreatedAt and PlayerIds; the post-parse hook
+    /// (PNDCMIMEJLD.FKDDCNLJOLF) derives PlayerCount from PlayerIds.Count,
+    /// SubroomName from the cached room details' SubRooms by SubRoomId, and
+    /// HasModPresent from the room's Roles. The screen
+    /// (RoomInstanceBrowserScreen / RoomInstancePagedGrid) shows every row it
+    /// is given, current instance first then oldest CreatedAt first, and
+    /// renders the age as UtcNow - CreatedAt, so CreatedAt must be UTC.</para>
+    ///
+    /// <para><b>What is listed.</b> Every live instance of the room: each
+    /// distinct Photon room in which at least one player is presenced with a
+    /// live activity marker (<see cref="PlayerPresenceService.EnumerateActiveInstances"/>).
+    /// Private instances are included only for callers allowed into them —
+    /// the room creator, accepted role holders, the instance owner, its
+    /// invitees, and players already inside — so another room's invite-only
+    /// match never leaks. Empty instances are not listed: there is nothing to
+    /// join and they are what made the old list stale.</para>
+    ///
+    /// <para><b>Fixed defects.</b> The Redis presence path returned nothing at
+    /// all, so the browser was empty on every multi-replica deployment;
+    /// private instances (every user room is born private and has one
+    /// instance per sub-room) were dropped from presence and re-added only
+    /// for their owner with an empty PlayerIds, so they showed 0 players or
+    /// nothing; expired or crashed presences still counted; IsFull was always
+    /// false; and SubRoomId used the OrderIndex, which does not match the
+    /// room details' wire ids.</para></summary>
     [HttpGet("/room/{roomId:long}/instances")]
     [AllowAnonymous]
     public async Task<IActionResult> RoomInstances(long roomId)
     {
-        var presenced = presence.EnumerateActiveInstances(roomId).ToList();
-        // Only surface the caller's OWN private instances — we never
-        // leak someone else's PhotonRoomId into the browser. The Photon
-        // join check still requires CanJoinAsync, but redacting at the
-        // list level matches the existing RoomInstanceDto.Redact policy.
         var pid = this.CurrentPlayerId() ?? 0;
-        var privates = pid == 0
-            ? new List<Data.Entities.PrivateInstanceEntity>()
-            : await db.PrivateInstances
-                .Where(p => p.RoomId == roomId && p.OwnerPlayerId == pid)
-                .ToListAsync();
+        var room = await db.Rooms.AsNoTracking().FirstOrDefaultAsync(r => r.Id == roomId);
+        if (room is null) return Ok(Array.Empty<object>());
 
-        // Merge: presence rows are authoritative (player currently
-        // there); add any owned private instance the inviter created
-        // but nobody's joined yet so the inviter can still see it.
-        var byKey = new Dictionary<string, SimpleInstance>(StringComparer.Ordinal);
-        foreach (var (room, playerIds) in presenced)
+        var live = presence.EnumerateActiveInstances(roomId, includePrivate: true).ToList();
+
+        var privateIds = live.Where(l => l.Room.IsPrivate).Select(l => l.Room.RoomInstanceId).Distinct().ToList();
+        var privateRows = privateIds.Count == 0
+            ? new Dictionary<long, PrivateInstanceEntity>()
+            : await db.PrivateInstances.AsNoTracking()
+                .Where(p => privateIds.Contains(p.Id))
+                .ToDictionaryAsync(p => p.Id);
+
+        var callerHasRole = pid != 0 && (room.CreatorPlayerId == pid
+            || await db.RoomRoles.AsNoTracking().AnyAsync(r =>
+                r.RoomId == roomId && r.PlayerId == pid && r.Accepted));
+        var invitedTo = pid == 0 || privateIds.Count == 0
+            ? new HashSet<long>()
+            : (await db.PrivateInstanceInvitees.AsNoTracking()
+                .Where(i => i.PlayerId == pid && privateIds.Contains(i.PrivateInstanceId))
+                .Select(i => i.PrivateInstanceId)
+                .ToListAsync()).ToHashSet();
+
+        var rows = new List<RoomInstanceRow>();
+        foreach (var (inst, playerIds) in live)
         {
-            if (string.IsNullOrEmpty(room.PhotonRoomId)) continue;
-            byKey[room.PhotonRoomId] = new SimpleInstance(
-                RoomInstanceId: room.RoomInstanceId,
-                RoomId: room.RoomId,
-                SubRoomId: room.SubRoomId,
-                IsFull: false,
-                CreatedAt: DateTime.UtcNow,
-                PlayerIds: playerIds.Select(p => (int)p).ToList(),
-                SubroomName: room.Name ?? string.Empty,
-                PlayerCount: playerIds.Count,
-                HasModPresent: false,
-                HashedInstanceId: room.PhotonRoomId);
-        }
-        foreach (var p in privates)
-        {
-            if (string.IsNullOrEmpty(p.PhotonRoomId) || byKey.ContainsKey(p.PhotonRoomId)) continue;
-            byKey[p.PhotonRoomId] = new SimpleInstance(
-                RoomInstanceId: p.Id,
-                RoomId: p.RoomId,
-                SubRoomId: p.SubRoomId,
-                IsFull: false,
-                CreatedAt: DateTime.SpecifyKind(p.CreatedAt, DateTimeKind.Utc),
-                PlayerIds: new List<int>(),
-                SubroomName: p.Name,
-                PlayerCount: 0,
-                HasModPresent: false,
-                HashedInstanceId: p.PhotonRoomId);
+            privateRows.TryGetValue(inst.RoomInstanceId, out var privateRow);
+            if (inst.IsPrivate && !CanSeePrivateInstance(
+                    pid, callerHasRole, playerIds, privateRow, invitedTo.Contains(inst.RoomInstanceId)))
+                continue;
+
+            var capacity = inst.MaxCapacity > 0 ? inst.MaxCapacity : privateRow?.MaxCapacity ?? 0;
+            rows.Add(new RoomInstanceRow(
+                RoomInstanceId: inst.RoomInstanceId,
+                RoomId: inst.RoomId,
+                SubRoomId: inst.SubRoomId,
+                IsFull: capacity > 0 && playerIds.Count >= capacity,
+                CreatedAt: privateRow is not null
+                    ? DateTime.SpecifyKind(privateRow.CreatedAt, DateTimeKind.Utc)
+                    : DateTime.UtcNow,
+                PlayerIds: playerIds.Distinct().OrderBy(p => p).ToList()));
         }
 
-        // Wire shape: SimpleRoomInstance.Deserialize reads CAMELCASE
-        // keys — verified at Cpp2IL_ISIL/.../RecNet/SimpleRoomInstance.txt
-        // lines 765-808 ({roomInstanceId, roomId, subRoomId, isFull,
-        // createdAt, playerIds}). SubroomName / PlayerCount /
-        // HasModPresent / HashedInstanceId are populated locally on the
-        // watch (PlayerIds.Count, local hash, etc.) — not read from
-        // JSON, so we don't send them. Earlier PascalCase response made
-        // every field default to 0/null on the watch, breaking the
-        // browser.
-        return Ok(byKey.Values.Select(i => new
-        {
-            roomInstanceId = i.RoomInstanceId,
-            roomId = i.RoomId,
-            subRoomId = i.SubRoomId,
-            isFull = i.IsFull,
-            createdAt = i.CreatedAt,
-            playerIds = i.PlayerIds.ToArray(),
-        }));
+        logger.LogInformation(
+            "[room-instances] room={Room} caller={Caller} live={Live} listed={Listed}",
+            roomId, pid, live.Count, rows.Count);
+        return Ok(rows.OrderBy(r => r.CreatedAt).Select(ToWire));
     }
 
-    private sealed record SimpleInstance(
+    /// <summary>Who may see (and so be offered a join into) a private
+    /// instance in the browser.</summary>
+    public static bool CanSeePrivateInstance(
+        long callerId,
+        bool callerHasRoomRole,
+        IReadOnlyCollection<long> playersInside,
+        PrivateInstanceEntity? privateRow,
+        bool callerInvited)
+    {
+        if (callerId == 0) return false;
+        if (callerHasRoomRole) return true;
+        if (playersInside.Contains(callerId)) return true;
+        if (privateRow is not null && privateRow.OwnerPlayerId == callerId) return true;
+        return callerInvited;
+    }
+
+    internal sealed record RoomInstanceRow(
         long RoomInstanceId, long RoomId, long SubRoomId, bool IsFull,
-        DateTime CreatedAt, List<int> PlayerIds, string SubroomName,
-        int PlayerCount, bool HasModPresent, string HashedInstanceId);
+        DateTime CreatedAt, List<long> PlayerIds);
+
+    /// <summary>PNDCMIMEJLD wire row. Account ids are Int32 on this DTO;
+    /// SubRoomId is the wire id the room details advertise
+    /// (<see cref="RoomSceneIds"/>), which the client uses to name the row.
+    /// The reader matches PascalCase, camelCase and lowercase keys; camelCase
+    /// is what this route has always sent.</summary>
+    internal static object ToWire(RoomInstanceRow r) => new
+    {
+        roomInstanceId = r.RoomInstanceId,
+        roomId = r.RoomId,
+        subRoomId = RoomSceneIds.ToWire(r.SubRoomId),
+        isFull = r.IsFull,
+        createdAt = r.CreatedAt,
+        playerIds = r.PlayerIds.Select(p => (int)p).ToArray(),
+    };
 
     /// <summary>DELETE <c>match.*/invite/{id}</c> — Matchmaking.cs
     /// DeclineRoomInvite. Verified URL at Matchmaking.txt:6505 (method

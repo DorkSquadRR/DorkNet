@@ -11,6 +11,7 @@ public class DorkNetDbContext(DbContextOptions<DorkNetDbContext> options) : DbCo
     public DbSet<RelationshipEntity> Relationships => Set<RelationshipEntity>();
     public DbSet<RoomEntity> Rooms => Set<RoomEntity>();
     public DbSet<RoomRoleEntity> RoomRoles => Set<RoomRoleEntity>();
+    public DbSet<RoomRolePermissionEntity> RoomRolePermissions => Set<RoomRolePermissionEntity>();
     public DbSet<LeaderboardChannelMetaEntity> LeaderboardChannelMeta => Set<LeaderboardChannelMetaEntity>();
     public DbSet<RoomBookmarkEntity> RoomBookmarks => Set<RoomBookmarkEntity>();
     public DbSet<RoomDataBlobEntity> RoomDataBlobs => Set<RoomDataBlobEntity>();
@@ -132,6 +133,14 @@ public class DorkNetDbContext(DbContextOptions<DorkNetDbContext> options) : DbCo
         {
             e.HasKey(p => p.Id);
             e.HasIndex(p => new { p.ClubId, p.MembershipType }).IsUnique();
+        });
+
+        // One cell per (room, sub-room, role, permission): the sub-room
+        // permissions PUT upserts the cells it was sent.
+        modelBuilder.Entity<RoomRolePermissionEntity>(e =>
+        {
+            e.HasKey(p => p.Id);
+            e.HasIndex(p => new { p.RoomId, p.SubRoomId, p.Role, p.Permission }).IsUnique();
         });
 
         modelBuilder.Entity<ClubAdditionalImageEntity>(e =>

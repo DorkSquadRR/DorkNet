@@ -416,9 +416,10 @@ public sealed class RroRoomBlobTests : IClassFixture<DorkNetServerFactory>
         }
     }
 
+    // The entry sub-room (OrderIndex 0) is wire SubRoomId 1 (RoomSceneIds).
     private static JsonElement SubRoomZero(JsonElement details) =>
         details.GetProperty("SubRooms").EnumerateArray()
-            .First(e => e.GetProperty("SubRoomId").GetInt64() == 0);
+            .First(e => e.GetProperty("SubRoomId").GetInt64() == 1);
 
     private static async Task<JsonElement> GetJsonAsync(HttpClient client, string path)
     {

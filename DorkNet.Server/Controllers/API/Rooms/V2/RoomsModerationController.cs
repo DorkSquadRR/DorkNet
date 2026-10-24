@@ -1432,6 +1432,13 @@ public class RoomsModerationController(
             // it editable. Safe for admin: the purge gate and "RR Original"
             // badge both key on CreatorPlayerId == SystemAccountId, so a
             // user-owned clone is still shown as Custom and stays purgeable.
+            //
+            // The WIRE IsRRO is a different thing: it is false for every
+            // player-owned room (RoomService.WireIsRRO). The 2023 client's
+            // room-load pipeline never reads IsRRO (the baked scene comes
+            // from the sub-room's UnitySceneId, the blob step from DataBlob),
+            // while its owner UI refuses publish and every room setting on
+            // an RRO, which is what kept cloned rooms from being published.
             IsAGRoom = source.IsAGRoom,
             IsDormRoom = false,
             CloningAllowed = source.CloningAllowed,
@@ -1509,6 +1516,18 @@ public class RoomsModerationController(
             CanMatchmakeInto = s.CanMatchmakeInto,
             DataModifiedAt = DateTime.UtcNow,
         }).ToList();
+        // A template with no scene rows still has to give the new room a
+        // real entry sub-room (named "Home", from the clone's own location,
+        // blob and capacity). Without it the details served a synthesised
+        // placeholder and Room Settings > Subrooms showed an empty row.
+        if (clonedScenes.Count == 0)
+        {
+            var home = Services.RoomService.NewHomeScene(clone);
+            home.Id = ++nextSceneId;
+            clonedScenes.Add(home);
+        }
+        foreach (var scene in clonedScenes.Where(s => string.IsNullOrWhiteSpace(s.Name)))
+            scene.Name = Services.RoomService.DefaultSubRoomName(scene.OrderIndex);
         if (clonedScenes.Count > 0)
         {
             db.RoomScenes.AddRange(clonedScenes);
@@ -1580,8 +1599,11 @@ public class RoomsModerationController(
             // The scene was created as a shallow copy, so its DataBlobName is
             // currently the SOURCE's. Either a copy replaces it or it gets
             // cleared — it must never survive as-is.
+            // A synthesised Home scene (template had no rows) has no source
+            // scene; it starts from the room-level blob it was built with.
+            var sourceBlob = i < sourceScenes.Count ? sourceScenes[i].DataBlobName : target.DataBlobName;
             var copied = await CopyBlobForCloneAsync(
-                sourceScenes[i].DataBlobName, clone.Id, target.OrderIndex, callerId);
+                sourceBlob, clone.Id, target.OrderIndex, callerId);
 
             target.DataBlobName = copied ?? string.Empty;
             target.DataModifiedAt = DateTime.UtcNow;

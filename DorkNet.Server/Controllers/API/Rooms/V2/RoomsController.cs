@@ -35,6 +35,7 @@ public class RoomsController(
     DomainConfig domain,
     NotificationService notifications,
     ServerSettingsService serverSettings,
+    SystemNotificationService systemNotifications,
     ILogger<RoomsController> logger) : ControllerBase
 {
     private long? CurrentPlayerId => ControllerBaseExtensions.CurrentPlayerId(this);
@@ -574,6 +575,7 @@ public class RoomsController(
     [HttpGet("rooms/{roomId:long}/subrooms/{subRoomId:long}/datahistory")]
     public async Task<IActionResult> SubRoomDataHistory(long roomId, long subRoomId)
     {
+        subRoomId = RoomSceneIds.ToOrderIndex(subRoomId); // wire id → OrderIndex
         var blobs = await db.RoomDataBlobs
             .Where(b => b.RoomId == roomId
                      && (b.SubRoomId == subRoomId || b.SubRoomId == null))
@@ -586,7 +588,7 @@ public class RoomsController(
             .Take(50)
             .Select(b => new
             {
-                SubRoomId = subRoomId,
+                SubRoomId = RoomSceneIds.ToWire(subRoomId),
                 DataBlob = b.BlobName,
                 SavedByAccountId = b.UploadedByPlayerId,
                 CreatedAt = b.UploadedAt,
@@ -613,6 +615,7 @@ public class RoomsController(
         [FromQuery] int? unityAssetTarget,
         [FromQuery] int? unityAssetVersion)
     {
+        subRoomId = RoomSceneIds.ToOrderIndex(subRoomId); // wire id → OrderIndex
         var room = await rooms.GetByIdAsync(roomId);
         if (room is null) return NotFound(new { error = "room_not_found", roomId });
 
@@ -661,6 +664,7 @@ public class RoomsController(
     [Authorize]
     public async Task<IActionResult> SubRoom(long roomId, long subRoomId)
     {
+        subRoomId = RoomSceneIds.ToOrderIndex(subRoomId); // wire id → OrderIndex
         var room = await rooms.GetByIdAsync(roomId);
         if (room is null) return NotFound(new { error = "room_not_found", roomId });
 
@@ -689,6 +693,7 @@ public class RoomsController(
         [FromQuery] int? unityAssetTarget,
         [FromQuery] int? unityAssetVersion)
     {
+        subRoomId = RoomSceneIds.ToOrderIndex(subRoomId); // wire id → OrderIndex
         var room = await rooms.GetByIdAsync(roomId);
         if (room is null) return NotFound(new { error = "room_not_found", roomId });
 
@@ -731,6 +736,7 @@ public class RoomsController(
         long roomId, long subRoomId,
         [FromQuery] int skip = 0, [FromQuery] int take = 50)
     {
+        subRoomId = RoomSceneIds.ToOrderIndex(subRoomId); // wire id → OrderIndex
         var room = await rooms.GetByIdAsync(roomId);
         if (room is null) return NotFound(new { error = "room_not_found", roomId });
 
@@ -763,7 +769,7 @@ public class RoomsController(
             saves.Add(new
             {
                 SubRoomDataSaveId = currentSaveId,
-                SubRoomId = subRoomId,
+                SubRoomId = RoomSceneIds.ToWire(subRoomId),
                 UnityAssetId = scene?.StudioUnityAssetId ?? string.Empty,
                 SubRoomUnityAssetId = scene?.StudioUnityAssetId ?? string.Empty,
                 ReferencedUnityAssetIds = Array.Empty<string>(),
@@ -809,7 +815,7 @@ public class RoomsController(
         var modified = scene?.DataModifiedAt ?? room.UpdatedAt;
         return new
         {
-            SubRoomId = (long)orderIndex,
+            SubRoomId = RoomSceneIds.ToWire(orderIndex),
             RoomId = room.Id,
             Name = scene?.Name ?? "Home",
             DataBlob = dataBlob,
@@ -824,7 +830,7 @@ public class RoomsController(
             CurrentSave = new
             {
                 SubRoomDataSaveId = scene?.StudioSubRoomDataSaveId ?? 0L,
-                SubRoomId = (long)orderIndex,
+                SubRoomId = RoomSceneIds.ToWire(orderIndex),
                 UnityAssetId = scene?.StudioUnityAssetId ?? string.Empty,
                 SubRoomUnityAssetId = scene?.StudioUnityAssetId ?? string.Empty,
                 ReferencedUnityAssetIds = Array.Empty<string>(),
@@ -871,7 +877,7 @@ public class RoomsController(
         return new
         {
             SubRoomDataSaveId = saveId,
-            SubRoomId = subRoomId,
+            SubRoomId = RoomSceneIds.ToWire(subRoomId),
             UnityAssetId = unityAssetId,
             SubRoomUnityAssetId = unityAssetId,
             ReferencedUnityAssetIds = Array.Empty<string>(),
@@ -916,13 +922,14 @@ public class RoomsController(
     public async Task<IActionResult> SubRoomRestoreData(
         long roomId, long subRoomId, [FromForm] string? filename)
     {
+        subRoomId = RoomSceneIds.ToOrderIndex(subRoomId); // wire id → OrderIndex
         if (string.IsNullOrWhiteSpace(filename))
             return BadRequest(new { error = "missing_filename" });
 
         var pid = this.RequireCurrentPlayerId();
         var room = await rooms.GetByIdAsync(roomId);
         if (room is null) return NotFound(new { error = "room_not_found" });
-        if (room.CreatorPlayerId != pid) return Forbid();
+        if (!await CanEditRoomAsync(room, pid)) return Forbid();
 
         var blob = await db.RoomDataBlobs
             .FirstOrDefaultAsync(b => b.BlobName == filename && b.RoomId == roomId);
@@ -2001,7 +2008,7 @@ public class RoomsController(
                     UseLevelBasedMatchmaking = false,
                     UseAgeBasedMatchmaking = false,
                     UseRecRoyaleMatchmaking = false,
-                    SubRoomId = (long)s.OrderIndex,
+                    SubRoomId = RoomSceneIds.ToWire(s.OrderIndex),
                     RoomId = room.Id,
                     Name = s.Name,
                     UnityAssetId = s.StudioUnityAssetId,
@@ -2027,7 +2034,7 @@ public class RoomsController(
                     UseLevelBasedMatchmaking = false,
                     UseAgeBasedMatchmaking = false,
                     UseRecRoyaleMatchmaking = false,
-                    SubRoomId = 0L,
+                    SubRoomId = RoomSceneIds.ToWire(0),
                     RoomId = room.Id,
                     Name = "Home",
                     UnityAssetId = string.Empty,
@@ -2046,11 +2053,10 @@ public class RoomsController(
                 },
             };
 
-        var wireRoles = new List<object>
-        {
-            BuildRoomAccountRoleWire(room.CreatorPlayerId, 30),
-        };
-        wireRoles.AddRange(roleList.Select(BuildRoomRoleGrantWire));
+        // The creator is Creator (255), never CoOwner (30): the client reads
+        // the local player's role from this list and only lets a player edit
+        // roles strictly below their own (see RoomRoleRules).
+        var wireRoles = RoomRoleRules.BuildWires(room, roleList);
 
         var tags = string.IsNullOrEmpty(room.TagsCsv)
             ? Array.Empty<object>()
@@ -2075,7 +2081,9 @@ public class RoomsController(
             State = room.State,
             Accessibility = room.Accessibility,
             SupportsLevelVoting = room.SupportsLevelVoting,
-            IsRRO = room.IsAGRoom,
+            // Player rooms are never RRO on the wire (see RoomService.WireIsRRO):
+            // the client refuses publish and room settings for an RRO.
+            IsRRO = RoomService.WireIsRRO(room),
             SupportsScreens = room.SupportsScreens,
             SupportsWalkVR = room.SupportsWalkVR,
             SupportsTeleportVR = room.SupportsTeleportVR,
@@ -2922,9 +2930,9 @@ public class RoomsController(
         {
             // RoomRoles co-owner check — same authorisation as the
             // existing modify endpoint, lets co-owners rename too.
-            var coOwner = await db.RoomRoles.AnyAsync(rr =>
-                rr.RoomId == roomId && rr.PlayerId == me && rr.Accepted && (rr.Role == 0 || rr.Role == 1));
-            if (!coOwner) return Forbid();
+            // Room settings are creator / co-owner only; moderators and
+            // hosts moderate players, they don't edit the room.
+            if (!await CanEditRoomAsync(room, me)) return Forbid();
         }
 
         // Uniqueness — Rooms.Name has a unique index (DorkNetDbContext.cs:118).
@@ -2964,6 +2972,7 @@ public class RoomsController(
         long subRoomId,
         [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] RenameBody body)
     {
+        subRoomId = RoomSceneIds.ToOrderIndex(subRoomId); // wire id → OrderIndex
         var newName = body?.Name;
         if (string.IsNullOrWhiteSpace(newName))
             return BadRequest(new { Result = 1, error = "empty_name" });
@@ -2976,9 +2985,9 @@ public class RoomsController(
         if (room is null) return NotFound(new { Result = 4, error = "room_not_found" });
         if (room.CreatorPlayerId != me)
         {
-            var coOwner = await db.RoomRoles.AnyAsync(rr =>
-                rr.RoomId == roomId && rr.PlayerId == me && rr.Accepted && (rr.Role == 0 || rr.Role == 1));
-            if (!coOwner) return Forbid();
+            // Room settings are creator / co-owner only; moderators and
+            // hosts moderate players, they don't edit the room.
+            if (!await CanEditRoomAsync(room, me)) return Forbid();
         }
 
         var scene = await db.RoomScenes.FirstOrDefaultAsync(s =>
@@ -3614,7 +3623,7 @@ public class RoomsController(
         var pid = this.RequireCurrentPlayerId();
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
         if (room is null) return NotFound();
-        if (room.CreatorPlayerId != pid) return Forbid();
+        if (!await CanEditRoomAsync(room, pid)) return Forbid();
 
         var name = (req.Name ?? string.Empty).Trim();
         if (name.Length == 0) name = "NewScene";
@@ -3651,10 +3660,11 @@ public class RoomsController(
     [Authorize]
     public async Task<IActionResult> DeleteSubRoom(long roomId, long subRoomId)
     {
+        subRoomId = RoomSceneIds.ToOrderIndex(subRoomId); // wire id → OrderIndex
         var pid = this.RequireCurrentPlayerId();
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
         if (room is null) return NotFound();
-        if (room.CreatorPlayerId != pid) return Forbid();
+        if (!await CanEditRoomAsync(room, pid)) return Forbid();
         var scene = await db.RoomScenes
             .FirstOrDefaultAsync(s => s.RoomId == roomId && s.OrderIndex == subRoomId);
         if (scene is null) return NotFound();
@@ -3710,20 +3720,6 @@ public class RoomsController(
     /// <summary>One row of the per-subroom role-permission matrix the 2023
     /// client PUTs to <c>subrooms/{sub}/permissions</c>. Keys verified in the
     /// writer <c>HDOJMEBCAGP.txt</c> ISIL 050/069/085/101/117.</summary>
-    public sealed class SubRoomPermissionEntry
-    {
-        // Field order + CLR types come from the BNLPBMJJOMM constructor
-        // (BNLPBMJJOMM.txt:126): (String Permission, OMMBGJMJJPN Role,
-        // Boolean Override, FEOJFGECKGH Type, String Value). The two enum
-        // members serialize as numbers (the role writer boxes them
-        // System.Int32 — BFKNABDHMGG.txt ISIL 015), hence int? here.
-        public string? Permission { get; set; }
-        public int? Role { get; set; }
-        public bool? Override { get; set; }
-        public int? Type { get; set; }
-        public string? Value { get; set; }
-    }
-
     public sealed class PublishSubRoomSaveRequest
     {
         public long? SubRoomDataSaveId { get; set; }
@@ -3773,45 +3769,103 @@ public class RoomsController(
                 s.CanMatchmakeInto = a != AccessibilityPrivate;
         });
 
-    /// <summary>PUT <c>rooms/{id}/subrooms/{sub}/permissions</c> — the
-    /// role-permission matrix. Client:
+    /// <summary>PUT <c>rooms/{id}/subrooms/{sub}/permissions</c> — "change
+    /// subroom permissions", the role-permission matrix. Client:
     /// <c>NLDBPDCNNCF.AAMEOMHKPHF(long, long, IReadOnlyList&lt;BNLPBMJJOMM&gt;)</c>
-    /// (NLDBPDCNNCF.txt:9198, verb 3). Unlike its siblings this one does NOT
-    /// form-encode: the closure calls <c>BNDIAONDFFF.FJLLPHFOOJJ(String)</c>
-    /// (CCNOMNNHNNG.txt ISIL 009), which stamps body-kind 4 = raw string
-    /// (BNDIAONDFFF.txt:275, <c>mov dword ptr [rbx+38h],4</c>) — i.e. a raw
-    /// JSON ARRAY. FormOrJsonModelBinder handles that (non-form → JSON
-    /// deserialize into the List).
+    /// (NLDBPDCNNCF.txt:9198, verb 3, same typed helper as every other room
+    /// mutation, so the response is the full <c>FGCPNAACHIK</c> details).
+    /// Unlike its siblings the body is NOT form-encoded: the closure calls
+    /// <c>BNDIAONDFFF.FJLLPHFOOJJ(String)</c> (CCNOMNNHNNG.txt ISIL 009), a raw
+    /// JSON array of cells. The editor sends one changed cell per call
+    /// (OMJKHJLFOCO.AFHJLBBFAGP.&lt;LocalRequestModifyRolePermission&gt;g__ChangeAndRefresh
+    /// builds a one-element BNLPBMJJOMM[]), so each cell is upserted; cells not
+    /// sent are left alone.
     ///
-    /// <para><b>Scope note — deliberately not persisted.</b> DorkNet has no
-    /// per-subroom permission storage: <see cref="RoomSceneEntity"/> has no
-    /// column for it and there is no permissions table. Adding one means an
-    /// entity + DbContext + migration, which is outside this file. Until then
-    /// the matrix is accepted, logged, and the room details echoed back so the
-    /// client's promise resolves instead of 415-ing; the values do not survive
-    /// a round-trip. The old handler silently bound an unrelated DTO whose keys
-    /// the client never sends, which was strictly worse.</para></summary>
+    /// <para>Read back through <c>GET photon_access_token</c> (its
+    /// <c>Permissions</c> list), and pushed to everyone in that sub-room as
+    /// the <c>PhotonAccessToken</c> hub message so the change takes effect
+    /// without a rejoin.</para>
+    ///
+    /// <para>Authorization mirrors the client's own rule
+    /// (OMJKHJLFOCO.DIIMLMKEJLC): the creator may edit every role, including
+    /// Co-Owner and Creator; a co-owner only the roles below their own;
+    /// nobody else may edit (<see cref="RoomRoleRules.CanEditRolePermissions"/>).</para></summary>
     [HttpPost("rooms/{roomId:long}/subrooms/{subRoomId:long}/permissions")]
     [HttpPut("rooms/{roomId:long}/subrooms/{subRoomId:long}/permissions")]
     [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/permissions")]
     [HttpPut("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/permissions")]
     [Authorize]
-    public async Task<IActionResult> SubRoomPermissions(
-        long roomId,
-        long subRoomId,
-        [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] List<SubRoomPermissionEntry> req)
+    public async Task<IActionResult> SubRoomPermissions(long roomId, long subRoomId)
     {
+        subRoomId = RoomSceneIds.ToOrderIndex(subRoomId); // wire id → OrderIndex
         var pid = this.RequireCurrentPlayerId();
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
         if (room is null) return NotFound();
-        if (room.CreatorPlayerId != pid) return Forbid();
+        var roleRows = await db.RoomRoles.Where(r => r.RoomId == roomId).ToListAsync();
+        if (!RoomRoleRules.CanEditRoom(room, roleRows, pid)) return Forbid();
+
+        string body;
+        using (var reader = new StreamReader(Request.Body))
+            body = await reader.ReadToEndAsync();
+        var cells = RoomPermissionMatrix.Parse(body);
+        if (cells is null) return BadRequest(new { error = "invalid_permissions_body" });
+
+        var denied = cells.Where(c => !RoomRoleRules.CanEditRolePermissions(room, roleRows, pid, c.Role)).ToList();
+        if (denied.Count > 0)
+        {
+            logger.LogWarning(
+                "[subroom-permissions] denied room={Room} sub={Sub} by={By} roles={Roles}",
+                roomId, subRoomId, pid, string.Join(",", denied.Select(d => d.Role).Distinct()));
+            return Forbid();
+        }
+
         var scene = await GetOrCreateSceneForMutationAsync(room, subRoomId);
         if (scene is null) return NotFound();
+
+        var existing = await db.RoomRolePermissions
+            .Where(p => p.RoomId == roomId && p.SubRoomId == subRoomId)
+            .ToListAsync();
+        var now = DateTime.UtcNow;
+        foreach (var cell in cells)
+        {
+            var row = existing.FirstOrDefault(p =>
+                p.Role == cell.Role
+                && string.Equals(p.Permission, cell.Permission, StringComparison.OrdinalIgnoreCase));
+            if (row is null)
+            {
+                row = new RoomRolePermissionEntity
+                {
+                    RoomId = roomId,
+                    SubRoomId = subRoomId,
+                    Role = cell.Role,
+                    Permission = cell.Permission,
+                };
+                db.RoomRolePermissions.Add(row);
+                existing.Add(row);
+            }
+            row.Type = cell.Type;
+            row.Override = cell.Override;
+            row.Value = cell.Value;
+            row.UpdatedByPlayerId = pid;
+            row.UpdatedAt = now;
+        }
+        scene.DataModifiedAt = now;
         await db.SaveChangesAsync();
 
-        logger.LogWarning(
-            "[subroom-permissions] room={Room} sub={Sub} by={By} entries={Count} — accepted but NOT persisted (no permission storage yet)",
-            roomId, subRoomId, pid, req?.Count ?? 0);
+        logger.LogInformation(
+            "[subroom-permissions] room={Room} sub={Sub} by={By} cells={Count}",
+            roomId, subRoomId, pid, cells.Count);
+
+        // Everyone in that sub-room gets the new matrix; the client's
+        // PhotonAccessToken handler re-initialises its permissions from it.
+        var matrix = await RoomPermissionMatrix.LoadAsync(db, roomId, subRoomId);
+        foreach (var (instance, players) in presence.EnumerateActiveInstances(roomId, includePrivate: true))
+        {
+            if (instance.SubRoomId != subRoomId) continue;
+            var tokenBody = RoomPermissionMatrix.AccessTokenBody(instance.RoomInstanceId, matrix);
+            foreach (var other in players)
+                await notifications.NotifyTypedAsync(other, "PhotonAccessToken", tokenBody);
+        }
 
         return Ok(await BuildRoomServerDetailsWithRolesAsync(roomId));
     }
@@ -3842,10 +3896,11 @@ public class RoomsController(
     [Authorize]
     public async Task<IActionResult> PublishSubRoomSave(long roomId, long subRoomId)
     {
+        subRoomId = RoomSceneIds.ToOrderIndex(subRoomId); // wire id → OrderIndex
         var pid = this.RequireCurrentPlayerId();
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
         if (room is null) return NotFound();
-        if (room.CreatorPlayerId != pid) return Forbid();
+        if (!await CanEditRoomAsync(room, pid)) return Forbid();
 
         var scene = await GetOrCreateSceneForMutationAsync(room, subRoomId);
         if (scene is null) return NotFound();
@@ -3921,10 +3976,11 @@ public class RoomsController(
     [Authorize]
     public async Task<IActionResult> CloneSubRoom(long roomId, long subRoomId)
     {
+        subRoomId = RoomSceneIds.ToOrderIndex(subRoomId); // wire id → OrderIndex
         var pid = this.RequireCurrentPlayerId();
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
         if (room is null) return NotFound();
-        if (room.CreatorPlayerId != pid) return Forbid();
+        if (!await CanEditRoomAsync(room, pid)) return Forbid();
         var src = await db.RoomScenes
             .FirstOrDefaultAsync(s => s.RoomId == roomId && s.OrderIndex == subRoomId);
         if (src is null) return NotFound();
@@ -4015,6 +4071,7 @@ public class RoomsController(
         long subRoomId,
         [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] SubRoomMoveRequest req)
     {
+        subRoomId = RoomSceneIds.ToOrderIndex(subRoomId); // wire id → OrderIndex
         var pid = this.RequireCurrentPlayerId();
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
         if (room is null) return NotFound();
@@ -4105,6 +4162,7 @@ public class RoomsController(
     [Authorize]
     public async Task<IActionResult> SubRoomData(long roomId, long subRoomId)
     {
+        subRoomId = RoomSceneIds.ToOrderIndex(subRoomId); // wire id → OrderIndex
         var body = await ReadSaveRoomSceneRequestAsync();
         body.RoomSceneId = subRoomId;
         return await SaveDataCore(body, roomId, wrapCreateModifyResponse: true);
@@ -4165,10 +4223,11 @@ public class RoomsController(
     /// successful mutation surface as a client-side parse failure.</summary>
     private async Task<IActionResult> MutateScene(long roomId, long subRoomId, Action<RoomSceneEntity> mutator)
     {
+        subRoomId = RoomSceneIds.ToOrderIndex(subRoomId); // wire id → OrderIndex
         var pid = this.RequireCurrentPlayerId();
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
         if (room is null) return NotFound();
-        if (room.CreatorPlayerId != pid) return Forbid();
+        if (!await CanEditRoomAsync(room, pid)) return Forbid();
         var scene = await GetOrCreateSceneForMutationAsync(room, subRoomId);
         if (scene is null) return NotFound();
         mutator(scene);
@@ -4219,12 +4278,7 @@ public class RoomsController(
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
         if (room is null) return NotFound();
         var rows = await db.RoomRoles.Where(r => r.RoomId == roomId).ToListAsync();
-        var list = new List<object>(rows.Count + 1)
-        {
-            BuildRoomAccountRoleWire(room.CreatorPlayerId, 30),
-        };
-        list.AddRange(rows.Select(BuildRoomRoleGrantWire));
-        return Ok(list);
+        return Ok(RoomRoleRules.BuildWires(room, rows));
     }
 
     private static string CurrentOrSyntheticDataBlobName(RoomEntity room)
@@ -4339,30 +4393,38 @@ public class RoomsController(
     /// <summary>GET <c>rooms/{id}/roles/{playerId}</c> — one role row
     /// (<c>NLDBPDCNNCF.PCFOIPELKHN</c> → <c>Task&lt;EFHPLDPNGIM&gt;</c>,
     /// NLDBPDCNNCF.txt:2192). roomserver/ twin required, same as the list
-    /// above.</summary>
+    /// above. The creator answers as Creator (255).</summary>
     [HttpGet("rooms/{roomId:long}/roles/{playerId:long}")]
     [HttpGet("roomserver/rooms/{roomId:long}/roles/{playerId:long}")]
     public async Task<IActionResult> RoleForPlayer(long roomId, long playerId)
     {
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
         if (room is null) return NotFound();
-        if (room.CreatorPlayerId == playerId)
-            return Ok(BuildRoomAccountRoleWire(playerId, 30));
-        var row = await db.RoomRoles
-            .FirstOrDefaultAsync(r => r.RoomId == roomId && r.PlayerId == playerId);
-        if (row is null) return NotFound();
-        return Ok(BuildRoomRoleGrantWire(row));
+        var rows = await db.RoomRoles
+            .Where(r => r.RoomId == roomId && r.PlayerId == playerId)
+            .ToListAsync();
+        var wire = RoomRoleRules.BuildWires(room, rows)
+            .FirstOrDefault(w => w.AccountId == RoomRoleRules.ToClientAccountId(playerId));
+        if (wire is null) return NotFound();
+        return Ok(wire);
     }
 
-    public sealed class GrantRoleRequest { public int? Role { get; set; } }
-
-    /// <summary>PUT <c>rooms/{id}/roles/{playerId}</c> — owner grants
-    /// a role to a player. Auto-accepted (no invite step).
-    /// <c>NLDBPDCNNCF.LMIEIJMCEAB</c> ("change room account role",
-    /// NLDBPDCNNCF.txt:7380) is verb 3 = PUT, form key <c>role</c> carrying a
-    /// boxed Int32 (BFKNABDHMGG.txt ISIL 015), and returns the full
-    /// <c>FGCPNAACHIK</c> details — which this already does. Only the
-    /// roomserver/ twin was missing.</summary>
+    /// <summary>PUT <c>rooms/{id}/roles/{playerId}</c> — "change room account
+    /// role" (<c>NLDBPDCNNCF.LMIEIJMCEAB</c>, NLDBPDCNNCF.txt:7516, verb 3 =
+    /// PUT, single form key <c>role</c> boxed as Int32 —
+    /// NLDBPDCNNCF_NestedType_BFKNABDHMGG.txt ISIL 015-024), response the full
+    /// <c>FGCPNAACHIK</c> details. Three callers:
+    /// <list type="bullet">
+    /// <item>the owner's role button (AddRemovePlayerRoomRoleConditionalButton
+    /// .EEGJBELCBDI): Host/Moderator are set directly, and "Remove" sends
+    /// role 0;</item>
+    /// <item>the invitee accepting a co-owner invite (message Type 62,
+    /// KPFKPIKDBFJ.ELKAEBMMIGL / KLNLKDJJDLE Accept): their OWN account id
+    /// with role 30;</item>
+    /// <item>a co-owner rejecting a direct add (Type 60, COJCABEJDFN Reject):
+    /// their own id with role 0.</item>
+    /// </list>
+    /// Authorization is <see cref="RoomRoleRules.CheckChange"/>.</summary>
     [HttpPut("rooms/{roomId:long}/roles/{playerId:long}")]
     [HttpPost("rooms/{roomId:long}/roles/{playerId:long}")]
     [HttpPut("roomserver/rooms/{roomId:long}/roles/{playerId:long}")]
@@ -4372,45 +4434,19 @@ public class RoomsController(
     [HttpPut("/api/rooms/v2/rooms/{roomId:long}/roles/{playerId:long}")]
     [HttpPost("/api/rooms/v2/rooms/{roomId:long}/roles/{playerId:long}")]
     [Authorize]
-    public async Task<IActionResult> GrantRole(long roomId, long playerId)
-    {
-        var me = this.RequireCurrentPlayerId();
-        var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
-        if (room is null) return NotFound();
-        if (!await CanManageRoomRolesAsync(room, me)) return Forbid();
-        var role = await ReadClientRoomRoleAsync();
-        if (role is null) return BadRequest(new { error = "missing_role" });
-        if (role.Value == 0)
-            return await ClearRoomAccountRoleAsync(room, playerId);
+    public Task<IActionResult> GrantRole(long roomId, long playerId)
+        => ChangeRoomAccountRoleAsync(roomId, playerId, isInvite: false);
 
-        if (!TryMapClientRoleToRoomRole(role.Value, out var roomRole))
-            return BadRequest(new { error = "invalid_role", role });
-
-        var existing = await db.RoomRoles
-            .FirstOrDefaultAsync(r => r.RoomId == roomId && r.PlayerId == playerId && r.Role == roomRole);
-        if (existing is null)
-        {
-            await RemoveOtherRoomRolesAsync(roomId, playerId, roomRole);
-            db.RoomRoles.Add(new RoomRoleEntity
-            {
-                RoomId = roomId, PlayerId = playerId, Role = roomRole,
-                Accepted = true, GrantedByPlayerId = me,
-            });
-        }
-        else
-        {
-            existing.Accepted = true;
-        }
-        await db.SaveChangesAsync();
-        return Ok(await BuildRoomServerDetailsWithRolesAsync(roomId));
-    }
-
-    /// <summary>POST <c>rooms/{id}/roles/{playerId}/invite</c> — same
-    /// as grant but Accepted=false; the target's accept-invite flow
-    /// flips the flag (separate endpoint, not yet exposed). For now
-    /// invited rows surface in RoomDetails.InvitedCoOwners etc.
-    /// <c>NLDBPDCNNCF.KIJDCLINOIC</c> ("invite account to role",
-    /// NLDBPDCNNCF.txt:7550) is verb 3 = PUT under the roomserver/ prefix.</summary>
+    /// <summary>PUT <c>rooms/{id}/roles/{playerId}/invite</c> — "invite account
+    /// to role" (<c>NLDBPDCNNCF.KIJDCLINOIC</c>, NLDBPDCNNCF.txt:7686, verb 3,
+    /// form key <c>role</c> as Int32 — NLDBPDCNNCF_NestedType_ENHMMCAOING.txt).
+    /// Only Co-Owner goes through an invite in this client: the owner's button
+    /// sends role 30 here, the invitee is told with a Type 62
+    /// (RoomCoOwnerInvited) message carrying RoomId, and either accepts with
+    /// <c>PUT roles/{me}</c> role 30 or rejects by sending role 0 back to THIS
+    /// route on their own id (KPFKPIKDBFJ.OGONAKHNMGN, KLNLKDJJDLE Reject),
+    /// which clears the pending invite but leaves any role they already
+    /// hold.</summary>
     [HttpPut("rooms/{roomId:long}/roles/{playerId:long}/invite")]
     [HttpPost("rooms/{roomId:long}/roles/{playerId:long}/invite")]
     [HttpPut("roomserver/rooms/{roomId:long}/roles/{playerId:long}/invite")]
@@ -4420,62 +4456,167 @@ public class RoomsController(
     [HttpPut("/api/rooms/v2/rooms/{roomId:long}/roles/{playerId:long}/invite")]
     [HttpPost("/api/rooms/v2/rooms/{roomId:long}/roles/{playerId:long}/invite")]
     [Authorize]
-    public async Task<IActionResult> InviteRole(long roomId, long playerId)
+    public Task<IActionResult> InviteRole(long roomId, long playerId)
+        => ChangeRoomAccountRoleAsync(roomId, playerId, isInvite: true);
+
+    private async Task<IActionResult> ChangeRoomAccountRoleAsync(long roomId, long playerId, bool isInvite)
     {
         var me = this.RequireCurrentPlayerId();
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
         if (room is null) return NotFound();
-        if (!await CanManageRoomRolesAsync(room, me)) return Forbid();
-        var role = await ReadClientRoomRoleAsync();
-        if (role is null) return BadRequest(new { error = "missing_role" });
-        if (role.Value == 0)
-            return await ClearRoomAccountRoleAsync(room, playerId);
+        var requested = await ReadClientRoomRoleAsync();
+        if (requested is null) return BadRequest(new { error = "missing_role" });
+        if (playerId <= 0 || !await db.Players.AnyAsync(p => p.Id == playerId))
+            return NotFound(new { error = "unknown_player" });
 
-        if (!TryMapClientRoleToRoomRole(role.Value, out var roomRole))
-            return BadRequest(new { error = "invalid_role", role });
-
-        var existing = await db.RoomRoles
-            .FirstOrDefaultAsync(r => r.RoomId == roomId && r.PlayerId == playerId && r.Role == roomRole);
-        if (existing is null)
+        var rows = await db.RoomRoles.Where(r => r.RoomId == roomId).ToListAsync();
+        var error = RoomRoleRules.CheckChange(
+            room, rows, me, playerId, requested.Value, isInvite, out var kind);
+        if (error is not null)
         {
-            await RemoveOtherRoomRolesAsync(roomId, playerId, roomRole);
-            db.RoomRoles.Add(new RoomRoleEntity
+            logger.LogWarning(
+                "[room-roles] denied room={Room} actor={Actor} target={Target} role={Role} invite={Invite} error={Error}",
+                roomId, me, playerId, requested.Value, isInvite, error);
+            return error == "cannot_change_creator_role" || error == "invalid_role"
+                ? BadRequest(new { error, role = requested.Value })
+                : Forbid();
+        }
+
+        var targetRows = rows.Where(r => r.PlayerId == playerId).ToList();
+        var wasCoOwner = targetRows.Any(r => r.Accepted && r.Role == RoomRoleRules.StoredCoOwner);
+        var hadCoOwnerInvite = targetRows.Any(r => !r.Accepted && r.Role == RoomRoleRules.StoredCoOwner);
+        RoomRoleRules.TryFromWire(requested.Value, out var storedRole);
+
+        switch (kind)
+        {
+            case RoomRoleRules.ChangeKind.Clear when isInvite:
+                // Reject / withdraw an invite: only the pending rows go.
+                db.RoomRoles.RemoveRange(targetRows.Where(r => !r.Accepted));
+                break;
+
+            case RoomRoleRules.ChangeKind.Clear:
+                db.RoomRoles.RemoveRange(targetRows);
+                break;
+
+            case RoomRoleRules.ChangeKind.Invite:
             {
-                RoomId = roomId, PlayerId = playerId, Role = roomRole,
-                Accepted = false, GrantedByPlayerId = me,
-            });
+                // Already holding the role: nothing to invite to. Otherwise
+                // replace any other pending invite but keep the role the
+                // player holds until they accept.
+                if (targetRows.Any(r => r.Accepted && r.Role == storedRole)) break;
+                db.RoomRoles.RemoveRange(targetRows.Where(r => !r.Accepted && r.Role != storedRole));
+                var pending = targetRows.FirstOrDefault(r => !r.Accepted && r.Role == storedRole);
+                if (pending is null)
+                {
+                    db.RoomRoles.Add(new RoomRoleEntity
+                    {
+                        RoomId = roomId, PlayerId = playerId, Role = storedRole,
+                        Accepted = false, GrantedByPlayerId = me, GrantedAt = DateTime.UtcNow,
+                    });
+                }
+                else
+                {
+                    pending.GrantedByPlayerId = me;
+                    pending.GrantedAt = DateTime.UtcNow;
+                }
+                break;
+            }
+
+            case RoomRoleRules.ChangeKind.AcceptInvite:
+            case RoomRoleRules.ChangeKind.Grant:
+            {
+                // One role per account: the new one replaces the rest
+                // (an accepted invite replaces the role held meanwhile).
+                var keep = targetRows.FirstOrDefault(r => r.Role == storedRole);
+                db.RoomRoles.RemoveRange(targetRows.Where(r => !ReferenceEquals(r, keep)));
+                if (keep is null)
+                {
+                    db.RoomRoles.Add(new RoomRoleEntity
+                    {
+                        RoomId = roomId, PlayerId = playerId, Role = storedRole,
+                        Accepted = true,
+                        GrantedByPlayerId = kind == RoomRoleRules.ChangeKind.AcceptInvite
+                            ? targetRows.FirstOrDefault(r => !r.Accepted)?.GrantedByPlayerId ?? me
+                            : me,
+                        GrantedAt = DateTime.UtcNow,
+                    });
+                }
+                else
+                {
+                    keep.Accepted = true;
+                    if (kind == RoomRoleRules.ChangeKind.Grant) keep.GrantedByPlayerId = me;
+                    keep.GrantedAt = DateTime.UtcNow;
+                }
+                break;
+            }
         }
-        else
+
+        await db.SaveChangesAsync();
+
+        var isCoOwnerNow = await db.RoomRoles.AnyAsync(r =>
+            r.RoomId == roomId && r.PlayerId == playerId && r.Accepted && r.Role == RoomRoleRules.StoredCoOwner);
+        var hasCoOwnerInviteNow = await db.RoomRoles.AnyAsync(r =>
+            r.RoomId == roomId && r.PlayerId == playerId && !r.Accepted && r.Role == RoomRoleRules.StoredCoOwner);
+        logger.LogInformation(
+            "[room-roles] room={Room} actor={Actor} target={Target} role={Role} invite={Invite} kind={Kind} coOwner={Was}->{Now}",
+            roomId, me, playerId, requested.Value, isInvite, kind, wasCoOwner, isCoOwnerNow);
+
+        // The invitee's notifications are how the role reaches them: the
+        // 2023 client renders message Types 60/61/62 (factory
+        // OCGKOJMFLAI.ALEHDHAEFOK, enum KJECOLODAFA.MEPCALGGMJC) and reads
+        // only RoomId from them. Self-service changes (accept / reject /
+        // leave) notify nobody.
+        if (playerId != me)
         {
-            existing.Accepted = false;
+            if (!hadCoOwnerInvite && hasCoOwnerInviteNow)
+                await systemNotifications.SendAsync(playerId,
+                    SystemNotificationService.MessageType.RoomCoOwnerInvited, me, roomId: roomId);
+            if (!wasCoOwner && isCoOwnerNow)
+                await systemNotifications.SendAsync(playerId,
+                    SystemNotificationService.MessageType.RoomCoOwnerAdded, me, roomId: roomId);
+            if (wasCoOwner && !isCoOwnerNow)
+                await systemNotifications.SendAsync(playerId,
+                    SystemNotificationService.MessageType.RoomCoOwnerRemoved, me, roomId: roomId);
         }
-        await db.SaveChangesAsync();
-        return Ok(await BuildRoomServerDetailsWithRolesAsync(roomId));
+
+        if (hadCoOwnerInvite && !hasCoOwnerInviteNow)
+            await MarkCoOwnerInviteMessagesReadAsync(playerId, roomId);
+
+        var details = await BuildRoomServerDetailsWithRolesAsync(roomId);
+        await PushRoomUpdateAsync(roomId, details, playerId, me);
+        return Ok(details);
     }
 
-    private async Task<IActionResult> ClearRoomAccountRoleAsync(RoomEntity room, long playerId)
+    /// <summary>Once an invite is answered (or withdrawn) its Type 62 message
+    /// must stop offering Accept/Reject in the inbox.</summary>
+    private async Task MarkCoOwnerInviteMessagesReadAsync(long playerId, long roomId)
     {
-        if (room.CreatorPlayerId == playerId)
-            return BadRequest(new { error = "cannot_change_creator_role" });
-
-        var rows = await db.RoomRoles
-            .Where(r => r.RoomId == room.Id && r.PlayerId == playerId)
+        var stale = await db.Messages
+            .Where(m => m.RecipientPlayerId == playerId
+                        && m.RoomId == roomId
+                        && m.Type == SystemNotificationService.MessageType.RoomCoOwnerInvited
+                        && m.ReadAt == null)
             .ToListAsync();
-        if (rows.Count > 0)
-            db.RoomRoles.RemoveRange(rows);
-
+        if (stale.Count == 0) return;
+        foreach (var m in stale) m.ReadAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
-        return Ok(await BuildRoomServerDetailsWithRolesAsync(room.Id));
     }
 
-    private async Task<bool> CanManageRoomRolesAsync(RoomEntity room, long playerId)
+    /// <summary>Push the fresh room details as <c>RoomUpdate</c> (handler
+    /// IBEOONPEELF.txt:507, Action&lt;FGCPNAACHIK&gt;) to everyone currently
+    /// in the room plus the players whose view changed, so the role list,
+    /// the role-gated buttons and the local player's own role refresh
+    /// without leaving the room.</summary>
+    private async Task PushRoomUpdateAsync(long roomId, object details, params long[] alsoNotify)
     {
-        if (room.CreatorPlayerId == playerId) return true;
-        return await db.RoomRoles.AnyAsync(r =>
-            r.RoomId == room.Id
-            && r.PlayerId == playerId
-            && r.Accepted
-            && r.Role == 0);
+        var recipients = presence.EnumerateActiveInstances(roomId, includePrivate: true)
+            .SelectMany(i => i.PlayerIds)
+            .Concat(alsoNotify)
+            .Where(pid => pid > 0)
+            .Distinct()
+            .ToList();
+        foreach (var pid in recipients)
+            await notifications.NotifyAsync(pid, PushNotificationId.SubscriptionUpdateRoom, details);
     }
 
     private async Task<int?> ReadClientRoomRoleAsync()
@@ -4486,6 +4627,8 @@ public class RoomsController(
             var form = await Request.ReadFormAsync();
             if (int.TryParse(form["role"].FirstOrDefault(), out parsed)) return parsed;
             if (int.TryParse(form["Role"].FirstOrDefault(), out parsed)) return parsed;
+            if (TryParseRoleName(form["role"].FirstOrDefault() ?? form["Role"].FirstOrDefault(), out parsed))
+                return parsed;
         }
 
         if (int.TryParse(Request.Query["role"].FirstOrDefault(), out parsed)) return parsed;
@@ -4495,10 +4638,20 @@ public class RoomsController(
         {
             try
             {
-                var body = await JsonSerializer.DeserializeAsync<GrantRoleRequest>(
-                    Request.Body,
-                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                if (body?.Role is int bodyRole) return bodyRole;
+                using var doc = await JsonDocument.ParseAsync(Request.Body);
+                if (doc.RootElement.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var prop in doc.RootElement.EnumerateObject())
+                    {
+                        if (!prop.Name.Equals("role", StringComparison.OrdinalIgnoreCase)) continue;
+                        if (prop.Value.ValueKind == JsonValueKind.Number && prop.Value.TryGetInt32(out parsed))
+                            return parsed;
+                        if (prop.Value.ValueKind == JsonValueKind.String
+                            && (int.TryParse(prop.Value.GetString(), out parsed)
+                                || TryParseRoleName(prop.Value.GetString(), out parsed)))
+                            return parsed;
+                    }
+                }
             }
             catch (JsonException)
             {
@@ -4509,64 +4662,34 @@ public class RoomsController(
         return null;
     }
 
-    private async Task RemoveOtherRoomRolesAsync(long roomId, long playerId, int keepRole)
+    /// <summary>OMMBGJMJJPN member names, for callers that box the enum
+    /// itself (Enum.ToString) instead of an Int32.</summary>
+    internal static bool TryParseRoleName(string? raw, out int role)
     {
-        var rows = await db.RoomRoles
-            .Where(r => r.RoomId == roomId && r.PlayerId == playerId && r.Role != keepRole)
-            .ToListAsync();
-        if (rows.Count > 0)
-            db.RoomRoles.RemoveRange(rows);
-    }
-
-    private static bool TryMapClientRoleToRoomRole(int clientRole, out int roomRole)
-    {
-        roomRole = clientRole switch
+        role = (raw ?? string.Empty).Trim().ToLowerInvariant() switch
         {
-            30 => 0, // CoOwner
-            20 => 1, // Moderator
-            10 => 2, // Host
+            "none" => RoomRoleRules.WireNone,
+            "banned" => RoomRoleRules.WireBanned,
+            "host" => RoomRoleRules.WireHost,
+            "moderator" => RoomRoleRules.WireModerator,
+            "coowner" => RoomRoleRules.WireCoOwner,
+            "temporarycoowner" => RoomRoleRules.WireTemporaryCoOwner,
+            "creator" => RoomRoleRules.WireCreator,
             _ => -1,
         };
-        return roomRole >= 0;
+        return role >= 0;
     }
 
-    private static object BuildRoomRoleGrantWire(RoomRoleEntity role)
-        => BuildRoomAccountRoleWire(
-            role.PlayerId,
-            ToClientRoomRole(role.Role),
-            role.Accepted,
-            role.GrantedByPlayerId);
-
-    private static object BuildRoomAccountRoleWire(
-        long accountId,
-        int role,
-        bool accepted = true,
-        long? lastChangedByAccountId = null)
-        => new
-        {
-            AccountId = ToClientAccountId(accountId),
-            Role = accepted ? role : 0,
-            LastChangedByAccountId = ToClientAccountId(lastChangedByAccountId),
-            InvitedRole = accepted ? 0 : role,
-        };
-
-    private static int ToClientRoomRole(int roomRole) => roomRole switch
+    /// <summary>Creator or accepted co-owner (see
+    /// <see cref="RoomRoleRules.CanEditRoom"/>).</summary>
+    private async Task<bool> CanEditRoomAsync(RoomEntity room, long playerId)
     {
-        0 => 30, // CoOwner
-        1 => 20, // Moderator
-        2 => 10, // Host
-        _ => 0,
-    };
-
-    private static int ToClientAccountId(long accountId)
-        => accountId > int.MaxValue
-            ? int.MaxValue
-            : accountId < int.MinValue
-                ? int.MinValue
-                : (int)accountId;
-
-    private static int? ToClientAccountId(long? accountId)
-        => accountId.HasValue ? ToClientAccountId(accountId.Value) : null;
+        if (room.CreatorPlayerId == playerId) return true;
+        var rows = await db.RoomRoles
+            .Where(r => r.RoomId == room.Id && r.PlayerId == playerId)
+            .ToListAsync();
+        return RoomRoleRules.CanEditRoom(room, rows, playerId);
+    }
 
     private async Task<object> BuildRoomServerDetailsWithRolesAsync(long roomId)
     {

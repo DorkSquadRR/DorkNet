@@ -394,7 +394,11 @@ public class PlayerEventsController(
         if (evt is null) return NotFound();
 
         var extras = (await LoadExtrasAsync(new[] { evt }))[evt.Id];
-        var subRoomId = extras.SubRoomId is long sub && sub > 0 ? sub : (long?)null;
+        // The event stores the client's wire SubRoomId; presence and private
+        // instances hold the OrderIndex (RoomSceneIds).
+        var subRoomId = extras.SubRoomId is long sub && sub > 0
+            ? RoomSceneIds.ToOrderIndex(sub)
+            : (long?)null;
 
         // Same sourcing as the room browser: presence rows are the live truth
         // (one instance per distinct PhotonRoomId), and the caller's OWN private
@@ -417,7 +421,7 @@ public class PlayerEventsController(
             {
                 roomInstanceId = room.RoomInstanceId,
                 roomId = room.RoomId,
-                subRoomId = room.SubRoomId,
+                subRoomId = RoomSceneIds.ToWire(room.SubRoomId),
                 // MaxCapacity is the per-instance cap the matchmaker handed
                 // out, so this is a real answer rather than a constant false.
                 isFull = room.MaxCapacity > 0 && playerIds.Count >= room.MaxCapacity,
@@ -438,7 +442,7 @@ public class PlayerEventsController(
             {
                 roomInstanceId = p.Id,
                 roomId = p.RoomId,
-                subRoomId = p.SubRoomId,
+                subRoomId = RoomSceneIds.ToWire(p.SubRoomId),
                 isFull = false,
                 createdAt = DateTime.SpecifyKind(p.CreatedAt, DateTimeKind.Utc),
                 playerIds = Array.Empty<int>(),
