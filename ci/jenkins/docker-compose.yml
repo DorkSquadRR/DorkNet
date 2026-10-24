@@ -12,9 +12,11 @@ services:
     environment:
       # Jenkins as seen from inside Docker (e.g. http://<jenkins container
       # name>:8080), not the public URL, which is behind Cloudflare Access.
-      JENKINS_URL: ${JENKINS_URL:?set JENKINS_URL to Jenkins' internal address}
+      # Both are needed at runtime only; keep them out of the image build so
+      # the node secret never reaches a build argument.
+      JENKINS_URL: ${JENKINS_URL}
       JENKINS_AGENT_NAME: ${JENKINS_AGENT_NAME:-dorknet-builder}
-      JENKINS_SECRET: ${JENKINS_SECRET:?set JENKINS_SECRET to the node secret}
+      JENKINS_SECRET: ${JENKINS_SECRET}
       JENKINS_WEB_SOCKET: "true"
       JENKINS_AGENT_WORKDIR: /home/jenkins/agent
       # Where the stock builds live in the archive (restic repository folders
