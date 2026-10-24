@@ -2912,6 +2912,7 @@ public class RoomsController(
     [HttpPost("roomserver/rooms/{roomId:long}/name")]
     [HttpPut("roomserver/rooms/{roomId:long}/name")]
     [Authorize]
+    [RecNetEnvelope]
     public async Task<IActionResult> RenameRoom(
         long roomId,
         [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] RenameBody body)
@@ -2967,6 +2968,7 @@ public class RoomsController(
     [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/name")]
     [HttpPut("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/name")]
     [Authorize]
+    [RecNetEnvelope]
     public async Task<IActionResult> RenameSubroom(
         long roomId,
         long subRoomId,
@@ -3616,6 +3618,7 @@ public class RoomsController(
     [HttpPost("rooms/{roomId:long}/subrooms")]
     [HttpPost("roomserver/rooms/{roomId:long}/subrooms")]
     [Authorize]
+    [RecNetEnvelope]
     public async Task<IActionResult> AddSubRoom(
         long roomId,
         [ModelBinder(typeof(DorkNet.Server.Binding.FormOrJsonModelBinder))] CreateSubRoomRequest req)
@@ -3658,6 +3661,7 @@ public class RoomsController(
     [HttpDelete("rooms/{roomId:long}/subrooms/{subRoomId:long}")]
     [HttpDelete("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}")]
     [Authorize]
+    [RecNetEnvelope]
     public async Task<IActionResult> DeleteSubRoom(long roomId, long subRoomId)
     {
         subRoomId = RoomSceneIds.ToOrderIndex(subRoomId); // wire id → OrderIndex
@@ -3742,6 +3746,7 @@ public class RoomsController(
     [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/maxplayers")]
     [HttpPut("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/maxplayers")]
     [Authorize]
+    [RecNetEnvelope]
     public Task<IActionResult> SubRoomMaxPlayers(
         long roomId,
         long subRoomId,
@@ -3759,6 +3764,7 @@ public class RoomsController(
     [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/accessibility")]
     [HttpPut("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/accessibility")]
     [Authorize]
+    [RecNetEnvelope]
     public Task<IActionResult> SubRoomAccessibility(
         long roomId,
         long subRoomId,
@@ -3795,6 +3801,7 @@ public class RoomsController(
     [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/permissions")]
     [HttpPut("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/permissions")]
     [Authorize]
+    [RecNetEnvelope]
     public async Task<IActionResult> SubRoomPermissions(long roomId, long subRoomId)
     {
         subRoomId = RoomSceneIds.ToOrderIndex(subRoomId); // wire id → OrderIndex
@@ -3894,6 +3901,7 @@ public class RoomsController(
     [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/publish_save")]
     [HttpPut("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/publish_save")]
     [Authorize]
+    [RecNetEnvelope]
     public async Task<IActionResult> PublishSubRoomSave(long roomId, long subRoomId)
     {
         subRoomId = RoomSceneIds.ToOrderIndex(subRoomId); // wire id → OrderIndex
@@ -3974,6 +3982,7 @@ public class RoomsController(
     [HttpPost("rooms/{roomId:long}/subrooms/{subRoomId:long}/clone")]
     [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/clone")]
     [Authorize]
+    [RecNetEnvelope]
     public async Task<IActionResult> CloneSubRoom(long roomId, long subRoomId)
     {
         subRoomId = RoomSceneIds.ToOrderIndex(subRoomId); // wire id → OrderIndex
@@ -4027,6 +4036,7 @@ public class RoomsController(
     [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/modify")]
     [HttpPut("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/modify")]
     [Authorize]
+    [RecNetEnvelope]
     public Task<IActionResult> ModifySubRoom(
         long roomId,
         long subRoomId,
@@ -4066,6 +4076,7 @@ public class RoomsController(
     [HttpPost("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/move")]
     [HttpPut("roomserver/rooms/{roomId:long}/subrooms/{subRoomId:long}/move")]
     [Authorize]
+    [RecNetEnvelope]
     public async Task<IActionResult> MoveSubRoom(
         long roomId,
         long subRoomId,
@@ -4434,6 +4445,7 @@ public class RoomsController(
     [HttpPut("/api/rooms/v2/rooms/{roomId:long}/roles/{playerId:long}")]
     [HttpPost("/api/rooms/v2/rooms/{roomId:long}/roles/{playerId:long}")]
     [Authorize]
+    [RecNetEnvelope]
     public Task<IActionResult> GrantRole(long roomId, long playerId)
         => ChangeRoomAccountRoleAsync(roomId, playerId, isInvite: false);
 
@@ -4456,6 +4468,7 @@ public class RoomsController(
     [HttpPut("/api/rooms/v2/rooms/{roomId:long}/roles/{playerId:long}/invite")]
     [HttpPost("/api/rooms/v2/rooms/{roomId:long}/roles/{playerId:long}/invite")]
     [Authorize]
+    [RecNetEnvelope]
     public Task<IActionResult> InviteRole(long roomId, long playerId)
         => ChangeRoomAccountRoleAsync(roomId, playerId, isInvite: true);
 

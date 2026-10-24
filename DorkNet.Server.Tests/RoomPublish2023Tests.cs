@@ -88,7 +88,11 @@ public sealed class RoomPublish2023Tests : IClassFixture<DorkNetServerFactory>
         using var modRooms = Client("rooms", moderator);
         using (var denied = await modRooms.PutAsync($"/roomserver/rooms/{cloneId}/accessibility",
                    new FormUrlEncodedContent(new Dictionary<string, string> { ["accessibility"] = "0" })))
-            Assert.False(denied.IsSuccessStatusCode);
+        {
+            // Refusals are 200 {success:false, error} so the client can show them.
+            using var doc = JsonDocument.Parse(await denied.Content.ReadAsStringAsync());
+            Assert.False(doc.RootElement.GetProperty("success").GetBoolean());
+        }
         using var coRooms = Client("rooms", coOwner);
         var unpublished = await PutAccessibilityAsync(coRooms, cloneId, "0");
         Assert.Equal(0, unpublished.GetProperty("Accessibility").GetInt32());
@@ -100,7 +104,11 @@ public sealed class RoomPublish2023Tests : IClassFixture<DorkNetServerFactory>
             new FormUrlEncodedContent(new Dictionary<string, string> { ["accessibility"] = value }));
         var body = await response.Content.ReadAsStringAsync();
         Assert.True(response.IsSuccessStatusCode, $"{(int)response.StatusCode}: {body}");
-        return JsonDocument.Parse(body).RootElement.Clone();
+        // "change room accessibility" goes through the {success, value, error}
+        // helper (NLDBPDCNNCF.BDBHCEGKGDC<FGCPNAACHIK>), same as clone.
+        using var doc = JsonDocument.Parse(body);
+        Assert.True(doc.RootElement.GetProperty("success").GetBoolean(), body);
+        return doc.RootElement.GetProperty("value").Clone();
     }
 
     private static async Task<JsonElement> GetJsonAsync(HttpClient client, string path)
