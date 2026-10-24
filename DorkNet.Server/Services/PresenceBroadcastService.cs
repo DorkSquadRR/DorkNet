@@ -36,7 +36,10 @@ public static class PresenceVisibility
 /// RecNet.Runtime/RecNet/Matchmaking.txt:1436) feeds the payload straight into
 /// FLAOOBNJAAD (:6917), the same routine the heartbeat uses to apply an out-of-sync
 /// correction (:18467). A frame about the LOCAL player therefore moves that player, so
-/// these frames go to friends only, never to the subject.
+/// these frames never go to the subject. They go to the subject's friends and to every
+/// other connection that subscribed to the subject with SubscribeToPlayers (see
+/// NotifyHub.SubscribeToPlayers); non-friends only see the real presence when it is
+/// Public.
 /// </summary>
 public sealed class PresenceBroadcastService(
     IServiceScopeFactory scopes,
@@ -58,7 +61,7 @@ public sealed class PresenceBroadcastService(
         presence.IsRecentlyActive(playerId) || connections.GetConnections(playerId).Count > 0;
 
     /// <summary>Push the player's current presence (online state + committed
-    /// room) to every friend.</summary>
+    /// room) to every friend and subscriber.</summary>
     public Task PublishCurrentAsync(long playerId) => PublishAsync(playerId, forceOffline: false);
 
     /// <summary>Push an offline frame regardless of any lingering markers —
@@ -105,7 +108,6 @@ public sealed class PresenceBroadcastService(
                 .Where(id => id != playerId)
                 .Distinct()
                 .ToList();
-            if (friendIds.Count == 0) return;
 
             var online = !forceOffline && IsOnline(playerId);
             var room = online ? presence.GetRoom(playerId) : null;
@@ -134,6 +136,20 @@ public sealed class PresenceBroadcastService(
                 await notifications.PlayerPresenceChanged(visibleTo, playerId, room, online, visibility);
             if (hiddenFrom.Count > 0)
                 await notifications.PlayerPresenceChanged(hiddenFrom, playerId, null, false, visibility);
+
+            // Everyone else who subscribed to this player (SubscribeToPlayers:
+            // people in the same room, an open profile). They are not friends,
+            // so they see the real presence only when it is Public, and the
+            // offline frame otherwise. Friends were served above and the
+            // subject must never get a frame about themselves, so their
+            // connections are excluded.
+            var exclude = connections.GetConnections(playerId)
+                .Concat(friendIds.SelectMany(connections.GetConnections))
+                .Distinct()
+                .ToList();
+            var publicToAll = visibility == PresenceVisibility.Public && online;
+            await notifications.PresenceToSubscribersAsync(
+                playerId, publicToAll ? room : null, publicToAll, visibility, exclude);
         }
         catch (Exception ex)
         {

@@ -154,7 +154,7 @@ public class AccountsController(
                 playerId, username, summary);
         }
 
-        await notifications.KickPlayerAsync(playerId, "This account has been deleted.");
+        await notifications.LogoutAsync(playerId, NotificationService.LogoutReason.ForciblyLoggedOut);
         presence.Clear(playerId);
 
         return Ok(new RecNetResult { Success = true, Error = string.Empty });

@@ -27,15 +27,16 @@ namespace DorkNet.Server.Hubs;
 /// Pre-PR-2 used a local <c>static ConcurrentDictionary</c> which only
 /// reflected this replica's connections.
 ///
-/// Hub methods invoked by the client (verified by string-literal scan
-/// of metadata at addresses 0x39b2470, 0x39b24c8, 0x39b4ba8):
-///   "Subscribe"          - generic topic subscribe
-///   "Unsubscribe"        - generic topic unsubscribe
-///   "SubscribeToPlayers" - subscribe to per-player events (used by
-///                          RecNet.NotificationManager / SubscribeToPlayers)
-/// All accept JsonElement so we don't lock ourselves into a parameter
-/// schema we haven't verified yet, and return Task so the client's
-/// awaited Invoke completes cleanly.
+/// Hub methods the 2023-03-21 client sends (fire-and-forget, RecNet.Runtime
+/// OMHPBIEHOHN):
+///   "SubscribeToPlayers" - {PlayerIds}: players to get presence for
+///   "SubscribeTo"        - {Channels}: always empty in this build
+///   "UnsubscribeFrom"    - {Channels}: always empty in this build
+/// There is no UnsubscribeFromPlayers; SubscribeToPlayers always carries the
+/// complete set. All accept JsonElement and tolerate casing differences.
+///
+/// The client reconnects at most 3 times per login (its attempt counter is
+/// never reset), so the server must not drop healthy connections.
 /// </summary>
 [Authorize]
 public class NotifyHub(
@@ -65,28 +66,25 @@ public class NotifyHub(
             // Instead: at the moment the SECOND session's WebSocket
             // arrives, take a snapshot of the EXISTING connection ids
             // (which still belong to the original session — we haven't
-            // joined the group yet) and push a targeted ModerationKick
-            // to those ids. The watch's OnModerationKick handler at
-            // PlayerReporting.txt:1857 shows the standard moderation
-            // dialog and routes through LocalModerationKickSelf, the
-            // same graceful disconnect path the original Rec Room used
-            // for real moderator kicks.
+            // joined the group yet) and send those ids a Logout with
+            // Reason SessionTakeover. The client shows its own "signed in
+            // elsewhere" message and returns to the boot scene. (A
+            // ModerationKick only sent the old session to its dorm, still
+            // signed in.)
             //
             // Targeting specific connection ids (not the group) means
             // the new connection — about to join the group on the next
-            // line — never receives the kick, even with Redis backplane
+            // line — never receives it, even with Redis backplane
             // routing across replicas.
             var existing = presence.GetConnections(id);
             if (existing.Count > 0)
             {
                 logger.LogWarning(
-                    "[hub] second-session connect for player={PlayerId} (conn={NewConn}); kicking {OldCount} existing connection(s)",
+                    "[hub] second-session connect for player={PlayerId} (conn={NewConn}); logging out {OldCount} existing connection(s)",
                     id, Context.ConnectionId, existing.Count);
                 try
                 {
-                    await notifications.KickConnectionsAsync(
-                        existing,
-                        "Your account was signed in on another device.");
+                    await notifications.LogoutConnectionsAsync(existing);
                 }
                 catch (Exception ex)
                 {
@@ -156,36 +154,101 @@ public class NotifyHub(
         await base.OnDisconnectedAsync(exception);
     }
 
-    public Task SubscribeToPlayers(JsonElement payload)
+    /// <summary>SignalR group a connection joins to receive one player's
+    /// presence. Only presence is sent here — a subscriber must never receive
+    /// the subject's own pushes (DMs, gifts, …).</summary>
+    public static string PresenceGroupForPlayer(long playerId) => $"presence:{playerId}";
+
+    private const string SubscriptionsKey = "presence-subscriptions";
+
+    /// <summary><c>SubscribeToPlayers(PlayerSubscriptionListDTO {PlayerIds:
+    /// List&lt;int&gt;})</c> (RecNet.Runtime OMHPBIEHOHN.txt:3430): the full set
+    /// of players this client wants presence for — its relationships, the
+    /// players around it, and itself. Sent on every (re)connect and whenever
+    /// the set changes, always as the complete set, so it REPLACES the
+    /// connection's subscriptions. Presence for those players is then pushed
+    /// to <see cref="PresenceGroupForPlayer"/> by
+    /// <see cref="PresenceBroadcastService"/>, so non-friends the client is
+    /// looking at (people in the room, an open profile) stay current too.
+    ///
+    /// The caller's own id is skipped: a presence frame about the local player
+    /// is applied as a correction and moves them. An unreadable payload
+    /// leaves the current subscriptions alone rather than clearing them.
+    /// Groups live per connection on its own replica, are routed cluster-wide
+    /// by the Redis backplane, and are dropped by SignalR on disconnect.</summary>
+    public async Task SubscribeToPlayers(JsonElement payload)
+    {
+        var me = TryGetPlayerId();
+        if (!TryReadPlayerIds(payload, out var requested))
+        {
+            logger.LogWarning(
+                "[hub] SubscribeToPlayers unreadable payload player={PlayerId} conn={ConnectionId} payload={Payload}",
+                me, Context.ConnectionId, RawPayload(payload));
+            return;
+        }
+        if (me is long self) requested.Remove(self);
+
+        var current = Context.Items.TryGetValue(SubscriptionsKey, out var existing) && existing is HashSet<long> set
+            ? set
+            : new HashSet<long>();
+        var added = requested.Except(current).ToList();
+        var removed = current.Except(requested).ToList();
+        foreach (var id in added)
+            await Groups.AddToGroupAsync(Context.ConnectionId, PresenceGroupForPlayer(id));
+        foreach (var id in removed)
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, PresenceGroupForPlayer(id));
+        Context.Items[SubscriptionsKey] = requested;
+
+        logger.LogInformation(
+            "[hub] SubscribeToPlayers player={PlayerId} conn={ConnectionId} subscribed={Count} added={Added} removed={Removed}",
+            me, Context.ConnectionId, requested.Count, added.Count, removed.Count);
+    }
+
+    /// <summary><c>SubscribeTo({Channels: List&lt;string&gt;})</c>. The
+    /// 2023-03-21 client composes it on every connect but its channel set is
+    /// always empty, so there is nothing to subscribe to; logged only.</summary>
+    public Task SubscribeTo(JsonElement payload)
     {
         logger.LogInformation(
-            "[hub] SubscribeToPlayers player={PlayerId} conn={ConnectionId} payload={Payload}",
+            "[hub] SubscribeTo player={PlayerId} conn={ConnectionId} payload={Payload}",
             TryGetPlayerId(), Context.ConnectionId, RawPayload(payload));
         return Task.CompletedTask;
     }
 
-    public Task UnsubscribeFromPlayers(JsonElement payload)
+    /// <summary>Counterpart of <see cref="SubscribeTo"/>; logged only.</summary>
+    public Task UnsubscribeFrom(JsonElement payload)
     {
         logger.LogInformation(
-            "[hub] UnsubscribeFromPlayers player={PlayerId} conn={ConnectionId} payload={Payload}",
+            "[hub] UnsubscribeFrom player={PlayerId} conn={ConnectionId} payload={Payload}",
             TryGetPlayerId(), Context.ConnectionId, RawPayload(payload));
         return Task.CompletedTask;
     }
 
-    public Task Subscribe(JsonElement payload)
+    /// <summary>Reads <c>{PlayerIds:[…]}</c> (any key casing), or a bare
+    /// array, as player ids; numbers or numeric strings.</summary>
+    public static bool TryReadPlayerIds(JsonElement payload, out HashSet<long> ids)
     {
-        logger.LogInformation(
-            "[hub] Subscribe player={PlayerId} conn={ConnectionId} payload={Payload}",
-            TryGetPlayerId(), Context.ConnectionId, RawPayload(payload));
-        return Task.CompletedTask;
-    }
-
-    public Task Unsubscribe(JsonElement payload)
-    {
-        logger.LogInformation(
-            "[hub] Unsubscribe player={PlayerId} conn={ConnectionId} payload={Payload}",
-            TryGetPlayerId(), Context.ConnectionId, RawPayload(payload));
-        return Task.CompletedTask;
+        ids = new HashSet<long>();
+        var list = payload;
+        if (payload.ValueKind == JsonValueKind.Object)
+        {
+            var found = false;
+            foreach (var prop in payload.EnumerateObject())
+            {
+                if (!string.Equals(prop.Name, "PlayerIds", StringComparison.OrdinalIgnoreCase)) continue;
+                list = prop.Value;
+                found = true;
+                break;
+            }
+            if (!found) return false;
+        }
+        if (list.ValueKind != JsonValueKind.Array) return false;
+        foreach (var item in list.EnumerateArray())
+        {
+            if (item.ValueKind == JsonValueKind.Number && item.TryGetInt64(out var n) && n > 0) ids.Add(n);
+            else if (item.ValueKind == JsonValueKind.String && long.TryParse(item.GetString(), out var p) && p > 0) ids.Add(p);
+        }
+        return true;
     }
 
     private long? TryGetPlayerId()

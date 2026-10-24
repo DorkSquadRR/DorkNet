@@ -48,7 +48,11 @@ namespace DorkNet.Server.Controllers.API.Relationships.V2;
 /// </summary>
 [ApiController]
 [Authorize]
-public class RelationshipsController(DorkNetDbContext db, NotificationService notifications, ServerSettingsService settings) : ControllerBase
+public class RelationshipsController(
+    DorkNetDbContext db,
+    NotificationService notifications,
+    SystemNotificationService systemNotifications,
+    ServerSettingsService settings) : ControllerBase
 {
     // RelationshipType — int values match Relationship.RelationshipType
     // in the patched dump.cs.
@@ -226,7 +230,9 @@ public class RelationshipsController(DorkNetDbContext db, NotificationService no
         }
         await db.SaveChangesAsync();
 
-        await notifications.FriendRequestReceived(id, me);
+        await PushPairAsync(me, id);
+        // The "X sent you a friend request" row in the target's notifications.
+        await systemNotifications.SendAsync(id, SystemNotificationService.MessageType.FriendInvite, fromPlayerId: me);
         return Ok(BuildRelationship(row, me));
     }
 
@@ -251,7 +257,8 @@ public class RelationshipsController(DorkNetDbContext db, NotificationService no
         rel.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
-        await notifications.FriendRequestAccepted(id, me);
+        await PushPairAsync(me, id);
+        await systemNotifications.SendAsync(id, SystemNotificationService.MessageType.FriendRequestAccepted, fromPlayerId: me);
         return Ok(BuildRelationship(rel, me));
     }
 
@@ -285,7 +292,7 @@ public class RelationshipsController(DorkNetDbContext db, NotificationService no
 
         db.Relationships.RemoveRange(removable);
         await db.SaveChangesAsync();
-        await notifications.FriendRemoved(id, me);
+        await PushPairAsync(me, id);
 
         var remaining = pair.Except(removable).ToList();
         return Ok(remaining.Count == 0 ? EmptyRelationship(id) : BuildMerged(me, id, remaining));
@@ -333,6 +340,8 @@ public class RelationshipsController(DorkNetDbContext db, NotificationService no
             existing.UpdatedAt = DateTime.UtcNow;
         }
         await db.SaveChangesAsync();
+        await PushPairAsync(me, id);
+        await systemNotifications.SendAsync(id, SystemNotificationService.MessageType.FriendRequestAccepted, fromPlayerId: me);
         return Ok(BuildRelationship(existing, me));
     }
 
@@ -411,6 +420,10 @@ public class RelationshipsController(DorkNetDbContext db, NotificationService no
         if (ignored is bool i) row.Ignored = i;
         row.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
+        // The HTTP reply is only an ack; the updated row reaches the client
+        // through RelationshipChanged. A preference is the caller's own bit,
+        // so only the caller is told.
+        await PushPairAsync(me, otherId, notifyOther: false);
         return Ok(new Models.Auth.RecNetResult { Success = true, Error = string.Empty });
     }
 
@@ -510,6 +523,36 @@ public class RelationshipsController(DorkNetDbContext db, NotificationService no
     }
 
     // ── helpers ──────────────────────────────────────────────────────
+
+    /// <summary>Push RelationshipChanged for the pair (<paramref name="me"/>,
+    /// <paramref name="other"/>) after a change, each side getting its OWN view
+    /// of the relationship. Without this a friend request, accept or unfriend
+    /// only showed up after the friends list was refetched, and the client
+    /// never re-subscribed to the new friend's presence.</summary>
+    private async Task PushPairAsync(long me, long other, bool notifyOther = true)
+    {
+        var pair = await db.Relationships
+            .Where(r => (r.RequesterId == me && r.TargetId == other) ||
+                        (r.RequesterId == other && r.TargetId == me))
+            .ToListAsync();
+        var globalFriends = await settings.IsGlobalFriendsEnabledAsync();
+
+        await notifications.RelationshipChanged(me, ViewOf(me, other, pair, globalFriends));
+        if (notifyOther)
+            await notifications.RelationshipChanged(other, ViewOf(other, me, pair, globalFriends));
+    }
+
+    /// <summary>The relationship from <paramref name="viewer"/>'s side, the way
+    /// <c>v2/get</c> would list it.</summary>
+    private static Dictionary<string, object> ViewOf(
+        long viewer, long other, List<RelationshipEntity> pair, bool globalFriends)
+    {
+        if (globalFriends
+            && other != RelationshipQueries.SystemAccountId
+            && !pair.Any(r => r.Status == EntityStatus.Blocked))
+            return SynthFriend(other, pair.FirstOrDefault(r => r.RequesterId == viewer), viewer);
+        return pair.Count == 0 ? EmptyRelationship(other) : BuildMerged(viewer, other, pair);
+    }
 
     private async Task<HashSet<long>> FriendIdsAsync(long playerId)
     {

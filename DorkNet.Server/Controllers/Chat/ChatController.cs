@@ -460,6 +460,20 @@ public class ChatController(
         var removed = await db.ChatThreadMembers
             .Where(m => m.ThreadKey == chatThreadId && m.PlayerId == Me)
             .ExecuteDeleteAsync();
+        if (removed > 0)
+        {
+            // "PlayerLeftChat" is an Action<ChatMessage> (DLDKCILCKNA.txt:721);
+            // the handler only reads ChatThreadId and SenderPlayerId (the
+            // player who left) and drops them from that thread's members.
+            // Sent to the remaining members, whose member lists otherwise
+            // stayed stale, and to the leaver's own other sessions.
+            var thread = await EnsureThreadRowAsync(chatThreadId);
+            var left = new ChatMessageEntity { ThreadKey = chatThreadId, SenderPlayerId = Me, Body = string.Empty };
+            var recipients = await ThreadRecipientsAsync(chatThreadId);
+            recipients.Add(Me);
+            foreach (var rid in recipients.Distinct())
+                await notifications.NotifyTypedAsync(rid, "PlayerLeftChat", ToWireMessage(left, thread.Id));
+        }
         return Ok(removed > 0 ? ChatSuccess : ChatMembershipNotFound);
     }
 

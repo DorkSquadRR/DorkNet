@@ -1295,39 +1295,14 @@ public class ImagesController(
                  .Select(s => long.TryParse(s, out var v) ? v : 0L)
                  .Where(v => v > 0);
 
-    private Task NotifyAccountImageChangedAsync(PlayerEntity player)
-    {
-        var account = new DorkNet.Models.Auth.RecNetAccount
-        {
-            AccountId = (int)player.Id,
-            RawUsername = player.Username,
-            Username = player.Username,
-            DisplayName = player.DisplayName ?? player.Username,
-            ProfileImage = player.ProfileImageName ?? string.Empty,
-            TreatAsJunior = player.IsJunior,
-            HasBirthday = true,
-            Platforms = 1,
-        };
-        var selfAccount = new DorkNet.Models.Auth.RecNetSelfAccount
-        {
-            AccountId = account.AccountId,
-            RawUsername = account.RawUsername,
-            Username = account.Username,
-            DisplayName = account.DisplayName,
-            ProfileImage = account.ProfileImage,
-            TreatAsJunior = account.TreatAsJunior,
-            HasBirthday = account.HasBirthday,
-            Platforms = account.Platforms,
-            Email = player.Email ?? string.Empty,
-            Phone = player.Phone ?? string.Empty,
-            Birthday = player.Birthday,
-            JuniorState = player.IsJunior ? 1 : 0,
-            ParentAccountId = null,
-        };
-        return Task.WhenAll(
-            notifications.NotifyTypedAsync(player.Id, "AccountUpdate", account),
-            notifications.NotifyTypedAsync(player.Id, "SelfAccountUpdate", selfAccount));
-    }
+    /// <summary>Push the new profile image through the same account pushes
+    /// as every other profile edit: the owner's SelfAccountUpdate and an
+    /// AccountUpdate to everyone. A hand-built account here left out the
+    /// emoji, banner, pronouns, identity flags and creation date, so an image
+    /// change wiped them from the owner's cached account, and nobody else saw
+    /// the new picture.</summary>
+    private Task NotifyAccountImageChangedAsync(PlayerEntity player) =>
+        notifications.AccountChanged(player);
 
     private static string NormaliseTaggedIds(string? csv, long exceptId)
     {
