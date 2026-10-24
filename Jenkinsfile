@@ -1,14 +1,13 @@
 // DorkNet client builds — PC (patcher zip + full client) and Quest (.xapk).
 //
-// Runs on the Jenkins image from ci/jenkins (the stock image plus Python with
-// LIEF, .NET, the Android NDK/build-tools, apktool, restic and rclone).
+// Runs on the "dorknet-builder" agent from ci/jenkins (an inbound agent with
+// Python + LIEF, .NET, the Android NDK/build-tools, apktool, restic and rclone).
 //
 // Stock builds come out of the restic build archive on the FTP. Where it lives
 // is server configuration, not part of the repo: the FTP host, login and the
 // restic password are Jenkins credentials, and the repository folders come
-// from the Jenkins container's environment (ARCHIVE_PC_REPO /
-// ARCHIVE_QUEST_REPO), each overridable per run. A build is picked by
-// snapshot tags.
+// from the agent's environment (ARCHIVE_PC_REPO / ARCHIVE_QUEST_REPO), each
+// overridable per run. A build is picked by snapshot tags.
 //
 // On a push, only the platforms whose code changed are rebuilt. A manual run
 // picks the platforms with PLATFORMS. See ci/jenkins/README.md.
@@ -23,7 +22,7 @@ def buildPc = false
 def buildQuest = false
 
 pipeline {
-  agent any
+  agent { label 'dorknet-builder' }
 
   options {
     timestamps()
@@ -45,9 +44,9 @@ pipeline {
     string(name: 'QUEST_SNAPSHOT_TAGS', defaultValue: '',
       description: "restic tags picking the stock Quest build, comma = AND. Empty: ${QUEST_DEFAULT_TAGS}")
     string(name: 'PC_REPO', defaultValue: '',
-      description: 'PC restic repository folder on the FTP. Empty: ARCHIVE_PC_REPO from the Jenkins environment.')
+      description: 'PC restic repository folder on the FTP. Empty: ARCHIVE_PC_REPO set on the agent.')
     string(name: 'QUEST_REPO', defaultValue: '',
-      description: 'Quest restic repository folder on the FTP. Empty: ARCHIVE_QUEST_REPO from the Jenkins environment.')
+      description: 'Quest restic repository folder on the FTP. Empty: ARCHIVE_QUEST_REPO set on the agent.')
     booleanParam(name: 'LIST_SNAPSHOTS', defaultValue: false,
       description: 'Only list the snapshots matching the tags in both repositories (to find a build), then stop.')
   }
@@ -88,8 +87,8 @@ pipeline {
                    "PC_TAGS=${params.PC_SNAPSHOT_TAGS}", "QUEST_TAGS=${params.QUEST_SNAPSHOT_TAGS}"]) {
             sh '''
               export RESTIC_CACHE_DIR="$DORKNET_CACHE/restic"
-              pc="${PC_REPO_OVERRIDE:-${ARCHIVE_PC_REPO:?set ARCHIVE_PC_REPO on Jenkins or PC_REPO on the run}}"
-              quest="${QUEST_REPO_OVERRIDE:-${ARCHIVE_QUEST_REPO:?set ARCHIVE_QUEST_REPO on Jenkins or QUEST_REPO on the run}}"
+              pc="${PC_REPO_OVERRIDE:-${ARCHIVE_PC_REPO:?set ARCHIVE_PC_REPO on the agent or PC_REPO on the run}}"
+              quest="${QUEST_REPO_OVERRIDE:-${ARCHIVE_QUEST_REPO:?set ARCHIVE_QUEST_REPO on the agent or QUEST_REPO on the run}}"
               echo "== PC: $pc";       archive-restore list "$pc" "$PC_TAGS"
               echo "== Quest: $quest"; archive-restore list "$quest" "$QUEST_TAGS"
             '''
@@ -113,7 +112,7 @@ pipeline {
             withEnv(["REPO_OVERRIDE=${params.PC_REPO}", "TAGS=${params.PC_SNAPSHOT_TAGS ?: PC_DEFAULT_TAGS}"]) {
               sh(returnStdout: true, script: '''
                 export RESTIC_CACHE_DIR="$DORKNET_CACHE/restic"
-                repo="${REPO_OVERRIDE:-${ARCHIVE_PC_REPO:?set ARCHIVE_PC_REPO on Jenkins or PC_REPO on the run}}"
+                repo="${REPO_OVERRIDE:-${ARCHIVE_PC_REPO:?set ARCHIVE_PC_REPO on the agent or PC_REPO on the run}}"
                 archive-restore restore "$repo" "$TAGS" "$DORKNET_CACHE/pc" --exclude /.DepotDownloader
               ''').trim().readLines().last()
             }
@@ -141,7 +140,7 @@ pipeline {
             withEnv(["REPO_OVERRIDE=${params.QUEST_REPO}", "TAGS=${params.QUEST_SNAPSHOT_TAGS ?: QUEST_DEFAULT_TAGS}"]) {
               sh(returnStdout: true, script: '''
                 export RESTIC_CACHE_DIR="$DORKNET_CACHE/restic"
-                repo="${REPO_OVERRIDE:-${ARCHIVE_QUEST_REPO:?set ARCHIVE_QUEST_REPO on Jenkins or QUEST_REPO on the run}}"
+                repo="${REPO_OVERRIDE:-${ARCHIVE_QUEST_REPO:?set ARCHIVE_QUEST_REPO on the agent or QUEST_REPO on the run}}"
                 archive-restore restore "$repo" "$TAGS" "$DORKNET_CACHE/quest"
               ''').trim().readLines().last()
             }
@@ -187,7 +186,7 @@ pipeline {
     }
     cleanup {
       // Runs after archiving. Keeps the restic cache and restored stock
-      // builds ($DORKNET_CACHE in jenkins_home, outside the workspace); drops
+      // builds ($DORKNET_CACHE on the agent, outside the workspace); drops
       // the workspace's build output and scratch.
       cleanWs(deleteDirs: true, notFailBuild: true)
     }
