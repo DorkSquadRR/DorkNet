@@ -91,9 +91,10 @@ Save, open the node, and copy its **secret**.
 ### 3. Deploy the agent on Coolify
 
 1. **Create a Docker Compose application** from this repository: build pack
-   Docker Compose, base directory `/`, compose location
-   `/ci/jenkins/docker-compose.yml`. It needs no domain. Under Advanced, turn
-   on **Connect to predefined network**.
+   Docker Compose, base directory **`/ci/jenkins`**, compose location
+   `/docker-compose.yml`. The base directory is the build context, so with
+   `/` the build would pick up the server's `Dockerfile` at the repo root. It
+   needs no domain. Under Advanced, turn on **Connect to predefined network**.
 2. **Set its environment:**
 
    | Variable | Value |
