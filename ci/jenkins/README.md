@@ -91,8 +91,6 @@ The job needs these plugins:
 - GitHub (for the push trigger)
 - Credentials Binding
 - Timestamper
-- AnsiColor
-- Workspace Cleanup
 
 Most are part of the suggested set.
 

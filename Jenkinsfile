@@ -27,7 +27,6 @@ pipeline {
 
   options {
     timestamps()
-    ansiColor('xterm')
     disableConcurrentBuilds()
     // Full clients and xapks are several GB each: keep artifacts for the
     // last few runs only.
@@ -189,7 +188,7 @@ pipeline {
       // Runs after archiving. Keeps the restic cache and restored stock
       // builds ($DORKNET_CACHE in jenkins_home, outside the workspace); drops
       // the workspace's build output and scratch.
-      cleanWs(deleteDirs: true, notFailBuild: true)
+      deleteDir()
     }
   }
 }
