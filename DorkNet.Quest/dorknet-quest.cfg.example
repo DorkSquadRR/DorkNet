@@ -65,6 +65,12 @@ EnableTlsTrustBypass = true
 # Accept image Content-Signatures the server signs with its own key.
 AcceptUnsignedImages = true
 
+# A headset with no remembered account. false: open the sign-in page so the
+# player logs into their existing DorkNet account. true: Rec Room's own
+# behaviour, which creates a new account automatically -- only useful when the
+# server allows sign-ups (otherwise the game keeps retrying and failing).
+AutoCreateAccount = false
+
 # ---- diagnostics (adb logcat -s DORKNET) ----
 
 LogHttp = true

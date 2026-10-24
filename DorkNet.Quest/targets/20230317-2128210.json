@@ -111,6 +111,12 @@
       "length": 412,
       "fingerprint": "0xb12b0044ac4f844f",
       "why": "Log-only: prints the quit code and caller."
+    },
+    "title_auto_login": {
+      "rva": 58892048,
+      "length": 668,
+      "fingerprint": "0x83bebb9a30983b33",
+      "why": "Title-screen auto-login. With no remembered account (null) it creates a new account; unless AutoCreateAccount is on, open the sign-in page instead."
     }
   }
 }

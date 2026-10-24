@@ -216,6 +216,16 @@ keep the prefab value) trade per-frame size for bandwidth if a high FPS
 saturates the link. Only the player *sharing* needs the override. Default
 `0` (off).
 
+### Sign-in page instead of a new account
+
+When the title screen finds no remembered account for the machine, Rec Room
+creates a brand-new account automatically. On a server with sign-ups off that
+is refused and the title screen keeps retrying. By default the mod opens the
+**sign-in page** instead, so players log into their existing DorkNet account.
+Set `"AutoCreateAccount": true` in `dorknet-clientmod.json` to keep Rec Room's
+behaviour on a server that allows sign-ups. The Quest build has the same
+option (`AutoCreateAccount` in `dorknet-quest.cfg`).
+
 ### RRO quest team size (opt-in)
 
 RRO quests ship with a baked 4-player `GameConfigurationAsset` team cap.

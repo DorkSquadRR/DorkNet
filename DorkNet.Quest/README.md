@@ -30,7 +30,8 @@ Photon shards with PC DorkNet players with no server-side version change.
 | image RSA/SHA1 verify | accept Content-Signatures the server signs with its own key | PC ImageSigning |
 | hile-warning / unknown-DLL / file-hash / ToxMod callbacks | neutralised so a re-signed, hook-loaded client is not warned/quit | `ClientMod` AntiTamper/ToxMod/FileHash |
 | integrity report + quit funnels | **log only** — names any new rejection in logcat | — |
-| Oculus `ovr_*` platform calls | (no-Meta build only) steer the entitlement/login path to the client's own credential screen | — |
+| Oculus `ovr_*` platform calls | (no-Meta build only) pass the entitlement / user-proof / logged-in-user requests Meta refuses for the renamed app (including the SDK's second check on the inner native message), answering the logged-in user with the placeholder user id `1` | — |
+| title-screen auto-login (`TitleScreenFlowModel`) | a headset with no remembered account opens the **sign-in page** instead of auto-creating an account (`AutoCreateAccount = true` restores Rec Room's behaviour) | — |
 
 ### Two builds, selected by `OculusAppId`
 
@@ -204,6 +205,8 @@ every `armed <target>`, then `intercepted https://ns.rec.net/ -> https://ns.<hos
 | `[http<-]` shows a Cloudflare challenge page | edge WAF blocked the request before your origin |
 | multiplayer never connects | Photon app ids not set in the cfg |
 | Quest and PC players never see each other's rooms | `PhotonRegion` differs from the PC ClientMod `PhotonCloudRegion` |
+| "Unable to load Oculus user account" | old build (before the GetLoggedInUser bypass), or a Meta build whose app id the account isn't entitled to |
+| game restarts while "creating a new account" | `AutoCreateAccount = true` on a server with sign-ups off — set it to `false` so the sign-in page opens |
 
 ## Layout
 
