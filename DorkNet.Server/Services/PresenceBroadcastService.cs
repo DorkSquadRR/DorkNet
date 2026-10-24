@@ -143,8 +143,11 @@ public sealed class PresenceBroadcastService(
             // offline frame otherwise. Friends were served above and the
             // subject must never get a frame about themselves, so their
             // connections are excluded.
-            var exclude = connections.GetConnections(playerId)
-                .Concat(friendIds.SelectMany(connections.GetConnections))
+            // Only friends who are online have connections; one call for the
+            // online set, then one pipelined lookup for all of them.
+            var onlineIds = connections.OnlinePlayerIds().ToHashSet();
+            var exclude = (await connections.GetConnectionsAsync(
+                    friendIds.Where(onlineIds.Contains).Append(playerId)))
                 .Distinct()
                 .ToList();
             var publicToAll = visibility == PresenceVisibility.Public && online;

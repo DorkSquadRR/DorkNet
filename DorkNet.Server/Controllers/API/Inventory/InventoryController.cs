@@ -463,7 +463,9 @@ public class InventoryController(
         CreatedAt = inv.AcquiredAt,
         ActiveDurationMinutes = (int?)null,
         inv.IsActive,
-        IsTransferable = true,
+        // Same as GET api/consumables/v2/getUnlocked, so a push never flips
+        // what the inventory list says.
+        IsTransferable = false,
     };
 
     private static object ToConsumableWire(PlayerInventoryEntity inv, StoreItemEntity item)
