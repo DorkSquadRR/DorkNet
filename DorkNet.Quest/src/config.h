@@ -57,6 +57,11 @@
 #ifndef DN_ACCEPT_UNSIGNED_IMAGES
 #  define DN_ACCEPT_UNSIGNED_IMAGES true
 #endif
+// A headset with no remembered account: false opens the sign-in page, true
+// keeps Rec Room's behaviour of creating a new account automatically.
+#ifndef DN_AUTO_CREATE_ACCOUNT
+#  define DN_AUTO_CREATE_ACCOUNT false
+#endif
 #ifndef DN_LOG_HTTP
 #  define DN_LOG_HTTP true
 #endif
@@ -82,7 +87,7 @@ void dn_load_runtime_config(char *server_host, size_t server_host_cap,
                             char *photon_realtime, char *photon_voice, char *photon_chat,
                             char *photon_server, size_t photon_server_cap, int *photon_port,
                             char *photon_region, size_t photon_region_cap,
-                            bool *tls_bypass, bool *accept_images,
+                            bool *tls_bypass, bool *accept_images, bool *auto_create_account,
                             bool *log_http, bool *debug_http, int *body_max);
 
 #endif  // DORKNET_QUEST_CONFIG_H
