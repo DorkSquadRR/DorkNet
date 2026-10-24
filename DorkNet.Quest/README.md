@@ -60,7 +60,7 @@ Photon shards with PC DorkNet players with no server-side version change.
   and its matching **OBB**.
 
 > On Windows with Controlled Folder Access on, the NDK linker and apksigner
-> can't write under `Documents`. `build.ps1` builds in `%TEMP%` by default;
+> can't write under `Documents`. `build.py` builds in `%TEMP%` by default;
 > keep the work dir outside protected folders.
 
 ## Build
@@ -76,20 +76,28 @@ dotnet Il2CppDumper.dll `
 copy DorkNet.Quest\dorknet-quest.cfg.example DorkNet.Quest\dorknet-quest.cfg
 #   edit ServerHost, Photon app ids, (optional) OculusAppId, PackageName
 
-# 3. Build the signed APK:
+# 3. Build the signed APK (and, with --obb, the release package):
 $env:ANDROID_SDK_ROOT = 'C:\path\to\android-sdk'
 $env:ANDROID_NDK      = 'C:\path\to\android-sdk\ndk\27.2.12479018'
 $env:APKTOOL_JAR      = 'C:\path\to\apktool.jar'
-DorkNet.Quest\scripts\build.ps1 `
-  -Apk    C:\path\to\RecRoom-store-2128210.apk `
-  -DumpCs <scratch>\dump\dump.cs `
-  -Obb    C:\path	o\main.2128210.com.AgainstGravity.RecRoom.obb
+py -3 DorkNet.Quest\scripts\build.py build `
+  --apk     C:\path\to\RecRoom-store-2128210.apk `
+  --dump-cs <scratch>\dump\dump.cs `
+  --obb     C:\path\to\main.2128210.com.AgainstGravity.RecRoom.obb `
+  --keystore C:\path\to\dorknet-debug.keystore
 # -> %TEMP%\dorknet-quest-build\dorknet-recroom-20230317.apk
-# -> %TEMP%\dorknet-quest-build\DorkNet-Quest-20230317\   (with -Obb)
+# -> %TEMP%\dorknet-quest-build\DorkNet-Quest-20230317\   (with --obb)
 ```
 
-With `-Obb`, the build also runs `scripts/package.ps1`, which writes a release
-folder ready to hand to players:
+The same command works on Linux and macOS (`python3 DorkNet.Quest/scripts/build.py build …`).
+
+For a build whose target table is already committed under `targets/`, pass
+`--targets-json DorkNet.Quest/targets/20230317-2128210.json` instead of
+`--dump-cs`. No Il2CppDumper is needed then: the build checks the table
+against the APK's `libil2cpp.so` and stops on a mismatch. This is what the
+Jenkins job does (`ci/jenkins/README.md`).
+
+With `--obb`, the build also writes a release folder ready to hand to players:
 
 | File | Purpose |
 | --- | --- |
@@ -98,15 +106,16 @@ folder ready to hand to players:
 | `install.sh` | one-command install on macOS / Linux |
 | `README.txt` | player instructions |
 
-To package an APK you already built, run `scripts/package.ps1 -Apk <apk> -Obb <obb>`.
+To package an APK you already built, run `build.py package --apk <apk> --obb <obb>`.
 The package contains game binaries from your store copy, so only share it with
 people who own the game.
 
-`build.ps1` chains: resolve targets → generate headers → compile
+`build.py build` chains: resolve targets → generate headers → compile
 `libdorknet.so` → apktool decode → package rename + LAUNCHER + manifest →
 app name (`AppName`) → drop the library in + `DT_NEEDED` it onto `libmain.so` → apktool build →
-zipalign → apksigner (v2+v3). It generates a fresh debug keystore in the work
-dir on first run. **Keep that keystore** — Meta ties tokens to app id + package
+zipalign → apksigner (v2+v3). Without `--keystore` it generates a fresh debug
+keystore in the work dir on first run. **Keep that keystore** and pass it with
+`--keystore` from then on — Meta ties tokens to app id + package
 + signing cert, so re-signing with a different key breaks any Meta registration.
 It is never committed.
 
@@ -189,7 +198,7 @@ every `armed <target>`, then `intercepted https://ns.rec.net/ -> https://ns.<hos
 | Symptom | Likely cause |
 | --- | --- |
 | `REFUSING <target>: ... fingerprint mismatch` | wrong APK for this target table — rebuild from the matching store APK, or rebase |
-| install fails `-124` / `NO_CERTIFICATES` | signing/align step — rebuild with `build.ps1`, don't hand-zip |
+| install fails `-124` / `NO_CERTIFICATES` | signing/align step — rebuild with `build.py`, don't hand-zip |
 | boots to an empty world | OBB missing or named for the wrong versionCode |
 | `[integrity] report reason=... NetworkCertificateMismatch` then a quit | TLS bypass off, or a pin hook didn't arm |
 | `[http<-]` shows a Cloudflare challenge page | edge WAF blocked the request before your origin |
@@ -209,8 +218,7 @@ every `armed <target>`, then `intercepted https://ns.rec.net/ -> https://ns.<hos
 | `scripts/gen_targets_header.py` | target table → `targets_generated.h` |
 | `scripts/gen_config_header.py` | `dorknet-quest.cfg` → `config_generated.h` |
 | `scripts/inject_needed.py` | LIEF `DT_NEEDED` injection |
-| `scripts/build.ps1` | one-shot: store APK → signed patched APK (+ release package with `-Obb`) |
-| `scripts/package.ps1` | patched APK + OBB → `.xapk` + installers |
+| `scripts/build.py` | `build`: store APK → signed patched APK (+ release package with `--obb`); `package`: patched APK + OBB → `.xapk` + installers |
 | `scripts/installer/` | `install.ps1`, `install.cmd`, `install.sh` copied into each package |
 | `dorknet-quest.cfg.example` | config template; copy to `dorknet-quest.cfg` (git-ignored) |
 
