@@ -1,6 +1,6 @@
 # DorkNet build agent on Coolify. Deploy as a Docker Compose application from
-# this repository with compose location /ci/jenkins/docker-compose.yml and
-# "Connect to predefined network" on. It needs no domain: it dials out to
+# this repository with base directory /ci/jenkins, compose location
+# /docker-compose.yml and "Connect to predefined network" on. It needs no domain: it dials out to
 # Jenkins over WebSocket on Docker's internal network. Set the variables in
 # the resource's Environment Variables; see ci/jenkins/README.md.
 services:
