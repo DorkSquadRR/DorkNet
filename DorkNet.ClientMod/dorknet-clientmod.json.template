@@ -1,6 +1,7 @@
 {
   "ServerHost": "{HOST}",
   "EnableTlsTrustBypass": {ENABLE_TLS_TRUST_BYPASS},
+  "AutoCreateAccount": false,
   "EnableDebugConsole": false,
   "DebugConsoleToggleKey": "BackQuote",
   "DevCommands": [],

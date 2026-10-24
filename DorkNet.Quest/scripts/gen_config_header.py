@@ -23,6 +23,7 @@ KEYS = {
     "PhotonRegion": ("DN_PHOTON_REGION", "str"),
     "EnableTlsTrustBypass": ("DN_TLS_TRUST_BYPASS", "bool"),
     "AcceptUnsignedImages": ("DN_ACCEPT_UNSIGNED_IMAGES", "bool"),
+    "AutoCreateAccount": ("DN_AUTO_CREATE_ACCOUNT", "bool"),
     "LogHttp": ("DN_LOG_HTTP", "bool"),
     "Debug": ("DN_DEBUG_HTTP", "bool"),
     "LogHttpBodyMax": ("DN_LOG_BODY_MAX", "int"),

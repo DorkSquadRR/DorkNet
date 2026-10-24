@@ -114,6 +114,12 @@
       "class": "public class SessionManager ",
       "method": "public static void TryApplicationQuit(int DKOGJICFAEP)",
       "why": "Log-only: prints the quit code and caller."
+    },
+    {
+      "id": "title_auto_login",
+      "class": "public class TitleScreenFlowModel ",
+      "method": "private LDGADANDBIO IAKHIJIHAPJ(LBNJFPOLCDL.MDGJJCFGJNF AJCKAHHJDEN)",
+      "why": "Title-screen auto-login. With no remembered account (null) it creates a new account; unless AutoCreateAccount is on, open the sign-in page instead."
     }
   ]
 }
