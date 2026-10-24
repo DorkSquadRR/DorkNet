@@ -32,7 +32,6 @@ import argparse
 import hashlib
 import json
 import os
-import platform
 import re
 import shutil
 import subprocess
@@ -40,6 +39,7 @@ import sys
 import tempfile
 import zipfile
 from pathlib import Path
+from typing import NoReturn
 from xml.sax.saxutils import escape as xml_escape
 
 SCRIPTS = Path(__file__).resolve().parent
@@ -53,7 +53,7 @@ def step(msg: str) -> None:
     print(f"==> {msg}", flush=True)
 
 
-def fail(msg: str) -> None:
+def fail(msg: str) -> NoReturn:
     raise SystemExit(f"error: {msg}")
 
 
@@ -143,7 +143,7 @@ def resolve_apktool(arg: str | None) -> Path:
     root = sdk_root()
     if root and (root / "apktool.jar").exists():
         return root / "apktool.jar"
-    fail("apktool.jar not found. Pass --apktool-jar or set APKTOOL_JAR.")
+    raise SystemExit("error: apktool.jar not found. Pass --apktool-jar or set APKTOOL_JAR.")
 
 
 def cfg_value(config: Path, key: str) -> str | None:

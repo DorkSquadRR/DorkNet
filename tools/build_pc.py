@@ -28,6 +28,7 @@ import tempfile
 import urllib.request
 import zipfile
 from pathlib import Path
+from typing import NoReturn
 
 REPO = Path(__file__).resolve().parent.parent
 CLIENT_MOD = REPO / "DorkNet.ClientMod"
@@ -50,7 +51,7 @@ def step(msg: str) -> None:
     print(f"==> {msg}", flush=True)
 
 
-def fail(msg: str) -> None:
+def fail(msg: str) -> NoReturn:
     raise SystemExit(f"error: {msg}")
 
 
