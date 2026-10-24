@@ -41,6 +41,13 @@ public class LevelService(DorkNetDbContext db, NotificationService notifications
         player.Level = LevelForXp(player.XP);
         await db.SaveChangesAsync();
 
+        // Live level bar: "PlayerProgressionLevelUpdate" {PlayerId, Level, XP}
+        // (handler PBOGNAPEBAI.txt:263, DTO DGFGIFIHCAJ) — the same values
+        // api/players/v2/progression returns. Without it the watch kept the
+        // level and XP it loaded at login until the next relog.
+        await notifications.NotifyTypedAsync(playerId, "PlayerProgressionLevelUpdate",
+            new { PlayerId = (int)playerId, player.Level, player.XP });
+
         if (player.Level > oldLevel)
         {
             // Level-up grants a small currency reward. The wallet UI
@@ -82,9 +89,13 @@ public class LevelService(DorkNetDbContext db, NotificationService notifications
         row.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync();
 
+        // StorefrontBalanceUpdate "61" is BalanceResponseDTO {Balance,
+        // CurrencyType, Platform}; the client sets that (CurrencyType,
+        // Platform) bucket to Balance. Platform 0 matches every balance REST
+        // response, so the buckets line up.
         await notifications.NotifyAsync(playerId,
             PushNotificationId.StorefrontBalanceUpdate,
-            new { CurrencyType = currencyType, row.Balance, Reason = reason });
+            new { row.Balance, CurrencyType = currencyType, Platform = 0 });
         return row.Balance;
     }
 

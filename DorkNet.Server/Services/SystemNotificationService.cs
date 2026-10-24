@@ -28,6 +28,8 @@ public sealed class SystemNotificationService(DorkNetDbContext db, NotificationS
     /// listed; add more as needed.</summary>
     public static class MessageType
     {
+        public const int FriendInvite = 4;
+        public const int RequestGameInvite = 10;
         public const int TextMessage = 30;
         public const int FriendRequestAccepted = 40;
         public const int FriendCodeUsed = 41;
@@ -39,6 +41,8 @@ public sealed class SystemNotificationService(DorkNetDbContext db, NotificationS
         public const int CreatorPublishedNewRoom = 70;
         public const int PlayerAttendingEvent = 80;
         public const int PlayerEventInvitation = 81;
+        public const int CoachMessage = 100;
+        public const int FriendIntroduction = 130;
     }
 
     /// <summary>Persist and push a system notification to

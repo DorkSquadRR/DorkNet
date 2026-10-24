@@ -1095,11 +1095,9 @@ public class InventionsController(
             });
             inv.CheerCount += 1;
             await db.SaveChangesAsync();
-
-            if (inv.CreatorPlayerId != pid)
-                await notifications.NotifyAsync(inv.CreatorPlayerId,
-                    PushNotificationId.InventionModerationStateChanged,
-                    new { Type = "cheer", inv.Id, From = pid, inv.CheerCount });
+            // No push: InventionModerationStateChanged ("100") means "your
+            // inventions' moderation state changed" and takes no payload; sent
+            // on every cheer it only made the creator refetch for nothing.
         }
         else if (!req.Cheer && existing is not null)
         {

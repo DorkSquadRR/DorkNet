@@ -29,6 +29,7 @@ namespace DorkNet.Server.Controllers.Admin;
 public class AdminController(
     DorkNetDbContext db,
     NotificationService notifications,
+    SystemNotificationService systemNotifications,
     LevelService level,
     CommunityBoardService communityBoard,
     RoomBlobNormalizerService roomBlobNormalizer,
@@ -160,7 +161,9 @@ public class AdminController(
         await LogAsync("ban_player", "player", id, body.Reason ?? "");
         await db.SaveChangesAsync();
 
-        await notifications.KickPlayerAsync(id, body.Reason ?? "You have been banned.");
+        // A ban must sign the player out (a kick only sends them to the dorm);
+        // the next login is refused by the ban check.
+        await notifications.LogoutAsync(id, NotificationService.LogoutReason.Banned);
         playerPresence.Clear(id);
 
         return Ok(new { player.Id, player.BannedUntil });
@@ -243,7 +246,7 @@ public class AdminController(
         await db.SaveChangesAsync();
         await tx.CommitAsync();
 
-        await notifications.KickPlayerAsync(id, "Your account has been removed by an admin.");
+        await notifications.LogoutAsync(id, NotificationService.LogoutReason.ForciblyLoggedOut);
         playerPresence.Clear(id);
 
         return Ok(new
@@ -1570,10 +1573,13 @@ public class AdminController(
         return Ok(new { ok = true });
     }
 
-    /// <summary>Push fresh RoomDetails after role/owner mutations. The
-    /// 2020 watch caches RoomDetails, including CoOwners/Moderators/Hosts,
-    /// and role-gated UI reads that cache until Rooms.OnSubscriptionUpdateRoom
-    /// stores a replacement.</summary>
+    /// <summary>Push fresh room details after role/owner mutations, to everyone
+    /// in the room plus the player whose role changed. The client caches the
+    /// room's Roles and role-gated UI reads that cache. The 2023 "RoomUpdate"
+    /// handler (IBEOONPEELF.txt:507) reads the FULL room (FGCPNAACHIK) — the
+    /// shape GET roomserver/rooms/{id} returns. The 2020 {Room, Scenes}
+    /// wrapper parsed as RoomId 0 with no roles, so role changes never
+    /// reached anyone until they re-entered the room.</summary>
     private async Task NotifyRoomRolesChangedAsync(long roomId, long changedPlayerId, string reason)
     {
         var room = await db.Rooms.FirstOrDefaultAsync(r => r.Id == roomId);
@@ -1587,7 +1593,7 @@ public class AdminController(
             .ToListAsync();
 
         var payload = DorkNet.Server.Controllers.API.Rooms.V2.RoomsController
-            .BuildRoomDetails(room, scenes, roles: roles);
+            .BuildRoomServerDetails(room, scenes, roles: roles);
 
         var recipients = onlinePresence.OnlinePlayerIds()
             .Where(pid => playerPresence.GetRoom(pid)?.RoomId == roomId)
@@ -1739,7 +1745,7 @@ public class AdminController(
         {
             var r = playerPresence.GetRoom(pid);
             if (r is null || r.RoomId != id || r.RoomInstanceId != instanceId) continue;
-            await notifications.KickPlayerAsync(pid, reason);
+            await notifications.KickPlayerAsync(pid, reason, gameSessionId: instanceId);
             playerPresence.Clear(pid);
             kicked.Add(pid);
         }
@@ -2396,7 +2402,9 @@ public class AdminController(
         var reason = string.IsNullOrWhiteSpace(body?.Reason)
             ? "Kicked by an admin."
             : body!.Reason!.Trim();
-        await notifications.KickPlayerAsync(id, reason);
+        // The room instance lets the client announce the kick to that room.
+        await notifications.KickPlayerAsync(id, reason,
+            gameSessionId: playerPresence.GetRoom(id)?.RoomInstanceId ?? 0);
         playerPresence.Clear(id);
         await LogAsync("kick_player", "player", id, body?.Reason ?? "");
         await db.SaveChangesAsync();
@@ -3328,10 +3336,11 @@ public class AdminController(
         player.PasswordHash = BCrypt.Net.BCrypt.HashPassword(body.NewPassword);
         await LogAsync("set_password", "player", id, "");
         await db.SaveChangesAsync();
-        // Push a logout so any active sessions on the old password get
-        // dropped — the watch re-authenticates with the new password.
-        await notifications.NotifyAsync(id, PushNotificationId.Logout,
-            new { Reason = "AdminPasswordReset" });
+        // Log out any session still on the old password; the client has to
+        // sign in again with the new one. The reason must be the numeric
+        // enum: the string "AdminPasswordReset" failed the client's parse and
+        // the push was dropped.
+        await notifications.LogoutAsync(id, NotificationService.LogoutReason.ForciblyLoggedOut);
         return Ok(new { id });
     }
 
@@ -3500,22 +3509,26 @@ public class AdminController(
 
         playerPresence.SetRoom(id, roomInstance);
 
-        // Two pushes back-to-back: GameSession update changes the
-        // watch's cached RoomInstance (OnSubscriptionUpdateRoomInstance
-        // → UpdateCachedRoomInstance), and SubscriptionUpdateRoom
-        // refreshes the watch's RoomDetails cache so the room-info
-        // panel doesn't show stale data after the warp.
+        // The move itself comes from the presence set above: the client's
+        // next heartbeat sees it is out of sync and joins that instance.
+        // RoomInstanceUpdate only refreshes the client's cached copy of the
+        // instance, and RoomUpdate its cached room details, which must be
+        // the full room (FGCPNAACHIK) the roomserver GET returns.
         await notifications.NotifyAsync(id,
             PushNotificationId.SubscriptionUpdateGameSession, roomInstance);
+        var forceJoinScenes = await db.RoomScenes
+            .Where(sc => sc.RoomId == room.Id)
+            .OrderBy(sc => sc.OrderIndex)
+            .ToListAsync();
+        // With every role grant: the client replaces its cached room with
+        // this, so a payload without them would drop everyone's roles.
+        var forceJoinRoles = await db.RoomRoles
+            .Where(r => r.RoomId == room.Id)
+            .ToListAsync();
         await notifications.NotifyAsync(id,
             PushNotificationId.SubscriptionUpdateRoom,
-            new
-            {
-                Room = new { Id = room.Id, Name = room.Name },
-                RoomId = room.Id,
-                SubRoomId = subRoomId,
-                Reason = "AdminForceJoin",
-            });
+            DorkNet.Server.Controllers.API.Rooms.V2.RoomsController.BuildRoomServerDetails(
+                room, forceJoinScenes, roles: forceJoinRoles));
 
         await LogAsync("force_join", "player", id,
             $"room={body.RoomId} sub={subRoomId} instance={roomInstanceId} photon={photonRoomId}");
@@ -3532,20 +3545,46 @@ public class AdminController(
 
     // ── System ───────────────────────────────────────────────────────────
 
-    public sealed record SetMotdRequest(string Message);
+    public sealed record SetMotdRequest(string? Message, int? StartsInMinutes);
 
-    /// <summary>Push a server-maintenance broadcast to every connected
-    /// player. The MOTD config value is changed via appsettings.json
-    /// (server restart required); this is for ad-hoc announcements.</summary>
+    /// <summary>Broadcast to every connected player.
+    /// <list type="bullet">
+    ///   <item><c>Message</c>: a coach message (MessageReceived, Type 100, from
+    ///         the system account) in each online player's notifications —
+    ///         the client's channel for free text from the server.</item>
+    ///   <item><c>StartsInMinutes</c>: the client's own maintenance countdown
+    ///         (ServerMaintenance "25", which reads only
+    ///         <c>StartsInMinutes</c>; 0 cancels a running countdown).</item>
+    /// </list>
+    /// ServerMaintenance used to carry the text as <c>{Message}</c>, which the
+    /// client never reads: the text was never shown, and StartsInMinutes 0
+    /// cancelled any countdown instead.</summary>
     [HttpPost("broadcast")]
     public async Task<ActionResult> Broadcast([FromBody] SetMotdRequest body)
     {
-        if (string.IsNullOrWhiteSpace(body.Message)) return BadRequest("empty message");
-        await notifications.BroadcastAsync(PushNotificationId.ServerMaintenance,
-            new { Message = body.Message });
-        await LogAsync("broadcast", "system", 0, body.Message);
+        var message = body.Message?.Trim() ?? string.Empty;
+        if (message.Length == 0 && body.StartsInMinutes is null)
+            return BadRequest("empty message");
+        if (body.StartsInMinutes is < 0)
+            return BadRequest("StartsInMinutes must be 0 or more");
+
+        var recipients = onlinePresence.OnlinePlayerIds().ToList();
+        if (message.Length > 0)
+        {
+            foreach (var pid in recipients)
+                await systemNotifications.SendAsync(pid,
+                    SystemNotificationService.MessageType.CoachMessage,
+                    fromPlayerId: PlayerService.SystemAccountId,
+                    data: message);
+        }
+        if (body.StartsInMinutes is int minutes)
+            await notifications.BroadcastAsync(PushNotificationId.ServerMaintenance,
+                new { StartsInMinutes = minutes });
+
+        await LogAsync("broadcast", "system", 0,
+            body.StartsInMinutes is int m ? $"[maintenance in {m} min] {message}" : message);
         await db.SaveChangesAsync();
-        return Ok();
+        return Ok(new { recipients = recipients.Count });
     }
 
     // ── Store catalog management ─────────────────────────────────────────

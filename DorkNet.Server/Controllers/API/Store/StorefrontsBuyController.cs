@@ -156,9 +156,19 @@ public class StorefrontsBuyController(
         await db.SaveChangesAsync();
 
         // Push the buyer's balance update so their wallet UI refreshes.
+        // StorefrontBalancePurchase "62" is PurchaseBalanceModificationDTO
+        // {BalanceAddType, Delta, Balance, Platform, CurrencyType}; Balance
+        // is the absolute new balance, Delta only feeds the client's log.
         await notifications.NotifyAsync(pid,
             PushNotificationId.StorefrontBalancePurchase,
-            new { req.CurrencyType, Balance = newBalance, ItemId = item.Id, item.Slug });
+            new
+            {
+                BalanceAddType = 0,
+                Delta = (int)-item.Price,
+                Balance = newBalance,
+                Platform = 0,
+                req.CurrencyType,
+            });
 
         if (isGift)
         {
@@ -166,24 +176,13 @@ public class StorefrontsBuyController(
             // GiftPackageReceived (id=30) to refresh /api/avatar/v2/gifts
             // and pop the "you got a gift" toast; the gift box itself
             // appears next time the recipient opens their inventory.
+            // GiftPackageReceived "30" carries the client's full gift package
+            // (FHMABOHAEED) — the same object GET api/avatar/v2/gifts lists.
+            // A hand-picked subset left out PlatformsToSpawnOn (-1 = every
+            // platform), so the box could count as spawning nowhere.
             await notifications.NotifyAsync(recipient,
                 PushNotificationId.GiftPackageReceived,
-                new
-                {
-                    Id           = gift.Id,
-                    Platform     = -1,
-                    Xp           = 0,
-                    Level        = 1,
-                    GiftRarity   = 0,
-                    GiftContext  = gift.GiftContext,
-                    FromPlayerId = gift.FromPlayerId,
-                    AvatarItemType = gift.AvatarItemType,
-                    AvatarItemDesc = avatarItemDesc,
-                    ConsumableItemDesc = gift.ConsumableItemDesc ?? string.Empty,
-                    EquipmentPrefabName = gift.EquipmentPrefabName,
-                    EquipmentModificationGuid = gift.EquipmentModificationGuid,
-                    Message      = gift.Message ?? string.Empty,
-                });
+                DorkNet.Server.Controllers.API.Avatar.V2.AvatarGiftsController.ToWire(gift));
         }
 
         // For gift purchases the buyer doesn't get a box — their flow

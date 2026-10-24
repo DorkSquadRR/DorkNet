@@ -152,8 +152,6 @@ public class InGameModerationController(
         foreach (var target in ids)
         {
             logger.LogInformation("[mod] instant-kick by {Caller}: target={Target}", caller, target);
-            // Push the ModerationKick shape the 2020.12 client expects:
-            // Msg.Reason must be a ModerationBlockDetail object.
             await notifications.KickPlayerAsync(target, "Instant kick by moderator.");
         }
         return Ok(new { success = true, error = "" });
@@ -249,21 +247,14 @@ public class InGameModerationController(
             "[mod] ban by {Caller}: target={Target} reason={Reason} until={Until} display={Display}",
             caller, target, reason, p.BannedUntil, displayReason);
 
-        // Push the ban as a ModerationKick (22) with IsBan set, NOT as
-        // ModerationRoomBan (24): the 2023-03-21 client's moderation manager
-        // registers only 22, "ModerationUnkick" and 23
-        // (RecNet.Runtime/FPIBGPIAOBI.txt:310, :323, :335) — there is no handler
-        // for 24, so that push landed nowhere and the banned player kept playing
-        // until their next login. The 22 handler reads Msg.Reason as a
-        // ModerationBlockDetail, which ModerationKickPayload already produces.
-        await notifications.KickPlayerAsync(
-            target,
-            // `reason` is the numeric report category; DisplayReason is the
-            // moderator's text and is what the ban dialog shows.
-            string.IsNullOrWhiteSpace(displayReason)
-                ? "You have been banned from this room."
-                : displayReason.Trim(),
-            isBan: true);
+        // Sign the banned player out with Logout "6" (Reason Banned). Not
+        // ModerationRoomBan (24): the 2023-03-21 client registers no handler
+        // for it (RecNet.Runtime/FPIBGPIAOBI.txt:310, :323, :335 register only
+        // 22, "ModerationUnkick" and 23), so that push landed nowhere. Not a
+        // ModerationKick either: a kick only sends the player to their dorm
+        // and they kept playing until their next login. The ban check refuses
+        // that next login.
+        await notifications.LogoutAsync(target, NotificationService.LogoutReason.Banned);
         return Ok(new { success = true, error = "" });
     }
 
