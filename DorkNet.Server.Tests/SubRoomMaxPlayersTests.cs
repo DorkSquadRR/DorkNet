@@ -73,9 +73,12 @@ public sealed class SubRoomMaxPlayersTests : IClassFixture<DorkNetServerFactory>
         Assert.True(slider.IsSuccessStatusCode,
             $"owner PUT maxplayers -> {(int)slider.StatusCode}: {sliderBody}");
 
-        // The client deserialises the reply as FGCPNAACHIK — the room-details
-        // shape — so the slider's own response has to carry the new value.
-        var echoed = JsonDocument.Parse(sliderBody).RootElement
+        // The client reads the reply through the {success, value, error}
+        // helper with value = FGCPNAACHIK, so the slider's own response has to
+        // carry the new value inside the envelope.
+        var envelope = JsonDocument.Parse(sliderBody).RootElement;
+        Assert.True(envelope.GetProperty("success").GetBoolean(), sliderBody);
+        var echoed = envelope.GetProperty("value")
             .GetProperty("SubRooms").EnumerateArray()
             .First(e => e.GetProperty("SubRoomId").GetInt64() == 2);
         Assert.Equal(24, echoed.GetProperty("MaxPlayers").GetInt32());

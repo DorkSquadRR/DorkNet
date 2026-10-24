@@ -48,6 +48,7 @@ public class PlaylistsController(
     /// query or JSON body so JSON callers (admin UI) keep working.</summary>
     [HttpPost("/playlists")]
     [Authorize]
+    [RecNetEnvelope]
     public async Task<IActionResult> Create()
     {
         var name = await ReadFieldAsync("name", "Name");
@@ -87,6 +88,7 @@ public class PlaylistsController(
     [HttpPost("/playlists/{playlistId:long}/name")]
     [HttpPut("/playlists/{playlistId:long}/name")]
     [Authorize]
+    [RecNetEnvelope]
     public async Task<IActionResult> PlaylistName(long playlistId)
     {
         var value = await ReadFieldAsync("name", "Name", "value", "Value");
@@ -96,6 +98,7 @@ public class PlaylistsController(
     [HttpPost("/playlists/{playlistId:long}/description")]
     [HttpPut("/playlists/{playlistId:long}/description")]
     [Authorize]
+    [RecNetEnvelope]
     public async Task<IActionResult> PlaylistDescription(long playlistId)
     {
         var value = await ReadFieldAsync("description", "Description", "value", "Value");
@@ -105,6 +108,7 @@ public class PlaylistsController(
     [HttpPost("/playlists/{playlistId:long}/image")]
     [HttpPut("/playlists/{playlistId:long}/image")]
     [Authorize]
+    [RecNetEnvelope]
     public async Task<IActionResult> PlaylistImage(long playlistId)
     {
         var value = await ReadFieldAsync("imageName", "ImageName", "value", "Value");
@@ -116,6 +120,7 @@ public class PlaylistsController(
     [HttpPost("/playlists/{playlistId:long}/tags")]
     [HttpPut("/playlists/{playlistId:long}/tags")]
     [Authorize]
+    [RecNetEnvelope]
     public async Task<IActionResult> PlaylistTags(long playlistId)
     {
         var tags = await ReadFieldsAsync("tag", "Tag", "autoTag", "AutoTag", "tags", "Tags");
@@ -131,6 +136,7 @@ public class PlaylistsController(
     [HttpPost("/playlists/{playlistId:long}/visibility")]
     [HttpPut("/playlists/{playlistId:long}/visibility")]
     [Authorize]
+    [RecNetEnvelope]
     public async Task<IActionResult> PlaylistAccessibility(long playlistId)
     {
         var value = await ReadFieldAsync(
@@ -144,6 +150,7 @@ public class PlaylistsController(
     [HttpPost("/playlists/{playlistId:long}/levelvoting")]
     [HttpPut("/playlists/{playlistId:long}/levelvoting")]
     [Authorize]
+    [RecNetEnvelope]
     public async Task<IActionResult> PlaylistLevelVoting(long playlistId)
     {
         var value = await ReadFieldAsync("supportsLevelVoting", "SupportsLevelVoting", "value", "Value");
@@ -156,6 +163,7 @@ public class PlaylistsController(
     [HttpPost("/playlists/{playlistId:long}/restrictions")]
     [HttpPut("/playlists/{playlistId:long}/restrictions")]
     [Authorize]
+    [RecNetEnvelope]
     public async Task<IActionResult> PlaylistRestrictions(long playlistId)
     {
         var juniors  = await ReadFieldAsync("supportsJuniors", "SupportsJuniors");
@@ -174,6 +182,7 @@ public class PlaylistsController(
     [HttpPost("/playlists/{playlistId:long}/warning")]
     [HttpPut("/playlists/{playlistId:long}/warning")]
     [Authorize]
+    [RecNetEnvelope]
     public async Task<IActionResult> PlaylistWarning(long playlistId)
     {
         var mask   = await ReadFieldAsync("warningMask", "WarningMask");
@@ -295,6 +304,7 @@ public class PlaylistsController(
     [HttpPut("/playlists/{playlistId:long}/rooms/{roomId:long}")]
     [HttpPost("/playlists/{playlistId:long}/rooms/{roomId:long}")]
     [Authorize]
+    [RecNetEnvelope]
     public async Task<IActionResult> AddRoom(long playlistId, long roomId)
     {
         try
@@ -307,6 +317,7 @@ public class PlaylistsController(
 
     [HttpDelete("/playlists/{playlistId:long}/rooms/{roomId:long}")]
     [Authorize]
+    [RecNetEnvelope]
     public async Task<IActionResult> RemoveRoom(long playlistId, long roomId)
     {
         try

@@ -624,7 +624,33 @@ Diffed all 45 real HTTP routes of the 2023-03-21 client's rooms subsystem agains
 
 #### Sub-room ids, IsRRO and the instance browser
 
-These three cut across the whole rooms surface.
+These cut across the whole rooms surface.
+
+- **Every room and playlist mutation answers `{success, value, error}`.**
+  They all go through one generic helper,
+  `NLDBPDCNNCF.BDBHCEGKGDC<TResult>(opName, verb, route, …)` (RVA 0x35E50A0,
+  `Call 0x1835E50A0` at 47 call sites in NLDBPDCNNCF.txt). It is the same
+  helper and the same `BDBHCEGKGDC<FGCPNAACHIK>` instantiation token
+  (`[0x1884C1948]`) that "clone room" uses (NLDBPDCNNCF.txt:4815-4823), and
+  clone is proven in game to need the envelope. A bare room-details body has
+  no `success`; the helper rejects it with no message, and the player sees
+  "Exception of type 'CEMNLBKJABA' was thrown." (CEMNLBKJABA is the RecNet
+  request exception, base BCPHBJHOIEM : Exception, built with a null
+  message) although the server applied the change. This is what broke the
+  co-owner invite in game after the role fixes. Routes: rooms/{0}/{accessibility,
+  allow_new_users, automute, cloning, comments, creator, description, image,
+  loadscreen, max_player_calculation_mode, min_level, modify, name,
+  promo_external, promo_images, restrictions, tags, voice_chat_encryption,
+  warning}, rooms/{0}/roles/{1} and /invite, rooms/{0}/subrooms (POST),
+  rooms/{0}/subrooms/{1} (DELETE) and its accessibility, clone, maxplayers,
+  modify, move, name, permissions, publish_save, plus playlists (POST) and
+  playlists/{0}/{accessibility, description, image, levelvoting, name,
+  restrictions, rooms/{1}, tags, warning}. `value` is the full FGCPNAACHIK
+  (playlist DTO for playlists). Refusals are HTTP 200 with `success:false`
+  and a message in `error`, since a 403/404 also shows only the message-less
+  exception. Server: `Controllers/RecNetEnvelopeAttribute.cs` on each handler.
+  Wherever a row below says "FGCPNAACHIK full room details" for one of these
+  routes, read it as the envelope's `value`.
 
 - **Sub-room ids are OrderIndex + 1 on the wire.** The client refuses to load
   a sub-room whose id is not positive: `SubroomModel.DOKCPLJOKIE`

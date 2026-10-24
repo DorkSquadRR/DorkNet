@@ -241,14 +241,14 @@ public sealed class RoomRoles2023Tests : IClassFixture<DorkNetServerFactory>
 
         // With the invite gone, the same accept is refused.
         using var again = await PutFormRawAsync(inviteeRooms, $"/roomserver/rooms/{roomId}/roles/{invitee.PlayerId}", ("role", "30"));
-        Assert.Equal(HttpStatusCode.Forbidden, again.StatusCode);
+        await AssertRefusedAsync(again);
 
         // A stranger can neither promote themselves nor invite anyone.
         using var strangerRooms = Client("rooms", stranger);
         using var self = await PutFormRawAsync(strangerRooms, $"/roomserver/rooms/{roomId}/roles/{stranger.PlayerId}", ("role", "20"));
-        Assert.Equal(HttpStatusCode.Forbidden, self.StatusCode);
+        await AssertRefusedAsync(self);
         using var other = await PutFormRawAsync(strangerRooms, $"/roomserver/rooms/{roomId}/roles/{invitee.PlayerId}/invite", ("role", "30"));
-        Assert.Equal(HttpStatusCode.Forbidden, other.StatusCode);
+        await AssertRefusedAsync(other);
     }
 
     [Fact]
@@ -262,7 +262,7 @@ public sealed class RoomRoles2023Tests : IClassFixture<DorkNetServerFactory>
         Assert.Equal(20, RoleOf(granted, target.PlayerId).GetProperty("Role").GetInt32());
 
         using var inviteCo = await PutFormRawAsync(coRooms, $"/roomserver/rooms/{roomId}/roles/{target.PlayerId}/invite", ("role", "30"));
-        Assert.Equal(HttpStatusCode.Forbidden, inviteCo.StatusCode);
+        await AssertRefusedAsync(inviteCo);
 
         // The creator can directly add and remove a co-owner.
         using var ownerRooms = Client("rooms", owner);
@@ -271,7 +271,7 @@ public sealed class RoomRoles2023Tests : IClassFixture<DorkNetServerFactory>
 
         // …and now the co-owner can't touch their peer.
         using var demote = await PutFormRawAsync(coRooms, $"/roomserver/rooms/{roomId}/roles/{target.PlayerId}", ("role", "0"));
-        Assert.Equal(HttpStatusCode.Forbidden, demote.StatusCode);
+        await AssertRefusedAsync(demote);
 
         var removed = await PutFormAsync(ownerRooms, $"/roomserver/rooms/{roomId}/roles/{target.PlayerId}", ("role", "0"));
         Assert.DoesNotContain(removed.GetProperty("Roles").EnumerateArray(),
@@ -297,8 +297,9 @@ public sealed class RoomRoles2023Tests : IClassFixture<DorkNetServerFactory>
         {
             var text = await put.Content.ReadAsStringAsync();
             Assert.True(put.IsSuccessStatusCode, $"{(int)put.StatusCode}: {text}");
-            using var json = JsonDocument.Parse(text);
-            Assert.Equal(roomId, json.RootElement.GetProperty("RoomId").GetInt64()); // full room details
+            // {success, value: full room details, error}
+            var value = Envelope(text);
+            Assert.Equal(roomId, value.GetProperty("RoomId").GetInt64());
         }
 
         // The owner enters the room, then the matrix comes back with the token.
@@ -318,10 +319,10 @@ public sealed class RoomRoles2023Tests : IClassFixture<DorkNetServerFactory>
         using var coRooms = Client("rooms", coOwner);
         using (var denied = await PutJsonRawAsync(coRooms, $"/roomserver/rooms/{roomId}/subrooms/1/permissions",
                    """[{"Permission":"13","Role":30,"Override":true,"Type":0,"Value":"true"}]"""))
-            Assert.Equal(HttpStatusCode.Forbidden, denied.StatusCode);
+            await AssertRefusedAsync(denied);
         using (var allowed = await PutJsonRawAsync(coRooms, $"/roomserver/rooms/{roomId}/subrooms/1/permissions",
                    """[{"Permission":"13","Role":20,"Override":true,"Type":0,"Value":"true"}]"""))
-            Assert.True(allowed.IsSuccessStatusCode, await allowed.Content.ReadAsStringAsync());
+            Envelope(await allowed.Content.ReadAsStringAsync());
 
         await using var scope = _factory.Services.CreateAsyncScope();
         var db = scope.ServiceProvider.GetRequiredService<DorkNetDbContext>();
@@ -374,12 +375,60 @@ public sealed class RoomRoles2023Tests : IClassFixture<DorkNetServerFactory>
             Assert.True(join.IsSuccessStatusCode, await join.Content.ReadAsStringAsync());
         using (var put = await PutJsonRawAsync(ownerRooms, $"/roomserver/rooms/{roomId}/subrooms/1/permissions",
                    """[{"Permission":"21","Role":20,"Override":true,"Type":0,"Value":"true"}]"""))
-            Assert.True(put.IsSuccessStatusCode, await put.Content.ReadAsStringAsync());
+            Envelope(await put.Content.ReadAsStringAsync());
 
         var token = Assert.Single(hub.To(CapturingHubContext.PlayerGroup(owner.PlayerId), "PhotonAccessToken"));
         Assert.True(token.Msg.GetProperty("RoomInstanceId").GetInt64() > 0);
         Assert.Contains(token.Msg.GetProperty("Permissions").EnumerateArray(),
             c => c.GetProperty("Role").GetInt32() == 20 && c.GetProperty("Permission").GetString() == "21");
+    }
+
+    [Fact]
+    public void Envelope_filter_wraps_success_and_turns_refusals_into_messages()
+    {
+        static JsonElement Body(Microsoft.AspNetCore.Mvc.IActionResult r) =>
+            JsonDocument.Parse(JsonSerializer.Serialize(((Microsoft.AspNetCore.Mvc.ObjectResult)r).Value)).RootElement.Clone();
+
+        var ok = Body(Controllers.RecNetEnvelopeAttribute.Wrap(new Microsoft.AspNetCore.Mvc.OkObjectResult(new { RoomId = 5 })));
+        Assert.True(ok.GetProperty("success").GetBoolean());
+        Assert.Equal(5, ok.GetProperty("value").GetProperty("RoomId").GetInt32());
+        Assert.Equal("", ok.GetProperty("error").GetString());
+
+        var forbid = Body(Controllers.RecNetEnvelopeAttribute.Wrap(new Microsoft.AspNetCore.Mvc.ForbidResult()));
+        Assert.False(forbid.GetProperty("success").GetBoolean());
+        Assert.False(string.IsNullOrWhiteSpace(forbid.GetProperty("error").GetString()));
+
+        var bad = Body(Controllers.RecNetEnvelopeAttribute.Wrap(
+            new Microsoft.AspNetCore.Mvc.BadRequestObjectResult(new { error = "cannot_change_creator_role" })));
+        Assert.Equal("cannot_change_creator_role", bad.GetProperty("error").GetString());
+
+        // An envelope the handler built itself is left alone.
+        var already = new Microsoft.AspNetCore.Mvc.OkObjectResult(new { success = false, value = (object?)null, error = "x" });
+        Assert.Same(already, Controllers.RecNetEnvelopeAttribute.Wrap(already));
+    }
+
+    [Fact]
+    public async Task Room_mutations_answer_the_success_value_error_envelope_on_bare_and_roomserver_paths()
+    {
+        var (owner, invitee, _) = await PlayersAsync();
+        var roomId = await SeedRoomAsync(owner.PlayerId);
+        using var rooms = Client("rooms", owner);
+
+        // The exact request the client sent in production (bare path, form role=30).
+        var invited = await PutFormAsync(rooms, $"/rooms/{roomId}/roles/{invitee.PlayerId}/invite", ("role", "30"));
+        Assert.Equal(30, RoleOf(invited, invitee.PlayerId).GetProperty("InvitedRole").GetInt32());
+
+        foreach (var (path, key, value) in new[]
+                 {
+                     ($"/rooms/{roomId}/description", "description", "hello"),
+                     ($"/roomserver/rooms/{roomId}/accessibility", "accessibility", "0"),
+                     ($"/roomserver/rooms/{roomId}/subrooms/1/name", "name", "Lobby"),
+                     ($"/roomserver/rooms/{roomId}/subrooms/1/maxplayers", "maxPlayers", "10"),
+                 })
+        {
+            var details = await PutFormAsync(rooms, path, (key, value));
+            Assert.Equal(roomId, details.GetProperty("RoomId").GetInt64());
+        }
     }
 
     // ── helpers ─────────────────────────────────────────────────────────
@@ -426,7 +475,32 @@ public sealed class RoomRoles2023Tests : IClassFixture<DorkNetServerFactory>
         using var response = await PutFormRawAsync(client, path, fields);
         var body = await response.Content.ReadAsStringAsync();
         Assert.True(response.IsSuccessStatusCode, $"PUT {path} -> {(int)response.StatusCode}: {body}");
-        return JsonDocument.Parse(body).RootElement.Clone();
+        return Envelope(body);
+    }
+
+    /// <summary>Every room mutation answers the {success, value, error}
+    /// envelope (NLDBPDCNNCF.BDBHCEGKGDC&lt;FGCPNAACHIK&gt;): assert success and
+    /// return the room details in <c>value</c>.</summary>
+    private static JsonElement Envelope(string body)
+    {
+        using var doc = JsonDocument.Parse(body);
+        var root = doc.RootElement;
+        Assert.True(root.GetProperty("success").GetBoolean(), body);
+        Assert.Equal(string.Empty, root.GetProperty("error").GetString());
+        return root.GetProperty("value").Clone();
+    }
+
+    /// <summary>A refusal is HTTP 200 with success=false and a message: the
+    /// client shows the message, while a 403/404 surfaces only as the
+    /// message-less "Exception of type 'CEMNLBKJABA' was thrown".</summary>
+    private static async Task AssertRefusedAsync(HttpResponseMessage response)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var doc = JsonDocument.Parse(body);
+        Assert.False(doc.RootElement.GetProperty("success").GetBoolean(), body);
+        Assert.False(string.IsNullOrWhiteSpace(doc.RootElement.GetProperty("error").GetString()), body);
+        Assert.Equal(JsonValueKind.Null, doc.RootElement.GetProperty("value").ValueKind);
     }
 
     private static Task<HttpResponseMessage> PutJsonRawAsync(HttpClient client, string path, string json)
