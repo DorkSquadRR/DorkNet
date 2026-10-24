@@ -679,7 +679,7 @@ public class Mod : MelonMod
     private MethodInfo GetPatchMethod(string name)
     {
         // Look in the core + feature patch holder classes.
-        foreach (var holder in new[] { typeof(UriPatches), typeof(AntiCheatPatches), typeof(AntiTamperPatches), typeof(FileHashCheckerPatches), typeof(ToxModPatches), typeof(TlsPatches), typeof(ScreenSharePatches), typeof(QuestTeamSize), typeof(RecRoyaleNight) })
+        foreach (var holder in new[] { typeof(UriPatches), typeof(AntiCheatPatches), typeof(AntiTamperPatches), typeof(FileHashCheckerPatches), typeof(ToxModPatches), typeof(TlsPatches), typeof(ScreenSharePatches), typeof(QuestTeamSize), typeof(RecRoyaleNight), typeof(TitleScreenLoginPatches) })
         {
             var m = holder.GetMethod(name, BindingFlags.Public | BindingFlags.Static);
             if (m is not null) return m;
@@ -959,7 +959,9 @@ internal static class TitleScreenLoginPatches
         }
         catch (Exception ex)
         {
-            Mod.Log.Warning($"[title] sign-in redirect failed, creating an account as Rec Room does: {ex.Message}");
+            // goToLogin.Invoke wraps the real failure in TargetInvocationException.
+            var cause = ex is TargetInvocationException { InnerException: not null } tie ? tie.InnerException! : ex;
+            Mod.Log.Warning($"[title] sign-in redirect failed, creating an account as Rec Room does: {cause.GetType().Name}: {cause.Message}");
             return true;
         }
     }
