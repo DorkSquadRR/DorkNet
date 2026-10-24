@@ -1,0 +1,2 @@
+# Shell scripts run inside the Linux image; keep them LF on every checkout.
+*.sh text eol=lf

@@ -1,0 +1,31 @@
+# Reference for the Jenkins service on Dokploy, built from this directory's
+# Dockerfile (the stock Jenkins image plus the client build toolchain).
+#
+# Use it on your EXISTING Jenkins service rather than as a second Jenkins.
+# The data volume must be the one Jenkins uses today, or Jenkins starts empty.
+# Point `volumes:` at that volume (and its name under the top-level
+# `volumes:`, marked `external: true`), or keep this service's name and volume
+# if they already match. See ci/jenkins/README.md.
+services:
+  jenkins:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # The image your Jenkins runs today, so the Jenkins version and Java
+        # stay the same.
+        JENKINS_IMAGE: ${JENKINS_IMAGE:-jenkins/jenkins:lts-jdk17}
+    restart: unless-stopped
+    expose:
+      - "8080"
+    environment:
+      # Where the stock builds live in the archive (restic repository folders
+      # on the FTP), as plain text. Overridable per run.
+      ARCHIVE_PC_REPO: ${ARCHIVE_PC_REPO:-}
+      ARCHIVE_QUEST_REPO: ${ARCHIVE_QUEST_REPO:-}
+      ARCHIVE_FTP_TLS: ${ARCHIVE_FTP_TLS:-explicit}
+    volumes:
+      - jenkins_home:/var/jenkins_home
+
+volumes:
+  jenkins_home:
