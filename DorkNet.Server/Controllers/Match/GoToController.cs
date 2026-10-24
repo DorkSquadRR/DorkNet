@@ -880,8 +880,11 @@ public class GoToController(
                     callerId, playerId, theirRoom.RoomInstanceId);
                 // Tell the OWNER someone tried to follow them in, as the
                 // client's own "wants to join" message (RequestGameInvite,
-                // from the caller), so they can send an invite.
-                if (callerId is long requester)
+                // from the caller), so they can send an invite. At most once
+                // per requester, owner and instance per cooldown, so retrying
+                // doesn't fill the owner's inbox.
+                if (callerId is long requester
+                    && JoinRequestCooldown.TryStart(requester, playerId, theirRoom.RoomInstanceId))
                     await systemNotifications.SendAsync(playerId,
                         SystemNotificationService.MessageType.RequestGameInvite, fromPlayerId: requester);
                 return Ok(new MatchmakingResponseDto
@@ -1668,5 +1671,37 @@ public class RoomInstanceDto
             EventId        = room.EventId,
             Name           = room.Name,
         };
+    }
+}
+
+/// <summary>Rate limit for "wants to join" messages: one per (requester,
+/// owner, room instance) per <see cref="Window"/>. Later retries and other
+/// instances still go through. Per replica, which is enough to stop a
+/// retry loop from flooding an inbox.</summary>
+internal static class JoinRequestCooldown
+{
+    public static readonly TimeSpan Window = TimeSpan.FromMinutes(5);
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<(long, long, long), DateTime> Last = new();
+
+    /// <summary>True when no request for this key was sent within the window
+    /// (and records this one); false while it is cooling down.</summary>
+    public static bool TryStart(long requester, long owner, long roomInstanceId)
+    {
+        var now = DateTime.UtcNow;
+        if (Last.Count > 10_000)
+            foreach (var (key, at) in Last)
+                if (now - at > Window) Last.TryRemove(key, out _);
+
+        var k = (requester, owner, roomInstanceId);
+        while (true)
+        {
+            if (!Last.TryGetValue(k, out var prev))
+            {
+                if (Last.TryAdd(k, now)) return true;
+                continue;
+            }
+            if (now - prev < Window) return false;
+            if (Last.TryUpdate(k, now, prev)) return true;
+        }
     }
 }

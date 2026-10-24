@@ -161,6 +161,12 @@ public class NotifyHub(
 
     private const string SubscriptionsKey = "presence-subscriptions";
 
+    /// <summary>Most players one connection may subscribe to. The client sends
+    /// its relationships plus the players around it (dozens); anything far
+    /// past that is not a real client, and each id costs a group membership
+    /// on the backplane.</summary>
+    public const int MaxPresenceSubscriptions = 5000;
+
     /// <summary><c>SubscribeToPlayers(PlayerSubscriptionListDTO {PlayerIds:
     /// List&lt;int&gt;})</c> (RecNet.Runtime OMHPBIEHOHN.txt:3430): the full set
     /// of players this client wants presence for — its relationships, the
@@ -187,6 +193,13 @@ public class NotifyHub(
             return;
         }
         if (me is long self) requested.Remove(self);
+        if (requested.Count > MaxPresenceSubscriptions)
+        {
+            logger.LogWarning(
+                "[hub] SubscribeToPlayers over the {Max} limit player={PlayerId} conn={ConnectionId} count={Count}; kept the current set",
+                MaxPresenceSubscriptions, me, Context.ConnectionId, requested.Count);
+            return;
+        }
 
         var current = Context.Items.TryGetValue(SubscriptionsKey, out var existing) && existing is HashSet<long> set
             ? set
@@ -232,15 +245,12 @@ public class NotifyHub(
         var list = payload;
         if (payload.ValueKind == JsonValueKind.Object)
         {
-            var found = false;
-            foreach (var prop in payload.EnumerateObject())
-            {
-                if (!string.Equals(prop.Name, "PlayerIds", StringComparison.OrdinalIgnoreCase)) continue;
-                list = prop.Value;
-                found = true;
-                break;
-            }
-            if (!found) return false;
+            var match = payload.EnumerateObject()
+                .Where(prop => string.Equals(prop.Name, "PlayerIds", StringComparison.OrdinalIgnoreCase))
+                .Select(prop => (JsonElement?)prop.Value)
+                .FirstOrDefault();
+            if (match is not JsonElement value) return false;
+            list = value;
         }
         if (list.ValueKind != JsonValueKind.Array) return false;
         foreach (var item in list.EnumerateArray())

@@ -3520,9 +3520,15 @@ public class AdminController(
             .Where(sc => sc.RoomId == room.Id)
             .OrderBy(sc => sc.OrderIndex)
             .ToListAsync();
+        // With every role grant: the client replaces its cached room with
+        // this, so a payload without them would drop everyone's roles.
+        var forceJoinRoles = await db.RoomRoles
+            .Where(r => r.RoomId == room.Id)
+            .ToListAsync();
         await notifications.NotifyAsync(id,
             PushNotificationId.SubscriptionUpdateRoom,
-            DorkNet.Server.Controllers.API.Rooms.V2.RoomsController.BuildRoomServerDetails(room, forceJoinScenes));
+            DorkNet.Server.Controllers.API.Rooms.V2.RoomsController.BuildRoomServerDetails(
+                room, forceJoinScenes, roles: forceJoinRoles));
 
         await LogAsync("force_join", "player", id,
             $"room={body.RoomId} sub={subRoomId} instance={roomInstanceId} photon={photonRoomId}");
