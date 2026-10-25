@@ -1,6 +1,7 @@
 import { NavLink, Link, useLocation, useNavigate } from 'react-router';
 import { useEffect, useRef, useState } from 'react';
 import { BrandMark } from './BrandMark';
+import { getDownloads } from '../lib/downloads';
 
 const NAV = [
   { to: '/', label: 'Home', exact: true },
@@ -10,6 +11,8 @@ const NAV = [
   { to: '/join', label: 'Join' },
   { to: '/quest', label: 'Quest' },
 ];
+// Shown only when the server offers downloads (DorkNet:Downloads:BaseUrl).
+const DOWNLOADS = { to: '/downloads', label: 'Downloads', exact: false };
 
 export function Header() {
   const [open, setOpen] = useState(false);
@@ -17,6 +20,12 @@ export function Header() {
   const nav = useNavigate();
   const loc = useLocation();
   const inputRef = useRef<HTMLInputElement>(null);
+  const [hasDownloads, setHasDownloads] = useState(false);
+  const navItems = hasDownloads ? [...NAV, DOWNLOADS] : NAV;
+
+  useEffect(() => {
+    getDownloads().then((m) => setHasDownloads(m !== null)).catch(() => {});
+  }, []);
 
   // Close the mobile drawer on route change so tapping a nav item
   // doesn't leave a half-open overlay covering the page.
@@ -37,7 +46,7 @@ export function Header() {
         </Link>
 
         <nav className="hidden md:flex items-center gap-1 ml-2">
-          {NAV.map(n => (
+          {navItems.map(n => (
             <NavLink
               key={n.to}
               to={n.to}
@@ -85,7 +94,7 @@ export function Header() {
               />
             </form>
             <nav className="flex flex-col gap-1">
-              {NAV.map(n => (
+              {navItems.map(n => (
                 <NavLink
                   key={n.to}
                   to={n.to}
