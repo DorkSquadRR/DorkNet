@@ -95,7 +95,7 @@ export async function installXapk(
     let done = 0;
     const total = xapk.apk.size;
     onProgress({ phase: 'app', label: 'Installing the app', done, total });
-    const stream = counted(await entryStream(xapk.file, xapk.apk), (n) => {
+    const stream = counted(await entryStream(xapk.source, xapk.apk), (n) => {
       done += n;
       onProgress({ phase: 'app', label: 'Installing the app', done, total });
     });
@@ -124,7 +124,7 @@ export async function installXapk(
 
     let done = 0;
     onProgress({ phase: 'data', label: 'Copying game data', done, total });
-    const stream = counted(await entryStream(xapk.file, entry), (n) => {
+    const stream = counted(await entryStream(xapk.source, entry), (n) => {
       done += n;
       onProgress({ phase: 'data', label: 'Copying game data', done, total });
     });

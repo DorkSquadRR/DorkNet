@@ -238,6 +238,9 @@ public static class RequestTracingExtensions
             return false;
 
         var path = request.Path.Value ?? "";
+        // Client builds are streamed through (several GB): never buffer them.
+        if (path.StartsWith("/api/site/v1/downloads/files/", StringComparison.OrdinalIgnoreCase))
+            return false;
         var ext = Path.GetExtension(path);
         if (string.IsNullOrEmpty(ext))
             return true;
