@@ -3,12 +3,16 @@ using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
+using DorkNet.Server.Auth;
 using DorkNet.Server.Data;
 
 namespace DorkNet.Server.Services;
 
-public class AuthService(IConfiguration config, DorkNetDbContext db)
+public class AuthService(IConfiguration config, DorkNetDbContext db, DomainConfig domain, IdentityServerSigningKeyProvider signingKeyProvider)
 {
+    public const string AccessCookieName = "dorknet_access_token";
+    public const string LegacyIssuer = "https://api.rec.net/";
+
     // Resolution order MUST match Program.cs's JwtBearer validator setup —
     // env var first, config key second — otherwise tokens are signed with
     // one secret and validated against another and every authenticated
@@ -38,38 +42,17 @@ public class AuthService(IConfiguration config, DorkNetDbContext db)
     private string CreateJwt(long playerId, TimeSpan lifetime, string tokenType)
     {
         var handler = new JwtSecurityTokenHandler();
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SecretKey));
-
-        // Look up dev/admin flags so the JWT carries a "developer" role
-        // claim for accounts that should see the in-game debug button.
-        // The watch's Login.SetAccessToken parses the access_token's
-        // <c>role</c> claim — either a single string or a list — and
-        // calls <c>HasRole("developer", token)</c>; that result drives
-        // <c>Accounts.SetLocalAccountIsDev</c> and ultimately
-        // <c>SessionManager.IsDeveloper</c>, which the watch UI checks
-        // when deciding whether to show the dev console toggle.
-        var isDev = db.Players
-            .Where(p => p.Id == playerId)
-            .Select(p => (bool?)(p.IsDeveloper || p.IsAdmin))
-            .FirstOrDefault() ?? false;
-
-        var claims = new List<Claim>
-        {
-            new(ClaimTypes.NameIdentifier, playerId.ToString()),
-            new(ClaimTypes.Role, "gameClient"),
-            new("token_type", tokenType),
-        };
-        // Multiple Role claims become a JSON array on the wire — the
-        // watch's HasRole helper handles both string and List<string>
-        // forms.
-        if (isDev) claims.Add(new Claim(ClaimTypes.Role, "developer"));
+        var claims = RecRoomIdentityClaims.CreateAsync(db, playerId)
+            .GetAwaiter()
+            .GetResult();
+        claims.Add(new Claim("token_type", tokenType));
 
         var descriptor = new SecurityTokenDescriptor
         {
             Subject = new ClaimsIdentity(claims),
             Expires = DateTime.UtcNow.Add(lifetime),
-            Issuer = "https://api.rec.net/",
-            SigningCredentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256),
+            Issuer = domain.AuthIssuer,
+            SigningCredentials = new SigningCredentials(signingKeyProvider.SigningKey, SecurityAlgorithms.RsaSha256),
         };
 
         return handler.WriteToken(handler.CreateJwtSecurityToken(descriptor));
@@ -80,19 +63,22 @@ public class AuthService(IConfiguration config, DorkNetDbContext db)
         try
         {
             var handler = new JwtSecurityTokenHandler();
-            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SecretKey));
-
             var principal = handler.ValidateToken(token, new TokenValidationParameters
             {
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKey = key,
+                IssuerSigningKeys = signingKeyProvider.ValidationKeys,
                 ValidateIssuer = true,
-                ValidIssuer = "https://api.rec.net/",
+                ValidIssuers = new[] { domain.AuthIssuer, LegacyIssuer },
                 ValidateAudience = false,
                 ClockSkew = TimeSpan.Zero,
             }, out _);
 
-            var idClaim = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var idClaim = principal.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? principal.FindFirst(JwtRegisteredClaimNames.Sub)?.Value
+                ?? principal.FindFirst("sub")?.Value
+                ?? principal.FindFirst("accountId")?.Value
+                ?? principal.FindFirst("account_id")?.Value
+                ?? principal.FindFirst("accountid")?.Value;
             return idClaim is not null ? long.Parse(idClaim) : null;
         }
         catch
