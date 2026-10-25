@@ -12,7 +12,7 @@
 // On a push, only the platforms whose code changed are rebuilt. A manual run
 // picks the platforms with PLATFORMS. See ci/jenkins/README.md.
 //
-// Finished builds are renamed for players and published to the downloads page
+// Finished builds are renamed for players and published to the downloads bucket
 // (ci/downloads) unless PUBLISH_DOWNLOADS is off. The build scripts keep their
 // own file names, which the launcher depends on.
 
@@ -22,7 +22,7 @@ def PC_VERSION_KEY = 'march_2023_03_21'
 def PC_DEFAULT_TAGS = 'manifest=7490748483298966814'   // Steam 2023-03-21 (appVersion 20230317)
 def QUEST_DEFAULT_TAGS = 'version-code=2128210'        // Quest 20230317
 
-// How this branch's builds are listed on the downloads page.
+// How this branch's builds are listed on the site's Downloads page.
 def RELEASE_ID = '2023.03'
 def RELEASE_TITLE = 'March 2023'
 def RELEASE_GAME_VERSION = '2023-03-21'
@@ -59,7 +59,7 @@ pipeline {
     booleanParam(name: 'LIST_SNAPSHOTS', defaultValue: false,
       description: 'Only list the snapshots matching the tags in both repositories (to find a build), then stop.')
     booleanParam(name: 'PUBLISH_DOWNLOADS', defaultValue: true,
-      description: 'Publish what this run built to the downloads page. Push builds publish too.')
+      description: 'Publish what this run built to the downloads bucket (listed on the site Downloads page). Push builds publish too.')
   }
 
   stages {
