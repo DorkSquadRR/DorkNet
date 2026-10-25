@@ -73,7 +73,7 @@ function FileCard({ f, rel }: { f: DownloadFile; rel: DownloadRelease }) {
       <div className="mt-auto flex flex-wrap items-center gap-2 pt-1">
         {f.id === 'quest' ? (
           <>
-            <Link className="btn-primary" to="/quest?build=latest">Install on Quest</Link>
+            <Link className="btn-primary" to={`/quest?file=${encodeURIComponent(f.path)}`}>Install on Quest</Link>
             <a className="btn-secondary" href={fileUrl(f)} download={f.name}>Download</a>
           </>
         ) : (

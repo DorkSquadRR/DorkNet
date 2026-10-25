@@ -438,7 +438,10 @@ DorkNet__Downloads__Host=<bucket name>
 
 Unset, the site hides both features. The builds contain Rec Room's own game
 files: only turn this on when the site is behind an access proxy (e.g.
-Cloudflare Access) that admits just your community.
+Cloudflare Access) that admits just your community. The downloads routes
+answer only on the apex host, where the site lives, and return 404 on every
+other host the server accepts, so leaving the game's own subdomains open for
+the client doesn't expose the files. Put the apex behind the proxy.
 
 ---
 

@@ -219,8 +219,9 @@ public static class ServiceCollectionExtensions
         services.AddHostedService<TestCaseIssueReconciler>();
         // CI-published client builds for the site's Downloads / Quest pages.
         // Off (IsConfigured=false) without DorkNet:Downloads:BaseUrl. No client
-        // timeout: a multi-GB file streams for longer than the default 100 s;
-        // the request's own abort token still ends it.
+        // timeout: a multi-GB file streams for longer than the default 100 s.
+        // DownloadsService limits the wait for headers itself, and the
+        // request's own abort token ends the stream.
         services.AddHttpClient(DownloadsService.HttpClientName, c => c.Timeout = Timeout.InfiniteTimeSpan);
         services.AddSingleton<DownloadsService>();
         // Scoped (per-request) — these services hold DbContext references and

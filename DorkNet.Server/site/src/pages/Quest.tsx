@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { fileSource, openXapk, urlSource, type Xapk } from '../lib/xapk';
 import { connectHeadset, installXapk, webUsbSupported, type Headset, type Progress } from '../lib/questInstall';
-import { fileUrl, getDownloads, latestQuest } from '../lib/downloads';
+import { fileUrl, getDownloads, questBuild, type QuestBuild } from '../lib/downloads';
 
 const fmtSize = (n: number) =>
   n >= 1e9 ? `${(n / 1e9).toFixed(2)} GB` : n >= 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1e3))} KB`;
@@ -46,7 +46,7 @@ export function Quest() {
   const [done, setDone] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   // The server's latest published Quest build, if it offers downloads.
-  const [latest, setLatest] = useState<ReturnType<typeof latestQuest>>(null);
+  const [latest, setLatest] = useState<QuestBuild | null>(null);
   const [params] = useSearchParams();
 
   const open = async (load: () => Promise<Xapk>) => {
@@ -60,16 +60,17 @@ export function Quest() {
     if (f) await open(() => openXapk(fileSource(f)));
   };
 
-  const pickLatest = async (l = latest) => {
-    if (l) await open(() => openXapk(urlSource(fileUrl(l.file), l.file.name, l.file.size)));
+  const pickBuild = async (b: QuestBuild | null) => {
+    if (b) await open(() => openXapk(urlSource(fileUrl(b.file), b.file.name, b.file.size)));
   };
 
   useEffect(() => {
     getDownloads().then((m) => {
-      const l = latestQuest(m);
-      setLatest(l);
-      // Arriving from the Downloads page's "Install on Quest".
-      if (l && params.get('build') === 'latest') void pickLatest(l);
+      setLatest(questBuild(m));
+      // Arriving from a Quest card's "Install on Quest" on the Downloads page:
+      // that card's own file, which may not be the newest release's.
+      const wanted = params.get('file');
+      if (wanted) void pickBuild(questBuild(m, wanted));
     }).catch(() => { /* no downloads: only the file picker */ });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -142,7 +143,7 @@ export function Quest() {
         <input ref={fileRef} type="file" accept=".xapk,.zip" className="hidden" onChange={(e) => pickFile(e.target.files?.[0])} />
         <div className="flex flex-wrap items-center gap-3">
           {latest && (
-            <button className="btn-primary" disabled={busy !== null} onClick={() => pickLatest()}>
+            <button className="btn-primary" disabled={busy !== null} onClick={() => pickBuild(latest)}>
               {busy === 'file' ? 'Reading…' : `Latest build: ${latest.release.title}${latest.file.build ? ` (build ${latest.file.build})` : ''}`}
             </button>
           )}
