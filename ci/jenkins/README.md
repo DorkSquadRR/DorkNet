@@ -64,14 +64,14 @@ Resolve a table for another build locally with `build.py build --dump-cs`.
   changes, and only the platform they touch:
   - `DorkNet.ClientMod/` and `tools/build_pc.py` rebuild PC;
   - `DorkNet.Quest/` rebuilds Quest;
-  - Markdown files never count; server, docs and CI-only pushes (including
+  - Markdown files (`.md`, `.markdown`) never count; server, docs and CI-only pushes (including
     the `Jenkinsfile` and `ci/`) build nothing. Run those manually.
 
   Set the same filter on the job so other pushes don't start a run at all:
   under the job's **Git** source, add **Additional Behaviours → Polling
   ignores commits in certain paths** with included regions
   `DorkNet[.]ClientMod/.*`, `DorkNet[.]Quest/.*`, `tools/build_pc[.]py` (one
-  per line) and excluded region `.*[.]md`. The filter compares against the
+  per line) and excluded region `.*[.](md|markdown)`. The filter compares against the
   last build's checkout, so the pipeline keeps it and deletes only `out/`
   and its scratch folders after each run; without a checkout, Jenkins treats
   every push as a change.
