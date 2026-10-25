@@ -28,11 +28,10 @@ services:
       ARCHIVE_PC_REPO: ${ARCHIVE_PC_REPO:-}
       ARCHIVE_QUEST_REPO: ${ARCHIVE_QUEST_REPO:-}
       ARCHIVE_FTP_TLS: ${ARCHIVE_FTP_TLS:-explicit}
-      # The downloads page's bucket (S3 API, internal address) and the DorkNet
-      # website the page links to. See ci/downloads/publish.py.
+      # The downloads bucket (S3 API, internal address) the builds are
+      # published to. See ci/downloads/publish.py.
       DOWNLOADS_S3_ENDPOINT: ${DOWNLOADS_S3_ENDPOINT:-}
       DOWNLOADS_BUCKET: ${DOWNLOADS_BUCKET:-}
-      DORKNET_SITE_URL: ${DORKNET_SITE_URL:-}
     volumes:
       - dorknet_cache:/home/jenkins/dorknet-cache
       - agent_work:/home/jenkins/agent

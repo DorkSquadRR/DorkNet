@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
-"""Publish DorkNet client builds to the downloads page.
+"""Publish DorkNet client builds to the downloads bucket.
 
   stage    the build output in out/ -> out/downloads/<release>/ under the
            names players see, plus release.json describing those files
   upload   that folder -> the downloads bucket, then merge release.json into
-           the bucket's manifest.json and upload the page (index.html)
+           the bucket's manifest.json
+
+The DorkNet server reads the bucket and offers the files on its site (the
+Downloads page, and Latest build on the Quest page); see docs/deploy.md.
 
 The build scripts keep their own file names on purpose: the launcher fetches
 dorknet-clientpatch-<VersionKey>.zip from GitHub Releases by that exact name.
@@ -15,16 +18,14 @@ Only the published copies are renamed:
     DorkNet-Quest-<ver>/DorkNet-<ver>.xapk  DorkNet-<release>-Quest.xapk
     DorkNet-Quest-<ver>/install.*, README DorkNet-<release>-Quest-Installer.zip
 
-The bucket is served read-only as a static website (Garage's web endpoint).
-upload talks to its S3 API with rclone; the endpoint, bucket and key come
-from the environment:
+The server reads the bucket over plain HTTP on the internal network (e.g.
+Garage's web endpoint); nothing needs to be public. upload talks to its S3
+API with rclone; the endpoint, bucket and key come from the environment:
 
     DOWNLOADS_S3_ENDPOINT   S3 API URL, e.g. http://garage-<uuid>:3900
-    DOWNLOADS_BUCKET        bucket name, e.g. downloads.example.com
+    DOWNLOADS_BUCKET        bucket name, e.g. dorknet-downloads
     DOWNLOADS_S3_REGION     optional, default garage
     DOWNLOADS_S3_KEY_ID / DOWNLOADS_S3_SECRET
-    DORKNET_SITE_URL        optional: the DorkNet server's website, linked
-                            from the page for the browser Quest installer
 
     python3 ci/downloads/publish.py stage --out out --release 2023.03 \\
         --title "March 2023" --game-version 2023-03-21 --version-key march_2023_03_21
@@ -44,12 +45,6 @@ import zipfile
 from pathlib import Path
 from typing import NoReturn
 
-HERE = Path(__file__).resolve().parent
-REPO = HERE.parent.parent
-PAGE_FILES = {  # bucket path -> source
-    "index.html": HERE / "index.html",
-    "dorknet.svg": REPO / "DorkNet.Server" / "site" / "public" / "brand" / "dorknet.svg",
-}
 NO_CACHE = "Cache-Control: no-cache"
 
 INSTALLER_NOTE = """Unzip these files into the same folder as {xapk}, then
@@ -223,9 +218,6 @@ def merge(manifest: dict, release: dict) -> dict:
     releases.sort(key=lambda r: r["id"], reverse=True)
     out = {**manifest, "releases": releases,
            "updated": datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0).isoformat()}
-    site = os.environ.get("DORKNET_SITE_URL", "").rstrip("/")
-    if site:
-        out["site_url"] = site
     return out
 
 
@@ -247,10 +239,7 @@ def cmd_upload(a: argparse.Namespace) -> None:
     manifest = json.loads(r.stdout) if r.returncode == 0 and r.stdout.strip() else {}
     manifest = merge(manifest, release)
 
-    # 3. the page, then the manifest
-    for path, src in PAGE_FILES.items():
-        step(f"uploading {path}")
-        rclone(env, "copyto", str(src), f"{bucket}/{path}", "--header-upload", NO_CACHE)
+    # 3. the manifest, last: it is what makes the new files visible
     step("uploading manifest.json")
     rclone(env, "rcat", f"{bucket}/manifest.json", "--header-upload", NO_CACHE,
            "--header-upload", "Content-Type: application/json", stdin=json.dumps(manifest, indent=2) + "\n")
@@ -275,14 +264,14 @@ def main() -> None:
     s.add_argument("--out", default="out", help="the build output folder (default: out)")
     s.add_argument("--dest", help="where to stage (default: <out>/downloads)")
     s.add_argument("--release", required=True, help="release id used in file names and paths, e.g. 2023.03")
-    s.add_argument("--title", required=True, help='shown on the page, e.g. "March 2023"')
+    s.add_argument("--title", required=True, help='shown on the Downloads page, e.g. "March 2023"')
     s.add_argument("--game-version", required=True, help="the stock build's date, e.g. 2023-03-21")
     s.add_argument("--version-key", required=True, help="the PC build's version key, e.g. march_2023_03_21")
     s.add_argument("--build", default=os.environ.get("BUILD_NUMBER", ""), help="CI build number (default: $BUILD_NUMBER)")
     s.add_argument("--commit", default=os.environ.get("GIT_COMMIT", ""), help="source commit (default: $GIT_COMMIT)")
     s.set_defaults(fn=cmd_stage)
 
-    u = sub.add_parser("upload", help="staged folder -> downloads bucket + manifest.json + page")
+    u = sub.add_parser("upload", help="staged folder -> downloads bucket + manifest.json")
     u.add_argument("--staged", default="out/downloads", help="the folder `stage` wrote (default: out/downloads)")
     u.set_defaults(fn=cmd_upload)
 

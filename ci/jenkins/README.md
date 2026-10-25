@@ -11,9 +11,11 @@ The builds run on a **build agent**, not on Jenkins itself:
   job runs on it through the `dorknet-builder` label.
 - **Jenkins itself:** stays on the stock image and runs no builds.
 
-Each build is published to the **downloads page** under a name players can
+Each build is published to the **downloads bucket** under a name players can
 read, and the same files are kept as Jenkins artifacts
-(`out/downloads/2023.03/`):
+(`out/downloads/2023.03/`). The DorkNet server offers them on its site: the
+**Downloads** page, and **Latest build** on the **Quest** page
+(`docs/deploy.md` → Client downloads).
 
 | Download | What it is | Built from |
 |---|---|---|
@@ -26,9 +28,9 @@ The build scripts keep their own names: the launcher downloads
 `dorknet-clientpatch-<VersionKey>.zip` from GitHub Releases by that exact
 name. `ci/downloads/publish.py` renames only the published copies.
 
-The full PC client and the Quest packages contain game files. The downloads
-page is behind Cloudflare Access for that reason; don't publish them
-anywhere public.
+The full PC client and the Quest packages contain game files. Keep the bucket
+internal and the site behind an access proxy; don't publish them anywhere
+public.
 
 ## Where the stock builds come from
 
@@ -65,10 +67,10 @@ Resolve a table for another build locally with `build.py build --dump-cs`.
 - **Build with Parameters** runs a manual build:
   - `PLATFORMS` (both / pc / quest), and `PC_FULL_CLIENT` for the full PC client;
   - snapshot tags, and per-run repository overrides;
-  - `PUBLISH_DOWNLOADS` (on by default) to publish to the downloads page.
+  - `PUBLISH_DOWNLOADS` (on by default) to publish to the downloads bucket.
 
-Push builds publish too, but only the platform they rebuilt: the page keeps
-the other platform's last files.
+Push builds publish too, but only the platform they rebuilt: the manifest
+keeps the other platform's last files.
 
 ## Setup
 
@@ -139,8 +141,7 @@ Save, open the node, and copy its **secret**.
    | `ARCHIVE_QUEST_REPO` | Quest repository folder, e.g. `Rec Room Versions/quest-v2` |
    | `ARCHIVE_FTP_TLS` | `explicit` (default), `implicit` or `none` |
    | `DOWNLOADS_S3_ENDPOINT` | the downloads bucket's S3 API, internal address, e.g. `http://garage-<service uuid>:3900` |
-   | `DOWNLOADS_BUCKET` | its name, e.g. `downloads.example.com` |
-   | `DORKNET_SITE_URL` | optional: the DorkNet server's website (e.g. `https://dorknet.example.com`); the page links its Quest installer |
+   | `DOWNLOADS_BUCKET` | its name, e.g. `dorknet-downloads` |
 
 3. **Deploy.** The first image build downloads the Android NDK (~1.5 GB) and
    takes a while. The node shows as connected in Jenkins once the agent is up.
@@ -202,49 +203,34 @@ In the repository's **Settings → Webhooks**:
 - Content type: `application/json`
 - Events: just the push event
 
-### 8. The downloads page
+### 8. The downloads bucket
 
-The page (`ci/downloads/index.html`) is a static file in an S3 bucket. It
-renders the bucket's `manifest.json`, which `publish.py upload` rewrites after
-each build. With Garage (the S3 store on the Coolify server):
+`publish.py upload` puts the files and a `manifest.json` describing them in
+an S3 bucket. The DorkNet server reads that bucket over HTTP on the internal
+network and offers the files on its site (`docs/deploy.md` → Client
+downloads), so the bucket needs no public route. With Garage (the S3 store on
+the Coolify server):
 
-1. **Bucket and key.** Create the bucket, serve it as a website, and give
-   Jenkins a key for that bucket only:
+1. **Bucket and key.** Create the bucket, turn on Garage's website access for
+   it (the server reads it through the web endpoint, port `3902`, which picks
+   the bucket by the request's Host header), and give Jenkins a key for that
+   bucket only:
 
    ```sh
-   garage bucket create downloads.example.com
-   garage bucket website --allow downloads.example.com
+   garage bucket create dorknet-downloads
+   garage bucket website --allow dorknet-downloads
    garage key create jenkins-downloads
-   garage bucket allow --read --write --key <key id> downloads.example.com
+   garage bucket allow --read --write --key <key id> dorknet-downloads
    ```
 
-   Store the key as the `downloads-s3` credential. Garage's web endpoint (port
-   `3902`) serves a bucket whose name is the request's host name, read-only.
-2. **Route.** Point the hostname at the web endpoint with a Coolify dynamic
-   proxy configuration (**Servers → Proxy → Dynamic Configurations**):
+   Store the key as the `downloads-s3` credential.
+2. **Server.** Point the DorkNet server at the web endpoint:
+   `DorkNet__Downloads__BaseUrl=http://garage-<service uuid>:3902` and
+   `DorkNet__Downloads__Host=dorknet-downloads`.
 
-   ```yaml
-   http:
-     routers:
-       downloads:
-         entryPoints: [http]
-         service: downloads
-         rule: Host(`downloads.example.com`)
-     services:
-       downloads:
-         loadBalancer:
-           passHostHeader: true
-           servers:
-             - url: "http://garage-<service uuid>:3902"
-   ```
-
-3. **Access.** Put the hostname behind a Cloudflare Access application
-   **before** the first publish, with the policies of the people who may
-   download. That group needs no other application.
-
-Files are uploaded with `Cache-Control: no-cache`, so Cloudflare never serves
-an old build after a new one replaces it. Each release keeps one copy of each
-file; a new build overwrites it.
+Each release keeps one copy of each file; a new build overwrites it. The
+manifest is uploaded last, so the site only ever lists files that are fully
+uploaded.
 
 ### Disk
 
