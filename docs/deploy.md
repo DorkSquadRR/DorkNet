@@ -477,6 +477,9 @@ DorkNet__SignIn__ClientSecret=<client secret>
 DorkNet__SignIn__DisplayName=Cloudflare
 # Optional: scopes, default "openid email profile".
 DorkNet__SignIn__Scopes=openid email profile
+# Optional: also read the userinfo endpoint (default false; the ID token is
+# enough for most providers, and Cloudflare Access's userinfo can't be read).
+DorkNet__SignIn__UseUserInfoEndpoint=false
 ```
 
 Register these redirect URIs at the provider, one per host people sign in on:
