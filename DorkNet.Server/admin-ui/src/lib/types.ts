@@ -49,21 +49,28 @@ export function assetCdnUrl(path: string | null | undefined): string | null {
   return subdomainUrl('cdn', path, undefined, true);
 }
 
-export function adminApex(): string {
-  if (typeof window === 'undefined') return 'rec.net';
+// The server mounts this SPA on its own `admin` subdomain, so the admin
+// host tells us the deployment's apex and subdomain style: `admin.<apex>`
+// (dot style, `img.<apex>`) or `admin-<apex>` (hyphen style, `img-<apex>`).
+function adminHost(): { apex: string; hyphen: boolean } {
+  if (typeof window === 'undefined') return { apex: 'rec.net', hyphen: false };
 
   const host = window.location.hostname.toLowerCase();
-  if (host === 'localhost' || host.endsWith('.localhost')) return 'localhost';
-  if (host.endsWith('-dev.example.com')) return 'dev.example.com';
+  if (host === 'localhost' || host.endsWith('.localhost')) return { apex: 'localhost', hyphen: false };
 
-  const parts = host.split('.');
-  return parts.length > 2 ? parts.slice(1).join('.') : host;
+  const [first, ...rest] = host.split('.');
+  if (first.startsWith('admin-') && rest.length > 0)
+    return { apex: [first.slice('admin-'.length), ...rest].join('.'), hyphen: true };
+  return { apex: rest.length >= 2 ? rest.join('.') : host, hyphen: false };
 }
 
-function serviceHost(subdomain: string, apex: string): string {
-  return apex === 'dev.example.com'
-    ? `${subdomain}-${apex}`
-    : `${subdomain}.${apex}`;
+export function adminApex(): string {
+  return adminHost().apex;
+}
+
+function serviceHost(subdomain: string): string {
+  const { apex, hyphen } = adminHost();
+  return hyphen ? `${subdomain}-${apex}` : `${subdomain}.${apex}`;
 }
 
 function subdomainUrl(subdomain: string, path: string | null | undefined, query?: string, preserveSlashes = false): string | null {
@@ -74,7 +81,7 @@ function subdomainUrl(subdomain: string, path: string | null | undefined, query?
   const encodedPath = preserveSlashes
     ? path.split('/').map(encodeURIComponent).join('/')
     : encodeURIComponent(path);
-  return `${scheme}://${serviceHost(subdomain, apex)}/${encodedPath}${suffix}`;
+  return `${scheme}://${serviceHost(subdomain)}/${encodedPath}${suffix}`;
 }
 
 export interface Room {
