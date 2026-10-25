@@ -19,6 +19,13 @@ export function getMe(fresh = false): Promise<AccountMe> {
   return cached;
 }
 
+/** `url` if it is a path on this site, else `/` (the server applies the same
+ * rule): never navigate to an address taken from the query string otherwise. */
+export function localPath(url: string | null | undefined): string {
+  if (!url || !url.startsWith('/') || url.startsWith('//') || url.startsWith('/\\')) return '/';
+  return url;
+}
+
 /** Starts sign-in at the provider; comes back to `returnUrl` on this site. */
 export function signInUrl(returnUrl = window.location.pathname + window.location.search): string {
   return `/api/auth/external/login?returnUrl=${encodeURIComponent(returnUrl)}`;

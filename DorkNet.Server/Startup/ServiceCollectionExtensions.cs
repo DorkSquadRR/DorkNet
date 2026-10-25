@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -345,9 +346,7 @@ public static class ServiceCollectionExtensions
     // older Coolify configs.
     private static void AddAuthentication(WebApplicationBuilder builder)
     {
-        var jwtSecret = Environment.GetEnvironmentVariable("DORKNET_JWT_SECRET")
-            ?? Environment.GetEnvironmentVariable("RECNET_JWT_SECRET")
-            ?? builder.Configuration["Jwt:Secret"]
+        var jwtSecret = AuthService.ConfiguredSecret(builder.Configuration)
             ?? throw new InvalidOperationException(
                 "JWT secret not configured. Set the DORKNET_JWT_SECRET env var or " +
                 "add `Jwt:Secret` to appsettings.Local.json (the install-plugin.ps1 " +
@@ -422,10 +421,17 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<LinkAttemptLimiter>();
 
         // Cookie encryption keys live in the database, so a redeploy or a
-        // second replica doesn't invalidate everyone's session.
+        // second replica doesn't invalidate everyone's session. They're
+        // stored encrypted with a key derived from the server secret, which
+        // lives outside the database, so a database backup alone can't forge
+        // sessions.
+        services.AddSingleton(new DataProtectionKeyEncryption(
+            AuthService.ConfiguredSecret(builder.Configuration) ?? string.Empty));
         services.AddDataProtection()
             .SetApplicationName("DorkNet")
             .PersistKeysToDbContext<DorkNetDbContext>();
+        services.AddOptions<KeyManagementOptions>()
+            .Configure<DataProtectionKeyEncryption>((o, enc) => o.XmlEncryptor = enc);
 
         var auth = services.AddAuthentication()
             .AddCookie(ExternalSignIn.WebScheme, o =>

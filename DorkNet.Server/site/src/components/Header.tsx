@@ -34,9 +34,15 @@ export function Header() {
     getMe().then(setMe).catch(() => { /* site works without sign-in */ });
   }, []);
 
+  const [signOutError, setSignOutError] = useState<string | null>(null);
   const doSignOut = async () => {
-    await signOut().catch(() => {});
-    window.location.assign('/');
+    setSignOutError(null);
+    try {
+      await signOut();
+      window.location.assign('/');
+    } catch (e) {
+      setSignOutError((e as Error).message);
+    }
   };
 
   // Sign in / account, shown only when the server has a sign-in provider.
@@ -132,6 +138,15 @@ export function Header() {
               ))}
             </nav>
             {account && <div className="pt-1">{account}</div>}
+          </div>
+        </div>
+      )}
+
+      {signOutError && (
+        <div className="border-t border-danger/30 bg-danger/10">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 py-2 flex items-center justify-between gap-3 text-sm text-danger">
+            <span>Couldn't sign out ({signOutError}). You're still signed in; try again.</span>
+            <button type="button" className="btn-ghost !px-2 !py-1 text-xs" onClick={() => setSignOutError(null)}>Dismiss</button>
           </div>
         </div>
       )}

@@ -148,6 +148,37 @@ public sealed class ExternalSignInTests : IClassFixture<DorkNetServerFactory>
     }
 
     [Fact]
+    public async Task Cookie_keys_are_stored_encrypted()
+    {
+        var (player, password) = await PlayerAsync();
+        using var site = Client();
+        using var link = await PostJsonAsync(site, "/api/site/v1/account/link",
+            new { username = player.Username, password }, ExternalCookie(Guid.NewGuid().ToString("N"), ""));
+        Assert.Equal(HttpStatusCode.OK, link.StatusCode);
+
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<DorkNetDbContext>();
+        var stored = await db.DataProtectionKeys.Select(k => k.Xml).ToListAsync();
+        Assert.NotEmpty(stored);
+        Assert.All(stored, xml =>
+        {
+            Assert.Contains("dorknetEncryptedKey", xml);
+            Assert.DoesNotContain("masterKey", xml);
+        });
+    }
+
+    [Fact]
+    public void Key_encryption_round_trips_and_rejects_another_secret()
+    {
+        var element = new System.Xml.Linq.XElement("key", new System.Xml.Linq.XElement("masterKey", "secret-bytes"));
+        var encrypted = new DataProtectionKeyEncryption("first-secret").Encrypt(element).EncryptedElement;
+        Assert.DoesNotContain("secret-bytes", encrypted.ToString());
+        Assert.Equal(element.ToString(), new DataProtectionKeyEncryption("first-secret").DecryptElement(encrypted).ToString());
+        Assert.ThrowsAny<System.Security.Cryptography.CryptographicException>(
+            () => new DataProtectionKeyEncryption("other-secret").DecryptElement(encrypted));
+    }
+
+    [Fact]
     public async Task Downloads_can_require_sign_in()
     {
         await using var factory = _factory.WithWebHostBuilder(b =>

@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router';
-import { getMe, link, LINK_ERRORS, signInUrl, type AccountMe } from '../lib/account';
+import { getMe, link, LINK_ERRORS, localPath, signInUrl, type AccountMe } from '../lib/account';
 
 // After a first sign-in with the provider: prove which DorkNet account this
 // identity belongs to, once, with that account's password.
 export function Link() {
   const [params] = useSearchParams();
-  const returnUrl = params.get('returnUrl') || '/';
+  const returnUrl = localPath(params.get('returnUrl'));
   const navigate = useNavigate();
   const [me, setMe] = useState<AccountMe | null>(null);
   const [username, setUsername] = useState('');
@@ -16,7 +16,10 @@ export function Link() {
 
   useEffect(() => {
     getMe(true).then((m) => {
-      if (m.signedIn) navigate(returnUrl, { replace: true });
+      // Signed in with nothing waiting to be linked: nothing to do here. (A
+      // signed-in visitor can still link a new identity, e.g. a second
+      // account's.)
+      if (m.signedIn && !m.pendingLink) navigate(returnUrl, { replace: true });
       else setMe(m);
     }).catch((e) => setErr((e as Error).message));
     // eslint-disable-next-line react-hooks/exhaustive-deps

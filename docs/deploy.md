@@ -497,7 +497,10 @@ above.
 
 Sessions are HttpOnly cookies per host (`dorknet_session`, 30 days, sliding).
 The keys that encrypt them are stored in the database (`DataProtectionKeys`),
-so redeploys and extra replicas keep everyone signed in. Unlinking the
+so redeploys and extra replicas keep everyone signed in. They're stored
+encrypted with a key derived from the server secret (`DORKNET_JWT_SECRET`),
+so a database backup alone can't forge sessions; changing that secret signs
+everyone out. Unlinking the
 identity, deleting the account or banning the player ends the session on the
 next request. Wrong passwords on the link form are limited to 5 per 15
 minutes per provider identity and per username.
