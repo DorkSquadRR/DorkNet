@@ -226,10 +226,15 @@ pipeline {
       archiveArtifacts artifacts: 'out/downloads/**', allowEmptyArchive: true, fingerprint: true
     }
     cleanup {
-      // Runs after archiving. Keeps the restic cache and restored stock
-      // builds ($DORKNET_CACHE on the agent, outside the workspace); drops
-      // the workspace's build output and scratch.
-      cleanWs(deleteDirs: true, notFailBuild: true)
+      // Runs after archiving. Drops the build output and scratch (several
+      // GB) but keeps the Git checkout: the job's path filter compares
+      // pushes against it, and without a workspace Jenkins treats every
+      // push as a change and starts a run. The restic cache and restored
+      // stock builds live outside the workspace ($DORKNET_CACHE).
+      cleanWs(deleteDirs: true, notFailBuild: true, patterns: [
+        [pattern: 'out/**', type: 'INCLUDE'],
+        [pattern: 'quest-work/**', type: 'INCLUDE'],
+      ])
     }
   }
 }
