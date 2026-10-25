@@ -28,6 +28,12 @@ export interface DownloadsManifest {
   updated?: string;
 }
 
+/** The server only serves downloads to signed-in players
+ * (DorkNet:Downloads:RequireSignIn) and nobody is signed in. */
+export class SignInRequiredError extends Error {
+  constructor() { super('sign_in_required'); this.name = 'SignInRequiredError'; }
+}
+
 let cached: Promise<DownloadsManifest | null> | null = null;
 
 /** The manifest, or null when this server doesn't offer downloads. Fetched
@@ -36,6 +42,7 @@ export function getDownloads(fresh = false): Promise<DownloadsManifest | null> {
   if (!cached || fresh) {
     cached = get<DownloadsManifest>('/downloads').catch((e) => {
       if (e instanceof ApiError && e.status === 404) return null;
+      if (e instanceof ApiError && e.status === 401) { cached = null; throw new SignInRequiredError(); }
       cached = null;
       throw e;
     });

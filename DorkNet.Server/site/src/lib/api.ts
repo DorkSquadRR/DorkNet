@@ -1,7 +1,7 @@
 // Lightweight fetch wrapper for the public-facing site. Talks to the
-// apex-hosted PublicSiteController at /api/site/v1/*. Anonymous-only —
-// the public site has no login flow, so there's no Authorization
-// header or token plumbing.
+// apex-hosted PublicSiteController at /api/site/v1/*. No Authorization
+// header or token plumbing: the optional sign-in (lib/account.ts) is an
+// HttpOnly cookie that same-origin fetches send on their own.
 
 const BASE = '/api/site/v1';
 

@@ -1,7 +1,8 @@
-import { NavLink, Link, useLocation, useNavigate } from 'react-router';
+import { NavLink, Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { useEffect, useRef, useState } from 'react';
 import { BrandMark } from './BrandMark';
-import { getDownloads } from '../lib/downloads';
+import { getDownloads, SignInRequiredError } from '../lib/downloads';
+import { getMe, signInUrl, signOut, SIGNIN_ERRORS, type AccountMe } from '../lib/account';
 
 const NAV = [
   { to: '/', label: 'Home', exact: true },
@@ -23,9 +24,30 @@ export function Header() {
   const [hasDownloads, setHasDownloads] = useState(false);
   const navItems = hasDownloads ? [...NAV, DOWNLOADS] : NAV;
 
+  const [me, setMe] = useState<AccountMe | null>(null);
+  const [params, setParams] = useSearchParams();
+  const signinError = params.get('signin_error');
+
   useEffect(() => {
-    getDownloads().then((m) => setHasDownloads(m !== null)).catch(() => {});
+    getDownloads().then((m) => setHasDownloads(m !== null))
+      .catch((e) => setHasDownloads(e instanceof SignInRequiredError));
+    getMe().then(setMe).catch(() => { /* site works without sign-in */ });
   }, []);
+
+  const doSignOut = async () => {
+    await signOut().catch(() => {});
+    window.location.assign('/');
+  };
+
+  // Sign in / account, shown only when the server has a sign-in provider.
+  const account = !me?.signInAvailable ? null : me.signedIn && me.player ? (
+    <span className="flex items-center gap-2 text-sm">
+      <Link to="/account" className="text-ink-200 hover:text-ink-50">{me.player.username}</Link>
+      <button type="button" onClick={doSignOut} className="btn-ghost !px-2 !py-1 text-xs">Sign out</button>
+    </span>
+  ) : (
+    <a href={signInUrl()} className="btn-secondary !px-3 !py-1.5 text-sm">Sign in</a>
+  );
 
   // Close the mobile drawer on route change so tapping a nav item
   // doesn't leave a half-open overlay covering the page.
@@ -72,6 +94,8 @@ export function Header() {
           />
         </form>
 
+        <div className="hidden md:flex shrink-0">{account}</div>
+
         <button
           type="button"
           onClick={() => setOpen(o => !o)}
@@ -107,6 +131,16 @@ export function Header() {
                 </NavLink>
               ))}
             </nav>
+            {account && <div className="pt-1">{account}</div>}
+          </div>
+        </div>
+      )}
+
+      {signinError && (
+        <div className="border-t border-danger/30 bg-danger/10">
+          <div className="mx-auto max-w-6xl px-4 sm:px-6 py-2 flex items-center justify-between gap-3 text-sm text-danger">
+            <span>Sign-in didn't work: {SIGNIN_ERRORS[signinError] ?? signinError}</span>
+            <button type="button" className="btn-ghost !px-2 !py-1 text-xs" onClick={() => { params.delete('signin_error'); setParams(params, { replace: true }); }}>Dismiss</button>
           </div>
         </div>
       )}

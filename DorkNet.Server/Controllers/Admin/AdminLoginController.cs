@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using DorkNet.Server.Data;
@@ -41,6 +42,27 @@ public class AdminLoginController(
         if (!player.IsAdmin)
             return StatusCode(403, new { error = "not_admin" });
 
+        return TokenResponse(player);
+    }
+
+    /// <summary>GET api/admin/v1/sso — exchange a single sign-on session
+    /// (<see cref="ExternalSignIn.WebScheme"/>, signed in on this admin host via
+    /// the external provider) for the same token pair <c>login</c> returns.
+    /// Admin rights still come from the account's <c>IsAdmin</c>.</summary>
+    [HttpGet("sso")]
+    public async Task<ActionResult> Sso()
+    {
+        var web = await HttpContext.AuthenticateAsync(ExternalSignIn.WebScheme);
+        if (!web.Succeeded || ExternalSignIn.PlayerId(web.Principal) is not { } playerId)
+            return Unauthorized(new { error = "not_signed_in" });
+        var player = await db.Players.FirstOrDefaultAsync(p => p.Id == playerId);
+        if (player is null) return Unauthorized(new { error = "not_signed_in" });
+        if (!player.IsAdmin) return StatusCode(403, new { error = "not_admin" });
+        return TokenResponse(player);
+    }
+
+    private OkObjectResult TokenResponse(Data.Entities.PlayerEntity player)
+    {
         var (access, refresh) = authService.GenerateTokenPair(player.Id);
         return Ok(new
         {

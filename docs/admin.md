@@ -41,6 +41,13 @@ there is always a bootstrap operator. The login form posts to
 | `dorknet.admin.token` | DorkNet admin JWT |
 | `dorknet.admin.me` | Admin identity object used by the layout |
 
+With [external sign-in](deploy.md#external-sign-in-openid-connect)
+configured, the login page also shows **Sign in with …**. It signs in with
+the provider on the admin host, then `GET /api/admin/v1/sso` swaps that
+session for the same token pair the password login returns. The identity
+must already be linked to an account on the website, and the account still
+needs `IsAdmin = true`.
+
 Every admin API request sends `Authorization: Bearer <token>`. Protected
 actions are guarded by `AdminOnlyAttribute`, which checks the resolved
 player row still has `IsAdmin = true`. A `401` clears the local session

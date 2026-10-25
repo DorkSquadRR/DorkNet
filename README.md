@@ -431,6 +431,16 @@ hand it to the player, and they redeem it on the site's **`/join`** page —
 which creates their account bound to the device their game client
 reported, so the next launch logs straight in.
 
+### Website and admin sign-in
+
+Optionally, players sign in to the website (and admins to the admin panel)
+with an OpenID Connect provider such as a Cloudflare Access SaaS app. Each
+player links the provider identity to their DorkNet account once, with the
+account's password, on the site's **`/link`** page; the Quest page's direct
+install and the Downloads page can then be limited to signed-in players. The
+game client's login is unchanged. Setup:
+[`docs/deploy.md`](docs/deploy.md#external-sign-in-openid-connect).
+
 ### Everyone-is-friends toggle
 
 For small servers where searching + friend-requesting each other is

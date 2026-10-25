@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using DorkNet.Server.Services;
@@ -24,6 +25,12 @@ public class DownloadsController(DownloadsService downloads, DomainConfig domain
     private bool Available => downloads.IsConfigured
         && string.Equals(Request.Host.Host, domain.Apex, StringComparison.OrdinalIgnoreCase);
 
+    /// <summary>With <see cref="DownloadsService.RequireSignIn"/>, only a
+    /// signed-in, linked player may read the builds.</summary>
+    private async Task<bool> SignedInOrOpenAsync() =>
+        !downloads.RequireSignIn
+        || (await HttpContext.AuthenticateAsync(ExternalSignIn.WebScheme)).Succeeded;
+
     /// <summary>GET /api/site/v1/downloads — the manifest as published
     /// (snake_case keys), or 404 when downloads aren't set up or the request
     /// isn't for the site's host.</summary>
@@ -31,6 +38,7 @@ public class DownloadsController(DownloadsService downloads, DomainConfig domain
     public async Task<IActionResult> GetManifest(CancellationToken ct)
     {
         if (!Available) return NotFound(new { error = "Downloads aren't set up on this server." });
+        if (!await SignedInOrOpenAsync()) return Unauthorized(new { error = "sign_in_required" });
         var manifest = await downloads.GetManifestAsync(ct);
         Response.Headers.CacheControl = "no-cache";
         return Content((manifest ?? new System.Text.Json.Nodes.JsonObject { ["releases"] = new System.Text.Json.Nodes.JsonArray() })
@@ -43,6 +51,7 @@ public class DownloadsController(DownloadsService downloads, DomainConfig domain
     public async Task GetFile(string path, CancellationToken ct)
     {
         if (!Available) { Response.StatusCode = StatusCodes.Status404NotFound; return; }
+        if (!await SignedInOrOpenAsync()) { Response.StatusCode = StatusCodes.Status401Unauthorized; return; }
         var manifest = await downloads.GetManifestAsync(ct);
         var entry = manifest is null ? null : DownloadsService.FindFile(manifest, path);
         if (entry is null) { Response.StatusCode = StatusCodes.Status404NotFound; return; }

@@ -39,6 +39,7 @@ public sealed class DownloadsService
         }
         var host = config["DorkNet:Downloads:Host"]?.Trim();
         _host = string.IsNullOrEmpty(host) ? null : host;
+        RequireSignIn = config.GetValue<bool>("DorkNet:Downloads:RequireSignIn");
 
         if (_baseUri is null)
             log.LogInformation("[downloads] no DorkNet:Downloads:BaseUrl; the Downloads page and Quest latest-build install are off");
@@ -47,6 +48,10 @@ public sealed class DownloadsService
     }
 
     public bool IsConfigured => _baseUri is not null;
+
+    /// <summary><c>DorkNet:Downloads:RequireSignIn</c>: serve the manifest and
+    /// files only to a signed-in, linked player (website sign-in).</summary>
+    public bool RequireSignIn { get; }
 
     /// <summary>The published manifest, or null when none has been published yet.</summary>
     public async Task<JsonObject?> GetManifestAsync(CancellationToken ct)
