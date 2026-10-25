@@ -82,6 +82,17 @@ so an existing Jenkins deployed from this file keeps its jobs and credentials
 when redeployed; it switches to the stock image, and its builds wait until
 the agent (step 3) is connected.
 
+That redeploy also upgrades Jenkins, and from Java 17 (the old default) to
+Java 25, unless `JENKINS_IMAGE` pins your current image. Before it:
+
+1. **Back up the data volume** (`jenkins_home`), e.g. with a Coolify volume
+   backup or `docker run --rm -v <volume>:/v -v "$PWD":/b alpine tar czf
+   /b/jenkins_home.tgz -C /v .`, so you can go back to the old image.
+2. After it starts, open **Manage Jenkins**. Plugins that need a newer
+   version show up there as failed to load; update them under **Plugins →
+   Updates** and restart.
+3. Run the job once (**LIST_SNAPSHOTS** is a quick check) before relying on it.
+
 ### 2. The agent node
 
 **Manage Jenkins → Nodes → New Node**, a permanent agent:

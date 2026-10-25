@@ -10,6 +10,9 @@ services:
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
+    # Reap the processes build tools leave behind (dotnet build servers,
+    # Gradle daemons, adb), as the inbound-agent image's docs ask for.
+    init: true
     environment:
       # Jenkins as seen from inside Docker (e.g. http://<jenkins container
       # name>:8080), not the public URL, which is behind Cloudflare Access.
