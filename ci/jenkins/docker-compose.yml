@@ -3,6 +3,12 @@
 # /docker-compose.yml and "Connect to predefined network" on. It needs no domain: it dials out to
 # Jenkins over WebSocket on Docker's internal network. Set the variables in
 # the resource's Environment Variables; see ci/jenkins/README.md.
+#
+# This file used to define the Jenkins controller itself. If your Jenkins was
+# deployed from it, don't redeploy that application from this version: it
+# would replace the controller with an agent. Move the controller to its own
+# service first and deploy this as a NEW application (README: "Upgrading from
+# the old setup").
 services:
   agent:
     build:
