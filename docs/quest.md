@@ -85,6 +85,13 @@ pitfall in their Quest client notes.
    installer scripts; the app appears as **DorkNet** under Unknown Sources.
    Share the `.xapk` however you like: the page reads it from the player's own
    disk, so your server never hosts game files.
+5. Optionally, let players install the latest CI build without downloading it
+   first: point the server at the downloads bucket CI publishes to
+   (`DorkNet__Downloads__BaseUrl`, see `deploy.md` → Client downloads). The
+   Quest page then offers **Latest build** next to **Choose file** and streams
+   the package from the server during the install, and the site gets a
+   **Downloads** page. The builds contain game files, so only do this with
+   the site behind an access proxy.
 
 No server component is Quest-specific beyond the placeholder-platform-id
-handling above.
+handling above and the optional downloads proxy.

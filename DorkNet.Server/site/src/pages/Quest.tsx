@@ -1,6 +1,8 @@
-import { useRef, useState } from 'react';
-import { openXapk, type Xapk } from '../lib/xapk';
+import { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router';
+import { fileSource, openXapk, urlSource, type Xapk } from '../lib/xapk';
 import { connectHeadset, installXapk, webUsbSupported, type Headset, type Progress } from '../lib/questInstall';
+import { fileUrl, getDownloads, questBuild, type QuestBuild } from '../lib/downloads';
 
 const fmtSize = (n: number) =>
   n >= 1e9 ? `${(n / 1e9).toFixed(2)} GB` : n >= 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1e3))} KB`;
@@ -43,14 +45,35 @@ export function Quest() {
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  // The server's latest published Quest build, if it offers downloads.
+  const [latest, setLatest] = useState<QuestBuild | null>(null);
+  const [params] = useSearchParams();
 
-  const pickFile = async (f: File | undefined) => {
-    if (!f) return;
+  const open = async (load: () => Promise<Xapk>) => {
     setErr(null); setDone(false); setProgress({}); setBusy('file');
-    try { setXapk(await openXapk(f)); }
+    try { setXapk(await load()); }
     catch (e) { setXapk(null); setErr((e as Error).message); }
     finally { setBusy(null); }
   };
+
+  const pickFile = async (f: File | undefined) => {
+    if (f) await open(() => openXapk(fileSource(f)));
+  };
+
+  const pickBuild = async (b: QuestBuild | null) => {
+    if (b) await open(() => openXapk(urlSource(fileUrl(b.file), b.file.name, b.file.size)));
+  };
+
+  useEffect(() => {
+    getDownloads().then((m) => {
+      setLatest(questBuild(m));
+      // Arriving from a Quest card's "Install on Quest" on the Downloads page:
+      // that card's own file, which may not be the newest release's.
+      const wanted = params.get('file');
+      if (wanted) void pickBuild(questBuild(m, wanted));
+    }).catch(() => { /* no downloads: only the file picker */ });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const connect = async () => {
     setErr(null); setBusy('connect');
@@ -108,19 +131,32 @@ export function Quest() {
         </div>
       )}
 
-      <Step n={1} title="Choose the .xapk file" done={!!xapk}>
-        <p className="text-sm text-ink-400">Pick the <code className="text-ink-200">DorkNet-….xapk</code> you were given. It stays on your computer; nothing is uploaded.</p>
+      <Step n={1} title={latest ? 'Pick the build' : 'Choose the .xapk file'} done={!!xapk}>
+        {latest ? (
+          <p className="text-sm text-ink-400">
+            Install the latest build straight from this server: nothing to download first, it streams to the
+            headset during the install. Or pick a <code className="text-ink-200">.xapk</code> you already have.
+          </p>
+        ) : (
+          <p className="text-sm text-ink-400">Pick the <code className="text-ink-200">DorkNet-….xapk</code> you were given. It stays on your computer; nothing is uploaded.</p>
+        )}
         <input ref={fileRef} type="file" accept=".xapk,.zip" className="hidden" onChange={(e) => pickFile(e.target.files?.[0])} />
         <div className="flex flex-wrap items-center gap-3">
-          <button className="btn-secondary" disabled={busy !== null} onClick={() => fileRef.current?.click()}>
-            {busy === 'file' ? 'Reading…' : xapk ? 'Choose a different file' : 'Choose file'}
-          </button>
-          {xapk && (
-            <span className="text-sm text-ink-300">
-              <span className="text-ink-100 font-medium">{name}</span> {xapk.manifest.version_name} · {fmtSize(totalSize)}
-            </span>
+          {latest && (
+            <button className="btn-primary" disabled={busy !== null} onClick={() => pickBuild(latest)}>
+              {busy === 'file' ? 'Reading…' : `Latest build: ${latest.release.title}${latest.file.build ? ` (build ${latest.file.build})` : ''}`}
+            </button>
           )}
+          <button className="btn-secondary" disabled={busy !== null} onClick={() => fileRef.current?.click()}>
+            {busy === 'file' && !latest ? 'Reading…' : xapk && !latest ? 'Choose a different file' : 'Choose file'}
+          </button>
         </div>
+        {xapk && (
+          <p className="text-sm text-ink-300">
+            Selected: <span className="text-ink-100 font-medium">{name}</span> {xapk.manifest.version_name} · {fmtSize(totalSize)}
+            <span className="text-ink-500"> · {xapk.source.name}</span>
+          </p>
+        )}
       </Step>
 
       <Step n={2} title="Connect your headset" done={!!headset}>
