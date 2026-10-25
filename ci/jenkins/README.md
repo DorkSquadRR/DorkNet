@@ -11,14 +11,26 @@ The builds run on a **build agent**, not on Jenkins itself:
   job runs on it through the `dorknet-builder` label.
 - **Jenkins itself:** stays on the stock image and runs no builds.
 
-| Platform | Output (Jenkins artifacts) | How |
-|---|---|---|
-| PC | `out/pc/dorknet-clientpatch-march_2023_03_21.zip`: MelonLoader, mod, config template, Steam stub, `manifest.json`; no game files | `tools/build_pc.py patcher` |
-| PC | `out/pc/dorknet-client-march_2023_03_21.zip`: the stock Steam build with the patcher applied and your config; ready to run | `tools/build_pc.py client` |
-| Quest | `out/quest/dorknet-recroom-<code>.apk` and `out/quest/DorkNet-Quest-<ver>/` (`.xapk` + installers) | `DorkNet.Quest/scripts/build.py build` |
+Each build is published to the **downloads bucket** under a name players can
+read, and the same files are kept as Jenkins artifacts
+(`out/downloads/2023.03/`). The DorkNet server offers them on its site: the
+**Downloads** page, and **Latest build** on the **Quest** page
+(`docs/deploy.md` → Client downloads).
 
-The full PC client and the Quest packages contain game files, so keep them on
-Jenkins. Don't publish them anywhere public.
+| Download | What it is | Built from |
+|---|---|---|
+| `DorkNet-2023.03-PC-Full.zip` | the stock Steam build with the patcher applied and your config; ready to run | `tools/build_pc.py client` → `dorknet-client-march_2023_03_21.zip` |
+| `DorkNet-2023.03-PC-Patch.zip` | MelonLoader, mod, config template, Steam stub, `manifest.json`; no game files | `tools/build_pc.py patcher` → `dorknet-clientpatch-march_2023_03_21.zip` |
+| `DorkNet-2023.03-Quest.xapk` | patched APK + OBB, for the browser installer or SideQuest | `DorkNet.Quest/scripts/build.py build` → `DorkNet-Quest-<ver>/DorkNet-<ver>.xapk` |
+| `DorkNet-2023.03-Quest-Installer.zip` | `install.cmd` / `install.ps1` / `install.sh` + README, unzipped next to the `.xapk` | the same package folder |
+
+The build scripts keep their own names: the launcher downloads
+`dorknet-clientpatch-<VersionKey>.zip` from GitHub Releases by that exact
+name. `ci/downloads/publish.py` renames only the published copies.
+
+The full PC client and the Quest packages contain game files. Keep the bucket
+internal and the site behind an access proxy; don't publish them anywhere
+public.
 
 ## Where the stock builds come from
 
@@ -54,7 +66,11 @@ Resolve a table for another build locally with `build.py build --dump-cs`.
   - `Jenkinsfile` and `ci/jenkins/` rebuild both.
 - **Build with Parameters** runs a manual build:
   - `PLATFORMS` (both / pc / quest), and `PC_FULL_CLIENT` for the full PC client;
-  - snapshot tags, and per-run repository overrides.
+  - snapshot tags, and per-run repository overrides;
+  - `PUBLISH_DOWNLOADS` (on by default) to publish to the downloads bucket.
+
+Push builds publish too, but only the platform they rebuilt: the manifest
+keeps the other platform's last files.
 
 ## Setup
 
@@ -124,6 +140,8 @@ Save, open the node, and copy its **secret**.
    | `ARCHIVE_PC_REPO` | Steam repository folder on the FTP, e.g. `Rec Room Versions/steam-v2` (plain text, not URL-encoded) |
    | `ARCHIVE_QUEST_REPO` | Quest repository folder, e.g. `Rec Room Versions/quest-v2` |
    | `ARCHIVE_FTP_TLS` | `explicit` (default), `implicit` or `none` |
+   | `DOWNLOADS_S3_ENDPOINT` | the downloads bucket's S3 API, internal address, e.g. `http://garage-<service uuid>:3900` |
+   | `DOWNLOADS_BUCKET` | its name, e.g. `dorknet-downloads` |
 
 3. **Deploy.** The first image build downloads the Android NDK (~1.5 GB) and
    takes a while. The node shows as connected in Jenkins once the agent is up.
@@ -159,6 +177,7 @@ Add these under **Manage Jenkins → Credentials**, with exactly these IDs:
 | `quest-keystore-password` | Secret text | its store/key password |
 | `clientmod-config` | Secret file | your `dorknet-clientmod.json` |
 | `quest-config` | Secret file | your `dorknet-quest.cfg` |
+| `downloads-s3` | Username with password | S3 key for the downloads bucket: access key ID / secret. Give it read and write on that bucket only. |
 
 **Use the keystore your players' installs were signed with**, the
 `dorknet-debug.keystore` from your earlier local builds (password `dorknet`). A
@@ -183,6 +202,35 @@ In the repository's **Settings → Webhooks**:
 - Payload URL: `https://<your jenkins>/github-webhook/`
 - Content type: `application/json`
 - Events: just the push event
+
+### 8. The downloads bucket
+
+`publish.py upload` puts the files and a `manifest.json` describing them in
+an S3 bucket. The DorkNet server reads that bucket over HTTP on the internal
+network and offers the files on its site (`docs/deploy.md` → Client
+downloads), so the bucket needs no public route. With Garage (the S3 store on
+the Coolify server):
+
+1. **Bucket and key.** Create the bucket, turn on Garage's website access for
+   it (the server reads it through the web endpoint, port `3902`, which picks
+   the bucket by the request's Host header), and give Jenkins a key for that
+   bucket only:
+
+   ```sh
+   garage bucket create dorknet-downloads
+   garage bucket website --allow dorknet-downloads
+   garage key create jenkins-downloads
+   garage bucket allow --read --write --key <key id> dorknet-downloads
+   ```
+
+   Store the key as the `downloads-s3` credential.
+2. **Server.** Point the DorkNet server at the web endpoint:
+   `DorkNet__Downloads__BaseUrl=http://garage-<service uuid>:3902` and
+   `DorkNet__Downloads__Host=dorknet-downloads`.
+
+Each release keeps one copy of each file; a new build overwrites it. The
+manifest is uploaded last, so the site only ever lists files that are fully
+uploaded.
 
 ### Disk
 
