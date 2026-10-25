@@ -11,12 +11,21 @@
 //
 // On a push, only the platforms whose code changed are rebuilt. A manual run
 // picks the platforms with PLATFORMS. See ci/jenkins/README.md.
+//
+// Finished builds are renamed for players and published to the downloads page
+// (ci/downloads) unless PUBLISH_DOWNLOADS is off. The build scripts keep their
+// own file names, which the launcher depends on.
 
 // The builds this branch targets. Any other archived build can be picked per
 // run with the *_SNAPSHOT_TAGS parameters.
 def PC_VERSION_KEY = 'march_2023_03_21'
 def PC_DEFAULT_TAGS = 'manifest=7490748483298966814'   // Steam 2023-03-21 (appVersion 20230317)
 def QUEST_DEFAULT_TAGS = 'version-code=2128210'        // Quest 20230317
+
+// How this branch's builds are listed on the downloads page.
+def RELEASE_ID = '2023.03'
+def RELEASE_TITLE = 'March 2023'
+def RELEASE_GAME_VERSION = '2023-03-21'
 
 def buildPc = false
 def buildQuest = false
@@ -49,6 +58,8 @@ pipeline {
       description: 'Quest restic repository folder on the FTP. Empty: ARCHIVE_QUEST_REPO set on the agent.')
     booleanParam(name: 'LIST_SNAPSHOTS', defaultValue: false,
       description: 'Only list the snapshots matching the tags in both repositories (to find a build), then stop.')
+    booleanParam(name: 'PUBLISH_DOWNLOADS', defaultValue: true,
+      description: 'Publish what this run built to the downloads page. Push builds publish too.')
   }
 
   stages {
@@ -178,11 +189,35 @@ pipeline {
         }
       }
     }
+
+    stage('Downloads') {
+      when { expression { buildPc || buildQuest } }
+      steps {
+        sh """
+          python3 ci/downloads/publish.py stage --out out --release ${RELEASE_ID} \\
+            --title '${RELEASE_TITLE}' --game-version ${RELEASE_GAME_VERSION} --version-key ${PC_VERSION_KEY}
+        """
+        script {
+          if (params.PUBLISH_DOWNLOADS) {
+            // The bucket's S3 endpoint and name come from the agent's
+            // environment (DOWNLOADS_S3_ENDPOINT / DOWNLOADS_BUCKET).
+            withCredentials([usernamePassword(credentialsId: 'downloads-s3',
+                usernameVariable: 'DOWNLOADS_S3_KEY_ID', passwordVariable: 'DOWNLOADS_S3_SECRET')]) {
+              sh 'python3 ci/downloads/publish.py upload --staged out/downloads'
+            }
+          } else {
+            echo 'PUBLISH_DOWNLOADS is off: the files are only archived.'
+          }
+        }
+      }
+    }
   }
 
   post {
     success {
-      archiveArtifacts artifacts: 'out/**', allowEmptyArchive: true, fingerprint: true
+      // The renamed, player-facing files (and release.json): the same set the
+      // downloads page offers.
+      archiveArtifacts artifacts: 'out/downloads/**', allowEmptyArchive: true, fingerprint: true
     }
     cleanup {
       // Runs after archiving. Keeps the restic cache and restored stock
