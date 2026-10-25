@@ -1,0 +1,34 @@
+# DorkNet build agent on Coolify. Deploy as its own Docker Compose application
+# from this repository with base directory /ci/jenkins, compose location
+# /docker-compose.agent.yml and "Connect to predefined network" on. It needs no
+# domain: it dials out to Jenkins over WebSocket on Docker's internal network.
+# Set the variables in the resource's Environment Variables; see
+# ci/jenkins/README.md. The controller is docker-compose.yml.
+services:
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      # Jenkins as seen from inside Docker (e.g. http://<jenkins container
+      # name>:8080), not the public URL, which is behind Cloudflare Access.
+      # Both are needed at runtime only; keep them out of the image build so
+      # the node secret never reaches a build argument.
+      JENKINS_URL: ${JENKINS_URL}
+      JENKINS_AGENT_NAME: ${JENKINS_AGENT_NAME:-dorknet-builder}
+      JENKINS_SECRET: ${JENKINS_SECRET}
+      JENKINS_WEB_SOCKET: "true"
+      JENKINS_AGENT_WORKDIR: /home/jenkins/agent
+      # Where the stock builds live in the archive (restic repository folders
+      # on the FTP, plain text). Overridable per run.
+      ARCHIVE_PC_REPO: ${ARCHIVE_PC_REPO:-}
+      ARCHIVE_QUEST_REPO: ${ARCHIVE_QUEST_REPO:-}
+      ARCHIVE_FTP_TLS: ${ARCHIVE_FTP_TLS:-explicit}
+    volumes:
+      - dorknet_cache:/home/jenkins/dorknet-cache
+      - agent_work:/home/jenkins/agent
+
+volumes:
+  dorknet_cache:
+  agent_work:

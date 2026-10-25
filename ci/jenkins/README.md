@@ -60,38 +60,27 @@ Resolve a table for another build locally with `build.py build --dump-cs`.
 
 ### 1. Jenkins itself
 
-Jenkins runs as a Coolify service from a Compose file:
+The controller is `ci/jenkins/docker-compose.yml`: stock Jenkins, no build
+tools. On Coolify, deploy it as a Docker Compose application from this
+repository (base directory `/ci/jenkins`), or paste it into a Compose service.
 
-- **Use the Java 25 image**, e.g. `jenkins/jenkins:latest-jdk25`, or
-  `2.587-jdk25` to pin. Jenkins supports Java 25 until September 2029, Java 21
-  only until September 2027, and Java 17 not at all. Keep the agent on the same
-  Java major version; its image defaults to Java 25.
-- **Add `restart: unless-stopped`** to the `jenkins` service. A restart from
-  the Jenkins UI exits the container with code 5 and relies on Docker to
-  start it again. Without a restart policy it stays stopped.
+- **Java 25.** The file defaults to `jenkins/jenkins:lts-jdk25`; set
+  `JENKINS_IMAGE` to pin a version, e.g. `jenkins/jenkins:2.587-jdk25`.
+  Jenkins supports Java 25 until September 2029, Java 21 only until September
+  2027, and Java 17 not at all. Keep the agent on the same Java major version;
+  its image defaults to Java 25.
+- **`restart: unless-stopped`** is in the file: a restart from the Jenkins UI
+  exits the container with code 5 and relies on Docker to start it again.
 - **Turn on "Connect to predefined network"** (Advanced) so the agent can
-  reach Jenkins by its container name, `jenkins-<service uuid>`.
+  reach Jenkins by its container name, `jenkins-<uuid>`.
 - **Run no builds on it:** **Manage Jenkins → Nodes → Built-In Node →
   Configure**, set **Number of executors** to `0`.
 
-#### Upgrading from the old setup
-
-`ci/jenkins/docker-compose.yml` used to define the Jenkins **controller**
-(its `jenkins` service, built from `ci/jenkins/Dockerfile`, with the
-`jenkins_home` volume). It now defines only the build agent. If your Jenkins
-was deployed from that file, **don't redeploy that application** from this
-version: it would replace the controller with an agent, and Jenkins stops
-until you rebuild it. The data volume survives, but nothing serves it.
-
-Instead:
-
-1. Create a new service for the controller as above, on the stock Java 25
-   image, mounting the **same** data volume: reference the old volume by its
-   full name and mark it `external: true`, or Jenkins starts empty.
-2. Stop the old application, start the new service, and check that your jobs
-   and credentials are there.
-3. Deploy the agent (step 3) as a **new** application, then delete the old
-   one without deleting its volume.
+Earlier versions of this file built the controller from `ci/jenkins/Dockerfile`,
+which is now the agent's image. The service and data volume keep their names,
+so an existing Jenkins deployed from this file keeps its jobs and credentials
+when redeployed; it switches to the stock image, and its builds wait until
+the agent (step 3) is connected.
 
 ### 2. The agent node
 
@@ -111,7 +100,7 @@ Save, open the node, and copy its **secret**.
 
 1. **Create a Docker Compose application** from this repository: build pack
    Docker Compose, base directory **`/ci/jenkins`**, compose location
-   `/docker-compose.yml`. The base directory is the build context, so with
+   **`/docker-compose.agent.yml`**. The base directory is the build context, so with
    `/` the build would pick up the server's `Dockerfile` at the repo root. It
    needs no domain. Under Advanced, turn on **Connect to predefined network**.
 2. **Set its environment:**
