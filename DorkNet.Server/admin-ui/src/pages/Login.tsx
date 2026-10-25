@@ -54,7 +54,7 @@ export function Login() {
   const errorText = (e: unknown, codes: Record<string, React.ReactNode>): React.ReactNode => {
     if (e instanceof ApiError && e.body && typeof e.body === 'object' && 'error' in e.body) {
       const code = (e.body as { error: string }).error;
-      return codes[code] ?? e.message;
+      return Object.hasOwn(codes, code) ? codes[code] : e.message;
     }
     return e instanceof Error ? e.message : String(e);
   };
@@ -75,7 +75,8 @@ export function Login() {
       ssoHandled.current = true;
       setErr(signinError === 'not_linked'
         ? <>This sign-in isn't linked to a DorkNet account yet. Link it on the <a className="underline" href={siteUrl('/api/auth/external/login?returnUrl=%2Faccount')}>website</a> first, then sign in here again.</>
-        : SSO_ERRORS[signinError] ?? `Single sign-on failed (${signinError}).`);
+        // Only known codes are shown: the query string is attacker-controllable.
+        : Object.hasOwn(SSO_ERRORS, signinError) ? SSO_ERRORS[signinError] : 'Single sign-on failed. Try again.');
       setParams({}, { replace: true });
       return;
     }

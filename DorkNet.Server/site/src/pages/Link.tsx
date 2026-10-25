@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link as RouterLink, useNavigate, useSearchParams } from 'react-router';
-import { getMe, link, LINK_ERRORS, localPath, signInUrl, type AccountMe } from '../lib/account';
+import { errorCopy, getMe, link, LINK_ERRORS, localPath, signInUrl, type AccountMe } from '../lib/account';
 
 // After a first sign-in with the provider: prove which DorkNet account this
 // identity belongs to, once, with that account's password.
@@ -35,7 +35,7 @@ export function Link() {
       window.location.assign(returnUrl); // the header re-reads who is signed in
     } catch (e) {
       const key = (e as Error).message;
-      setErr(LINK_ERRORS[key] ?? key);
+      setErr(errorCopy(LINK_ERRORS, key, key));
     } finally {
       setBusy(false);
     }

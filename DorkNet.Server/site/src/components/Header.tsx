@@ -2,7 +2,7 @@ import { NavLink, Link, useLocation, useNavigate, useSearchParams } from 'react-
 import { useEffect, useRef, useState } from 'react';
 import { BrandMark } from './BrandMark';
 import { getDownloads, SignInRequiredError } from '../lib/downloads';
-import { getMe, signInUrl, signOut, SIGNIN_ERRORS, type AccountMe } from '../lib/account';
+import { errorCopy, getMe, signInUrl, signOut, SIGNIN_ERRORS, type AccountMe } from '../lib/account';
 
 const NAV = [
   { to: '/', label: 'Home', exact: true },
@@ -154,7 +154,7 @@ export function Header() {
       {signinError && (
         <div className="border-t border-danger/30 bg-danger/10">
           <div className="mx-auto max-w-6xl px-4 sm:px-6 py-2 flex items-center justify-between gap-3 text-sm text-danger">
-            <span>Sign-in didn't work: {SIGNIN_ERRORS[signinError] ?? signinError}</span>
+            <span>Sign-in didn't work: {errorCopy(SIGNIN_ERRORS, signinError, 'something went wrong. Try again.')}</span>
             <button type="button" className="btn-ghost !px-2 !py-1 text-xs" onClick={() => { params.delete('signin_error'); setParams(params, { replace: true }); }}>Dismiss</button>
           </div>
         </div>

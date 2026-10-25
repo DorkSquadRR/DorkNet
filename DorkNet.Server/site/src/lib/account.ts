@@ -46,6 +46,12 @@ export const LINK_ERRORS: Record<string, string> = {
   no_pending_identity: 'Your sign-in expired. Start again with "Sign in".',
 };
 
+/** Friendly copy for a known error code, else `fallback`. For codes read from
+ * the query string, pass a fixed fallback: anyone can put text in a link. */
+export function errorCopy(map: Record<string, string>, code: string | null | undefined, fallback: string): string {
+  return code && Object.hasOwn(map, code) ? map[code] : fallback;
+}
+
 export const SIGNIN_ERRORS: Record<string, string> = {
   account_unavailable: 'The account linked to this sign-in is unavailable (deleted or banned).',
   no_identity: "The sign-in provider didn't return an identity. Try again.",
