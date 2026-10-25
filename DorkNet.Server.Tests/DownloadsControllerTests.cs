@@ -11,11 +11,13 @@ using Microsoft.Extensions.Logging.Abstractions;
 
 namespace DorkNet.Server.Tests;
 
-/// <summary>The site's downloads proxy: off without config, serves only files
-/// the manifest lists, and passes Range through so the browser Quest installer
-/// can read an .xapk in place.</summary>
+/// <summary>The site's downloads proxy: off without config, only on the site's
+/// own host, serves only files the manifest lists, and passes Range through so
+/// the browser Quest installer can read an .xapk in place.</summary>
 public sealed class DownloadsControllerTests
 {
+    private const string Apex = "dorknet.example.com";
+
     private const string Manifest = """
         {"releases":[{"id":"2023.03","title":"March 2023","files":[
           {"id":"quest","platform":"quest","name":"DorkNet-2023.03-Quest.xapk","path":"2023.03/DorkNet-2023.03-Quest.xapk","size":10,"sha256":"x"}]}]}
@@ -27,6 +29,19 @@ public sealed class DownloadsControllerTests
         var (controller, _) = Create(baseUrl: null, _ => throw new InvalidOperationException("no request expected"));
 
         Assert.IsType<NotFoundObjectResult>(await controller.GetManifest(CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData("api.dorknet.example.com")]
+    [InlineData("cdn.dorknet.example.com")]
+    public async Task Other_hosts_get_404_without_touching_the_bucket(string host)
+    {
+        var (controller, ctx) = Create("http://bucket.internal:3902", _ => throw new InvalidOperationException("no request expected"));
+        ctx.Request.Host = new HostString(host);
+
+        Assert.IsType<NotFoundObjectResult>(await controller.GetManifest(CancellationToken.None));
+        await controller.GetFile("2023.03/DorkNet-2023.03-Quest.xapk", CancellationToken.None);
+        Assert.Equal(StatusCodes.Status404NotFound, ctx.Response.StatusCode);
     }
 
     [Fact]
@@ -91,8 +106,12 @@ public sealed class DownloadsControllerTests
         }).Build();
         var service = new DownloadsService(config, new StubFactory(handler), NullLogger<DownloadsService>.Instance);
         var ctx = new DefaultHttpContext();
+        ctx.Request.Host = new HostString(Apex);
         ctx.Response.Body = new MemoryStream();
-        var controller = new DownloadsController(service) { ControllerContext = new ControllerContext { HttpContext = ctx } };
+        var controller = new DownloadsController(service, new DomainConfig(Apex))
+        {
+            ControllerContext = new ControllerContext { HttpContext = ctx },
+        };
         return (controller, ctx);
     }
 

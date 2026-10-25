@@ -46,10 +46,13 @@ export function getDownloads(fresh = false): Promise<DownloadsManifest | null> {
 export const fileUrl = (f: DownloadFile) =>
   `/api/site/v1/downloads/files/${f.path.split('/').map(encodeURIComponent).join('/')}`;
 
-/** The newest release's Quest package, if one is published. */
-export function latestQuest(m: DownloadsManifest | null): { release: DownloadRelease; file: DownloadFile } | null {
+export interface QuestBuild { release: DownloadRelease; file: DownloadFile }
+
+/** A published Quest package: the one at `path` when given, otherwise the
+ * newest release's. Null when there's no match. */
+export function questBuild(m: DownloadsManifest | null, path?: string | null): QuestBuild | null {
   for (const release of m?.releases ?? []) {
-    const file = release.files.find((f) => f.id === 'quest');
+    const file = release.files.find((f) => f.id === 'quest' && (!path || f.path === path));
     if (file) return { release, file };
   }
   return null;

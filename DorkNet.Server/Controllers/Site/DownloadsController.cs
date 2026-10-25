@@ -11,20 +11,26 @@ namespace DorkNet.Server.Controllers.Site;
 /// installer can read an .xapk's zip directory and entries without fetching
 /// the whole file. Only files the manifest lists are served.
 ///
-/// The builds contain Rec Room's own game files: put the site behind an
-/// access proxy (e.g. Cloudflare Access) before turning this on.
+/// The builds contain Rec Room's own game files, so the routes answer only on
+/// the site's own host (the apex) and 404 on every other host the server
+/// accepts: the game's API/CDN subdomains are typically left open for the
+/// client, while the site sits behind an access proxy (e.g. Cloudflare Access).
 /// </summary>
 [ApiController]
 [AllowAnonymous]
 [Route("api/site/v1/downloads")]
-public class DownloadsController(DownloadsService downloads) : ControllerBase
+public class DownloadsController(DownloadsService downloads, DomainConfig domain) : ControllerBase
 {
+    private bool Available => downloads.IsConfigured
+        && string.Equals(Request.Host.Host, domain.Apex, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>GET /api/site/v1/downloads — the manifest as published
-    /// (snake_case keys), or 404 when downloads aren't set up.</summary>
+    /// (snake_case keys), or 404 when downloads aren't set up or the request
+    /// isn't for the site's host.</summary>
     [HttpGet]
     public async Task<IActionResult> GetManifest(CancellationToken ct)
     {
-        if (!downloads.IsConfigured) return NotFound(new { error = "Downloads aren't set up on this server." });
+        if (!Available) return NotFound(new { error = "Downloads aren't set up on this server." });
         var manifest = await downloads.GetManifestAsync(ct);
         Response.Headers.CacheControl = "no-cache";
         return Content((manifest ?? new System.Text.Json.Nodes.JsonObject { ["releases"] = new System.Text.Json.Nodes.JsonArray() })
@@ -36,7 +42,7 @@ public class DownloadsController(DownloadsService downloads) : ControllerBase
     [HttpGet("files/{**path}")]
     public async Task GetFile(string path, CancellationToken ct)
     {
-        if (!downloads.IsConfigured) { Response.StatusCode = StatusCodes.Status404NotFound; return; }
+        if (!Available) { Response.StatusCode = StatusCodes.Status404NotFound; return; }
         var manifest = await downloads.GetManifestAsync(ct);
         var entry = manifest is null ? null : DownloadsService.FindFile(manifest, path);
         if (entry is null) { Response.StatusCode = StatusCodes.Status404NotFound; return; }

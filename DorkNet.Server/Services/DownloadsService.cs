@@ -20,6 +20,10 @@ public sealed class DownloadsService
 {
     public const string HttpClientName = "downloads";
 
+    // How long the bucket may take to start answering. The body then streams
+    // with no limit (the client has none; the caller's abort token ends it).
+    private static readonly TimeSpan HeaderTimeout = TimeSpan.FromSeconds(30);
+
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly Uri? _baseUri;
     private readonly string? _host;
@@ -58,15 +62,9 @@ public sealed class DownloadsService
     public static JsonObject? FindFile(JsonObject manifest, string path)
     {
         if (manifest["releases"] is not JsonArray releases) return null;
-        foreach (var release in releases.OfType<JsonObject>())
-        {
-            if (release["files"] is not JsonArray files) continue;
-            foreach (var file in files.OfType<JsonObject>())
-            {
-                if (string.Equals((string?)file["path"], path, StringComparison.Ordinal)) return file;
-            }
-        }
-        return null;
+        return releases.OfType<JsonObject>()
+            .SelectMany(r => r["files"] is JsonArray files ? files.OfType<JsonObject>() : [])
+            .FirstOrDefault(f => string.Equals((string?)f["path"], path, StringComparison.Ordinal));
     }
 
     /// <summary>GET a file, forwarding the caller's Range header. The caller
@@ -78,10 +76,22 @@ public sealed class DownloadsService
     {
         if (_baseUri is null) throw new InvalidOperationException("Downloads are not configured.");
         var url = new Uri(_baseUri, string.Join('/', path.Split('/').Select(Uri.EscapeDataString)));
-        var req = new HttpRequestMessage(HttpMethod.Get, url);
+        using var req = new HttpRequestMessage(HttpMethod.Get, url);
         if (_host is not null) req.Headers.Host = _host;
         if (!string.IsNullOrEmpty(range) && RangeHeaderValue.TryParse(range, out var r)) req.Headers.Range = r;
         var client = _httpClientFactory.CreateClient(HttpClientName);
-        return await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+        // The timeout covers only getting the headers: with ResponseHeadersRead
+        // the token is released once they arrive, and disposing the source
+        // here stops its timer before the body is streamed.
+        using var headers = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        headers.CancelAfter(HeaderTimeout);
+        try
+        {
+            return await client.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, headers.Token);
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            throw new TimeoutException($"The downloads bucket didn't answer within {HeaderTimeout.TotalSeconds:0} s.");
+        }
     }
 }
