@@ -1,4 +1,4 @@
-using System.Text;
+using DorkNet.Server.Auth;
 using DorkNet.Server.Data;
 using DorkNet.Server.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -17,10 +17,10 @@ public static class ServiceCollectionExtensions
     {
         ConfigureLogging(builder);
         AddDatabase(builder);
-        AddDomain(builder);
+        var domain = AddDomain(builder);
         AddCoreServices(builder.Services);
         var redisConn = AddRedis(builder);
-        AddAuthentication(builder);
+        AddAuthentication(builder, domain);
         AddKestrelAndSignalR(builder, redisConn);
         builder.Services.AddEndpointsApiExplorer();
         builder.Services.AddSwaggerGen();
@@ -70,7 +70,7 @@ public static class ServiceCollectionExtensions
         });
     }
 
-    private static void AddDomain(WebApplicationBuilder builder)
+    private static DomainConfig AddDomain(WebApplicationBuilder builder)
     {
         var apex =
             builder.Configuration["Domain:Apex"]
@@ -87,7 +87,8 @@ public static class ServiceCollectionExtensions
             builder.Configuration["Domain:SingleOriginBaseUrl"]
             ?? Environment.GetEnvironmentVariable("DORKNET_SINGLE_ORIGIN_BASE_URL");
 
-        builder.Services.AddSingleton(new DomainConfig(apex, domainScheme, domainPort, singleOriginBaseUrl));
+        var domain = new DomainConfig(apex, domainScheme, domainPort, singleOriginBaseUrl);
+        builder.Services.AddSingleton(domain);
         builder.Services.Configure<Microsoft.AspNetCore.HostFiltering.HostFilteringOptions>(opt =>
         {
             opt.AllowedHosts = new[] { apex, $"*.{apex}", "localhost", "127.0.0.1" };
@@ -95,6 +96,7 @@ public static class ServiceCollectionExtensions
             opt.IncludeFailureMessage = true;
         });
         Console.WriteLine($"[domain] apex={apex}, scheme={domainScheme}, port={domainPort}, singleOrigin={singleOriginBaseUrl}, allowedHosts=[{apex}, *.{apex}, localhost]");
+        return domain;
     }
 
     private static void AddCoreServices(IServiceCollection services)
@@ -161,14 +163,11 @@ public static class ServiceCollectionExtensions
         return opts.ToString();
     }
 
-    private static void AddAuthentication(WebApplicationBuilder builder)
+    private static void AddAuthentication(WebApplicationBuilder builder, DomainConfig domain)
     {
-        var jwtSecret = Environment.GetEnvironmentVariable("DORKNET_JWT_SECRET")
-            ?? Environment.GetEnvironmentVariable("RECNET_JWT_SECRET")
-            ?? builder.Configuration["Jwt:Secret"]
-            ?? throw new InvalidOperationException(
-                "JWT secret not configured. Set the DORKNET_JWT_SECRET env var or " +
-                "add `Jwt:Secret` to appsettings.Local.json.");
+        var signingKeyProvider = new IdentityServerSigningKeyProvider(builder.Configuration);
+        builder.Services.AddSingleton(signingKeyProvider);
+        builder.Services.AddRecRoomIdentityServer(builder.Configuration, domain, signingKeyProvider);
 
         builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             .AddJwtBearer(opt =>
@@ -176,9 +175,9 @@ public static class ServiceCollectionExtensions
                 opt.TokenValidationParameters = new TokenValidationParameters
                 {
                     ValidateIssuerSigningKey = true,
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecret)),
+                    IssuerSigningKeys = signingKeyProvider.ValidationKeys,
                     ValidateIssuer = true,
-                    ValidIssuer = "https://api.rec.net/",
+                    ValidIssuers = new[] { domain.AuthIssuer, AuthService.LegacyIssuer },
                     ValidateAudience = false,
                     ClockSkew = TimeSpan.Zero,
                 };
@@ -190,6 +189,12 @@ public static class ServiceCollectionExtensions
                         var path = ctx.HttpContext.Request.Path;
                         if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hub"))
                             ctx.Token = accessToken;
+                        if (string.IsNullOrEmpty(ctx.Token) &&
+                            ctx.Request.Cookies.TryGetValue(AuthService.AccessCookieName, out var cookieToken) &&
+                            !string.IsNullOrWhiteSpace(cookieToken))
+                        {
+                            ctx.Token = cookieToken;
+                        }
                         return Task.CompletedTask;
                     },
                 };

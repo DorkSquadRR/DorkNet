@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using DorkNet.Models.Notification;
 using DorkNet.Server.Auth;
 using DorkNet.Server.Data;
@@ -39,6 +40,7 @@ public class AdminController(
     SignupCodeService signupCodes,
     IObjectStorage storage,
     DomainConfig domain,
+    IdentityServerSigningKeyProvider signingKeys,
     ILogger<AdminController> adminLogger) : ControllerBase
 {
     private long CurrentAdminId => this.RequireCurrentPlayerId();
@@ -1159,6 +1161,52 @@ public class AdminController(
 
     // ── Server settings (runtime toggles) ────────────────────────────────
 
+    [HttpGet("identityserver")]
+    public ActionResult GetIdentityServerSettings()
+    {
+        var issuer = domain.AuthIssuer.TrimEnd('/');
+        var client = RecRoomIdentityServerConfig.Clients[0];
+        var certPath = signingKeys.CertificatePath;
+        var fullCertPath = Path.GetFullPath(certPath);
+        var certificateExists = signingKeys.LoadedFromBase64 || System.IO.File.Exists(fullCertPath);
+
+        return Ok(new
+        {
+            Issuer = issuer,
+            DiscoveryUrl = $"{issuer}/.well-known/openid-configuration",
+            TokenEndpoint = $"{issuer}/connect/token",
+            UserInfoEndpoint = $"{issuer}/connect/userinfo",
+            Client = new
+            {
+                client.ClientId,
+                client.ClientName,
+                AllowedGrantTypes = client.AllowedGrantTypes.ToArray(),
+                AllowedScopes = client.AllowedScopes.ToArray(),
+                client.AllowOfflineAccess,
+                client.AccessTokenLifetime,
+                client.AbsoluteRefreshTokenLifetime,
+                client.SlidingRefreshTokenLifetime,
+                RefreshTokenUsage = client.RefreshTokenUsage.ToString(),
+                RefreshTokenExpiration = client.RefreshTokenExpiration.ToString(),
+            },
+            Signing = new
+            {
+                signingKeys.CertificateSource,
+                signingKeys.LoadedFromBase64,
+                CertificatePath = fullCertPath,
+                CertificateExists = certificateExists,
+                signingKeys.Certificate.Thumbprint,
+                NotBeforeUtc = signingKeys.Certificate.NotBefore.ToUniversalTime(),
+                NotAfterUtc = signingKeys.Certificate.NotAfter.ToUniversalTime(),
+                Algorithm = SecurityAlgorithms.RsaSha256,
+            },
+            PersistedGrants = new
+            {
+                Store = "in-memory",
+                Warning = "Refresh tokens are process-local until an operational store is configured.",
+            },
+        });
+    }
     /// <summary>GET <c>api/admin/v1/settings</c> — current server-wide
     /// toggle state. Single row, single round trip.</summary>
     [HttpGet("settings")]

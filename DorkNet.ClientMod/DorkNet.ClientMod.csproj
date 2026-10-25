@@ -1,12 +1,13 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework Condition="'$(TargetFramework)' == '' and '$(TargetFrameworks)' == ''">net6.0</TargetFramework>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <RootNamespace>DorkNet.ClientMod</RootNamespace>
     <AssemblyName>DorkNet.ClientMod</AssemblyName>
-    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendTargetFrameworkToOutputPath Condition="'$(TargetFrameworks)' == ''">false</AppendTargetFrameworkToOutputPath>
+    <AppendTargetFrameworkToOutputPath Condition="'$(TargetFrameworks)' != ''">true</AppendTargetFrameworkToOutputPath>
     <CopyLocalLockFileAssemblies>false</CopyLocalLockFileAssemblies>
     <NoWarn>$(NoWarn);CS8602;CS8604;CS0436</NoWarn>
   </PropertyGroup>
@@ -19,21 +20,28 @@
     they would be derivative works of the game anyway, so we never
     reference them. Only MelonLoader's own DLLs are needed.
 
-    By default the project downloads the pinned MelonLoader release
-    into DorkNet.ClientMod/build/ and references those DLLs. Pass
-    -p:MelonLoaderDir=<path-to-extracted-MelonLoader> only when you
-    deliberately want to use a local override.
+    By default the project downloads the pinned desktop MelonLoader release
+    into DorkNet.ClientMod/build/ and references its net6 DLLs. For Quest /
+    LemonLoader builds, pass:
+
+      -p:TargetFrameworks=net8.0
+      -p:MelonLoaderDir=<path-to-LemonLoader-melon_data/MelonLoader>
+
+    The reference folder follows the target framework unless explicitly
+    overridden with -p:MelonLoaderReferenceTfm=...
   -->
   <PropertyGroup>
     <MelonLoaderVersion Condition="'$(MelonLoaderVersion)' == ''">v0.6.6</MelonLoaderVersion>
     <MelonLoaderCacheRoot>$(MSBuildThisFileDirectory)build\melonloader</MelonLoaderCacheRoot>
     <MelonLoaderZip>$(MelonLoaderCacheRoot)\MelonLoader.x64.$(MelonLoaderVersion).zip</MelonLoaderZip>
     <MelonLoaderDir Condition="'$(MelonLoaderDir)' == ''">$(MelonLoaderCacheRoot)\MelonLoader</MelonLoaderDir>
+    <MelonLoaderReferenceTfm Condition="'$(MelonLoaderReferenceTfm)' == '' and '$(TargetFramework)' == 'net8.0'">net8</MelonLoaderReferenceTfm>
+    <MelonLoaderReferenceTfm Condition="'$(MelonLoaderReferenceTfm)' == ''">net6</MelonLoaderReferenceTfm>
   </PropertyGroup>
 
   <Target Name="EnsureMelonLoaderReferences"
           BeforeTargets="ResolveAssemblyReferences"
-          Condition="!Exists('$(MelonLoaderDir)\net6\MelonLoader.dll')">
+          Condition="'$(MelonLoaderReferenceTfm)' == 'net6' and !Exists('$(MelonLoaderDir)\$(MelonLoaderReferenceTfm)\MelonLoader.dll')">
     <MakeDir Directories="$(MelonLoaderCacheRoot)" />
     <DownloadFile
       SourceUrl="https://github.com/LavaGang/MelonLoader/releases/download/$(MelonLoaderVersion)/MelonLoader.x64.zip"
@@ -47,19 +55,19 @@
 
   <ItemGroup>
     <Reference Include="MelonLoader">
-      <HintPath>$(MelonLoaderDir)\net6\MelonLoader.dll</HintPath>
+      <HintPath>$(MelonLoaderDir)\$(MelonLoaderReferenceTfm)\MelonLoader.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="0Harmony">
-      <HintPath>$(MelonLoaderDir)\net6\0Harmony.dll</HintPath>
+      <HintPath>$(MelonLoaderDir)\$(MelonLoaderReferenceTfm)\0Harmony.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Il2CppInterop.Runtime">
-      <HintPath>$(MelonLoaderDir)\net6\Il2CppInterop.Runtime.dll</HintPath>
+      <HintPath>$(MelonLoaderDir)\$(MelonLoaderReferenceTfm)\Il2CppInterop.Runtime.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Il2CppInterop.Common">
-      <HintPath>$(MelonLoaderDir)\net6\Il2CppInterop.Common.dll</HintPath>
+      <HintPath>$(MelonLoaderDir)\$(MelonLoaderReferenceTfm)\Il2CppInterop.Common.dll</HintPath>
       <Private>false</Private>
     </Reference>
   </ItemGroup>
