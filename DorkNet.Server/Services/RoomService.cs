@@ -585,15 +585,24 @@ public class RoomService(DorkNetDbContext db)
     ///
     /// <para>Scene ids are assigned explicitly (max + 1) for the same reason
     /// the clone handler does: seeded rows were inserted with manual ids
-    /// without advancing the Postgres identity sequence.</para>
-    /// Returns (rooms given a scene, scenes renamed).</summary>
+    /// without advancing the Postgres identity sequence. Every service that
+    /// runs the database bootstrap calls this at startup, so on Postgres the
+    /// whole repair holds the bootstrap's advisory lock: replicas booting
+    /// together take turns instead of handing out the same ids.</para>
+    /// Returns (rooms given an entry scene, scenes renamed).</summary>
     public async Task<(int ScenesAdded, int ScenesRenamed)> RepairRoomScenesAsync()
     {
-        var roomsWithoutScenes = await db.Rooms
-            .Where(r => !r.IsDormRoom && !db.RoomScenes.Any(s => s.RoomId == r.Id))
+        await using var tx = await db.Database.BeginTransactionAsync();
+        if (db.Database.IsNpgsql())
+            await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(1146246987);");
+
+        // The entry sub-room is OrderIndex 0 (its blob is the room's own front
+        // door), so a room missing it is repaired even when it has others.
+        var roomsWithoutEntry = await db.Rooms
+            .Where(r => !r.IsDormRoom && !db.RoomScenes.Any(s => s.RoomId == r.Id && s.OrderIndex == 0))
             .ToListAsync();
         var nextSceneId = await db.RoomScenes.MaxAsync(s => (long?)s.Id) ?? 0L;
-        foreach (var room in roomsWithoutScenes)
+        foreach (var room in roomsWithoutEntry)
         {
             var scene = NewHomeScene(room);
             scene.Id = ++nextSceneId;
@@ -606,9 +615,10 @@ public class RoomService(DorkNetDbContext db)
         foreach (var scene in unnamed)
             scene.Name = DefaultSubRoomName(scene.OrderIndex);
 
-        if (roomsWithoutScenes.Count > 0 || unnamed.Count > 0)
+        if (roomsWithoutEntry.Count > 0 || unnamed.Count > 0)
             await db.SaveChangesAsync();
-        return (roomsWithoutScenes.Count, unnamed.Count);
+        await tx.CommitAsync();
+        return (roomsWithoutEntry.Count, unnamed.Count);
     }
 
     /// <summary>Run once at startup to backfill <see cref="RoomEntity"/>
