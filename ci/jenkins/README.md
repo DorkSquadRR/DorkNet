@@ -71,7 +71,10 @@ Resolve a table for another build locally with `build.py build --dump-cs`.
   under the job's **Git** source, add **Additional Behaviours → Polling
   ignores commits in certain paths** with included regions
   `DorkNet[.]ClientMod/.*`, `DorkNet[.]Quest/.*`, `tools/build_pc[.]py` (one
-  per line) and excluded region `.*[.]md`.
+  per line) and excluded region `.*[.]md`. The filter compares against the
+  last build's checkout, so the pipeline keeps it and deletes only `out/`
+  and its scratch folders after each run; without a checkout, Jenkins treats
+  every push as a change.
 - **Build with Parameters** runs a manual build:
   - `PLATFORMS` (both / pc / quest), and `PC_FULL_CLIENT` for the full PC client;
   - snapshot tags, and per-run repository overrides;
