@@ -87,8 +87,21 @@ public static class DatabaseBootstrap
 
         // The connection stays open until the finally, so every step below
         // (they all share this scope's DbContext) runs on the session that
-        // holds the lock.
-        await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_lock(1146246987);");
+        // holds the lock. Waiting for it has no command timeout: another
+        // replica may be seeding a fresh database (thumbnail downloads
+        // included) for well over the default 30 s.
+        connectLogger.LogInformation("[bootstrap] waiting for the database bootstrap lock");
+        var previousTimeout = db.Database.GetCommandTimeout();
+        db.Database.SetCommandTimeout(0);
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_lock(1146246987);");
+        }
+        finally
+        {
+            db.Database.SetCommandTimeout(previousTimeout);
+        }
+        connectLogger.LogInformation("[bootstrap] holding the database bootstrap lock");
         try
         {
             // Begin the transaction through EF, not on the raw connection:
@@ -106,9 +119,22 @@ public static class DatabaseBootstrap
         finally
         {
             // Explicit: Npgsql pools connections, so closing alone would not
-            // end the session that holds the lock.
-            await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_unlock(1146246987);");
-            await conn.CloseAsync();
+            // end the session that holds the lock. If the connection is
+            // already broken the unlock fails too; that must not replace the
+            // real bootstrap error, and the connection still gets closed
+            // (Postgres then drops the lock with the session).
+            try
+            {
+                await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_unlock(1146246987);");
+            }
+            catch (Exception ex)
+            {
+                connectLogger.LogWarning(ex, "[bootstrap] releasing the database bootstrap lock failed");
+            }
+            finally
+            {
+                await conn.CloseAsync();
+            }
         }
     }
 
