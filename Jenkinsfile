@@ -78,11 +78,11 @@ pipeline {
               for (entry in cs.items) changed.addAll(entry.affectedPaths)
             }
             // Only client-facing changes rebuild (and so republish) a
-            // platform; Markdown doesn't count. The job's Git path filter
+            // platform; Markdown (.md, .markdown) doesn't count. The job's Git path filter
             // uses the same paths, so other pushes don't start a run at all.
             // A CI-only change (Jenkinsfile, ci/) takes a manual run.
             def touches = { prefixes ->
-              changed.any { p -> !p.toLowerCase().endsWith('.md') && prefixes.any { p.startsWith(it) } }
+              changed.any { p -> !(p.toLowerCase() ==~ /.*\.(md|markdown)/) && prefixes.any { p.startsWith(it) } }
             }
             buildPc = touches(['DorkNet.ClientMod/', 'tools/build_pc.py'])
             buildQuest = touches(['DorkNet.Quest/'])
