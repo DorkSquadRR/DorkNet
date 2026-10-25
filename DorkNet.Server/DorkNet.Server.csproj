@@ -38,7 +38,7 @@
          cost+salt in the output string so we only need one column. -->
     <PackageReference Include="BCrypt.Net-Next" Version="4.0.3" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.3.1" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="10.3.1" />
     <!-- Server-side crop/resize for img.* CDN transforms (?cropSquare=1&width=N
          on profile thumbnails). The 2020 client treats this as part of the
          image CDN contract — it uploads a full-frame capture and expects the
