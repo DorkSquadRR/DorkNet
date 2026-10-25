@@ -443,6 +443,71 @@ answer only on the apex host, where the site lives, and return 404 on every
 other host the server accepts, so leaving the game's own subdomains open for
 the client doesn't expose the files. Put the apex behind the proxy.
 
+To serve the builds only to players signed in with a linked DorkNet account
+(see [External sign-in](#external-sign-in-openid-connect)), also set:
+
+```env
+DorkNet__Downloads__RequireSignIn=true
+```
+
+The manifest and files then answer `401` until the visitor signs in, and the
+Downloads and Quest pages offer **Sign in** instead.
+
+---
+
+## External sign-in (OpenID Connect)
+
+Optional. Players sign in to the website, and admins to the admin panel,
+with any OpenID Connect provider: a Cloudflare Access SaaS application,
+Google, Authentik, Keycloak and so on. The game client keeps its own login.
+
+The first time someone signs in, the website asks for their DorkNet username
+and password, once, to link the provider identity to that account. After that
+the provider sign-in is enough. The link is keyed on the provider's issuer and
+subject (`iss` + `sub`), never on the email address, so a changed or reused
+email can't take over an account. A player has one linked identity per
+provider; **Account** (`/account`) shows it and can unlink it.
+
+```env
+# The provider's issuer URL (discovery at {Authority}/.well-known/openid-configuration).
+DorkNet__SignIn__Authority=https://<provider>/...
+DorkNet__SignIn__ClientId=<client id>
+DorkNet__SignIn__ClientSecret=<client secret>
+# Optional: button label ("Sign in with ..."), default "single sign-on".
+DorkNet__SignIn__DisplayName=Cloudflare
+# Optional: scopes, default "openid email profile".
+DorkNet__SignIn__Scopes=openid email profile
+```
+
+Register these redirect URIs at the provider, one per host people sign in on:
+
+```text
+https://<site host>/api/auth/external/callback
+https://<admin host>/api/auth/external/callback
+```
+
+The server builds the redirect URI from `Domain:Scheme` and the request's
+host, so a TLS-terminating proxy in front doesn't turn it into `http://`.
+
+**Cloudflare Access as the provider.** In Zero Trust, add an application of
+type **SaaS**, choose **OIDC**, and enter the redirect URIs above. Give it the
+same Access policies as the site, so the people who can open the site can
+sign in. Copy the issuer, client ID and client secret into the settings
+above.
+
+Sessions are HttpOnly cookies per host (`dorknet_session`, 30 days, sliding).
+The keys that encrypt them are stored in the database (`DataProtectionKeys`),
+so redeploys and extra replicas keep everyone signed in. They're stored
+encrypted with a key derived from the server secret (`DORKNET_JWT_SECRET`),
+so a database backup alone can't forge sessions; changing that secret signs
+everyone out. Unlinking the
+identity, deleting the account or banning the player ends the session on the
+next request. Wrong passwords on the link form are limited to 5 per 15
+minutes per provider identity and per username.
+
+Unset, the website shows no sign-in, and the admin panel only the password
+form.
+
 ---
 
 ## Photon Cloud

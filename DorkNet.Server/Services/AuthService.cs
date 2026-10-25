@@ -19,12 +19,17 @@ public class AuthService(IConfiguration config, DorkNetDbContext db)
     // configs) and leave Jwt:Secret as the appsettings.json placeholder;
     // the mismatched-secret bug shows up only there.
     private string SecretKey =>
-        Environment.GetEnvironmentVariable("DORKNET_JWT_SECRET")
-        ?? Environment.GetEnvironmentVariable("RECNET_JWT_SECRET")
-        ?? config["Jwt:Secret"]
+        ConfiguredSecret(config)
         ?? throw new InvalidOperationException(
             "JWT secret not configured. Set DORKNET_JWT_SECRET env var or " +
             "Jwt:Secret in appsettings.Local.json.");
+
+    /// <summary>The server secret, in the one resolution order every user of
+    /// it shares (token signing, token validation, key encryption).</summary>
+    public static string? ConfiguredSecret(IConfiguration config) =>
+        Environment.GetEnvironmentVariable("DORKNET_JWT_SECRET")
+        ?? Environment.GetEnvironmentVariable("RECNET_JWT_SECRET")
+        ?? config["Jwt:Secret"];
 
     public string GenerateToken(long playerId) => CreateJwt(playerId, TimeSpan.FromHours(12), "access");
 

@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { fileSource, openXapk, urlSource, type Xapk } from '../lib/xapk';
 import { connectHeadset, installXapk, webUsbSupported, type Headset, type Progress } from '../lib/questInstall';
-import { fileUrl, getDownloads, questBuild, type QuestBuild } from '../lib/downloads';
+import { fileUrl, getDownloads, questBuild, SignInRequiredError, type QuestBuild } from '../lib/downloads';
+import { signInUrl } from '../lib/account';
 
 const fmtSize = (n: number) =>
   n >= 1e9 ? `${(n / 1e9).toFixed(2)} GB` : n >= 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1e3))} KB`;
@@ -47,6 +48,8 @@ export function Quest() {
   const fileRef = useRef<HTMLInputElement>(null);
   // The server's latest published Quest build, if it offers downloads.
   const [latest, setLatest] = useState<QuestBuild | null>(null);
+  // Downloads exist but need a signed-in player (DorkNet:Downloads:RequireSignIn).
+  const [signInForLatest, setSignInForLatest] = useState(false);
   const [params] = useSearchParams();
 
   const open = async (load: () => Promise<Xapk>) => {
@@ -71,7 +74,10 @@ export function Quest() {
       // that card's own file, which may not be the newest release's.
       const wanted = params.get('file');
       if (wanted) void pickBuild(questBuild(m, wanted));
-    }).catch(() => { /* no downloads: only the file picker */ });
+    }).catch((e) => {
+      // No downloads: only the file picker. Sign-in required: offer it.
+      if (e instanceof SignInRequiredError) setSignInForLatest(true);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -139,6 +145,11 @@ export function Quest() {
           </p>
         ) : (
           <p className="text-sm text-ink-400">Pick the <code className="text-ink-200">DorkNet-….xapk</code> you were given. It stays on your computer; nothing is uploaded.</p>
+        )}
+        {signInForLatest && !latest && (
+          <p className="text-sm text-ink-400">
+            <a className="text-brand-300 hover:text-brand-200" href={signInUrl('/quest')}>Sign in</a> to install the latest build straight from this server.
+          </p>
         )}
         <input ref={fileRef} type="file" accept=".xapk,.zip" className="hidden" onChange={(e) => pickFile(e.target.files?.[0])} />
         <div className="flex flex-wrap items-center gap-3">

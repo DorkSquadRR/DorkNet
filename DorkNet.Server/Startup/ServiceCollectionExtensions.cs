@@ -1,4 +1,9 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -29,6 +34,7 @@ public static class ServiceCollectionExtensions
         AddVersionCompatibility(builder);
         var redisConn = AddRedis(builder);
         AddAuthentication(builder);
+        AddExternalSignIn(builder);
         AddKestrelAndSignalR(builder, redisConn);
     }
 
@@ -340,9 +346,7 @@ public static class ServiceCollectionExtensions
     // older Coolify configs.
     private static void AddAuthentication(WebApplicationBuilder builder)
     {
-        var jwtSecret = Environment.GetEnvironmentVariable("DORKNET_JWT_SECRET")
-            ?? Environment.GetEnvironmentVariable("RECNET_JWT_SECRET")
-            ?? builder.Configuration["Jwt:Secret"]
+        var jwtSecret = AuthService.ConfiguredSecret(builder.Configuration)
             ?? throw new InvalidOperationException(
                 "JWT secret not configured. Set the DORKNET_JWT_SECRET env var or " +
                 "add `Jwt:Secret` to appsettings.Local.json (the install-plugin.ps1 " +
@@ -395,6 +399,119 @@ public static class ServiceCollectionExtensions
         // or it will override the explicit per-key attributes.
         builder.Services.AddControllers().AddJsonOptions(opt =>
             opt.JsonSerializerOptions.PropertyNamingPolicy = null);
+    }
+
+    // ── External sign-in (OpenID Connect) ─────────────────────────────────────
+    // Players sign in to the website (and admins to the admin panel) with an
+    // OpenID Connect provider, configured under DorkNet:SignIn. The game
+    // client's own token flow is untouched. Two cookie schemes, both per host
+    // (the hyphen host style puts the admin panel outside the apex's cookie
+    // domain): DorkNet.Web is the signed-in player, DorkNet.External a
+    // provider identity waiting to be linked to an account.
+    private static void AddExternalSignIn(WebApplicationBuilder builder)
+    {
+        var services = builder.Services;
+        var section = builder.Configuration.GetSection("DorkNet:SignIn");
+        services.Configure<ExternalSignInOptions>(section);
+        var signIn = section.Get<ExternalSignInOptions>() ?? new ExternalSignInOptions();
+        var https = !string.Equals(builder.Configuration["Domain:Scheme"] ?? "https", "http", StringComparison.OrdinalIgnoreCase);
+        var secure = https ? CookieSecurePolicy.Always : CookieSecurePolicy.SameAsRequest;
+
+        services.AddScoped<ExternalSignInService>();
+        services.AddSingleton<LinkAttemptLimiter>();
+
+        // Cookie encryption keys live in the database, so a redeploy or a
+        // second replica doesn't invalidate everyone's session. They're
+        // stored encrypted with a key derived from the server secret, which
+        // lives outside the database, so a database backup alone can't forge
+        // sessions.
+        services.AddSingleton(new DataProtectionKeyEncryption(
+            AuthService.ConfiguredSecret(builder.Configuration) ?? string.Empty));
+        services.AddDataProtection()
+            .SetApplicationName("DorkNet")
+            .PersistKeysToDbContext<DorkNetDbContext>();
+        services.AddOptions<KeyManagementOptions>()
+            .Configure<DataProtectionKeyEncryption>((o, enc) => o.XmlEncryptor = enc);
+
+        var auth = services.AddAuthentication()
+            .AddCookie(ExternalSignIn.WebScheme, o =>
+            {
+                o.Cookie.Name = "dorknet_session";
+                o.Cookie.HttpOnly = true;
+                o.Cookie.SameSite = SameSiteMode.Lax;
+                o.Cookie.SecurePolicy = secure;
+                o.ExpireTimeSpan = TimeSpan.FromDays(30);
+                o.SlidingExpiration = true;
+                // API endpoints answer 401/403 instead of redirecting.
+                o.Events.OnRedirectToLogin = ctx => { ctx.Response.StatusCode = StatusCodes.Status401Unauthorized; return Task.CompletedTask; };
+                o.Events.OnRedirectToAccessDenied = ctx => { ctx.Response.StatusCode = StatusCodes.Status403Forbidden; return Task.CompletedTask; };
+                // An unlinked identity, a deleted or banned player ends the session.
+                o.Events.OnValidatePrincipal = async ctx =>
+                {
+                    var issuer = ctx.Principal?.FindFirst(ExternalSignIn.IssuerClaim)?.Value;
+                    var subject = ctx.Principal?.FindFirst(ExternalSignIn.SubjectClaim)?.Value;
+                    var svc = ctx.HttpContext.RequestServices.GetRequiredService<ExternalSignInService>();
+                    var link = issuer is null || subject is null ? null : await svc.FindAsync(issuer, subject);
+                    if (link is null || link.PlayerId != ExternalSignIn.PlayerId(ctx.Principal)
+                        || await svc.ActivePlayerAsync(link) is null)
+                    {
+                        ctx.RejectPrincipal();
+                        await ctx.HttpContext.SignOutAsync(ExternalSignIn.WebScheme);
+                    }
+                };
+            })
+            .AddCookie(ExternalSignIn.ExternalScheme, o =>
+            {
+                o.Cookie.Name = "dorknet_external";
+                o.Cookie.HttpOnly = true;
+                o.Cookie.SameSite = SameSiteMode.Lax;
+                o.Cookie.SecurePolicy = secure;
+                o.ExpireTimeSpan = TimeSpan.FromMinutes(15);
+                o.Events.OnRedirectToLogin = ctx => { ctx.Response.StatusCode = StatusCodes.Status401Unauthorized; return Task.CompletedTask; };
+            });
+
+        if (!signIn.IsConfigured) return;
+
+        auth.AddOpenIdConnect(ExternalSignIn.OidcScheme, o =>
+        {
+            o.Authority = signIn.Authority;
+            o.ClientId = signIn.ClientId;
+            o.ClientSecret = signIn.ClientSecret;
+            o.ResponseType = "code";
+            o.UsePkce = true;
+            o.Scope.Clear();
+            foreach (var scope in signIn.Scopes.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                o.Scope.Add(scope);
+            o.SignInScheme = ExternalSignIn.ExternalScheme;
+            o.CallbackPath = ExternalSignIn.CallbackPath;
+            o.GetClaimsFromUserInfoEndpoint = true;
+            o.MapInboundClaims = false;
+            o.SaveTokens = false;
+            o.CorrelationCookie.SecurePolicy = secure;
+            o.NonceCookie.SecurePolicy = secure;
+            o.Events.OnRedirectToIdentityProvider = ctx =>
+            {
+                // Behind TLS-terminating proxies the request arrives as http;
+                // the provider must redirect back to the public URL of the
+                // host the sign-in started on (website or admin panel).
+                var domain = ctx.HttpContext.RequestServices.GetRequiredService<DomainConfig>();
+                ctx.ProtocolMessage.RedirectUri = $"{domain.Scheme}://{ctx.Request.Host}{ExternalSignIn.CallbackPath}";
+                return Task.CompletedTask;
+            };
+            o.Events.OnRemoteFailure = ctx =>
+            {
+                // e.g. the player cancelled at the provider: back to the login
+                // page (admin panel) or the site with an error instead of an
+                // exception page. The message is logged, not shown.
+                var domain = ctx.HttpContext.RequestServices.GetRequiredService<DomainConfig>();
+                var admin = string.Equals(ctx.Request.Host.Host, domain.Sub("admin"), StringComparison.OrdinalIgnoreCase);
+                ctx.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>()
+                    .CreateLogger("DorkNet.SignIn").LogWarning(ctx.Failure, "[signin] provider sign-in failed");
+                ctx.Response.Redirect((admin ? "/login" : "/") + "?signin_error=provider_failed");
+                ctx.HandleResponse();
+                return Task.CompletedTask;
+            };
+        });
     }
 
     // ── Kestrel + SignalR ────────────────────────────────────────────────────

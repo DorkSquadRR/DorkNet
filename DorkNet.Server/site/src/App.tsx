@@ -9,6 +9,8 @@ import { PlayerProfile } from './pages/PlayerProfile';
 import { Rooms } from './pages/Rooms';
 import { Join } from './pages/Join';
 import { Downloads } from './pages/Downloads';
+import { Link as LinkAccount } from './pages/Link';
+import { Account } from './pages/Account';
 import { NotFound } from './pages/NotFound';
 
 // The Quest installer pulls in the WebUSB/ADB stack; load it only on /quest.
@@ -29,6 +31,8 @@ export function App() {
           <Route path="/join" element={<Join />} />
           <Route path="/quest" element={<Suspense fallback={null}><Quest /></Suspense>} />
           <Route path="/downloads" element={<Downloads />} />
+          <Route path="/link" element={<LinkAccount />} />
+          <Route path="/account" element={<Account />} />
           {/* Legacy paths from the vanilla-JS feed.localhost site */}
           <Route path="/p/:id" element={<RedirectPhoto />} />
           <Route path="/u/:id" element={<RedirectPlayer />} />

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { fileUrl, getDownloads, type DownloadFile, type DownloadRelease, type DownloadsManifest } from '../lib/downloads';
+import { fileUrl, getDownloads, SignInRequiredError, type DownloadFile, type DownloadRelease, type DownloadsManifest } from '../lib/downloads';
+import { signInUrl } from '../lib/account';
 
 const fmtSize = (n: number) =>
   n >= 2 ** 30 ? `${(n / 2 ** 30).toFixed(2)} GB` : n >= 2 ** 20 ? `${(n / 2 ** 20).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 2 ** 10))} KB`;
@@ -96,9 +97,13 @@ function FileCard({ f, rel }: { f: DownloadFile; rel: DownloadRelease }) {
 export function Downloads() {
   const [m, setM] = useState<DownloadsManifest | null | undefined>(undefined);
   const [err, setErr] = useState<string | null>(null);
+  const [signInNeeded, setSignInNeeded] = useState(false);
 
   useEffect(() => {
-    getDownloads(true).then(setM).catch((e) => setErr((e as Error).message));
+    getDownloads(true).then(setM).catch((e) => {
+      if (e instanceof SignInRequiredError) setSignInNeeded(true);
+      else setErr((e as Error).message);
+    });
   }, []);
 
   const releases = (m?.releases ?? []).filter((r) => r.files.length);
@@ -114,7 +119,13 @@ export function Downloads() {
       </div>
 
       {err && <div className="rounded-lg border border-danger/30 bg-danger/5 px-4 py-3 text-sm text-danger">Couldn't load the builds: {err}</div>}
-      {m === undefined && !err && <p className="text-sm text-ink-400">Loading builds…</p>}
+      {signInNeeded && (
+        <div className="card !p-5 flex flex-wrap items-center justify-between gap-3 text-sm text-ink-300">
+          <span>Sign in with your DorkNet account to see and download the builds.</span>
+          <a className="btn-primary" href={signInUrl('/downloads')}>Sign in</a>
+        </div>
+      )}
+      {m === undefined && !err && !signInNeeded && <p className="text-sm text-ink-400">Loading builds…</p>}
       {m === null && <p className="text-sm text-ink-400">This server doesn't offer downloads.</p>}
       {m && !releases.length && <p className="text-sm text-ink-400">No builds have been published yet.</p>}
 

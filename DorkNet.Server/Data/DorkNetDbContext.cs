@@ -1,9 +1,10 @@
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using DorkNet.Server.Data.Entities;
 
 namespace DorkNet.Server.Data;
 
-public class DorkNetDbContext(DbContextOptions<DorkNetDbContext> options) : DbContext(options)
+public class DorkNetDbContext(DbContextOptions<DorkNetDbContext> options) : DbContext(options), IDataProtectionKeyContext
 {
     public DbSet<PlayerEntity> Players => Set<PlayerEntity>();
     public DbSet<AvatarEntity> Avatars => Set<AvatarEntity>();
@@ -88,9 +89,19 @@ public class DorkNetDbContext(DbContextOptions<DorkNetDbContext> options) : DbCo
     public DbSet<UgcPurchasableEntity> UgcPurchasables => Set<UgcPurchasableEntity>();
     public DbSet<RoomConsumableEntity> RoomConsumables => Set<RoomConsumableEntity>();
     public DbSet<RoomConsumableOwnershipEntity> RoomConsumableOwnership => Set<RoomConsumableOwnershipEntity>();
+    public DbSet<ExternalLoginEntity> ExternalLogins => Set<ExternalLoginEntity>();
+    // ASP.NET Core data-protection keys (sign-in cookies), kept in the
+    // database so a redeploy or a second replica doesn't sign everyone out.
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Entity<ExternalLoginEntity>(e =>
+        {
+            e.HasIndex(x => new { x.Issuer, x.Subject }).IsUnique();
+            e.HasIndex(x => x.PlayerId);
+        });
+
         // SQLite-specific NOCASE collation works via UseCollation; Postgres
         // doesn't have NOCASE. Provider-conditional helper applied to the
         // three string columns the wire API matches case-insensitively
