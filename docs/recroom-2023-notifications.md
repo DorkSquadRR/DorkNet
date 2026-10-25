@@ -69,7 +69,7 @@ today.
 | Key | Msg | Sent by |
 |---|---|---|
 | `1` RelationshipChanged | `{PlayerID, RelationshipType, Muted, Ignored, Favorited}`: the recipient's own view, the same row `api/relationships/v2/get` lists | friend request / accept / remove / add / add-with-code (both players); favorite / mute / ignore and their reverses (caller only) |
-| `2` MessageReceived | `{Id, FromPlayerId (Int32), SentTime, Type, Data (string), RoomId, PlayerEventId}`, the same row `api/messages/v2/get` lists | DMs and game invites; `SystemNotificationService` (cheers, friend request Type 4, accepted Type 40, "wants to join" Type 10, coach message Type 100, event invite text) |
+| `2` MessageReceived | `{Id, FromPlayerId (Int32), SentTime, Type, Data (string), RoomId, PlayerEventId}`, the same row `api/messages/v2/get` lists | DMs and game invites; `SystemNotificationService` (cheers, friend request Type 4, accepted Type 40, "wants to join" Type 10, coach message Type 100, event invite text, room co-owner Type 62 invited / 60 added / 61 removed with `RoomId` set — the client's co-owner slots read only RoomId) |
 | `3` MessageDeleted | `{Id}` | not sent |
 | `5` RefreshLogin | none | not sent |
 | `6` Logout | `{Reason}`: a **number**, enum Unknown 0, UserInitiated 1, SessionTakeover 2, ForciblyLoggedOut 3, Banned 4 | `NotificationService.LogoutAsync`: second-session takeover (2), account deleted or password reset (3), bans (4) |
@@ -89,12 +89,13 @@ today.
 | `AccountUpdate` / `SelfAccountUpdate` | the public / self account DTOs the account REST routes return | every profile edit, including profile image (`NotificationService.AccountChanged`) |
 | `PresenceUpdate` | `{playerId, statusVisibility, deviceClass, vrMovementMode, roomInstance, isOnline, appVersion (string)}` | `PresenceBroadcastService`, to friends and subscribers, **never to the subject** (a frame about the local player moves them) |
 | `RoomInstanceUpdate` | the room instance (`RoomInstanceDto`) | admin force-join / instance pull. It only refreshes the cached instance; the move itself comes from the next heartbeat. |
-| `RoomUpdate` | the **full room** (`FGCPNAACHIK`, `RoomsController.BuildRoomServerDetails`), not the 2020 `{Room, Scenes}` wrapper | admin role / owner changes (everyone in the room plus the changed player), admin force-join |
+| `RoomUpdate` | the **full room** (`FGCPNAACHIK`, `RoomsController.BuildRoomServerDetails`), not the 2020 `{Room, Scenes}` wrapper | admin role / owner changes and every in-game role change, invite, accept, reject or removal (everyone in the room plus the changed player and the actor), admin force-join |
+| `PhotonAccessToken` | `ALIIIAGAPND {RoomInstanceId, PhotonAccessToken (""), Permissions: [{Permission, Role, Override, Type, Value}]}`, the same body `GET photon_access_token` returns (handler IBEOONPEELF.txt:519, `Action<ALIIIAGAPND>`) | every `PUT rooms/{id}/subrooms/{sub}/permissions`, to each player in that sub-room with their own RoomInstanceId |
 | `ChatMessageReceived` | `{chatMessageId, chatThreadId, senderPlayerId, timeSent, contents}` | chat sends, to every member including the sender |
 | `PlayerLeftChat` | the same chat-message shape; only `chatThreadId` and `senderPlayerId` (the leaver) are read | leaving a group chat |
 | `PlayerProgressionLevelUpdate` | `{PlayerId, Level, XP}`, as `api/players/v2/progression` returns it | every XP award (`LevelService.AwardXpAsync`) |
 | `CommunityBoardUpdate` | community board | community board edits |
-| `ReputationUpdate`, `RoomCurrency*`, `KeepsakeInstance*`, `PhotonAccessToken`, `GoToFailure`, `AnnouncementUpdate/Delete`, `ClubMembershipUpdate`, `GameConfig.Refresh`, `PlayerSettings.Refresh`, … | see the contract notes in `recroom-2023-client-api-complete.md` | not sent |
+| `ReputationUpdate`, `RoomCurrency*`, `KeepsakeInstance*`, `GoToFailure`, `AnnouncementUpdate/Delete`, `ClubMembershipUpdate`, `GameConfig.Refresh`, `PlayerSettings.Refresh`, … | see the contract notes in `recroom-2023-client-api-complete.md` | not sent |
 
 **Not registered at all** (a push with these keys is dropped): numeric 4, 11,
 12, 13, 15, 21, 24 (ModerationRoomBan), 40, 85, 90, 95.

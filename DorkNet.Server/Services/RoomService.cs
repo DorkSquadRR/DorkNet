@@ -546,6 +546,94 @@ public class RoomService(DorkNetDbContext db)
         return existing;
     }
 
+    /// <summary>The name a sub-room gets when it has none: "Home" for the
+    /// entry sub-room, "Subroom N" (1-based, matching its wire id) for the
+    /// rest.</summary>
+    public static string DefaultSubRoomName(int orderIndex)
+        => orderIndex <= 0 ? "Home" : $"Subroom {orderIndex + 1}";
+
+    /// <summary>A real entry sub-room row for a room that has none, built
+    /// from the room's own location, data blob and capacity. Callers add it
+    /// to the context.</summary>
+    public static RoomSceneEntity NewHomeScene(RoomEntity room) => new()
+    {
+        RoomId = room.Id,
+        OrderIndex = 0,
+        Name = DefaultSubRoomName(0),
+        RoomSceneLocationId = string.IsNullOrWhiteSpace(room.LocationReplicationId)
+            ? new RoomSceneEntity().RoomSceneLocationId
+            : room.LocationReplicationId,
+        DataBlobName = room.CurrentDataBlobName ?? string.Empty,
+        MaxPlayers = room.MaxCapacity > 0 ? room.MaxCapacity : 8,
+        IsSandbox = false,
+        CanMatchmakeInto = true,
+        DataModifiedAt = DateTime.UtcNow,
+    };
+
+    /// <summary>Postgres only: moves the RoomScenes id sequence past the
+    /// highest existing id. Rows written with explicit ids (seeds, older
+    /// builds of the clone and repair code) leave it behind, and the next
+    /// insert that relies on it (add / clone sub-room) then collides on the
+    /// primary key. A no-op on SQLite, which assigns max + 1 itself.</summary>
+    public async Task SyncRoomSceneIdSequenceAsync()
+    {
+        if (!db.Database.IsNpgsql()) return;
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            SELECT setval(pg_get_serial_sequence('"RoomScenes"', 'Id'),
+                          GREATEST(COALESCE((SELECT MAX("Id") FROM "RoomScenes"), 0), 1),
+                          EXISTS (SELECT 1 FROM "RoomScenes"));
+            """);
+    }
+
+    /// <summary>Startup self-heal for sub-rooms (idempotent).
+    ///
+    /// <para>Every non-dorm room must own at least one real RoomScenes row,
+    /// and every row must have a name. A room created by cloning a template
+    /// that had no scene rows (the 2023 "create room" flow clones a base room
+    /// such as MakerRoom) ended up with none, so the details builder served a
+    /// synthesised fallback and every sub-room mutation had to create the row
+    /// on the fly; a blank Name renders as an empty row in Room Settings &gt;
+    /// Subrooms. This inserts the missing entry sub-room (OrderIndex 0, the
+    /// room's own location / blob / capacity) and names unnamed rows. Dorms
+    /// are left alone: their details are shaped per player and their single
+    /// scene is synthesised on purpose.</para>
+    ///
+    /// <para>It first moves the Postgres id sequence of RoomScenes past the
+    /// highest id (<see cref="SyncRoomSceneIdSequenceAsync"/>), then lets the
+    /// database assign ids like every other scene insert. Every service that
+    /// runs the database bootstrap calls this at startup, so on Postgres the
+    /// whole repair holds the bootstrap's advisory lock and replicas booting
+    /// together take turns.</para>
+    /// Returns (rooms given an entry scene, scenes renamed).</summary>
+    public async Task<(int ScenesAdded, int ScenesRenamed)> RepairRoomScenesAsync()
+    {
+        await using var tx = await db.Database.BeginTransactionAsync();
+        if (db.Database.IsNpgsql())
+            await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(1146246987);");
+
+        // The entry sub-room is OrderIndex 0 (its blob is the room's own front
+        // door), so a room missing it is repaired even when it has others.
+        await SyncRoomSceneIdSequenceAsync();
+
+        var roomsWithoutEntry = await db.Rooms
+            .Where(r => !r.IsDormRoom && !db.RoomScenes.Any(s => s.RoomId == r.Id && s.OrderIndex == 0))
+            .ToListAsync();
+        foreach (var room in roomsWithoutEntry)
+            db.RoomScenes.Add(NewHomeScene(room));
+
+        var unnamed = await db.RoomScenes
+            .Where(s => s.Name == null || s.Name.Trim() == string.Empty)
+            .ToListAsync();
+        foreach (var scene in unnamed)
+            scene.Name = DefaultSubRoomName(scene.OrderIndex);
+
+        if (roomsWithoutEntry.Count > 0 || unnamed.Count > 0)
+            await db.SaveChangesAsync();
+        await tx.CommitAsync();
+        return (roomsWithoutEntry.Count, unnamed.Count);
+    }
+
     /// <summary>Run once at startup to backfill <see cref="RoomEntity"/>
     /// + <see cref="DormStateEntity"/> rows for every account that
     /// pre-dates the auto-create-on-signup work. Idempotent — calls
@@ -1068,6 +1156,8 @@ public class RoomService(DorkNetDbContext db)
         };
 
         db.Rooms.Add(clone);
+        // Every room owns a real entry sub-room (see RepairRoomScenesAsync).
+        db.RoomScenes.Add(NewHomeScene(clone));
         await db.SaveChangesAsync();
         return new CloneResult(0 /* Success */, clone);
     }
@@ -1081,6 +1171,25 @@ public class RoomService(DorkNetDbContext db)
     ///   AllowsJuniors, RoomWarningMask, CustomRoomWarning
     /// Optional: IsDormRoom, SupportsVRLow, SupportsMobile, DisableMicAutoMute.
     /// </summary>
+    /// <summary>The <c>IsRRO</c> the 2023 client is told: only a first-party
+    /// room (baked/AG and still owned by the system account) is a Rec Room
+    /// Original. A player's room is never one, even when it was cloned from an
+    /// RRO template and keeps <see cref="RoomEntity.IsAGRoom"/> for the baked
+    /// blob handling.
+    ///
+    /// <para>The client gates the whole owner UI on it: RoomModel
+    /// get_CanPublishRoom, CanUnpublishRoom, CanDeleteRoom,
+    /// CanChangeRoomCreator, CanChangeRoomSetting, CanChangeCustomWarning,
+    /// CanChangeLoadingScreen and CanCreateNewSubroom all require
+    /// <c>!IsRRO</c> (IsilDump/Assembly-CSharp/RRUI/Data/RoomModel.txt:275,
+    /// 429, 560, 682, 1002, 1473, 1680, 1816), so a clone advertised as RRO
+    /// could never be published ("Cannot publish room") or have its settings
+    /// changed. The room-load pipeline (RecRoom.RoomLoading.Runtime) never
+    /// reads the flag: the scene comes from the sub-room's UnitySceneId and
+    /// the blob step from whether DataBlob is set.</para></summary>
+    public static bool WireIsRRO(RoomEntity r)
+        => r.IsAGRoom && r.CreatorPlayerId == PlayerService.SystemAccountId;
+
     public static object ToWireRoom(RoomEntity r) => new
     {
         RoomId = r.Id,
@@ -1093,7 +1202,7 @@ public class RoomService(DorkNetDbContext db)
         Accessibility = r.Accessibility,
         SupportsLevelVoting = r.SupportsLevelVoting,
         IsAGRoom = r.IsAGRoom,
-        IsRRO = r.IsAGRoom,
+        IsRRO = WireIsRRO(r),
         // 2020.12 Room.Deserialize (KLCOGEIGEBJ.PPGFHEDFBEA, the Room base)
         // reads required keys: RoomId, IsDorm, CloningAllowed, DisableMicAutoMute,
         // DisableRoomComments, EncryptVoiceChat. The 2020.03 key was IsDormRoom;

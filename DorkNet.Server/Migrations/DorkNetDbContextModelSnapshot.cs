@@ -3021,6 +3021,51 @@ namespace DorkNet.Server.Migrations
                     b.ToTable("RoomRoles");
                 });
 
+            modelBuilder.Entity("DorkNet.Server.Data.Entities.RoomRolePermissionEntity", b =>
+                {
+                    b.Property<long>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("Override")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Permission")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Role")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("RoomId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<long>("SubRoomId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<long>("UpdatedByPlayerId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasMaxLength(4096)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("RoomId", "SubRoomId", "Role", "Permission")
+                        .IsUnique();
+
+                    b.ToTable("RoomRolePermissions");
+                });
+
             modelBuilder.Entity("DorkNet.Server.Data.Entities.RoomSceneEntity", b =>
                 {
                     b.Property<long>("Id")

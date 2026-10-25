@@ -170,7 +170,7 @@ the player to their dorm, so bans go out as `Logout` (6) with Reason 4
 
 Ids the client handles that this server never sends (dead client features,
 available if wanted): 3, 5, 23, 32, 60, 110, 120, 121, plus a long tail of
-string channels — `GoToFailure`, `PhotonAccessToken`, `AppVersionUpdate`,
+string channels — `GoToFailure`, `AppVersionUpdate`,
 `GameConfig.Refresh`, `ReputationUpdate`, `KeepsakeInstanceAdded/Removed`,
 `RoomCurrencyCreated/Modified/Deleted`, `RoomCommentDeleted` and others.
 
@@ -622,6 +622,83 @@ Diffed all 45 real HTTP routes of the 2023-03-21 client's rooms subsystem agains
 
 8. UNKNOWNS: rooms/requiring/{mode} response element type could not be resolved from the ISIL metadata token (stored internally as a restricted-rooms list; server already implements rooms/requiring/{restriction}). The exact wire type of BNLPBMJJOMM.Value (subroom permissions) is a variant read through the shared value reader — keys are certain, scalar type is not.
 
+#### Sub-room ids, IsRRO and the instance browser
+
+These cut across the whole rooms surface.
+
+- **Every room and playlist mutation answers `{success, value, error}`.**
+  They all go through one generic helper,
+  `NLDBPDCNNCF.BDBHCEGKGDC<TResult>(opName, verb, route, …)` (RVA 0x35E50A0,
+  `Call 0x1835E50A0` at 47 call sites in NLDBPDCNNCF.txt). It is the same
+  helper and the same `BDBHCEGKGDC<FGCPNAACHIK>` instantiation token
+  (`[0x1884C1948]`) that "clone room" uses (NLDBPDCNNCF.txt:4815-4823), and
+  clone is proven in game to need the envelope. A bare room-details body has
+  no `success`; the helper rejects it with no message, and the player sees
+  "Exception of type 'CEMNLBKJABA' was thrown." (CEMNLBKJABA is the RecNet
+  request exception, base BCPHBJHOIEM : Exception, built with a null
+  message) although the server applied the change. This is what broke the
+  co-owner invite in game after the role fixes. Routes: rooms/{0}/{accessibility,
+  allow_new_users, automute, cloning, comments, creator, description, image,
+  loadscreen, max_player_calculation_mode, min_level, modify, name,
+  promo_external, promo_images, restrictions, tags, voice_chat_encryption,
+  warning}, rooms/{0}/roles/{1} and /invite, rooms/{0}/subrooms (POST),
+  rooms/{0}/subrooms/{1} (DELETE) and its accessibility, clone, maxplayers,
+  modify, move, name, permissions, publish_save, plus playlists (POST) and
+  playlists/{0}/{accessibility, description, image, levelvoting, name,
+  restrictions, rooms/{1}, tags, warning}. `value` is the full FGCPNAACHIK
+  (playlist DTO for playlists). Refusals are HTTP 200 with `success:false`
+  and a message in `error`, since a 403/404 also shows only the message-less
+  exception. Server: `Controllers/RecNetEnvelopeAttribute.cs` on each handler.
+  Wherever a row below says "FGCPNAACHIK full room details" for one of these
+  routes, read it as the envelope's `value`.
+
+- **Sub-room ids are OrderIndex + 1 on the wire.** The client refuses to load
+  a sub-room whose id is not positive: `SubroomModel.DOKCPLJOKIE`
+  (Assembly-CSharp/RRUI/Data/SubroomModel.txt:3) is
+  `RoomId > 0 && SubroomId > 0`, and `Model`1.LNPEMMMGCPC` skips the load when
+  it fails. With the first sub-room sent as 0, its Room Settings > Subrooms row
+  never fetched its details and showed no name, and every row action ran
+  against a null sub-room. The wire id is now `RoomSceneEntity.OrderIndex + 1`
+  in the room details `SubRooms[]`, the sub-room routes
+  (`rooms/{0}/subrooms/{1}/*`), `matchmake/room/{0}/{1}`, the room-instance
+  JSON (`RoomInstanceDto.subRoomId`), the instance browser and the sub-room
+  save DTOs; incoming 0 is accepted as the first sub-room. Storage (RoomScenes,
+  PrivateInstances, RoomDataBlobs, presence) keeps the OrderIndex.
+  See `DorkNet.Server/Services/RoomSceneIds.cs`.
+- **Every room owns a real, named entry sub-room.** Cloning a template that
+  has no RoomScenes rows now creates a "Home" row from the clone's own
+  location, blob and capacity, and a startup pass
+  (`RoomService.RepairRoomScenesAsync`) adds the row to existing rooms that
+  lack one and names blank rows ("Home", "Subroom N").
+- **`IsRRO` is false for every player-owned room.** RoomModel's owner UI —
+  get_CanPublishRoom, CanUnpublishRoom, CanDeleteRoom, CanChangeRoomCreator,
+  CanChangeRoomSetting, CanChangeCustomWarning, CanChangeLoadingScreen,
+  CanCreateNewSubroom (RoomModel.txt:275, 429, 560, 682, 1002, 1473, 1680,
+  1816) — requires `!IsRRO`, so a clone of a Rec Room Original template
+  advertised as RRO could not be published ("Cannot publish room") or have its
+  settings changed. The load pipeline (RecRoom.RoomLoading.Runtime) never
+  reads the flag. `RoomService.WireIsRRO` = AG room still owned by the system
+  account; `RoomEntity.IsAGRoom` keeps its server-side meaning.
+- **Publish preconditions are client-side.** Besides `!IsRRO`, the client
+  requires role ≥ CoOwner, not a dorm, a valid name (2–128 chars) and a room
+  image other than `DefaultRoomImage.jpg` ("Cannot publish room: Missing room
+  photo") before it sends `PUT rooms/{0}/accessibility accessibility=1`.
+- **Room settings are creator or accepted co-owner.** Sub-room mutations
+  (name, max players, accessibility, modify, add, delete, duplicate, restore,
+  permissions) used to be creator-only and the room and sub-room renames also
+  let moderators in; all now use the same creator-or-co-owner gate as the
+  bare room mutations.
+- **`room/{0}/instances`** (Matchmaking.KAIPGDGACGG, Matchmaking.txt:13966,
+  verb 0) is shown unfiltered by the client (RoomInstancePagedGrid, current
+  instance first, then oldest CreatedAt), which derives PlayerCount from
+  PlayerIds and SubroomName from the room's SubRooms by SubRoomId. The server
+  used to return nothing at all on Redis deployments (no per-room index),
+  dropped private instances from presence and re-added only the caller's own
+  with no players, counted crashed clients, and always sent IsFull false. It
+  now lists live instances from a per-room presence index, with the real
+  players (live activity marker only), IsFull from capacity, and private
+  instances for the people allowed into them.
+
 #### Endpoints
 
 | Verb | Route | Request | Response |
@@ -630,7 +707,7 @@ Diffed all 45 real HTTP routes of the 2023-03-21 client's rooms subsystem agains
 | POST | `api/rooms/v1/verifyRole` | x-www-form-urlencoded fields: roomId (Int64, current room from Matchmaking ObscuredLong), role (Int32 enum), context (String). Keys are camelCase. | none parsed — client ignores the body; return 200 |
 | POST | `api/rooms/v2/report` | x-www-form-urlencoded fields (PascalCase!): RoomId (Int64), RoomKeyId (Nullable<Int64>), Details (String), ReportCategory (Int32 enum FPIBGPIAOBI/BDOGOIGCKMK) | none parsed — logged as 'Failed to report room' on error; return 200 |
 | GET | `featuredrooms/current` | none | JBHJKCCFCIO: {"FeaturedRoomGroupId": Int64, "Name": String, "Rooms": [COGJIOGPNGD {"ImageName": String, "RoomId": Int64, "RoomName": String}]} (casing-tolerant) |
-| GET | `room/{0}/instances` | none | JSON array: [PNDCMIMEJLD {"RoomInstanceId": Int64, "RoomId": Int64, "SubRoomId": Int64, "PlayerIds": [Int32], "IsFull": Boolean, "CreatedAt": DateTime string}] (casing-tolerant) |
+| GET | `room/{0}/instances` | none | JSON array: [PNDCMIMEJLD {"RoomInstanceId": Int64, "RoomId": Int64, "SubRoomId": Int64 (wire id, see "Sub-room ids" below), "PlayerIds": [Int32], "IsFull": Boolean, "CreatedAt": UTC DateTime string}] (casing-tolerant). Live instances only (at least one player with a live activity marker); private instances only for the creator, accepted role holders, the instance owner, its invitees and players inside |
 | PUT | `roominstance/{0}/inprogress` | x-www-form-urlencoded field: inProgress (Boolean) | none parsed ('Failed to modify current room's game-in-progress state' on error); return 200 |
 | PUT | `roominstance/{0}/markprivate` | none (empty body) | none parsed ('Failed to mark room instance {0} as private'); return 200 |
 | POST | `roominstance/{0}/reportjoinresult` | x-www-form-urlencoded field: result (Int32 enum MEIJCIADDHJ) | none parsed ('Failed to report room join result'); return 200 |
@@ -657,7 +734,7 @@ Diffed all 45 real HTTP routes of the 2023-03-21 client's rooms subsystem agains
 | GET | `rooms/visitedby/me` | query params: skip (Int32), take (Int32) | [NEMINAEBALC] |
 | GET | `rooms/visitedby/{0}` | query params: skip (Int32), take (Int32) | [NEMINAEBALC] |
 | GET (2 overloads) + DELETE | `rooms/{0}` | GET summary: none. GET details: query params include (Byte bitmask), unityAssetTarget (String), unityAssetVersion (Int32) from closure CAEBODLFAMA. DELETE: none. | GET summary → NEMINAEBALC. GET details → FGCPNAACHIK = NEMINAEBALC keys PLUS: "DataBlob" String, "DataBlobHash" String, "LoadScreens": [{"ImageName","Title","Subtitle" all String}], "PromoImages": [String], "PromoExterna |
-| PUT | `rooms/{0}/accessibility` | x-www-form-urlencoded field: accessibility (Int32 enum JHAOFLCJNAL) | FGCPNAACHIK full room details (see rooms/{0}) — client re-parses the whole object; missing keys NRE |
+| PUT | `rooms/{0}/accessibility` | x-www-form-urlencoded field: accessibility (Int32 enum JHAOFLCJNAL: Private 0, Public 1, Unlisted 2). This is the "Publish room" button (RoomModel.TryPublishRoom → DBKKLDIPCHP(1)); unpublish sends 0 | FGCPNAACHIK full room details (see rooms/{0}) — client re-parses the whole object; missing keys NRE |
 | PUT | `rooms/{0}/allow_new_users` | form field: allowNewUsers (Boolean) | FGCPNAACHIK full room details |
 | PUT | `rooms/{0}/automute` | form field: disable (Boolean) — NOTE key is 'disable', maps to DisableMicAutoMute | FGCPNAACHIK full room details |
 | GET + POST | `rooms/{0}/bans` | GET: none. POST 'ban players': form fields id (repeated Int32 account ids) + banMask (Int32 enum DCDPJPHBHOA) | GET → [IBHAKOOKEEE {"AccountId": Int32, "BannedByAccountId": Int32, "BanStartTime": DateTime string}]. POST → none parsed. |
@@ -681,9 +758,9 @@ Diffed all 45 real HTTP routes of the 2023-03-21 client's rooms subsystem agains
 | PUT + DELETE | `rooms/{0}/promo_external` | form fields: type (Int32 enum OJGHPAELGBO), reference (String) — same keys on both verbs | FGCPNAACHIK full room details |
 | PUT + DELETE | `rooms/{0}/promo_images` | form field: imageName (String) on both verbs | FGCPNAACHIK full room details |
 | PUT | `rooms/{0}/restrictions` | form fields: supportsJuniors, supportsScreens, supportsTeleportVR, supportsWalkVR (Booleans) | FGCPNAACHIK full room details |
-| GET | `rooms/{0}/roles` | none | [EFHPLDPNGIM {"AccountId": Int32, "Role": Int32 enum, "InvitedRole": Int32 enum, "LastChangedByAccountId": Int32}] (casing-tolerant) |
-| GET + PUT | `rooms/{0}/roles/{1}` | GET: none. PUT: form field role (Int32 enum OMMBGJMJJPN). | GET → EFHPLDPNGIM single object. PUT → FGCPNAACHIK full room details. |
-| PUT | `rooms/{0}/roles/{1}/invite` | form field: role (Int32 enum) | FGCPNAACHIK full room details |
+| GET | `rooms/{0}/roles` | none | [EFHPLDPNGIM {"AccountId": Int32, "Role": Int32 enum, "InvitedRole": Int32 enum, "LastChangedByAccountId": Int32}] (casing-tolerant). One row per account; the creator is Role 255 (Creator) |
+| GET + PUT | `rooms/{0}/roles/{1}` | GET: none. PUT: form field role (Int32 enum OMMBGJMJJPN: None 0, Host 10, Moderator 20, CoOwner 30, TemporaryCoOwner 31, Creator 255). Also how an invitee ACCEPTS (own id, role 30) and how anyone leaves their role (own id, role 0) | GET → EFHPLDPNGIM single object. PUT → FGCPNAACHIK full room details. |
+| PUT | `rooms/{0}/roles/{1}/invite` | form field: role (Int32 enum). Owner invites with 30; the invitee REJECTS by sending role 0 here on their own id | FGCPNAACHIK full room details |
 | GET | `rooms/{0}/similar` | none | single OPGDCAELKMJ: {"SeedRoom": NEMINAEBALC, "Rooms": [NEMINAEBALC]} |
 | POST | `rooms/{0}/subrooms` | form field: name (String) — new subroom name | FGCPNAACHIK full room details (with the new SubRooms entry) |
 | DELETE | `rooms/{0}/subrooms/{1}` | none | FGCPNAACHIK full room details |
@@ -694,7 +771,7 @@ Diffed all 45 real HTTP routes of the 2023-03-21 client's rooms subsystem agains
 | PUT | `rooms/{0}/subrooms/{1}/modify` | form fields: name (String), accessibility (Int32 enum), maxPlayers (Int32) | FGCPNAACHIK full room details |
 | POST | `rooms/{0}/subrooms/{1}/move` | form field: newRoomId (Nullable<Int64> — target room) | FGCPNAACHIK full room details |
 | PUT | `rooms/{0}/subrooms/{1}/name` | form field: name (String) | FGCPNAACHIK full room details |
-| PUT | `rooms/{0}/subrooms/{1}/permissions` | serialized list of BNLPBMJJOMM permission entries; per-entry keys (from its serializer): Role (Int32), Type (Int32), Permission (Int32), Override (Boolean), Value (variant) | FGCPNAACHIK full room details |
+| PUT | `rooms/{0}/subrooms/{1}/permissions` | raw JSON array (BNDIAONDFFF.FJLLPHFOOJJ, not form) of BNLPBMJJOMM cells, keys from formatter HDOJMEBCAGP: Permission (String), Role (OMMBGJMJJPN), Override (Boolean), Type (FEOJFGECKGH: Bool 0, Int 1, StringList 2), Value (String). The editor sends only the changed cell | FGCPNAACHIK full room details |
 | POST | `rooms/{0}/subrooms/{1}/publish_save` | form field: subRoomDataSaveId (Int64) | FGCPNAACHIK full room details |
 | GET | `rooms/{0}/subrooms/{1}/saves` | query params: skip (Int32), take (Int32) | paged object GJDIKIMLCHA: {"Results": [JKIFFPPAJNK {"SubRoomDataSaveId" Int64, "SubRoomId" Int64, "UnityAssetId" String, "DataBlob" String, "DataBlobHash" String, "Description" String, "SavedByAccountId" Int64, "SavedOnP |
 | PUT | `rooms/{0}/tags` | form fields: tag (repeated String), autoTag (repeated String) | FGCPNAACHIK full room details |
@@ -948,6 +1025,8 @@ Handler: `DorkNet.Server/Controllers/API/Rooms/V2/RoomsModerationController.cs:4
 
 **Fix.** Change ApplyAndReturn to return RoomsController.BuildRoomServerDetails (load scenes+roles like BuildRoomServerDetailsWithRolesAsync) instead of ToWireRoom — this one fix repairs the response of every bare-path room mutation.
 
+**Fixed.** ApplyAndReturn returns the full details. This route is also the "Publish room" button; publishing a cloned room still failed because the clone was advertised as `IsRRO`, which hides and refuses Publish client-side. Player-owned rooms are now never RRO on the wire (see "Sub-room ids, IsRRO and the instance browser" above).
+
 ##### `PUT rooms/{0}/allow_new_users` — SHAPE_MISMATCH (degraded)
 
 Twins + form key allowNewUsers OK; response is ToWireRoom (same ApplyAndReturn defect as accessibility).
@@ -1036,29 +1115,33 @@ Handler: `DorkNet.Server/Controllers/API/Rooms/V2/RoomsModerationController.cs:8
 
 **Fix.** Same ApplyAndReturn fix.
 
-##### `GET rooms/{0}/roles` — MISSING (degraded)
+##### `GET rooms/{0}/roles`, `GET + PUT rooms/{0}/roles/{1}`, `PUT rooms/{0}/roles/{1}/invite` — FIXED
 
-Handler + wire shape are correct ([{AccountId,Role,InvitedRole,LastChangedByAccountId}], BuildRoomAccountRoleWire :4003-4014) but there is no roomserver twin → the permissions screen's list fetch 404s under the 2023 prefix.
+Was: the roomserver/ twins were added earlier, but three defects remained.
+(1) The creator was listed as Role 30 (CoOwner). The client takes the local
+role from the Roles list (`FGCPNAACHIK.ONECLLALJEO`, first AccountId match)
+and the permission editor only allows roles strictly below your own, with
+Creator (255) the one unconditional pass (`OMJKHJLFOCO.DIIMLMKEJLC`,
+RecRoom.RoomPermissions.Runtime/OMJKHJLFOCO.txt:2367), so the creator could
+not edit Co-Owner or Creator permissions. (2) Only the creator or a co-owner
+could call either route, so an invitee could never accept (own id, role 30)
+or reject (`/invite` on own id, role 0), and re-inviting an accepted co-owner
+demoted them to pending. (3) Nobody was told: the invitee's prompt is a
+message, Type 62 RoomCoOwnerInvited with RoomId (KPFKPIKDBFJ, factory
+OCGKOJMFLAI.ALEHDHAEFOK), and none was sent.
 
-Handler: `DorkNet.Server/Controllers/API/Rooms/V2/RoomsController.cs:3695`
+**Fixed.** Creator is 255 and listed once (`RoomRoleRules.BuildWires`); one
+row per account with accepted Role and pending InvitedRole side by side.
+`RoomRoleRules.CheckChange` enforces the ladder: the creator may set any role
+on anyone but themselves; otherwise the actor must be an accepted co-owner and
+both the target's current or invited role and the requested role must be
+strictly below theirs; anyone may drop their own role or decline their invite;
+an invitee may accept exactly the invited role. Messages 62 (invite), 60
+(added) and 61 (removed) go to the target, answered invites are marked read,
+and the full room goes out as `RoomUpdate` to everyone in the room plus the
+changed player.
 
-**Fix.** Add [HttpGet("roomserver/rooms/{roomId:long}/roles")] (and twins for the two routes below).
-
-##### `GET + PUT rooms/{0}/roles/{1}` — MISSING (degraded)
-
-Handlers are contract-correct: GET returns a single role wire object; PUT reads form 'role' (ReadClientRoomRoleAsync :3944-3973) and returns full BuildRoomServerDetailsWithRolesAsync. But neither has a roomserver twin → 404 under the 2023 prefix.
-
-Handler: `DorkNet.Server/Controllers/API/Rooms/V2/RoomsController.cs:3818 (GET), 3835 (PUT)`
-
-**Fix.** Add roomserver twins for GET and PUT/POST.
-
-##### `PUT rooms/{0}/roles/{1}/invite` — MISSING (degraded)
-
-Handler correct (form role, Accepted=false row, full-details response); no roomserver twin → 404 under prefix.
-
-Handler: `DorkNet.Server/Controllers/API/Rooms/V2/RoomsController.cs:3879`
-
-**Fix.** Add roomserver twin.
+Handler: `DorkNet.Server/Controllers/API/Rooms/V2/RoomsController.cs` (`GrantRole`, `InviteRole`, `ChangeRoomAccountRoleAsync`), rules in `DorkNet.Server/Services/RoomRoleRules.cs`
 
 ##### `POST rooms/{0}/subrooms/{1}/clone` — SHAPE_MISMATCH (degraded)
 
@@ -1084,13 +1167,29 @@ Handler: `DorkNet.Server/Controllers/API/Rooms/V2/RoomsController.cs:2656`
 
 **Fix.** Drop the [FromBody] parameter; return BuildRoomServerDetailsWithRolesAsync.
 
-##### `PUT rooms/{0}/subrooms/{1}/permissions` — STUB (degraded)
+##### `PUT rooms/{0}/subrooms/{1}/permissions` + `GET photon_access_token` — FIXED
 
-Twins exist but the handler accepts SubRoomModifyRequest (Name/MaxPlayers/IsSandbox/CanMatchmakeInto) — the client actually sends a serialized LIST of BNLPBMJJOMM permission entries {Role,Type,Permission,Override,Value}. No permission matrix is ever stored (there is no storage for it), and the client body would 415/no-op. Response SceneWire. The role-permission matrix silently never saves.
+Was: the PUT accepted the matrix and dropped it (no storage), and
+`photon_access_token` always answered a hardcoded seed, so a permission
+change never survived a reload and nobody else in the room saw it.
 
-Handler: `DorkNet.Server/Controllers/API/Rooms/V2/RoomsController.cs:3391`
+**Fixed.** Cells persist in `RoomRolePermissions` (one row per room, sub-room
+OrderIndex, role, permission; upsert, cells not sent are untouched).
+`photon_access_token` (`ALIIIAGAPND {RoomInstanceId, PhotonAccessToken,
+Permissions}`, now also under `roomserver/`) serves the defaults with the
+caller's current sub-room cells applied on top, and every save pushes the
+same body as the `PhotonAccessToken` hub message (registered as
+`Action<ALIIIAGAPND>`, IBEOONPEELF.txt:519) to everyone in that sub-room. Writes
+follow the client's own rule: the creator may edit every role row, a co-owner
+only rows below 30, nobody else may write. Role and Type are accepted as
+numbers, numeric strings or enum names.
 
-**Fix.** Parse the request as a list of {Role,Type,Permission,Override,Value}; persist per-subroom permission rows (new table); echo full room details. Scope explicitly if deferred — currently it is a silent stub.
+Unproven: the client's permission-id spelling. The defaults keep the numeric
+ids the server has always sent ("13" maker pen, "20"–"23"); RecFlare sends
+names such as `CAN_USE_MAKER_PEN`. Stored cells are echoed exactly as the
+client wrote them, so the client's own edits round-trip either way.
+
+Handler: `RoomsController.SubRoomPermissions`, `MatchController.PhotonAccessToken`, `DorkNet.Server/Services/RoomPermissionMatrix.cs`
 
 ##### `POST rooms/{0}/subrooms/{1}/publish_save` — SHAPE_MISMATCH (degraded)
 

@@ -501,6 +501,7 @@ public class RoomsModerationController(
     [HttpPost("roomserver/rooms/{roomId:long}/description")]
     [HttpPut("roomserver/rooms/{roomId:long}/description")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    [RecNetEnvelope]
     public async Task<IActionResult> BareDescription(long roomId)
     {
         // RawValue, not the whitespace-skipping reader: clearing the
@@ -520,6 +521,7 @@ public class RoomsModerationController(
     [HttpPost("roomserver/rooms/{roomId:long}/image")]
     [HttpPut("roomserver/rooms/{roomId:long}/image")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    [RecNetEnvelope]
     public async Task<IActionResult> BareImage(long roomId)
     {
         var payload = await ReadPayloadAsync();
@@ -541,6 +543,7 @@ public class RoomsModerationController(
     [HttpPost("roomserver/rooms/{roomId:long}/tags")]
     [HttpPut("roomserver/rooms/{roomId:long}/tags")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    [RecNetEnvelope]
     public async Task<IActionResult> BareTags(long roomId)
     {
         var payload = await ReadPayloadAsync();
@@ -567,6 +570,7 @@ public class RoomsModerationController(
     [HttpPost("roomserver/rooms/{roomId:long}/accessibility")]
     [HttpPut("roomserver/rooms/{roomId:long}/accessibility")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    [RecNetEnvelope]
     public async Task<IActionResult> BareAccessibility(long roomId)
     {
         var value = await ReadBareIntAsync("accessibility", "Accessibility", "value", "Value");
@@ -899,6 +903,7 @@ public class RoomsModerationController(
     [HttpPost("roomserver/rooms/{roomId:long}/cloning")]
     [HttpPut("roomserver/rooms/{roomId:long}/cloning")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    [RecNetEnvelope]
     public async Task<IActionResult> BareCloning(long roomId)
     {
         var value = await ReadBareBoolAsync("cloningAllowed", "CloningAllowed", "value", "Value");
@@ -918,6 +923,7 @@ public class RoomsModerationController(
     [HttpPost("roomserver/rooms/{roomId:long}/automute")]
     [HttpPut("roomserver/rooms/{roomId:long}/automute")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    [RecNetEnvelope]
     public async Task<IActionResult> BareAutomute(long roomId)
     {
         var value = await ReadBareBoolAsync("disable", "Disable", "DisableMicAutoMute", "value", "Value");
@@ -939,6 +945,7 @@ public class RoomsModerationController(
     [HttpPost("roomserver/rooms/{roomId:long}/restrictions")]
     [HttpPut("roomserver/rooms/{roomId:long}/restrictions")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    [RecNetEnvelope]
     public async Task<IActionResult> BareRestrictions(long roomId)
     {
         var payload = await ReadPayloadAsync();
@@ -965,6 +972,7 @@ public class RoomsModerationController(
     [HttpPost("roomserver/rooms/{roomId:long}/warning")]
     [HttpPut("roomserver/rooms/{roomId:long}/warning")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    [RecNetEnvelope]
     public async Task<IActionResult> BareWarning(long roomId)
     {
         var payload = await ReadPayloadAsync();
@@ -983,6 +991,7 @@ public class RoomsModerationController(
     [HttpPost("roomserver/rooms/{roomId:long}/creator")]
     [HttpPut("roomserver/rooms/{roomId:long}/creator")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    [RecNetEnvelope]
     public async Task<IActionResult> BareCreator(long roomId)
     {
         var creatorId = await ReadBareLongAsync(
@@ -1001,6 +1010,7 @@ public class RoomsModerationController(
     [HttpPost("roomserver/rooms/{roomId:long}/allow_new_users")]
     [HttpPut("roomserver/rooms/{roomId:long}/allow_new_users")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    [RecNetEnvelope]
     public async Task<IActionResult> BareAllowNewUsers(long roomId)
     {
         var value = await ReadBareBoolAsync("allowNewUsers", "AllowNewUsers", "value", "Value");
@@ -1015,6 +1025,7 @@ public class RoomsModerationController(
     [HttpPost("roomserver/rooms/{roomId:long}/min_level")]
     [HttpPut("roomserver/rooms/{roomId:long}/min_level")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    [RecNetEnvelope]
     public async Task<IActionResult> BareMinLevel(long roomId)
     {
         var value = await ReadBareIntAsync("minLevel", "MinLevel", "level", "Level", "value", "Value");
@@ -1029,6 +1040,7 @@ public class RoomsModerationController(
     [HttpPost("roomserver/rooms/{roomId:long}/max_player_calculation_mode")]
     [HttpPut("roomserver/rooms/{roomId:long}/max_player_calculation_mode")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    [RecNetEnvelope]
     public async Task<IActionResult> BareMaxPlayerCalculationMode(long roomId)
     {
         var value = await ReadBareIntAsync(
@@ -1054,6 +1066,7 @@ public class RoomsModerationController(
     [HttpPost("roomserver/rooms/{roomId:long}/loadscreen")]
     [HttpPut("roomserver/rooms/{roomId:long}/loadscreen")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    [RecNetEnvelope]
     public async Task<IActionResult> BareLoadScreen(long roomId)
     {
         var payload = await ReadPayloadAsync();
@@ -1085,6 +1098,7 @@ public class RoomsModerationController(
     [HttpDelete("rooms/{roomId:long}/loadscreen")]
     [HttpDelete("roomserver/rooms/{roomId:long}/loadscreen")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    [RecNetEnvelope]
     public async Task<IActionResult> BareLoadScreenRemove(long roomId)
     {
         var imageName = await ReadStringValueAsync("imageName", "ImageName", "name", "Name", "value", "Value")
@@ -1121,6 +1135,7 @@ public class RoomsModerationController(
     [HttpPost("roomserver/rooms/{roomId:long}/promo_images")]
     [HttpPut("roomserver/rooms/{roomId:long}/promo_images")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    [RecNetEnvelope]
     public async Task<IActionResult> BarePromoImagesAdd(long roomId)
     {
         var image = await ReadStringValueAsync("imageName", "ImageName", "name", "Name", "value", "Value");
@@ -1137,6 +1152,7 @@ public class RoomsModerationController(
     [HttpDelete("rooms/{roomId:long}/promo_images")]
     [HttpDelete("roomserver/rooms/{roomId:long}/promo_images")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    [RecNetEnvelope]
     public async Task<IActionResult> BarePromoImagesRemove(long roomId)
     {
         var image = await ReadStringValueAsync("imageName", "ImageName", "name", "Name", "value", "Value");
@@ -1167,6 +1183,7 @@ public class RoomsModerationController(
     [HttpPost("roomserver/rooms/{roomId:long}/promo_external")]
     [HttpPut("roomserver/rooms/{roomId:long}/promo_external")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    [RecNetEnvelope]
     public async Task<IActionResult> BarePromoExternalAdd(long roomId)
     {
         var payload = await ReadPayloadAsync();
@@ -1197,6 +1214,7 @@ public class RoomsModerationController(
     [HttpDelete("rooms/{roomId:long}/promo_external")]
     [HttpDelete("roomserver/rooms/{roomId:long}/promo_external")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    [RecNetEnvelope]
     public async Task<IActionResult> BarePromoExternalRemove(long roomId)
     {
         var payload = await ReadPayloadAsync();
@@ -1275,6 +1293,7 @@ public class RoomsModerationController(
     [HttpPost("roomserver/rooms/{roomId:long}/voice_chat_encryption")]
     [HttpPut("roomserver/rooms/{roomId:long}/voice_chat_encryption")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    [RecNetEnvelope]
     public async Task<IActionResult> BareAck(long roomId) =>
         await ApplyAndReturn(roomId, _ => { /* value not persistable: no column */ });
 
@@ -1305,6 +1324,7 @@ public class RoomsModerationController(
     [HttpPost("roomserver/rooms/{roomId:long}/modify")]
     [HttpPut("roomserver/rooms/{roomId:long}/modify")]
     [Consumes("application/x-www-form-urlencoded", "multipart/form-data", "application/json")]
+    [RecNetEnvelope]
     public async Task<IActionResult> BareModify(long roomId)
     {
         var payload = await ReadPayloadAsync();
@@ -1432,6 +1452,13 @@ public class RoomsModerationController(
             // it editable. Safe for admin: the purge gate and "RR Original"
             // badge both key on CreatorPlayerId == SystemAccountId, so a
             // user-owned clone is still shown as Custom and stays purgeable.
+            //
+            // The WIRE IsRRO is a different thing: it is false for every
+            // player-owned room (RoomService.WireIsRRO). The 2023 client's
+            // room-load pipeline never reads IsRRO (the baked scene comes
+            // from the sub-room's UnitySceneId, the blob step from DataBlob),
+            // while its owner UI refuses publish and every room setting on
+            // an RRO, which is what kept cloned rooms from being published.
             IsAGRoom = source.IsAGRoom,
             IsDormRoom = false,
             CloningAllowed = source.CloningAllowed,
@@ -1509,6 +1536,18 @@ public class RoomsModerationController(
             CanMatchmakeInto = s.CanMatchmakeInto,
             DataModifiedAt = DateTime.UtcNow,
         }).ToList();
+        // A template with no scene rows still has to give the new room a
+        // real entry sub-room (named "Home", from the clone's own location,
+        // blob and capacity). Without it the details served a synthesised
+        // placeholder and Room Settings > Subrooms showed an empty row.
+        if (clonedScenes.Count == 0)
+        {
+            var home = Services.RoomService.NewHomeScene(clone);
+            home.Id = ++nextSceneId;
+            clonedScenes.Add(home);
+        }
+        foreach (var scene in clonedScenes.Where(s => string.IsNullOrWhiteSpace(s.Name)))
+            scene.Name = Services.RoomService.DefaultSubRoomName(scene.OrderIndex);
         if (clonedScenes.Count > 0)
         {
             db.RoomScenes.AddRange(clonedScenes);
@@ -1580,8 +1619,11 @@ public class RoomsModerationController(
             // The scene was created as a shallow copy, so its DataBlobName is
             // currently the SOURCE's. Either a copy replaces it or it gets
             // cleared — it must never survive as-is.
+            // A synthesised Home scene (template had no rows) has no source
+            // scene; it starts from the room-level blob it was built with.
+            var sourceBlob = i < sourceScenes.Count ? sourceScenes[i].DataBlobName : target.DataBlobName;
             var copied = await CopyBlobForCloneAsync(
-                sourceScenes[i].DataBlobName, clone.Id, target.OrderIndex, callerId);
+                sourceBlob, clone.Id, target.OrderIndex, callerId);
 
             target.DataBlobName = copied ?? string.Empty;
             target.DataModifiedAt = DateTime.UtcNow;
@@ -1892,7 +1934,13 @@ public class RoomsModerationController(
     /// <see cref="BareClone"/>). The slim RoomService.ToWireRoom has no
     /// SubRooms/Roles/Tags/LoadScreens/PromoImages/DataBlob, so the strict
     /// reader's dispose-walk NRE'd on the missing nested lists and every
-    /// mutation reported failure even though it had persisted.</summary>
+    /// mutation reported failure even though it had persisted.
+    ///
+    /// <para>That helper is <c>NLDBPDCNNCF.BDBHCEGKGDC&lt;TResult&gt;</c>, the
+    /// <c>{success, value, error}</c> envelope reader, so the details are the
+    /// envelope's <c>value</c>: every caller carries
+    /// <see cref="Controllers.RecNetEnvelopeAttribute"/>. A bare details body
+    /// fails with "Exception of type 'CEMNLBKJABA' was thrown."</para></summary>
     private async Task<object> BuildRoomDetailsAsync(RoomEntity room)
     {
         var scenes = await db.RoomScenes

@@ -317,6 +317,10 @@ public class GoToController(
         [FromForm(Name = "JoinMode")] int joinMode = 0,
         [FromForm(Name = "AdditionalPlayerIds")] List<long>? additionalPlayerIds = null)
     {
+        // The client sends the wire SubRoomId it read from the room details
+        // (OrderIndex + 1, see RoomSceneIds); everything below works in
+        // OrderIndex.
+        subRoomId = RoomSceneIds.ToOrderIndex(subRoomId);
         var room = await rooms.GetByIdAsync(roomId);
         if (room is null)
         {
@@ -1552,8 +1556,24 @@ public class RoomInstanceDto
     [JsonPropertyName("roomId")]
     public long RoomId { get; set; }
 
-    [JsonPropertyName("subRoomId")]
+    /// <summary>The sub-room's <see cref="Data.Entities.RoomSceneEntity.OrderIndex"/>
+    /// (0 = the room's first sub-room). Server code reads and writes this;
+    /// the wire carries <see cref="WireSubRoomId"/>.</summary>
+    [JsonIgnore]
     public long SubRoomId { get; set; }
+
+    /// <summary>The 2023 client's SubRoomId: OrderIndex + 1 (see
+    /// <see cref="Services.RoomSceneIds"/>). It must equal the
+    /// <c>SubRooms[].SubRoomId</c> the room details advertise — the client
+    /// compares the two (<c>SubroomModel.get_SubroomIsLocal</c>) and looks the
+    /// current sub-room up by it. Presence round-trips through this property
+    /// too, so stored JSON stays consistent.</summary>
+    [JsonPropertyName("subRoomId")]
+    public long WireSubRoomId
+    {
+        get => Services.RoomSceneIds.ToWire(SubRoomId);
+        set => SubRoomId = Services.RoomSceneIds.ToOrderIndex(value);
+    }
 
     // STRING RoomSceneLocationId GUID — foreign-keys to
     // AGRoomRuntimeConfig.Locations[].ReplicationId. Resolved via
