@@ -484,7 +484,7 @@ public static class ServiceCollectionExtensions
                 o.Scope.Add(scope);
             o.SignInScheme = ExternalSignIn.ExternalScheme;
             o.CallbackPath = ExternalSignIn.CallbackPath;
-            o.GetClaimsFromUserInfoEndpoint = true;
+            o.GetClaimsFromUserInfoEndpoint = signIn.UseUserInfoEndpoint;
             o.MapInboundClaims = false;
             o.SaveTokens = false;
             o.CorrelationCookie.SecurePolicy = secure;

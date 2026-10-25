@@ -26,6 +26,12 @@ public sealed class ExternalSignInOptions
 
     public string Scopes { get; set; } = "openid email profile";
 
+    /// <summary>Also read the provider's userinfo endpoint after sign-in. Off by
+    /// default: the ID token already carries <c>sub</c> and <c>email</c>, and
+    /// Cloudflare Access answers userinfo without a Content-Type, which the
+    /// OpenID Connect handler rejects.</summary>
+    public bool UseUserInfoEndpoint { get; set; }
+
     public bool IsConfigured =>
         Authority.Length > 0 && ClientId.Length > 0 && ClientSecret.Length > 0;
 }
