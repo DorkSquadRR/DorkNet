@@ -119,6 +119,24 @@ public sealed class SubRoomsAndInstances2023Tests : IClassFixture<DorkNetServerF
     }
 
     [Fact]
+    public async Task Startup_repair_restores_a_missing_entry_sub_room_next_to_others()
+    {
+        var roomId = await SeedRoomAsync(1, accessibility: 0, scenes: new[] { "Home", "Back" });
+        await using var scope = _factory.Services.CreateAsyncScope();
+        var db = scope.ServiceProvider.GetRequiredService<DorkNetDbContext>();
+        await db.RoomScenes.Where(s => s.RoomId == roomId && s.OrderIndex == 0).ExecuteDeleteAsync();
+
+        var service = scope.ServiceProvider.GetRequiredService<RoomService>();
+        var (added, _) = await service.RepairRoomScenesAsync();
+        Assert.True(added >= 1);
+
+        var scenes = await db.RoomScenes.AsNoTracking().Where(s => s.RoomId == roomId)
+            .OrderBy(s => s.OrderIndex).Select(s => new { s.OrderIndex, s.Name }).ToListAsync();
+        Assert.Equal(new[] { (0, "Home"), (1, "Back") }, scenes.Select(s => (s.OrderIndex, s.Name)));
+        Assert.Equal((0, 0), await service.RepairRoomScenesAsync());
+    }
+
+    [Fact]
     public async Task Instance_browser_lists_the_private_instance_with_its_players_for_allowed_callers()
     {
         var owner = await PlayerAsync();
