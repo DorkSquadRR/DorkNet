@@ -28,7 +28,7 @@ RUN apt-get update \
  && wget -q "https://packages.microsoft.com/config/debian/${VERSION_ID}/packages-microsoft-prod.deb" -O /tmp/ms.deb \
  && dpkg -i /tmp/ms.deb && rm /tmp/ms.deb \
  && apt-get update \
- && apt-get install -y --no-install-recommends dotnet-sdk-8.0 \
+ && apt-get install -y --no-install-recommends dotnet-sdk-10.0 \
  && rm -rf /var/lib/apt/lists/*
 
 # ---- Python with LIEF (DT_NEEDED injection into libmain.so) ---------------

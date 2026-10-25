@@ -12,8 +12,8 @@ dist/
 # Local SQLite + uploaded blobs only — DON'T match the source-tree
 # DorkNet.Server/Data/ folder (which holds DbContext + Entities/) on
 # case-insensitive filesystems. Use the precise runtime data dirs.
-DorkNet.Server/bin/Debug/net9.0/data/
-DorkNet.Server/bin/Release/net9.0/data/
+DorkNet.Server/bin/Debug/net10.0/data/
+DorkNet.Server/bin/Release/net10.0/data/
 # appsettings.Production.json is intentionally versioned — contains
 # only the Postgres provider switch + Kestrel bind address. All real
 # secrets come from Coolify env vars at runtime.

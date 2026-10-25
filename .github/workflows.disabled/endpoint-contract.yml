@@ -25,7 +25,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 9.0.x
+          dotnet-version: 10.0.x
 
       - name: Install protobuf compiler
         run: |
@@ -40,7 +40,7 @@ jobs:
 
       - name: Start server
         run: |
-          dotnet DorkNet.Server/bin/Debug/net9.0/DorkNet.Server.dll > "$RUNNER_TEMP/dorknet-server.log" 2>&1 &
+          dotnet DorkNet.Server/bin/Debug/net10.0/DorkNet.Server.dll > "$RUNNER_TEMP/dorknet-server.log" 2>&1 &
           echo "$!" > "$RUNNER_TEMP/dorknet-server.pid"
 
       - name: Wait for server readiness
@@ -57,7 +57,7 @@ jobs:
       - name: Run endpoint contract
         run: |
           dotnet run --project tools/DorkNet.EndpointContract/DorkNet.EndpointContract.csproj --no-build -- \
-            --server-assembly DorkNet.Server/bin/Debug/net9.0/DorkNet.Server.dll \
+            --server-assembly DorkNet.Server/bin/Debug/net10.0/DorkNet.Server.dll \
             --base-url http://127.0.0.1:18080 \
             --report "$RUNNER_TEMP/endpoint-contract-report.json"
 
