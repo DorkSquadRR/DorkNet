@@ -22,8 +22,15 @@ export function getMe(fresh = false): Promise<AccountMe> {
 /** `url` if it is a path on this site, else `/` (the server applies the same
  * rule): never navigate to an address taken from the query string otherwise. */
 export function localPath(url: string | null | undefined): string {
-  if (!url || !url.startsWith('/') || url.startsWith('//') || url.startsWith('/\\')) return '/';
-  return url;
+  if (!url || !url.startsWith('/')) return '/';
+  // Parse it the way the browser will (it drops tabs and newlines and reads
+  // \ as /) and keep it only if it stays on this origin.
+  try {
+    const u = new URL(url, window.location.origin);
+    return u.origin === window.location.origin ? u.pathname + u.search + u.hash : '/';
+  } catch {
+    return '/';
+  }
 }
 
 /** Starts sign-in at the provider; comes back to `returnUrl` on this site. */
@@ -31,10 +38,17 @@ export function signInUrl(returnUrl = window.location.pathname + window.location
   return `/api/auth/external/login?returnUrl=${encodeURIComponent(returnUrl)}`;
 }
 
+// Each of these changes who is signed in, so the cached answer is dropped.
+async function changesAccount<T>(request: Promise<T>): Promise<T> {
+  const result = await request;
+  cached = null;
+  return result;
+}
+
 export const link = (username: string, password: string) =>
-  post<{ linked: boolean; username: string }>('/account/link', { username, password });
-export const signOut = () => post('/account/logout', {});
-export const unlink = () => post('/account/unlink', {});
+  changesAccount(post<{ linked: boolean; username: string }>('/account/link', { username, password }));
+export const signOut = () => changesAccount(post('/account/logout', {}));
+export const unlink = () => changesAccount(post('/account/unlink', {}));
 
 // Server error code -> friendly copy.
 export const LINK_ERRORS: Record<string, string> = {
