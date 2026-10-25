@@ -9,8 +9,9 @@
 // from the agent's environment (ARCHIVE_PC_REPO / ARCHIVE_QUEST_REPO), each
 // overridable per run. A build is picked by snapshot tags.
 //
-// On a push, only the platforms whose code changed are rebuilt. A manual run
-// picks the platforms with PLATFORMS. See ci/jenkins/README.md.
+// A push builds only the platforms whose client code changed (never for
+// docs or CI-only changes). A manual run picks the platforms with PLATFORMS.
+// See ci/jenkins/README.md.
 //
 // Finished builds are renamed for players and published to the downloads bucket
 // (ci/downloads) unless PUBLISH_DOWNLOADS is off. The build scripts keep their
@@ -76,10 +77,15 @@ pipeline {
             for (cs in currentBuild.changeSets) {
               for (entry in cs.items) changed.addAll(entry.affectedPaths)
             }
-            def touches = { prefixes -> changed.any { p -> prefixes.any { p.startsWith(it) } } }
-            def common = ['Jenkinsfile', 'ci/jenkins/']
-            buildPc = touches(common + ['DorkNet.ClientMod/', 'tools/build_pc.py'])
-            buildQuest = touches(common + ['DorkNet.Quest/'])
+            // Only client-facing changes rebuild (and so republish) a
+            // platform; Markdown (.md, .markdown) doesn't count. The job's Git path filter
+            // uses the same paths, so other pushes don't start a run at all.
+            // A CI-only change (Jenkinsfile, ci/) takes a manual run.
+            def touches = { prefixes ->
+              changed.any { p -> !(p.toLowerCase() ==~ /.*\.(md|markdown)/) && prefixes.any { p.startsWith(it) } }
+            }
+            buildPc = touches(['DorkNet.ClientMod/', 'tools/build_pc.py'])
+            buildQuest = touches(['DorkNet.Quest/'])
             echo "Push build; ${changed.size()} changed file(s)"
           } else {
             buildPc = params.PLATFORMS in ['both', 'pc']
@@ -220,10 +226,15 @@ pipeline {
       archiveArtifacts artifacts: 'out/downloads/**', allowEmptyArchive: true, fingerprint: true
     }
     cleanup {
-      // Runs after archiving. Keeps the restic cache and restored stock
-      // builds ($DORKNET_CACHE on the agent, outside the workspace); drops
-      // the workspace's build output and scratch.
-      cleanWs(deleteDirs: true, notFailBuild: true)
+      // Runs after archiving. Drops the build output and scratch (several
+      // GB) but keeps the Git checkout: the job's path filter compares
+      // pushes against it, and without a workspace Jenkins treats every
+      // push as a change and starts a run. The restic cache and restored
+      // stock builds live outside the workspace ($DORKNET_CACHE).
+      cleanWs(deleteDirs: true, notFailBuild: true, patterns: [
+        [pattern: 'out/**', type: 'INCLUDE'],
+        [pattern: 'quest-work/**', type: 'INCLUDE'],
+      ])
     }
   }
 }

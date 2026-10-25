@@ -60,10 +60,21 @@ Resolve a table for another build locally with `build.py build --dump-cs`.
 
 ## Triggers
 
-- **Push** to the branch (GitHub webhook) rebuilds only what changed:
-  - `DorkNet.ClientMod/` and the PC scripts rebuild PC;
+- **Push** to the branch (GitHub webhook) builds only for client-facing
+  changes, and only the platform they touch:
+  - `DorkNet.ClientMod/` and `tools/build_pc.py` rebuild PC;
   - `DorkNet.Quest/` rebuilds Quest;
-  - `Jenkinsfile` and `ci/jenkins/` rebuild both.
+  - Markdown files (`.md`, `.markdown`) never count; server, docs and CI-only pushes (including
+    the `Jenkinsfile` and `ci/`) build nothing. Run those manually.
+
+  Set the same filter on the job so other pushes don't start a run at all:
+  under the job's **Git** source, add **Additional Behaviours → Polling
+  ignores commits in certain paths** with included regions
+  `DorkNet[.]ClientMod/.*`, `DorkNet[.]Quest/.*`, `tools/build_pc[.]py` (one
+  per line) and excluded region `.*[.](md|markdown)`. The filter compares against the
+  last build's checkout, so the pipeline keeps it and deletes only `out/`
+  and its scratch folders after each run; without a checkout, Jenkins treats
+  every push as a change.
 - **Build with Parameters** runs a manual build:
   - `PLATFORMS` (both / pc / quest), and `PC_FULL_CLIENT` for the full PC client;
   - snapshot tags, and per-run repository overrides;
