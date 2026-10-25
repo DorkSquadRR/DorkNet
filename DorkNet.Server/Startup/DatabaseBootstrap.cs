@@ -15,9 +15,9 @@ namespace DorkNet.Server.Startup;
 ///   <item>SQLite — <c>Database.Migrate()</c> after
 ///   <see cref="BaselineExistingSchemaIfNeeded"/> reconciles any legacy
 ///   migration-history state.</item>
-///   <item>Postgres — <c>EnsureCreated</c> behind a transaction-scoped
-///   advisory lock so concurrent replica boots don't race on
-///   <c>CREATE TABLE</c>. Connect retries cover the
+///   <item>Postgres — <c>EnsureCreated</c>, with the whole bootstrap
+///   (schema and seeds) behind a session advisory lock so concurrent
+///   replica boots take turns instead of racing. Connect retries cover the
 ///   container-orchestrated boot window where Postgres DNS isn't
 ///   resolvable yet.</item>
 /// </list>
@@ -40,62 +40,110 @@ public static class DatabaseBootstrap
             await ConfigureSqliteForLocalConcurrencyAsync(db);
             BaselineExistingSchemaIfNeeded(db);
             db.Database.Migrate();
+            await RunUpgradesAndSeedsAsync(app, scope, db);
+            return;
         }
-        else
+
+        // Postgres path: schema generated from the EF Core model via
+        // EnsureCreated, then the same upgrades and seeds as SQLite. The
+        // whole bootstrap holds a session-level advisory lock, so replicas
+        // booting against one database take turns: the first creates the
+        // schema and seeds, the rest find everything in place. Holding it
+        // only around EnsureCreated left the seeders racing (duplicate keys
+        // on a fresh database).
+        //
+        // Lock key 0x444F524B (ascii "DORK") is hard-coded; it just needs
+        // to be the same int64 across replicas and not collide with
+        // anything else in the database. It is released in the finally
+        // below, and Postgres drops it if the replica's connection dies, so
+        // a crashed replica can't wedge the next boot.
+        var conn = db.Database.GetDbConnection();
+
+        // Retry initial Postgres connect — on container-orchestrated boots
+        // (Coolify, docker-compose) the Postgres service's DNS often isn't
+        // resolvable yet when this app starts, surfacing as SocketException
+        // errno=11 EAGAIN from Npgsql's Dns.GetHostEntryOrAddressesCore.
+        // Postgres itself can also be up-but-not-accepting-connections for
+        // a few seconds while it replays WAL. 15 attempts × ~2s backoff
+        // covers the typical 5-30s warmup window without looping forever
+        // on a permanently broken config.
+        var connectLogger = app.Services.GetRequiredService<ILoggerFactory>()
+            .CreateLogger("DorkNet.Server.Bootstrap");
+        for (var attempt = 1; ; attempt++)
         {
-            // Postgres path: schema generated from the EF Core model via
-            // EnsureCreated. Wrapped in a transaction-scoped advisory lock
-            // so concurrent replicas booting against the same database
-            // don't race on CREATE TABLE — only the first replica to take
-            // the lock runs EnsureCreated, the rest see "schema already
-            // exists" and proceed.
-            //
-            // Lock key 0x444F524B (ascii "DORK") is hard-coded; it just
-            // needs to be the same int64 across replicas and not collide
-            // with anything else in the database. pg_advisory_xact_lock
-            // releases automatically on COMMIT, so a crashed replica can't
-            // wedge the next boot.
-            var conn = db.Database.GetDbConnection();
-
-            // Retry initial Postgres connect — on container-orchestrated boots
-            // (Coolify, docker-compose) the Postgres service's DNS often isn't
-            // resolvable yet when this app starts, surfacing as SocketException
-            // errno=11 EAGAIN from Npgsql's Dns.GetHostEntryOrAddressesCore.
-            // Postgres itself can also be up-but-not-accepting-connections for
-            // a few seconds while it replays WAL. 15 attempts × ~2s backoff
-            // covers the typical 5-30s warmup window without looping forever
-            // on a permanently broken config.
-            var connectLogger = app.Services.GetRequiredService<ILoggerFactory>()
-                .CreateLogger("DorkNet.Server.Bootstrap");
-            for (var attempt = 1; ; attempt++)
+            try { await conn.OpenAsync(); break; }
+            catch (Exception ex) when (attempt < 15 &&
+                (ex is System.Net.Sockets.SocketException
+                 || ex is Npgsql.NpgsqlException
+                 || ex is System.Data.Common.DbException))
             {
-                try { await conn.OpenAsync(); break; }
-                catch (Exception ex) when (attempt < 15 &&
-                    (ex is System.Net.Sockets.SocketException
-                     || ex is Npgsql.NpgsqlException
-                     || ex is System.Data.Common.DbException))
-                {
-                    var delay = TimeSpan.FromSeconds(Math.Min(attempt, 5));
-                    connectLogger.LogWarning(
-                        "[bootstrap] Postgres connect attempt {Attempt}/15 failed ({Type}: {Message}); retrying in {Delay}s",
-                        attempt, ex.GetType().Name, ex.Message, delay.TotalSeconds);
-                    await Task.Delay(delay);
-                }
+                var delay = TimeSpan.FromSeconds(Math.Min(attempt, 5));
+                connectLogger.LogWarning(
+                    "[bootstrap] Postgres connect attempt {Attempt}/15 failed ({Type}: {Message}); retrying in {Delay}s",
+                    attempt, ex.GetType().Name, ex.Message, delay.TotalSeconds);
+                await Task.Delay(delay);
             }
-            // Begin the transaction through EF, not on the raw connection:
-            // since EF Core 10, EnsureCreated runs its commands through the
-            // migration executor, which starts its own transaction unless EF
-            // already has one, and fails on a fresh database with "A
-            // transaction is already in progress" when the open one is
-            // invisible to it.
-            await using var tx = await db.Database.BeginTransactionAsync();
-            await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(1146246987);");
-            db.Database.EnsureCreated();
-            await tx.CommitAsync();
-
-            await conn.CloseAsync();
         }
 
+        // The connection stays open until the finally, so every step below
+        // (they all share this scope's DbContext) runs on the session that
+        // holds the lock. Waiting for it has no command timeout: another
+        // replica may be seeding a fresh database (thumbnail downloads
+        // included) for well over the default 30 s.
+        connectLogger.LogInformation("[bootstrap] waiting for the database bootstrap lock");
+        var previousTimeout = db.Database.GetCommandTimeout();
+        db.Database.SetCommandTimeout(0);
+        try
+        {
+            await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_lock(1146246987);");
+        }
+        finally
+        {
+            db.Database.SetCommandTimeout(previousTimeout);
+        }
+        connectLogger.LogInformation("[bootstrap] holding the database bootstrap lock");
+        try
+        {
+            // Begin the transaction through EF, not on the raw connection:
+            // EnsureCreated runs its commands through the migration executor,
+            // which starts its own transaction unless EF already has one, and
+            // fails on a fresh database with "A transaction is already in
+            // progress" when the open one is invisible to it.
+            await using (var tx = await db.Database.BeginTransactionAsync())
+            {
+                db.Database.EnsureCreated();
+                await tx.CommitAsync();
+            }
+            await RunUpgradesAndSeedsAsync(app, scope, db);
+        }
+        finally
+        {
+            // Explicit: Npgsql pools connections, so closing alone would not
+            // end the session that holds the lock. If the connection is
+            // already broken the unlock fails too; that must not replace the
+            // real bootstrap error, and the connection still gets closed
+            // (Postgres then drops the lock with the session).
+            try
+            {
+                await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_unlock(1146246987);");
+            }
+            catch (Exception ex)
+            {
+                connectLogger.LogWarning(ex, "[bootstrap] releasing the database bootstrap lock failed");
+            }
+            finally
+            {
+                await conn.CloseAsync();
+            }
+        }
+    }
+
+    /// <summary>The idempotent post-schema sequence both providers run:
+    /// column/table upgrades, system account and backfills, legacy data
+    /// transforms, canonical rooms and the per-feature seeders. Flips the
+    /// <c>/healthz</c> readiness flag at the end.</summary>
+    private static async Task RunUpgradesAndSeedsAsync(WebApplication app, IServiceScope scope, DorkNetDbContext db)
+    {
         // Signup-code + pending-device tables. These post-date the
         // consolidated Initial migration, and the Postgres path is
         // EnsureCreated-only (no migration replay), so neither provider
