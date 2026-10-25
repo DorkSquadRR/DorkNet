@@ -119,6 +119,35 @@ public sealed class SubRoomsAndInstances2023Tests : IClassFixture<DorkNetServerF
     }
 
     [Fact]
+    public async Task Room_level_restore_also_restores_the_entry_sub_room()
+    {
+        var owner = await PlayerAsync();
+        var roomId = await SeedRoomAsync(owner.PlayerId, accessibility: 0, scenes: new[] { "Home", "Back" });
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<DorkNetDbContext>();
+            await db.RoomScenes.Where(s => s.RoomId == roomId)
+                .ExecuteUpdateAsync(s => s.SetProperty(x => x.DataBlobName, "blob-old"));
+            db.RoomDataBlobs.Add(new RoomDataBlobEntity { RoomId = roomId, BlobName = "blob-new", UploadedByPlayerId = owner.PlayerId });
+            await db.SaveChangesAsync();
+        }
+
+        using var api = Client("api", owner);
+        using var response = await api.PostAsync("/api/rooms/v1/restore", new FormUrlEncodedContent(new Dictionary<string, string>
+        {
+            ["roomId"] = roomId.ToString(), ["blobName"] = "blob-new",
+        }));
+        Assert.True(response.IsSuccessStatusCode, await response.Content.ReadAsStringAsync());
+
+        await using var check = _factory.Services.CreateAsyncScope();
+        var checkDb = check.ServiceProvider.GetRequiredService<DorkNetDbContext>();
+        var blobs = await checkDb.RoomScenes.AsNoTracking().Where(s => s.RoomId == roomId)
+            .OrderBy(s => s.OrderIndex).Select(s => s.DataBlobName).ToListAsync();
+        // The entry sub-room follows the restore; other sub-rooms keep theirs.
+        Assert.Equal(new[] { "blob-new", "blob-old" }, blobs);
+    }
+
+    [Fact]
     public async Task Startup_repair_restores_a_missing_entry_sub_room_next_to_others()
     {
         var roomId = await SeedRoomAsync(1, accessibility: 0, scenes: new[] { "Home", "Back" });

@@ -141,7 +141,19 @@ public class PlayerPresenceService
         {
             try
             {
-                mux.GetDatabase().KeyExpire(Key(playerId), PresenceTtl);
+                var db = mux.GetDatabase();
+                db.KeyExpire(Key(playerId), PresenceTtl);
+                // Keep the room's membership index alive as long as its
+                // members are: a player refreshed only through here would
+                // otherwise outlive the set (SetRoom's 2 × TTL) and drop out
+                // of the instance browser and room pushes.
+                var json = db.StringGet(Key(playerId));
+                if (json.HasValue &&
+                    JsonSerializer.Deserialize<RoomInstanceDto>(json.ToString(), JsonOpts) is { RoomId: > 0 } room)
+                {
+                    db.SetAdd(RoomIndexKey(room.RoomId), playerId);
+                    db.KeyExpire(RoomIndexKey(room.RoomId), PresenceTtl + PresenceTtl);
+                }
             }
             catch (Exception ex)
             {

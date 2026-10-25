@@ -60,7 +60,7 @@ public static class RoomPermissionMatrix
             var cell = new Cell(row.Permission, row.Role, row.Override, row.Type, row.Value);
             var at = cells.FindIndex(c =>
                 c.Role == row.Role
-                && string.Equals(c.Permission, row.Permission, StringComparison.OrdinalIgnoreCase));
+                && string.Equals(c.Permission, row.Permission, StringComparison.Ordinal));
             if (at >= 0) cells[at] = cell;
             else cells.Add(cell);
         }
