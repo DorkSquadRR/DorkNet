@@ -74,6 +74,25 @@ Jenkins runs as a Coolify service from a Compose file:
 - **Run no builds on it:** **Manage Jenkins → Nodes → Built-In Node →
   Configure**, set **Number of executors** to `0`.
 
+#### Upgrading from the old setup
+
+`ci/jenkins/docker-compose.yml` used to define the Jenkins **controller**
+(its `jenkins` service, built from `ci/jenkins/Dockerfile`, with the
+`jenkins_home` volume). It now defines only the build agent. If your Jenkins
+was deployed from that file, **don't redeploy that application** from this
+version: it would replace the controller with an agent, and Jenkins stops
+until you rebuild it. The data volume survives, but nothing serves it.
+
+Instead:
+
+1. Create a new service for the controller as above, on the stock Java 25
+   image, mounting the **same** data volume: reference the old volume by its
+   full name and mark it `external: true`, or Jenkins starts empty.
+2. Stop the old application, start the new service, and check that your jobs
+   and credentials are there.
+3. Deploy the agent (step 3) as a **new** application, then delete the old
+   one without deleting its volume.
+
 ### 2. The agent node
 
 **Manage Jenkins → Nodes → New Node**, a permanent agent:
