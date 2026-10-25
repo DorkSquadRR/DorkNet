@@ -412,6 +412,36 @@ for building and installing the patched APK.
 
 ---
 
+## Client downloads
+
+Optional. When CI publishes the client builds to a bucket
+(`ci/downloads/publish.py`, see `ci/jenkins/README.md`), the server can offer
+them on the public site:
+
+- a **Downloads** page (`/downloads`) listing every published file with its
+  size and SHA-256;
+- **Latest build** on the **Quest** page, which installs the newest Quest
+  package straight from the server: the browser reads it with HTTP Range
+  requests, so nothing is downloaded first.
+
+The server reads `manifest.json` and the files over plain HTTP, from inside
+your network, and streams them to the browser. Only files the manifest lists
+are served. The bucket itself never needs to be public.
+
+```env
+# Where manifest.json is: e.g. Garage's web endpoint on the internal network.
+DorkNet__Downloads__BaseUrl=http://garage-<service uuid>:3902
+# Optional Host header, for web endpoints that pick the bucket by host name
+# (Garage serves the bucket whose name matches it).
+DorkNet__Downloads__Host=<bucket name>
+```
+
+Unset, the site hides both features. The builds contain Rec Room's own game
+files: only turn this on when the site is behind an access proxy (e.g.
+Cloudflare Access) that admits just your community.
+
+---
+
 ## Photon Cloud
 
 Use your own Photon AppIds. Rec Room's original Photon AppIds reject

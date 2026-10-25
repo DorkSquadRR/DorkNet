@@ -217,6 +217,12 @@ public static class ServiceCollectionExtensions
         // so a deployment with no GitHub credentials behaves normally.
         services.AddSingleton<IGitHubIssues, GitHubIssueService>();
         services.AddHostedService<TestCaseIssueReconciler>();
+        // CI-published client builds for the site's Downloads / Quest pages.
+        // Off (IsConfigured=false) without DorkNet:Downloads:BaseUrl. No client
+        // timeout: a multi-GB file streams for longer than the default 100 s;
+        // the request's own abort token still ends it.
+        services.AddHttpClient(DownloadsService.HttpClientName, c => c.Timeout = Timeout.InfiniteTimeSpan);
+        services.AddSingleton<DownloadsService>();
         // Scoped (per-request) — these services hold DbContext references and
         // must share the request's scope to participate in the request's
         // transaction lifecycle. Pre-PR-3 they were Singleton with in-process
