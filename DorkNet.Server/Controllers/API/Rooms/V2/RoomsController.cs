@@ -1406,6 +1406,7 @@ public class RoomsController(
             .ExecuteUpdateAsync(s => s
                 .SetProperty(r => r.CurrentDataBlobName, blob.BlobName)
                 .SetProperty(r => r.UpdatedAt, DateTime.UtcNow));
+        if (!room.IsDormRoom) await SyncEntrySceneBlobAsync(room.Id, blob.BlobName);
         await db.SaveChangesAsync();
 
         // Push the same SubscriptionUpdateRoom the save flow sends so
@@ -1479,8 +1480,25 @@ public class RoomsController(
             .ExecuteUpdateAsync(s => s
                 .SetProperty(r => r.CurrentDataBlobName, blob.BlobName)
                 .SetProperty(r => r.UpdatedAt, DateTime.UtcNow));
+        if (!room.IsDormRoom) await SyncEntrySceneBlobAsync(roomId, blob.BlobName);
         await db.SaveChangesAsync();
         return Ok(new { restored = blob.BlobName });
+    }
+
+    /// <summary>A room-level restore also restores the entry sub-room
+    /// (OrderIndex 0): room details serve the entry scene's own blob ahead
+    /// of the room's, so updating only <c>Rooms.CurrentDataBlobName</c>
+    /// would leave the old version in place. The per-sub-room restore keeps
+    /// the two in step the other way round. Dorms keep their blob per
+    /// player (DormState) instead.</summary>
+    private Task SyncEntrySceneBlobAsync(long roomId, string blobName)
+    {
+        var now = DateTime.UtcNow;
+        return db.RoomScenes
+            .Where(s => s.RoomId == roomId && s.OrderIndex == 0)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.DataBlobName, blobName)
+                .SetProperty(x => x.DataModifiedAt, now));
     }
 
     /// <summary>GET <c>api/rooms/v{1,2}/personaldetails/{roomId}</c> —
@@ -3829,35 +3847,51 @@ public class RoomsController(
         var scene = await GetOrCreateSceneForMutationAsync(room, subRoomId);
         if (scene is null) return NotFound();
 
-        var existing = await db.RoomRolePermissions
-            .Where(p => p.RoomId == roomId && p.SubRoomId == subRoomId)
-            .ToListAsync();
         var now = DateTime.UtcNow;
-        foreach (var cell in cells)
-        {
-            var row = existing.FirstOrDefault(p =>
-                p.Role == cell.Role
-                && string.Equals(p.Permission, cell.Permission, StringComparison.OrdinalIgnoreCase));
-            if (row is null)
-            {
-                row = new RoomRolePermissionEntity
-                {
-                    RoomId = roomId,
-                    SubRoomId = subRoomId,
-                    Role = cell.Role,
-                    Permission = cell.Permission,
-                };
-                db.RoomRolePermissions.Add(row);
-                existing.Add(row);
-            }
-            row.Type = cell.Type;
-            row.Override = cell.Override;
-            row.Value = cell.Value;
-            row.UpdatedByPlayerId = pid;
-            row.UpdatedAt = now;
-        }
         scene.DataModifiedAt = now;
-        await db.SaveChangesAsync();
+        for (var attempt = 1; ; attempt++)
+        {
+            var existing = await db.RoomRolePermissions
+                .Where(p => p.RoomId == roomId && p.SubRoomId == subRoomId)
+                .ToListAsync();
+            foreach (var cell in cells)
+            {
+                // Exact match, like the unique index on
+                // (RoomId, SubRoomId, Role, Permission).
+                var row = existing.FirstOrDefault(p =>
+                    p.Role == cell.Role && string.Equals(p.Permission, cell.Permission, StringComparison.Ordinal));
+                if (row is null)
+                {
+                    row = new RoomRolePermissionEntity
+                    {
+                        RoomId = roomId,
+                        SubRoomId = subRoomId,
+                        Role = cell.Role,
+                        Permission = cell.Permission,
+                    };
+                    db.RoomRolePermissions.Add(row);
+                    existing.Add(row);
+                }
+                row.Type = cell.Type;
+                row.Override = cell.Override;
+                row.Value = cell.Value;
+                row.UpdatedByPlayerId = pid;
+                row.UpdatedAt = now;
+            }
+            try
+            {
+                await db.SaveChangesAsync();
+                break;
+            }
+            catch (DbUpdateException) when (attempt < 3)
+            {
+                // Another editor inserted the same new cell between our read
+                // and our insert (unique index). Forget our pending rows and
+                // apply the cells again, now as updates of theirs.
+                foreach (var entry in db.ChangeTracker.Entries<RoomRolePermissionEntity>().ToList())
+                    entry.State = EntityState.Detached;
+            }
+        }
 
         logger.LogInformation(
             "[subroom-permissions] room={Room} sub={Sub} by={By} cells={Count}",

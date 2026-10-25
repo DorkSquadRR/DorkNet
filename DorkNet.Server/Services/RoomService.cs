@@ -570,6 +570,22 @@ public class RoomService(DorkNetDbContext db)
         DataModifiedAt = DateTime.UtcNow,
     };
 
+    /// <summary>Postgres only: moves the RoomScenes id sequence past the
+    /// highest existing id. Rows written with explicit ids (seeds, older
+    /// builds of the clone and repair code) leave it behind, and the next
+    /// insert that relies on it (add / clone sub-room) then collides on the
+    /// primary key. A no-op on SQLite, which assigns max + 1 itself.</summary>
+    public async Task SyncRoomSceneIdSequenceAsync()
+    {
+        if (!db.Database.IsNpgsql()) return;
+        await db.Database.ExecuteSqlRawAsync(
+            """
+            SELECT setval(pg_get_serial_sequence('"RoomScenes"', 'Id'),
+                          GREATEST(COALESCE((SELECT MAX("Id") FROM "RoomScenes"), 0), 1),
+                          EXISTS (SELECT 1 FROM "RoomScenes"));
+            """);
+    }
+
     /// <summary>Startup self-heal for sub-rooms (idempotent).
     ///
     /// <para>Every non-dorm room must own at least one real RoomScenes row,
@@ -583,12 +599,12 @@ public class RoomService(DorkNetDbContext db)
     /// are left alone: their details are shaped per player and their single
     /// scene is synthesised on purpose.</para>
     ///
-    /// <para>Scene ids are assigned explicitly (max + 1) for the same reason
-    /// the clone handler does: seeded rows were inserted with manual ids
-    /// without advancing the Postgres identity sequence. Every service that
+    /// <para>It first moves the Postgres id sequence of RoomScenes past the
+    /// highest id (<see cref="SyncRoomSceneIdSequenceAsync"/>), then lets the
+    /// database assign ids like every other scene insert. Every service that
     /// runs the database bootstrap calls this at startup, so on Postgres the
-    /// whole repair holds the bootstrap's advisory lock: replicas booting
-    /// together take turns instead of handing out the same ids.</para>
+    /// whole repair holds the bootstrap's advisory lock and replicas booting
+    /// together take turns.</para>
     /// Returns (rooms given an entry scene, scenes renamed).</summary>
     public async Task<(int ScenesAdded, int ScenesRenamed)> RepairRoomScenesAsync()
     {
@@ -598,16 +614,13 @@ public class RoomService(DorkNetDbContext db)
 
         // The entry sub-room is OrderIndex 0 (its blob is the room's own front
         // door), so a room missing it is repaired even when it has others.
+        await SyncRoomSceneIdSequenceAsync();
+
         var roomsWithoutEntry = await db.Rooms
             .Where(r => !r.IsDormRoom && !db.RoomScenes.Any(s => s.RoomId == r.Id && s.OrderIndex == 0))
             .ToListAsync();
-        var nextSceneId = await db.RoomScenes.MaxAsync(s => (long?)s.Id) ?? 0L;
         foreach (var room in roomsWithoutEntry)
-        {
-            var scene = NewHomeScene(room);
-            scene.Id = ++nextSceneId;
-            db.RoomScenes.Add(scene);
-        }
+            db.RoomScenes.Add(NewHomeScene(room));
 
         var unnamed = await db.RoomScenes
             .Where(s => s.Name == null || s.Name.Trim() == string.Empty)
@@ -1144,9 +1157,7 @@ public class RoomService(DorkNetDbContext db)
 
         db.Rooms.Add(clone);
         // Every room owns a real entry sub-room (see RepairRoomScenesAsync).
-        var home = NewHomeScene(clone);
-        home.Id = (await db.RoomScenes.MaxAsync(s => (long?)s.Id) ?? 0L) + 1;
-        db.RoomScenes.Add(home);
+        db.RoomScenes.Add(NewHomeScene(clone));
         await db.SaveChangesAsync();
         return new CloneResult(0 /* Success */, clone);
     }
