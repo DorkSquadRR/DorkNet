@@ -82,13 +82,14 @@ public static class DatabaseBootstrap
                     await Task.Delay(delay);
                 }
             }
-            await using var tx = await conn.BeginTransactionAsync();
-            await using (var lockCmd = conn.CreateCommand())
-            {
-                lockCmd.Transaction = tx;
-                lockCmd.CommandText = "SELECT pg_advisory_xact_lock(1146246987);";
-                await lockCmd.ExecuteNonQueryAsync();
-            }
+            // Begin the transaction through EF, not on the raw connection:
+            // since EF Core 10, EnsureCreated runs its commands through the
+            // migration executor, which starts its own transaction unless EF
+            // already has one, and fails on a fresh database with "A
+            // transaction is already in progress" when the open one is
+            // invisible to it.
+            await using var tx = await db.Database.BeginTransactionAsync();
+            await db.Database.ExecuteSqlRawAsync("SELECT pg_advisory_xact_lock(1146246987);");
             db.Database.EnsureCreated();
             await tx.CommitAsync();
 
