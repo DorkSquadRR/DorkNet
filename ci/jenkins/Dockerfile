@@ -1,7 +1,7 @@
-# DorkNet Jenkins: the stock Jenkins image plus everything the PC and Quest
-# client builds need, so the job (the Jenkinsfile at the repo root) runs right
-# on the controller. Jobs, plugins and settings stay in the jenkins_home
-# volume; only the image changes.
+# DorkNet build agent: a Jenkins inbound agent with everything the PC and
+# Quest client builds need. It runs next to Jenkins on Coolify, connects to
+# the controller over WebSocket, and runs the jobs labelled "dorknet-builder"
+# (the Jenkinsfile at the repo root). Jenkins itself stays on the stock image.
 #
 #   PC      Python + .NET SDK          tools/build_pc.py
 #   Quest   Python/LIEF + JDK + Android NDK, build-tools, apktool
@@ -9,13 +9,13 @@
 #   Builds  restic + rclone            stock builds restored from the restic
 #                                      archive on the FTP (archive-restore.sh)
 #
+# Java 25: Jenkins supports it until Sep 2029 (Java 21 only until Sep 2027).
+# Keep the agent's Java the same major version as the controller's.
+#
 # See ci/jenkins/README.md.
 
-# Match this to the Jenkins image your Dokploy service runs today, so the
-# upgrade keeps the same Jenkins version and Java: e.g.
-#   --build-arg JENKINS_IMAGE=jenkins/jenkins:2.492.3-lts-jdk17
-ARG JENKINS_IMAGE=jenkins/jenkins:lts-jdk17
-FROM ${JENKINS_IMAGE}
+ARG AGENT_IMAGE=jenkins/inbound-agent:latest-jdk25
+FROM ${AGENT_IMAGE}
 
 USER root
 
@@ -73,9 +73,10 @@ RUN wget -q https://github.com/restic/restic/releases/download/v${RESTIC}/restic
 COPY archive-restore.sh /usr/local/bin/archive-restore
 RUN chmod +x /usr/local/bin/archive-restore
 
-# Restored stock builds and the restic cache live in the persistent
-# jenkins_home volume, so each multi-GB build is downloaded once.
-ENV DORKNET_CACHE=/var/jenkins_home/dorknet-cache
+# Restored stock builds and the restic cache. Mount a volume here so each
+# multi-GB stock build is downloaded once, not after every restart.
+ENV DORKNET_CACHE=/home/jenkins/dorknet-cache
+RUN mkdir -p ${DORKNET_CACHE} && chown jenkins:jenkins ${DORKNET_CACHE}
 
 ENV DOTNET_CLI_TELEMETRY_OPTOUT=1 \
     DOTNET_NOLOGO=1
