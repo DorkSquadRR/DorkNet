@@ -23,6 +23,8 @@ namespace DorkNet.Server.Tests;
 public sealed class ExternalSignInTests : IClassFixture<DorkNetServerFactory>
 {
     private const string Issuer = "https://idp.example.com";
+    // Test player ids: sequential, in a range no other test uses.
+    private static long _nextPlayerId = 9_600_000;
     private readonly DorkNetServerFactory _factory;
 
     public ExternalSignInTests(DorkNetServerFactory factory) => _factory = factory;
@@ -200,7 +202,7 @@ public sealed class ExternalSignInTests : IClassFixture<DorkNetServerFactory>
         var password = "pw-" + Guid.NewGuid().ToString("N")[..12];
         var player = new PlayerEntity
         {
-            Id = 9_400_000 + Random.Shared.Next(1, 99_999),
+            Id = Interlocked.Increment(ref _nextPlayerId),
             Username = "sso" + Guid.NewGuid().ToString("N")[..10],
             DisplayName = "SSO test",
             PasswordHash = BCrypt.Net.BCrypt.HashPassword(password),
