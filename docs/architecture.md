@@ -35,20 +35,20 @@ DorkNet.sln
 
 | Project | Responsibility | Target |
 |---|---|---|
-| `DorkNet.Server` | Shared REST/controller/service stack, database bootstrap, standalone fallback, monolith fallback | .NET 9 |
-| `DorkNet.Models` | DTOs the wire protocol speaks. No project dependencies. | .NET 9 |
-| `DorkNet.Contracts` | Service names, route ownership, service-map options, health responses, probe responses | .NET 9 |
-| `DorkNet.ServiceDefaults` | Common service health checks, JSON defaults, HTTP clients, service identity, route guard | .NET 9 |
-| `DorkNet.Gateway` | Edge reverse proxy; routes host/path slices to services and exposes service health probes | .NET 9 |
-| `DorkNet.Services.Identity` | Accounts, auth, platform login, JWT issuance route slice | .NET 9 |
-| `DorkNet.Services.Rooms` | Rooms, room keys, matchmaking, discovery route slice | .NET 9 |
-| `DorkNet.Services.Notify` | SignalR edge, messages/chat, notification fan-out route slice | .NET 9 |
-| `DorkNet.Services.Content` | CDN paths, image/photo APIs, uploads, S3-backed blobs | .NET 9 |
-| `DorkNet.Services.Social` | Clubs, groups, announcements, player events, subscriptions | .NET 9 |
-| `DorkNet.Services.Commerce` | Catalog, storefronts, econ, inventory, inventions | .NET 9 |
-| `DorkNet.Services.Platform` | Service URLs, config, version checks, geo, strings, telemetry-style surfaces | .NET 9 |
-| `DorkNet.Services.Moderation` | Bug reporting, player reporting, sanitize, path-routed admin API, testcase routes | .NET 9 |
-| `DorkNet.Services.Web` | Public site, admin static host, same-origin admin browser API, feed static host, site API | .NET 9 |
+| `DorkNet.Server` | Shared REST/controller/service stack, database bootstrap, standalone fallback, monolith fallback | .NET 10 |
+| `DorkNet.Models` | DTOs the wire protocol speaks. No project dependencies. | .NET 10 |
+| `DorkNet.Contracts` | Service names, route ownership, service-map options, health responses, probe responses | .NET 10 |
+| `DorkNet.ServiceDefaults` | Common service health checks, JSON defaults, HTTP clients, service identity, route guard | .NET 10 |
+| `DorkNet.Gateway` | Edge reverse proxy; routes host/path slices to services and exposes service health probes | .NET 10 |
+| `DorkNet.Services.Identity` | Accounts, auth, platform login, JWT issuance route slice | .NET 10 |
+| `DorkNet.Services.Rooms` | Rooms, room keys, matchmaking, discovery route slice | .NET 10 |
+| `DorkNet.Services.Notify` | SignalR edge, messages/chat, notification fan-out route slice | .NET 10 |
+| `DorkNet.Services.Content` | CDN paths, image/photo APIs, uploads, S3-backed blobs | .NET 10 |
+| `DorkNet.Services.Social` | Clubs, groups, announcements, player events, subscriptions | .NET 10 |
+| `DorkNet.Services.Commerce` | Catalog, storefronts, econ, inventory, inventions | .NET 10 |
+| `DorkNet.Services.Platform` | Service URLs, config, version checks, geo, strings, telemetry-style surfaces | .NET 10 |
+| `DorkNet.Services.Moderation` | Bug reporting, player reporting, sanitize, path-routed admin API, testcase routes | .NET 10 |
+| `DorkNet.Services.Web` | Public site, admin static host, same-origin admin browser API, feed static host, site API | .NET 10 |
 | `DorkNet.ClientMod` | MelonLoader 0.6.x IL2CPP mod — the client patcher, JSON config | .NET 6 |
 | `DorkNet.Quest` | native hook library + build scripts for the Meta Quest client | C++/arm64 |
 

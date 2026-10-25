@@ -26,7 +26,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '9.0.x'
+          dotnet-version: '10.0.x'
 
       # ── Server self-contained publish ────────────────────────────────
       - name: Publish DorkNet.Server (win-x64, self-contained)

@@ -64,7 +64,7 @@ What the 2023 client gets here that the 2020 branches don't have:
 
 ## Quickstart
 
-**1. Install .NET 9 SDK** and (optionally) `dotnet-ef`:
+**1. Install .NET 10 SDK** and (optionally) `dotnet-ef`:
 
 ```pwsh
 dotnet tool install --global dotnet-ef
@@ -101,7 +101,7 @@ cd DorkNet
 dotnet run --project DorkNet.Server
 ```
 
-First boot creates `bin/Debug/net9.0/data/dorknet.db`, runs every
+First boot creates `bin/Debug/net10.0/data/dorknet.db`, runs every
 `LegacyUpgrades` pass, seeds canonical rooms / store catalog / club
 categories / playlists, and starts listening. You should see
 `Application started.` in the log; `curl http://localhost:8080/healthz`
