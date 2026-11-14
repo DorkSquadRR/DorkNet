@@ -84,7 +84,7 @@ pipeline {
             def touches = { prefixes ->
               changed.any { p -> !(p.toLowerCase() ==~ /.*\.(md|markdown)/) && prefixes.any { p.startsWith(it) } }
             }
-            buildPc = touches(['DorkNet.ClientMod/', 'tools/build_pc.py', 'tools/patch_metadata.py'])
+            buildPc = touches(['DorkNet.ClientMod/', 'tools/build_pc.py', 'tools/patch_metadata.py', 'tools/test_patch_metadata.py'])
             buildQuest = touches(['DorkNet.Quest/'])
             echo "Push build; ${changed.size()} changed file(s)"
           } else {
@@ -117,6 +117,7 @@ pipeline {
     stage('PC patcher zip') {
       when { expression { buildPc } }
       steps {
+        sh 'python3 -m unittest discover -s tools -p "test_*.py"'
         sh "python3 tools/build_pc.py patcher --version-key ${PC_VERSION_KEY} --output-dir out/pc"
       }
     }

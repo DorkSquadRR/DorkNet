@@ -287,8 +287,21 @@ def load_config(path: Path) -> dict[str, str]:
 
 def patch_bytes(data: bytes, values: dict[str, str]) -> tuple[bytes, list[str]]:
     """Return (patched bytes, report lines). Raises PatchError on any problem."""
+    # A slot set to another slot's stock value (e.g. the two Photon AppIds
+    # swapped) would be found again as that other slot's original on the next
+    # run and flipped back, so the patch could never be idempotent. The stock
+    # values are Rec Room's own dead ids/hosts anyway: refuse the config.
+    originals = {s.original: s.key for s in SLOTS}
+    for key, new in values.items():
+        other = originals.get(new)
+        if other is not None and other != key:
+            raise PatchError(f"{key} is set to the client's stock {other} value")
+
     md = Metadata(data)
     report = []
+    # Locate every slot in the unmodified file first, so one replacement can
+    # never create matches for a later slot.
+    plan = []
     for slot in SLOTS:
         if slot.key not in values:
             continue
@@ -301,23 +314,27 @@ def patch_bytes(data: bytes, values: dict[str, str]) -> tuple[bytes, list[str]]:
         # client builds its Photon settings from those too.
         defaults = md.find_defaults(slot.original)
         if hits or defaults:
-            if hits:
-                md.repoint(hits, new)
-            if defaults:
-                md.overwrite(defaults, slot.original, new)
-            report.append(f"{slot.key}: patched {len(hits)} literal(s), {len(defaults)} default value(s)")
+            plan.append((slot, new, hits, defaults))
         elif md.find(new):
             report.append(f"{slot.key}: already set")
         else:
             raise PatchError(f"{slot.key}: the client's original value isn't in this metadata "
                              "(a different build, or patched to another value)")
-    # Re-read the result so a broken table never gets written out.
+    for slot, new, hits, defaults in plan:
+        if hits:
+            md.repoint(hits, new)
+        if defaults:
+            md.overwrite(defaults, slot.original, new)
+        report.append(f"{slot.key}: patched {len(hits)} literal(s), {len(defaults)} default value(s)")
+
+    # Re-read the result so a broken table never gets written out: every
+    # located literal and default value must now hold the new value.
     check = Metadata(bytes(md.data))
-    for slot in SLOTS:
-        if slot.key in values and values[slot.key] != slot.original:
-            if (check.find(slot.original) or check.find_defaults(slot.original)
-                    or not check.find(values[slot.key])):
-                raise PatchError(f"{slot.key}: verification failed after patching")
+    for slot, new, hits, defaults in plan:
+        raw = new.encode("utf-8")
+        if (any(check.literal(i) != raw for i in hits)
+                or any(check.data[off:off + len(raw)] != raw for off in defaults)):
+            raise PatchError(f"{slot.key}: verification failed after patching")
     return bytes(md.data), report
 
 

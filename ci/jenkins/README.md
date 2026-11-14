@@ -62,7 +62,9 @@ Resolve a table for another build locally with `build.py build --dump-cs`.
 
 - **Push** to the branch (GitHub webhook) builds only for client-facing
   changes, and only the platform they touch:
-  - `DorkNet.ClientMod/`, `tools/build_pc.py` and `tools/patch_metadata.py` rebuild PC;
+  - `DorkNet.ClientMod/`, `tools/build_pc.py` and `tools/patch_metadata.py`
+    (plus its tests, `tools/test_patch_metadata.py`, which every PC build runs
+    first) rebuild PC;
   - `DorkNet.Quest/` rebuilds Quest;
   - Markdown files (`.md`, `.markdown`) never count; server, docs and CI-only pushes (including
     the `Jenkinsfile` and `ci/`) build nothing. Run those manually.
@@ -71,7 +73,7 @@ Resolve a table for another build locally with `build.py build --dump-cs`.
   under the job's **Git** source, add **Additional Behaviours → Polling
   ignores commits in certain paths** with included regions
   `DorkNet[.]ClientMod/.*`, `DorkNet[.]Quest/.*`, `tools/build_pc[.]py`,
-  `tools/patch_metadata[.]py` (one per line) and excluded region `.*[.](md|markdown)`. The filter compares against the
+  `tools/patch_metadata[.]py`, `tools/test_patch_metadata[.]py` (one per line) and excluded region `.*[.](md|markdown)`. The filter compares against the
   last build's checkout, so the pipeline keeps it and deletes only `out/`
   and its scratch folders after each run; without a checkout, Jenkins treats
   every push as a change.
