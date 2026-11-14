@@ -16,7 +16,7 @@ builds against MelonLoader's own DLLs, so no Rec Room install is needed).
     py -3 tools/build_pc.py patcher --version-key march_2023_03_21
     py -3 tools/build_pc.py client --base-client RecRoom-2023-03-21.zip \\
         --patcher-zip dist/dorknet-clientpatch-march_2023_03_21.zip \\
-        --config dorknet-clientmod.json
+        --config dorknet-clientmod.json --metadata-config dorknet-client-metadata.json
 """
 from __future__ import annotations
 
@@ -29,6 +29,8 @@ import urllib.request
 import zipfile
 from pathlib import Path
 from typing import NoReturn
+
+import patch_metadata
 
 REPO = Path(__file__).resolve().parent.parent
 CLIENT_MOD = REPO / "DorkNet.ClientMod"
@@ -45,6 +47,8 @@ LAYOUTS = {
     "december_2020_12_18": ("MelonLoader/UserData/dorknet-clientmod.json", "RecRoom_Data/Plugins/x86_64/steam_api64.dll"),
     "march_2023_03_21": ("UserData/dorknet-clientmod.json", "RecRoom_Data/Plugins/x86_64/steam_api64.dll"),
 }
+# Builds whose hardcoded values tools/patch_metadata.py knows.
+METADATA_PATCH_KEYS = ("march_2023_03_21",)
 
 
 def step(msg: str) -> None:
@@ -159,6 +163,17 @@ def cmd_client(a: argparse.Namespace) -> None:
     base = need(a.base_client, "stock client")
     patcher_zip = need(a.patcher_zip, "patcher zip")
     config = need(a.config, "client config") if a.config else None
+    metadata_values = None
+    if a.metadata_config:
+        key = patcher_zip.stem.removeprefix("dorknet-clientpatch-")
+        if key not in METADATA_PATCH_KEYS:
+            fail(f"--metadata-config only knows the {', '.join(METADATA_PATCH_KEYS)} client, not '{key}'")
+        try:
+            metadata_values = patch_metadata.load_config(need(a.metadata_config, "metadata config"))
+        except patch_metadata.PatchError as ex:
+            fail(str(ex))
+        if not metadata_values:
+            fail(f"{a.metadata_config} sets no values")
 
     with tempfile.TemporaryDirectory(prefix="dorknet-pc-client-") as tmp:
         tmp = Path(tmp)
@@ -222,7 +237,22 @@ def cmd_client(a: argparse.Namespace) -> None:
                 p.unlink()
                 print(f"    removed old {old}")
 
-        # 3. zip
+        # 3. point the client's hardcoded name server, auth host, Photon
+        #    AppIds and image-signing key at this server (patch_metadata.py).
+        #    ClientMod can't redirect the name server lookup, so a full client
+        #    without this keeps asking ns.rec.net and never signs in.
+        if metadata_values:
+            step("patching global-metadata.dat")
+            metadata = need(install / patch_metadata.METADATA_RELPATH, "global-metadata.dat")
+            try:
+                patched, report = patch_metadata.patch_bytes(metadata.read_bytes(), metadata_values)
+            except patch_metadata.PatchError as ex:
+                fail(f"metadata patch: {ex}")
+            metadata.write_bytes(patched)
+            for line in report:
+                print(f"    {line}")
+
+        # 4. zip
         key = patcher_zip.stem.removeprefix("dorknet-clientpatch-")
         out = Path(a.output_zip) if a.output_zip else REPO / "dist" / f"dorknet-client-{key}.zip"
         step(f"zipping -> {out}")
@@ -249,6 +279,9 @@ def main() -> None:
     c.add_argument("--base-client", required=True, help="the stock client, as a .zip or a folder")
     c.add_argument("--patcher-zip", required=True, help="dorknet-clientpatch-<VersionKey>.zip from `patcher`")
     c.add_argument("--config", help="dorknet-clientmod.json to install (default: the unedited template)")
+    c.add_argument("--metadata-config",
+                   help="JSON of hardcoded client values to patch (see tools/patch_metadata.py); "
+                        "without it the client still asks ns.rec.net and can't sign in")
     c.add_argument("--output-zip", help="default: <repo>/dist/dorknet-client-<VersionKey>.zip")
     c.set_defaults(func=cmd_client)
 

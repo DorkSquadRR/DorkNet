@@ -19,7 +19,7 @@ read, and the same files are kept as Jenkins artifacts
 
 | Download | What it is | Built from |
 |---|---|---|
-| `DorkNet-2023.03-PC-Full.zip` | the stock Steam build with the patcher applied and your config; ready to run | `tools/build_pc.py client` → `dorknet-client-march_2023_03_21.zip` |
+| `DorkNet-2023.03-PC-Full.zip` | the stock Steam build with the patcher applied, your config, and its `global-metadata.dat` pointed at your server (`tools/patch_metadata.py`); ready to run | `tools/build_pc.py client` → `dorknet-client-march_2023_03_21.zip` |
 | `DorkNet-2023.03-PC-Patch.zip` | MelonLoader, mod, config template, Steam stub, `manifest.json`; no game files | `tools/build_pc.py patcher` → `dorknet-clientpatch-march_2023_03_21.zip` |
 | `DorkNet-2023.03-Quest.xapk` | patched APK + OBB, for the browser installer or SideQuest | `DorkNet.Quest/scripts/build.py build` → `DorkNet-Quest-<ver>/DorkNet-<ver>.xapk` |
 | `DorkNet-2023.03-Quest-Installer.zip` | `install.cmd` / `install.ps1` / `install.sh` + README, unzipped next to the `.xapk` | the same package folder |
@@ -62,7 +62,9 @@ Resolve a table for another build locally with `build.py build --dump-cs`.
 
 - **Push** to the branch (GitHub webhook) builds only for client-facing
   changes, and only the platform they touch:
-  - `DorkNet.ClientMod/` and `tools/build_pc.py` rebuild PC;
+  - `DorkNet.ClientMod/`, `tools/build_pc.py` and `tools/patch_metadata.py`
+    (plus its tests, `tools/test_patch_metadata.py`, which every PC build runs
+    first) rebuild PC;
   - `DorkNet.Quest/` rebuilds Quest;
   - Markdown files (`.md`, `.markdown`) never count; server, docs and CI-only pushes (including
     the `Jenkinsfile` and `ci/`) build nothing. Run those manually.
@@ -70,8 +72,8 @@ Resolve a table for another build locally with `build.py build --dump-cs`.
   Set the same filter on the job so other pushes don't start a run at all:
   under the job's **Git** source, add **Additional Behaviours → Polling
   ignores commits in certain paths** with included regions
-  `DorkNet[.]ClientMod/.*`, `DorkNet[.]Quest/.*`, `tools/build_pc[.]py` (one
-  per line) and excluded region `.*[.](md|markdown)`. The filter compares against the
+  `DorkNet[.]ClientMod/.*`, `DorkNet[.]Quest/.*`, `tools/build_pc[.]py`,
+  `tools/patch_metadata[.]py`, `tools/test_patch_metadata[.]py` (one per line) and excluded region `.*[.](md|markdown)`. The filter compares against the
   last build's checkout, so the pipeline keeps it and deletes only `out/`
   and its scratch folders after each run; without a checkout, Jenkins treats
   every push as a change.
@@ -187,8 +189,37 @@ Add these under **Manage Jenkins → Credentials**, with exactly these IDs:
 | `quest-keystore` | Secret file | the Quest signing keystore |
 | `quest-keystore-password` | Secret text | its store/key password |
 | `clientmod-config` | Secret file | your `dorknet-clientmod.json` |
+| `client-metadata-config` | Secret file | your `dorknet-client-metadata.json`: the values `tools/patch_metadata.py` writes into the full PC client (below) |
 | `quest-config` | Secret file | your `dorknet-quest.cfg` |
 | `downloads-s3` | Username with password | S3 key for the downloads bucket: access key ID / secret. Give it read and write on that bucket only. |
+
+`client-metadata-config` sets the values the 2023 PC client hardcodes. The
+full client needs it: ClientMod can't redirect the client's name server
+lookup, so without it the client keeps asking `ns.rec.net` and fails with
+"RecNet name server query failed (error code: summer)". Leave a key out to
+keep the client's own value.
+
+```json
+{
+  "NameServerUrl": "https://ns.example.com",
+  "AuthUrl": "https://auth.example.com",
+  "PhotonAppId": "00000000-0000-0000-0000-000000000000",
+  "PhotonVoiceAppId": "00000000-0000-0000-0000-000000000000",
+  "ImageSigningPublicKey": "<base64 RSA modulus, or a PEM public key>"
+}
+```
+
+- `NameServerUrl` / `AuthUrl`: your server's `ns` and `auth` hosts in its
+  host style (e.g. `https://ns-dev.example.com` for hyphen hosts). The `ns`
+  response supplies every other service URL.
+- `PhotonAppId` / `PhotonVoiceAppId`: your Photon Realtime and Voice app ids.
+- `ImageSigningPublicKey`: the public half of the server's
+  `ImageSigning:PrivateKeyPem` (2048-bit), so the client accepts the images
+  the server signs.
+
+To copy the values out of a client you already patched, run
+`python3 tools/patch_metadata.py show <its global-metadata.dat> --stock
+<the stock one> --output dorknet-client-metadata.json`.
 
 **Use the keystore your players' installs were signed with**, the
 `dorknet-debug.keystore` from your earlier local builds (password `dorknet`). A

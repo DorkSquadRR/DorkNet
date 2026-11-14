@@ -84,7 +84,7 @@ pipeline {
             def touches = { prefixes ->
               changed.any { p -> !(p.toLowerCase() ==~ /.*\.(md|markdown)/) && prefixes.any { p.startsWith(it) } }
             }
-            buildPc = touches(['DorkNet.ClientMod/', 'tools/build_pc.py'])
+            buildPc = touches(['DorkNet.ClientMod/', 'tools/build_pc.py', 'tools/patch_metadata.py', 'tools/test_patch_metadata.py'])
             buildQuest = touches(['DorkNet.Quest/'])
             echo "Push build; ${changed.size()} changed file(s)"
           } else {
@@ -117,6 +117,7 @@ pipeline {
     stage('PC patcher zip') {
       when { expression { buildPc } }
       steps {
+        sh 'python3 -m unittest discover -s tools -p "test_*.py"'
         sh "python3 tools/build_pc.py patcher --version-key ${PC_VERSION_KEY} --output-dir out/pc"
       }
     }
@@ -134,13 +135,20 @@ pipeline {
               ''').trim().readLines().last()
             }
           }
-          withCredentials([file(credentialsId: 'clientmod-config', variable: 'CLIENTMOD_CONFIG')]) {
+          // client-metadata-config: the hardcoded name server, auth host,
+          // Photon AppIds and image-signing key to patch into the client
+          // (tools/patch_metadata.py). Without it the client never signs in.
+          withCredentials([
+            file(credentialsId: 'clientmod-config', variable: 'CLIENTMOD_CONFIG'),
+            file(credentialsId: 'client-metadata-config', variable: 'CLIENT_METADATA_CONFIG'),
+          ]) {
             withEnv(["BASE_CLIENT=${base}"]) {
               sh """
                 python3 tools/build_pc.py client \\
                   --base-client "\$BASE_CLIENT" \\
                   --patcher-zip out/pc/dorknet-clientpatch-${PC_VERSION_KEY}.zip \\
                   --config "\$CLIENTMOD_CONFIG" \\
+                  --metadata-config "\$CLIENT_METADATA_CONFIG" \\
                   --output-zip out/pc/dorknet-client-${PC_VERSION_KEY}.zip
               """
             }
