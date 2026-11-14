@@ -89,3 +89,7 @@ local-releases/**
 DorkNet.Models/bin-verify/**
 DorkNet.Models/bin-verify2/**
 identityserver-signing.pfx
+
+# Python bytecode (tools/build_pc.py imports tools/patch_metadata.py)
+__pycache__/
+*.pyc
