@@ -207,7 +207,7 @@ export function Settings({ embedded }: { embedded?: boolean } = {}) {
   useEffect(() => {
     if (!ready || !location.hash) return;
     document.getElementById(location.hash.slice(1))?.scrollIntoView({ block: 'start' });
-  }, [ready, location.hash]);
+  }, [ready, location.hash, location.key]);
 
   const toggleSignups = async () => {
     if (!settings) return;

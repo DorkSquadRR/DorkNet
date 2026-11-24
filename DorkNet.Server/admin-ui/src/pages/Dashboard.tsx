@@ -68,7 +68,10 @@ export function Dashboard() {
     const next = new URLSearchParams(params);
     if (id === null) next.delete('player');
     else next.set('player', String(id));
-    setParams(next, { replace: selected !== null, state: id !== null && selected === null ? { fromList: true } : undefined });
+    // Switching players keeps the entry's "opened from the list" marker so
+    // the phone's Live link still steps straight back to the list.
+    const state = id === null ? undefined : selected === null ? { fromList: true } : location.state;
+    setParams(next, { replace: selected !== null, state });
   };
   const back = () => {
     if ((location.state as { fromList?: boolean } | null)?.fromList) navigate(-1);

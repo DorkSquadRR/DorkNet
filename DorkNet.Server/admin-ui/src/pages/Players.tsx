@@ -14,12 +14,24 @@ import { GiftPanel } from './Gift';
 import { PasswordResetCard } from './Passwords';
 
 export function Players({ embedded }: { embedded?: boolean } = {}) {
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const [query, setQuery] = useState(params.get('query') ?? '');
   const [rows, setRows] = useState<Player[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+  // Links elsewhere (room owners, members, leaderboards) open a player with
+  // ?focus=<id>; the parameter is dropped again when the dialog closes.
+  const focus = Number(params.get('focus')) || null;
+  const [selectedId, setSelectedId] = useState<number | null>(focus);
+  useEffect(() => { if (focus) setSelectedId(focus); }, [focus]);
+  const closePlayer = () => {
+    setSelectedId(null);
+    if (params.has('focus')) {
+      const next = new URLSearchParams(params);
+      next.delete('focus');
+      setParams(next, { replace: true });
+    }
+  };
 
   // Debounced search — the watch admin sat on /api/admin/v1/players for
   // every keypress, blowing through the SQLite write lock pool. 200ms
@@ -121,12 +133,12 @@ export function Players({ embedded }: { embedded?: boolean } = {}) {
       </div>
 
       {selectedId !== null && (
-        <Modal title="Player" open onClose={() => setSelectedId(null)} size="xl">
+        <Modal title="Player" open onClose={closePlayer} size="xl">
           <PlayerPanel
             key={selectedId}
             id={selectedId}
             onChanged={() => search(query)}
-            onDeleted={() => { setSelectedId(null); search(query); }}
+            onDeleted={() => { closePlayer(); search(query); }}
           />
         </Modal>
       )}
