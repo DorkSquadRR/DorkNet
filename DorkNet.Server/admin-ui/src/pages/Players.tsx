@@ -123,6 +123,7 @@ export function Players({ embedded }: { embedded?: boolean } = {}) {
       {selectedId !== null && (
         <Modal title="Player" open onClose={() => setSelectedId(null)} size="xl">
           <PlayerPanel
+            key={selectedId}
             id={selectedId}
             onChanged={() => search(query)}
             onDeleted={() => { setSelectedId(null); search(query); }}
@@ -177,18 +178,18 @@ export function PlayerPanel({ id, whereabouts, onChanged, onDeleted }: {
   const [kickOpen, setKickOpen] = useState(false);
   const idBase = useId();
 
-  // Responses are only applied while their player is still the one shown,
-  // so a slow answer for a previous selection can never land under (and
-  // aim the panel's actions at) the current one.
-  const currentId = useRef(id);
-  currentId.current = id;
+  // Only the most recent request's answer is applied, so a slow response
+  // for an earlier load (or an earlier player) can never replace newer
+  // data or aim the panel's actions at the wrong account. Callers also key
+  // the panel by player id, which resets every tab's own state.
+  const generation = useRef(0);
 
   const reload = () => {
-    const forId = id;
+    const gen = ++generation.current;
     setErr(null);
-    get<PlayerDetail>(`/players/${forId}`)
-      .then(d => { if (currentId.current === forId) setData(d); })
-      .catch(e => { if (currentId.current === forId) setErr((e as Error).message); });
+    get<PlayerDetail>(`/players/${id}`)
+      .then(d => { if (gen === generation.current) setData(d); })
+      .catch(e => { if (gen === generation.current) setErr((e as Error).message); });
   };
   // A new player resets the panel: overview tab, no open confirmation.
   useEffect(() => {

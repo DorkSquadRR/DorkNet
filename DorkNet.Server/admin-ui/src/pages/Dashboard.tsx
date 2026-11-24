@@ -27,27 +27,35 @@ export function Dashboard() {
   const navigate = useNavigate();
   const selected = Number(params.get('player')) || null;
 
-  // Polling, the refresh button and post-moderation refreshes can overlap
-  // when /stats is slow; only the newest request's answer is applied.
-  const latest = useRef(0);
+  // The refresh button and post-moderation refreshes can overlap a poll
+  // when /stats is slow. Each answer is applied only if it is newer than
+  // the one on screen, so an older response never replaces a newer one but
+  // slow responses still land. Polling itself waits for the last request.
+  const started = useRef(0);
+  const applied = useRef(0);
+  const inFlight = useRef(0);
   const load = useCallback(async () => {
-    const seq = ++latest.current;
+    const seq = ++started.current;
+    inFlight.current++;
     setLoading(true);
     try {
       const next = await get<Stats>('/stats');
-      if (seq !== latest.current) return;
-      setStats(next);
-      setErr(null);
+      if (seq > applied.current) {
+        applied.current = seq;
+        setStats(next);
+        setErr(null);
+      }
     } catch (e) {
-      if (seq === latest.current) setErr((e as Error).message);
+      if (seq > applied.current) setErr((e as Error).message);
     } finally {
-      if (seq === latest.current) setLoading(false);
+      inFlight.current--;
+      if (inFlight.current === 0) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     load();
-    const id = window.setInterval(load, 10_000);
+    const id = window.setInterval(() => { if (inFlight.current === 0) load(); }, 10_000);
     return () => window.clearInterval(id);
   }, [load]);
 
@@ -163,6 +171,7 @@ export function Dashboard() {
               <ArrowLeft /> Live
             </button>
             <PlayerPanel
+              key={selected}
               id={selected}
               whereabouts={selectedOnline?.currentRoom ? (
                 <>in <Link to={`/rooms/${selectedOnline.currentRoom.roomId}`} className="text-brand-300 hover:underline">{selectedOnline.currentRoom.name}</Link></>

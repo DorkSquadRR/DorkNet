@@ -118,8 +118,14 @@ export function Sidebar({ open, onClose, onNavigate, onLogout, name }: {
     document.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
+    // Widening past the md breakpoint swaps the drawer for the desktop rail;
+    // close the drawer so its focus trap and scroll lock go with it.
+    const desktop = window.matchMedia('(min-width: 768px)');
+    const onDesktop = () => { if (desktop.matches) onClose(); };
+    desktop.addEventListener('change', onDesktop);
     return () => {
       document.removeEventListener('keydown', onKey);
+      desktop.removeEventListener('change', onDesktop);
       document.body.style.overflow = prev;
       if (opener?.isConnected) opener.focus();
     };
