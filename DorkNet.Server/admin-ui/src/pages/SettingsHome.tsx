@@ -1,16 +1,18 @@
 import { Settings } from './Settings';
 import { SignupCodes } from './SignupCodes';
 import { PageHeader } from '../components/PageHeader';
-import { Tabs, useTabParam } from '../components/Tabs';
+import { useId } from 'react';
+import { TabPanel, Tabs, useTabParam } from '../components/Tabs';
 
 // Server-wide configuration: runtime toggles plus the single-use signup
 // invite codes (an access-control setting in its own right). Old
 // /signup-codes route redirects here with ?tab=signup.
 export function SettingsHome() {
   const [tab, setTab] = useTabParam<'server' | 'signup'>('server', ['server', 'signup']);
+  const idBase = useId();
   return (
     <div>
-      <PageHeader title="Settings" blurb="Runtime server toggles and single-use signup invite codes." />
+      <PageHeader title={({ server: 'Settings', signup: 'Signup codes' })[tab]} />
       <Tabs
         tabs={[
           { key: 'server', label: 'Server' },
@@ -18,9 +20,13 @@ export function SettingsHome() {
         ]}
         active={tab}
         onChange={setTab}
+        idBase={idBase}
+        className="md:hidden"
       />
-      {tab === 'server' && <Settings embedded />}
-      {tab === 'signup' && <SignupCodes embedded />}
+      <TabPanel idBase={idBase} active={tab}>
+        {tab === 'server' && <Settings embedded />}
+        {tab === 'signup' && <SignupCodes embedded />}
+      </TabPanel>
     </div>
   );
 }

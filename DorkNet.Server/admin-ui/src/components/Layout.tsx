@@ -1,8 +1,10 @@
-import { Outlet, useLocation, useNavigate } from 'react-router';
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router';
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { Sidebar } from './Sidebar';
-import { LogOut, Menu } from './Icons';
+import { BrandMark } from './BrandMark';
+import { Menu, Search } from './Icons';
 import { clearSession, getMe, notifyAuthChange, subscribeAuth } from '../lib/auth';
+import { CLIENT_BUILD } from '../lib/build';
 
 export function Layout() {
   const navigate = useNavigate();
@@ -10,11 +12,11 @@ export function Layout() {
   const me = useSyncExternalStore(subscribeAuth, getMe, () => null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // Defensive: close the drawer on route change in case the user opens
-  // it then navigates via something other than the sidebar links
-  // (e.g. the legacy importer link in PageHeader actions). The drawer
-  // also closes via NavLink onClick → onNavigate, so this is a belt.
-  useEffect(() => { setDrawerOpen(false); }, [location.pathname]);
+  // Belt and braces: close the drawer on any route change, not just the
+  // ones that go through a sidebar link.
+  useEffect(() => { setDrawerOpen(false); }, [location.pathname, location.search]);
+
+  const closeDrawer = useCallback(() => setDrawerOpen(false), []);
 
   const logout = () => {
     clearSession();
@@ -22,39 +24,40 @@ export function Layout() {
     navigate('/login', { replace: true });
   };
 
+  // The Live page is a full-height split view; every other page gets the
+  // standard content padding.
+  const fullBleed = location.pathname === '/';
+
   return (
     <div className="flex h-full">
       <Sidebar
         open={drawerOpen}
-        onClose={() => setDrawerOpen(false)}
-        onNavigate={() => setDrawerOpen(false)}
+        onClose={closeDrawer}
+        onNavigate={closeDrawer}
+        onLogout={logout}
+        name={me?.displayName || me?.username || `#${me?.id ?? '?'}`}
       />
-      <div className="flex flex-1 flex-col min-w-0">
-        <header className="flex h-14 items-center gap-2 border-b border-ink-800 bg-ink-900/60 px-3 sm:px-5">
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-12 shrink-0 items-center gap-1 border-b border-ink-800 bg-bar px-2 md:hidden">
           <button
             type="button"
             onClick={() => setDrawerOpen(true)}
-            className="md:hidden rounded-md p-1.5 text-ink-200 hover:bg-ink-800"
+            className="rounded-[5px] p-2 text-ink-200 hover:bg-ink-850"
             aria-label="Open menu"
             aria-expanded={drawerOpen}
           >
-            <Menu />
+            <Menu className="size-5" />
           </button>
-          <div className="flex-1 text-sm text-ink-300 truncate">
-            {/* Tighter copy on small screens — the "Signed in as" prefix
-                eats too much width on a phone. Tablet+ shows the full
-                phrase. */}
-            <span className="hidden sm:inline">Signed in as </span>
-            <span className="font-medium text-ink-50">
-              {me?.displayName ?? me?.username ?? `#${me?.id ?? '?'}`}
-            </span>
-          </div>
-          <button onClick={logout} className="btn-ghost text-xs shrink-0" aria-label="Sign out">
-            <LogOut />
-            <span className="hidden sm:inline">Sign out</span>
-          </button>
+          <Link to="/" className="flex items-center gap-2 px-1">
+            <BrandMark className="size-6" />
+            <span className="font-semibold text-ink-50">DorkNet</span>
+          </Link>
+          <span className="ml-1 text-xs text-ink-400 tabular-nums">{CLIENT_BUILD}</span>
+          <Link to="/players" className="ml-auto rounded-[5px] p-2 text-ink-200 hover:bg-ink-850" aria-label="Find a player">
+            <Search className="size-5" />
+          </Link>
         </header>
-        <main className="flex-1 overflow-auto px-3 sm:px-5 py-4 sm:py-6">
+        <main className={`min-h-0 flex-1 ${fullBleed ? 'overflow-hidden' : 'overflow-auto px-4 py-4 sm:px-7 sm:py-6'}`}>
           <Outlet />
         </main>
       </div>

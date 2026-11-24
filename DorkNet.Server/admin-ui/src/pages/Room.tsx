@@ -134,7 +134,7 @@ function RoomHeaderCard({ room }: { room: RoomDetail }) {
         </div>
         {tags.length > 0 && (
           <div className="mt-2 flex flex-wrap gap-1">
-            {tags.map(t => <span key={t} className="badge-neutral text-[10px]">#{t}</span>)}
+            {tags.map(t => <span key={t} className="badge-neutral text-xs">#{t}</span>)}
           </div>
         )}
       </div>
@@ -255,7 +255,7 @@ function GeneralTab({ room, onSaved }: { room: RoomDetail; onSaved: () => void }
             onChange={e => setMaxCapacity(e.target.value)}
             className="input tabular-nums"
           />
-          <span className="text-[11px] text-ink-500">
+          <span className="text-xs text-ink-500">
             Advertised cap on the 2020 client (not hard-enforced yet). 1–80.
           </span>
         </label>
@@ -857,7 +857,7 @@ function InstancesTab({ roomId }: { roomId: number }) {
                         : 'bg-ink-900 text-ink-200 ring-ink-800 hover:bg-ink-800'
                     }`}
                   >
-                    {p.isMaster && <span className="text-[10px] uppercase font-semibold tracking-wider text-brand-300">Master</span>}
+                    {p.isMaster && <span className="text-xs font-semibold  text-brand-300">Master</span>}
                     <span>@{p.username}</span>
                   </Link>
                 ))}
@@ -1019,7 +1019,7 @@ function LeaderboardsTab({ roomId }: { roomId: number }) {
                   </button>
                   <div className="flex items-center gap-3">
                     <div className="text-right">
-                      <div className="text-[10px] uppercase text-ink-500">Best</div>
+                      <div className="text-xs text-ink-500">Best</div>
                       <div className="text-sm tabular-nums text-ink-100">{formatChannelValue(c.bestValue, c.valueFormat)}</div>
                     </div>
                     <button onClick={() => setExpanded(expanded === c.channel ? null : c.channel)} className="btn-ghost text-xs">
@@ -1097,7 +1097,7 @@ function ChannelEntriesPanel({ roomId, channel }: { roomId: number; channel: num
   return (
     <div className="bg-ink-900/40 border-t border-ink-800">
       <table className="w-full text-xs">
-        <thead className="text-[10px] uppercase tracking-wider text-ink-400">
+        <thead className="text-xs text-ink-400">
           <tr>
             <th className="text-left font-medium px-4 py-1.5 w-10">#</th>
             <th className="text-left font-medium px-4 py-1.5">Player</th>
@@ -1216,7 +1216,7 @@ function VisitorsTab({ roomId }: { roomId: number }) {
       {data && data.length === 0 && <Empty title="No visitors yet" />}
       {data && data.length > 0 && (
         <div className="table-scroll"><table className="w-full text-sm min-w-[520px]">
-          <thead className="text-[11px] uppercase tracking-wider text-ink-400 bg-ink-900/50 border-b border-ink-800">
+          <thead className="text-xs text-ink-400 bg-ink-900/50 border-b border-ink-800">
             <tr>
               <th className="text-left font-medium px-4 py-2.5">Player</th>
               <th className="text-right font-medium px-4 py-2.5">Visits</th>

@@ -236,7 +236,7 @@ export function Store() {
           <select value={sort} onChange={e => setSort(e.target.value as SortKey)} className="input max-w-[180px]">
             {SORT_OPTIONS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
-          <div className="ml-auto inline-flex rounded-md border border-ink-800 bg-ink-900/40 p-0.5 text-[11px]">
+          <div className="ml-auto inline-flex rounded-md border border-ink-800 bg-ink-900/40 p-0.5 text-xs">
             <button
               onClick={() => setView('cards')}
               className={`px-2 py-1 rounded ${view === 'cards' ? 'bg-ink-800 text-ink-50' : 'text-ink-400 hover:text-ink-200'}`}
@@ -250,7 +250,7 @@ export function Store() {
 
         {/* Status chips — single-select. Stays on its own row so labels
             wrap predictably on narrow screens. */}
-        <div className="flex flex-wrap items-center gap-2 text-[11px]">
+        <div className="flex flex-wrap items-center gap-2 text-xs">
           {(['all', 'visible', 'hidden', 'missing-image', 'limited', 'expired'] as const).map(f => (
             <button
               key={f}
@@ -331,7 +331,7 @@ export function Store() {
         <div className="card overflow-hidden">
           <div className="table-scroll">
             <table className="w-full text-sm min-w-[820px]">
-              <thead className="text-[11px] uppercase tracking-wider text-ink-400 bg-ink-900/50 border-b border-ink-800">
+              <thead className="text-xs text-ink-400 bg-ink-900/50 border-b border-ink-800">
                 <tr>
                   <th className="w-10 px-3 py-2.5">
                     <input
@@ -365,7 +365,7 @@ export function Store() {
                     <td className="px-2 py-2"><Thumb imageName={it.imageName} size={36} label={it.displayName} category={it.category} /></td>
                     <td className="px-2 py-2">
                       <div className="text-ink-50">{it.displayName}</div>
-                      <div className="text-[11px] font-mono text-ink-500">{it.slug}</div>
+                      <div className="text-xs font-mono text-ink-500">{it.slug}</div>
                     </td>
                     <td className="px-3 py-2 text-ink-200 text-xs">{it.storefront}</td>
                     <td className="px-3 py-2 text-ink-200 text-xs">{it.category}</td>
@@ -474,22 +474,22 @@ function StoreCard({
 
       <div className="px-2.5 py-2 flex flex-col gap-1">
         <div className="text-sm text-ink-50 truncate" title={item.displayName}>{item.displayName}</div>
-        <div className="text-[10px] font-mono text-ink-500 truncate" title={item.slug}>{item.slug}</div>
+        <div className="text-xs font-mono text-ink-500 truncate" title={item.slug}>{item.slug}</div>
         <div className="flex items-center justify-between mt-1">
           <span className="text-xs tabular-nums text-ink-100">
             {num(item.price)} <span className="text-ink-400">{currencyName(item.currencyType)}</span>
           </span>
           <div className="flex items-center gap-1">
-            <button onClick={onToggleVisible} className="btn-ghost text-[11px] py-0.5 px-1.5">
+            <button onClick={onToggleVisible} className="btn-ghost text-xs py-0.5 px-1.5">
               {item.isActive ? 'Hide' : 'Show'}
             </button>
-            <button onClick={onEdit} className="btn-ghost text-[11px] py-0.5 px-1.5">Edit</button>
-            <button onClick={onDelete} className="btn-ghost text-[11px] py-0.5 px-1.5 text-danger" title="Delete">
+            <button onClick={onEdit} className="btn-ghost text-xs py-0.5 px-1.5">Edit</button>
+            <button onClick={onDelete} className="btn-ghost text-xs py-0.5 px-1.5 text-danger" title="Delete">
               <Trash />
             </button>
           </div>
         </div>
-        <div className="text-[10px] text-ink-500 truncate">
+        <div className="text-xs text-ink-500 truncate">
           {item.storefront} · {item.category}
         </div>
       </div>
@@ -541,7 +541,7 @@ function Thumb({
         <span className="flex size-12 items-center justify-center rounded-full border border-ink-700 bg-ink-800/60 text-lg font-semibold text-ink-200">
           {initial}
         </span>
-        <span className="mt-2 max-w-full truncate px-2 text-[10px] uppercase tracking-wide text-ink-500">
+        <span className="mt-2 max-w-full truncate px-2 text-xs text-ink-500">
           {category || 'store item'}
         </span>
       </div>
@@ -669,7 +669,7 @@ function StoreItemForm({
               category={form.category}
             />
           </div>
-          <div className="text-[10px] text-ink-500 font-mono break-all">{form.imageName || 'no imageName set'}</div>
+          <div className="text-xs text-ink-500 font-mono break-all">{form.imageName || 'no imageName set'}</div>
           <label className="btn-secondary text-xs w-full justify-center cursor-pointer">
             <Upload />
             {uploadingImage ? 'Uploading...' : 'Upload picture'}

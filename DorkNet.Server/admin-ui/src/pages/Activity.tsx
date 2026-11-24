@@ -2,7 +2,8 @@ import { Audit } from './Audit';
 import { PlayerLogs } from './PlayerLogs';
 import { TestCases } from './TestCases';
 import { PageHeader } from '../components/PageHeader';
-import { Tabs, useTabParam } from '../components/Tabs';
+import { useId } from 'react';
+import { TabPanel, Tabs, useTabParam } from '../components/Tabs';
 
 // Internal operations views in one place: the admin audit trail, the
 // per-player HTTP request ring buffer, and QA test cases with the GitHub
@@ -10,9 +11,10 @@ import { Tabs, useTabParam } from '../components/Tabs';
 export function Activity() {
   const [tab, setTab] = useTabParam<'audit' | 'logs' | 'testcases'>(
     'audit', ['audit', 'logs', 'testcases']);
+  const idBase = useId();
   return (
     <div>
-      <PageHeader title="Activity" blurb="Admin audit trail, per-player HTTP request logs, and QA test cases." />
+      <PageHeader title={({ audit: 'Audit log', logs: 'Player requests', testcases: 'Test cases' })[tab]} />
       <Tabs
         tabs={[
           { key: 'audit', label: 'Audit log' },
@@ -21,10 +23,14 @@ export function Activity() {
         ]}
         active={tab}
         onChange={setTab}
+        idBase={idBase}
+        className="md:hidden"
       />
-      {tab === 'audit' && <Audit embedded />}
-      {tab === 'logs' && <PlayerLogs embedded />}
-      {tab === 'testcases' && <TestCases />}
+      <TabPanel idBase={idBase} active={tab}>
+        {tab === 'audit' && <Audit embedded />}
+        {tab === 'logs' && <PlayerLogs embedded />}
+        {tab === 'testcases' && <TestCases />}
+      </TabPanel>
     </div>
   );
 }

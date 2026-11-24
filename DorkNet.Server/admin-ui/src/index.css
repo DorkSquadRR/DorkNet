@@ -2,49 +2,137 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Theme palette as RGB channels, consumed by tailwind.config.js. Light is
+   the default; index.html sets data-theme before first paint from the
+   saved choice or the OS preference (see src/lib/theme.ts). The ink scale
+   is ordered by contrast: 950 = page background, 50 = strongest text. */
 @layer base {
+  :root {
+    color-scheme: light;
+    --ink-950: 255 255 255;
+    --ink-900: 251 251 252;
+    --ink-850: 245 246 247;
+    --ink-800: 228 230 233;
+    --ink-700: 207 211 216;
+    --ink-600: 166 172 180;
+    --ink-500: 127 134 143;
+    --ink-400: 100 107 116;
+    --ink-300: 74 80 88;
+    --ink-200: 51 56 62;
+    --ink-100: 35 39 44;
+    --ink-50: 23 25 28;
+    --bar: 247 247 248;
+    --sel: 232 244 250;
+    --brand-50: 5 44 64;
+    --brand-100: 7 74 107;
+    --brand-200: 8 95 138;
+    --brand-300: 10 111 160;
+    --brand-400: 11 127 181;
+    --brand-500: 10 111 160;
+    --brand-600: 8 90 131;
+    --brand-700: 111 192 227;
+    --brand-800: 191 227 243;
+    --brand-900: 230 244 250;
+    --on-brand: 255 255 255;
+    --success: 23 115 58;
+    --warn: 138 83 0;
+    --danger: 179 38 30;
+    --on-danger: 255 255 255;
+  }
+  [data-theme='dark'] {
+    color-scheme: dark;
+    --ink-950: 19 20 23;
+    --ink-900: 23 24 27;
+    --ink-850: 28 29 33;
+    --ink-800: 38 41 46;
+    --ink-700: 54 58 64;
+    --ink-600: 75 80 88;
+    --ink-500: 108 114 123;
+    --ink-400: 142 149 158;
+    --ink-300: 169 174 182;
+    --ink-200: 198 201 206;
+    --ink-100: 218 220 223;
+    --ink-50: 236 238 240;
+    --bar: 22 23 26;
+    --sel: 23 38 47;
+    --brand-50: 230 247 253;
+    --brand-100: 200 243 255;
+    --brand-200: 159 227 247;
+    --brand-300: 111 208 242;
+    --brand-400: 85 195 236;
+    --brand-500: 61 184 232;
+    --brand-600: 42 159 208;
+    --brand-700: 29 122 163;
+    --brand-800: 21 90 120;
+    --brand-900: 14 58 78;
+    --on-brand: 3 20 28;
+    --success: 95 209 151;
+    --warn: 240 190 82;
+    --danger: 255 133 119;
+    --on-danger: 29 6 3;
+  }
+
   html, body, #root { height: 100%; }
   body {
-    font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+    @apply bg-ink-950 font-sans text-ink-50;
+    font-size: 14px;
     -webkit-font-smoothing: antialiased;
   }
-  ::selection { background-color: theme('colors.brand.500'); color: white; }
+  ::selection { background-color: rgb(var(--brand-500) / 0.3); }
 }
 
 @layer components {
+  /* Flat containers: a hairline border on the page colour, no shadow. */
   .card {
-    @apply rounded-xl border border-ink-800 bg-ink-900 shadow-card;
+    @apply rounded-md border border-ink-800 bg-ink-950;
   }
   .btn {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 text-sm font-medium
-           transition-colors focus:outline-none focus:ring-2 focus:ring-brand-500/40 focus:ring-offset-2 focus:ring-offset-ink-950
+    @apply inline-flex items-center justify-center gap-1.5 rounded-[5px] border border-transparent px-3 py-1.5 text-[13px] font-medium
+           transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50
            disabled:cursor-not-allowed disabled:opacity-50;
   }
-  .btn-primary  { @apply btn bg-brand-500 text-white hover:bg-brand-400 active:bg-brand-600; }
-  .btn-secondary{ @apply btn bg-ink-800 text-ink-100 hover:bg-ink-700 border border-ink-700; }
-  .btn-danger   { @apply btn bg-danger text-white hover:bg-danger/90; }
-  .btn-ghost    { @apply btn bg-transparent text-ink-200 hover:bg-ink-800; }
+  .btn-primary  { @apply btn bg-brand-500 text-[rgb(var(--on-brand))] hover:bg-brand-400; }
+  .btn-secondary{ @apply btn border-ink-700 bg-transparent text-ink-100 hover:bg-ink-850; }
+  .btn-danger   { @apply btn bg-danger text-[rgb(var(--on-danger))] hover:bg-danger/90; }
+  .btn-ghost    { @apply btn bg-transparent text-ink-200 hover:bg-ink-850; }
   .input {
-    @apply w-full rounded-lg border border-ink-700 bg-ink-900 px-3 py-2 text-sm text-ink-100
-           placeholder:text-ink-400 focus:border-brand-400 focus:outline-none focus:ring-2 focus:ring-brand-500/30;
+    @apply w-full rounded-[5px] border border-ink-700 bg-ink-950 px-2.5 py-1.5 text-[13.5px] text-ink-50
+           placeholder:text-ink-500 focus:border-brand-500 focus:outline-none focus:ring-2 focus:ring-brand-500/25;
   }
   .label {
-    @apply text-xs font-medium uppercase tracking-wide text-ink-300;
+    @apply text-[13px] font-medium text-ink-300;
   }
+  /* Status is coloured text, not a filled pill. */
   .badge {
-    @apply inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider;
+    @apply inline-flex items-center gap-1 whitespace-nowrap text-xs font-medium;
   }
-  .badge-online  { @apply badge bg-success/15 text-success; }
-  .badge-banned  { @apply badge bg-danger/15 text-danger; }
-  .badge-admin   { @apply badge bg-brand-500/15 text-brand-200; }
-  .badge-junior  { @apply badge bg-warn/15 text-warn; }
-  .badge-neutral { @apply badge bg-ink-800 text-ink-200; }
+  .badge-online  { @apply badge text-success; }
+  .badge-banned  { @apply badge text-danger; }
+  .badge-admin   { @apply badge text-brand-300; }
+  .badge-junior  { @apply badge text-warn; }
+  .badge-neutral { @apply badge text-ink-400; }
 
-  .table-row-hover { @apply hover:bg-ink-800/60 transition-colors; }
+  .table-row-hover { @apply transition-colors hover:bg-ink-850; }
 
   /* Wrap any wide data table in <div class="table-scroll"> so it
      scrolls horizontally on narrow viewports instead of forcing the
      whole layout wider than the screen. Pair with `whitespace-nowrap`
      on cells that should never wrap (usernames, timestamps). */
   .table-scroll { @apply overflow-x-auto -mx-px; }
+
+  /* On/off switch. Use <Switch> from components/Switch.tsx. */
+  .switch {
+    @apply relative inline-flex h-5 w-[34px] shrink-0 cursor-pointer items-center rounded-full bg-ink-700 transition-colors
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-500/50 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .switch[aria-checked='true'] { @apply bg-brand-500; }
+  .switch::after {
+    content: '';
+    @apply absolute left-[3px] size-3.5 rounded-full bg-white transition-transform;
+  }
+  .switch[aria-checked='true']::after { transform: translateX(14px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0s !important; animation-duration: 0s !important; }
 }

@@ -1,17 +1,29 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <meta name="color-scheme" content="dark light" />
-    <meta name="theme-color" content="#0b95c7" />
+    <meta name="color-scheme" content="light dark" />
     <title>DorkNet Admin</title>
     <link rel="icon" type="image/svg+xml" href="%BASE_URL%brand/dorknet.svg" />
+    <!-- Apply the saved theme (or the OS preference) before first paint so
+         the page never flashes the wrong colours. Keep the key in sync with
+         src/lib/theme.ts. -->
+    <script>
+      (function () {
+        var t = null;
+        try { t = localStorage.getItem('dorknet.admin.theme'); } catch (e) {}
+        if (t !== 'light' && t !== 'dark') {
+          t = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        }
+        document.documentElement.setAttribute('data-theme', t);
+      })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet" />
   </head>
-  <body class="bg-ink-950 text-ink-100 antialiased">
+  <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

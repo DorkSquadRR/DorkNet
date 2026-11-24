@@ -1,264 +1,225 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router';
-import { api, get } from '../lib/api';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
+import { get } from '../lib/api';
 import type { Stats } from '../lib/types';
-import { absoluteTime, num, relativeTime } from '../lib/format';
-import { PlayerAvatar } from '../components/PlayerAvatar';
-import { useToast } from '../components/Toast';
-import { Activity, Ban, Building2, Gift, Megaphone, RefreshCw, Users } from '../components/Icons';
+import { absoluteTime, relativeTime } from '../lib/format';
+import { ArrowLeft, RefreshCw } from '../components/Icons';
+import { PlayerPanel } from './Players';
 
-type ActionState = { playerId: number; username: string; kind: 'kick' | 'ban' } | null;
+type Online = Stats['players']['online'][number];
 
+interface RoomGroup {
+  key: string;
+  room: Online['currentRoom'];
+  players: Online[];
+}
+
+// Live: who is online right now, grouped by the room instance they're in,
+// with the selected player's account and moderation tools beside the list.
+// The selection lives in ?player= so a phone can show the list and the
+// player as two screens with working back navigation.
 export function Dashboard() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [action, setAction] = useState<ActionState>(null);
-  const toast = useToast();
+  const [params, setParams] = useSearchParams();
+  const location = useLocation();
+  const navigate = useNavigate();
+  const selected = Number(params.get('player')) || null;
 
-  const load = async () => {
+  // The refresh button and post-moderation refreshes can overlap a poll
+  // when /stats is slow. Each answer is applied only if it is newer than
+  // the one on screen, so an older response never replaces a newer one but
+  // slow responses still land. Polling itself waits for the last request.
+  const started = useRef(0);
+  const applied = useRef(0);
+  const inFlight = useRef(0);
+  const load = useCallback(async () => {
+    const seq = ++started.current;
+    inFlight.current++;
     setLoading(true);
-    setErr(null);
     try {
-      setStats(await get<Stats>('/stats'));
+      const next = await get<Stats>('/stats');
+      if (seq > applied.current) {
+        applied.current = seq;
+        setStats(next);
+        setErr(null);
+      }
     } catch (e) {
-      setErr((e as Error).message);
+      if (seq > applied.current) {
+        applied.current = seq;
+        setErr((e as Error).message);
+      }
     } finally {
-      setLoading(false);
+      inFlight.current--;
+      if (inFlight.current === 0) setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     load();
-    const id = setInterval(load, 10_000);
-    return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    const id = window.setInterval(() => { if (inFlight.current === 0) load(); }, 10_000);
+    return () => window.clearInterval(id);
+  }, [load]);
 
-  const runAction = async (reason: string) => {
-    if (!action) return;
-    try {
-      if (action.kind === 'kick') {
-        await api(`/players/${action.playerId}/kick`, { method: 'POST', body: { Reason: reason } });
-        toast.push(`Kicked @${action.username}`, 'success');
-      } else {
-        await api(`/players/${action.playerId}/ban`, { method: 'POST', body: { DurationDays: 1, Reason: reason || 'Quick ban from live dashboard' } });
-        toast.push(`Banned @${action.username} for 1 day`, 'success');
-      }
-      setAction(null);
-      await load();
-    } catch (e) {
-      toast.push((e as Error).message, 'error');
-    }
+  // Opening a player from the list adds one history entry (so a phone's
+  // back button returns to the list); switching between players replaces it.
+  const select = (id: number | null) => {
+    const next = new URLSearchParams(params);
+    if (id === null) next.delete('player');
+    else next.set('player', String(id));
+    // Switching players keeps the entry's "opened from the list" marker so
+    // the phone's Live link still steps straight back to the list.
+    const state = id === null ? undefined : selected === null ? { fromList: true } : location.state;
+    setParams(next, { replace: selected !== null, state });
+  };
+  const back = () => {
+    if ((location.state as { fromList?: boolean } | null)?.fromList) navigate(-1);
+    else select(null);
   };
 
-  const onlinePlayers = stats?.players.online ?? [];
+  const online = stats?.players.online ?? [];
+  const groups = useMemo(() => groupByRoom(online), [online]);
+  const inRooms = groups.filter(g => g.room).length;
+  const selectedOnline = online.find(p => p.id === selected);
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-ink-50">Live Ops</h1>
-          <p className="text-sm text-ink-400">Online players, active rooms, and server health.</p>
-        </div>
-        <div className="flex gap-2">
-          <Link to="/broadcast" className="btn-secondary text-xs"><Megaphone /> Broadcast</Link>
-          <button onClick={load} className="btn-secondary text-xs" disabled={loading}>
-            <RefreshCw className={loading ? 'animate-spin' : ''} />
-            Refresh
-          </button>
-        </div>
-      </div>
-
-      {err && <div className="card border-danger/30 bg-danger/5 px-4 py-3 text-sm text-danger">{err}</div>}
-
-      <section className="grid grid-cols-2 xl:grid-cols-6 gap-3">
-        <Stat icon={<Users />} label="Online" value={stats?.players.onlineNow} sub={`${stats?.players.total ?? 0} accounts`} tone="success" />
-        <Stat icon={<Activity />} label="In game" value={stats?.rooms.inGamePlayerCount} sub={`${stats?.rooms.activeSessionCount ?? 0} sessions`} tone="brand" />
-        <Stat icon={<Building2 />} label="Rooms" value={stats?.rooms.total} sub={`${num(stats?.rooms.totalVisits ?? 0)} visits`} tone="neutral" />
-        <Stat icon={<Gift />} label="Inventions" value={stats?.inventions} sub={`${num(stats?.rooms.totalCheers ?? 0)} room cheers`} tone="neutral" />
-        <Stat icon={<Users />} label="New today" value={stats?.players.newToday} sub={`${stats?.photos.today ?? 0} photos`} tone="brand" />
-        <Stat icon={<Ban />} label="Moderation" value={stats?.moderation.openReports} sub={`${stats?.players.bannedNow ?? 0} banned`} tone="warn" />
-      </section>
-
-      <section className="grid grid-cols-1 2xl:grid-cols-[minmax(0,1fr)_380px] gap-4">
-        <div className="card overflow-hidden">
-          <div className="border-b border-ink-800 px-4 py-3 flex flex-wrap items-center gap-2">
-            <div>
-              <h2 className="text-sm font-semibold text-ink-50">Online players</h2>
-              <p className="text-xs text-ink-400">{onlinePlayers.length} connected right now</p>
-            </div>
-            <Link to="/players" className="btn-ghost text-xs ml-auto">All players</Link>
+    <div className="grid h-full grid-rows-[minmax(0,1fr)] md:grid-cols-[340px_minmax(0,1fr)] lg:grid-cols-[360px_minmax(0,1fr)]">
+      {/* Player list */}
+      <section className={`min-h-0 flex-col overflow-y-auto border-ink-800 md:flex md:border-r ${selected ? 'hidden' : 'flex'}`} aria-label="Online players">
+        <div className="border-b border-ink-800 px-4 pb-3 pt-4">
+          <div className="flex items-baseline gap-2">
+            <h1 className="text-[15px] font-semibold text-ink-50">{stats ? `${stats.players.onlineNow} online` : 'Online'}</h1>
+            {stats && <span className="text-[13px] text-ink-400">in {inRooms} {inRooms === 1 ? 'room' : 'rooms'}</span>}
+            <button
+              onClick={load}
+              disabled={loading}
+              className="ml-auto rounded-[5px] p-1 text-ink-400 hover:bg-ink-850 hover:text-ink-100"
+              aria-label="Refresh"
+              title={stats ? `Updated ${new Date(stats.serverTime).toLocaleTimeString()}` : 'Refresh'}
+            >
+              <RefreshCw className={loading ? 'animate-spin' : ''} />
+            </button>
           </div>
-          <div className="table-scroll">
-            <table className="w-full text-sm min-w-[900px]">
-              <thead className="text-[11px] uppercase tracking-wider text-ink-400 bg-ink-900/60 border-b border-ink-800">
-                <tr>
-                  <th className="text-left font-medium px-4 py-2.5">Player</th>
-                  <th className="text-left font-medium px-4 py-2.5">Room</th>
-                  <th className="text-left font-medium px-4 py-2.5">Instance</th>
-                  <th className="text-right font-medium px-4 py-2.5">Level</th>
-                  <th className="text-left font-medium px-4 py-2.5">Seen</th>
-                  <th className="text-right font-medium px-4 py-2.5">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-ink-800">
-                {onlinePlayers.map(p => (
-                  <tr key={p.id} className="table-row-hover">
-                    <td className="px-4 py-2.5">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <PlayerAvatar name={p.profileImageName} displayName={p.displayName || p.username} size={34} />
-                        <div className="min-w-0">
-                          <div className="font-medium text-ink-50 truncate">{p.displayName || p.username}</div>
-                          <div className="text-xs text-ink-400 truncate">@{p.username} <span className="text-ink-600">·</span> #{p.id}</div>
-                        </div>
-                        <div className="flex gap-1 ml-1">
-                          {p.isAdmin && <span className="badge-admin">Admin</span>}
-                          {p.isJunior && <span className="badge-junior">Junior</span>}
-                          {p.isVerified && <span className="badge-neutral">Verified</span>}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-2.5">
-                      {p.currentRoom ? (
-                        <Link to={`/rooms/${p.currentRoom.roomId}`} className="text-ink-100 hover:text-brand-200">
-                          {p.currentRoom.name}
-                        </Link>
-                      ) : (
-                        <span className="text-ink-500">Unknown</span>
-                      )}
-                      {p.currentRoom?.isPrivate && <span className="badge-neutral ml-2">Private</span>}
-                    </td>
-                    <td className="px-4 py-2.5 font-mono text-xs text-ink-300">
-                      {p.currentRoom ? (
-                        <span title={p.currentRoom.photonRoomId}>
-                          #{p.currentRoom.roomInstanceId} · {p.currentRoom.photonRegionId}
-                        </span>
-                      ) : '—'}
-                    </td>
-                    <td className="px-4 py-2.5 text-right tabular-nums text-ink-200">{p.level}</td>
-                    <td className="px-4 py-2.5 text-xs text-ink-300" title={absoluteTime(p.lastSeenAt)}>
-                      {relativeTime(p.lastSeenAt)}
-                    </td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex justify-end gap-1.5">
-                        <Link to={`/players?query=${encodeURIComponent(p.username)}`} className="btn-ghost text-xs">Open</Link>
-                        <Link to={`/gift?player=${p.id}`} className="btn-ghost text-xs">Gift</Link>
-                        <button onClick={() => setAction({ playerId: p.id, username: p.username, kind: 'kick' })} className="btn-secondary text-xs">Kick</button>
-                        {!p.isAdmin && <button onClick={() => setAction({ playerId: p.id, username: p.username, kind: 'ban' })} className="btn-danger text-xs">Ban 1d</button>}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {stats && onlinePlayers.length === 0 && (
-                  <tr><td colSpan={6} className="py-10 text-center text-xs text-ink-400">No online players.</td></tr>
-                )}
-                {!stats && !err && (
-                  <tr><td colSpan={6} className="py-10 text-center text-xs text-ink-400">Loading live players...</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        <div className="space-y-4">
-          <Panel title="Active sessions" subtitle={`${stats?.rooms.activeSessionCount ?? 0} open`}>
-            <div className="space-y-2">
-              {stats?.rooms.activeSessions.map(s => (
-                <div key={s.id} className="rounded-lg border border-ink-800 bg-ink-950/40 p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="font-mono text-xs text-ink-200 truncate">{s.photonRoomName || `session-${s.id}`}</div>
-                    <span className="badge-online">{s.playerCount}/{s.maxCapacity}</span>
-                  </div>
-                  <div className="mt-1 text-[11px] text-ink-500">
-                    room {s.roomId || 'unknown'} · {s.region} · {relativeTime(s.createdAt)}
-                  </div>
-                </div>
-              ))}
-              {stats && stats.rooms.activeSessions.length === 0 && <div className="text-xs text-ink-500 py-4">No active sessions.</div>}
-            </div>
-          </Panel>
-
-          <Panel title="Top rooms" subtitle="By visits">
-            <div className="space-y-2">
-              {stats?.rooms.topByVisits.slice(0, 6).map((r, idx) => (
-                <Link key={r.id} to={`/rooms/${r.id}`} className="block rounded-lg border border-ink-800 bg-ink-950/40 px-3 py-2 hover:bg-ink-800/60">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-ink-500 w-5 tabular-nums">{idx + 1}</span>
-                    <span className="text-sm text-ink-100 truncate flex-1">{r.name}</span>
-                    <span className="text-xs text-ink-300 tabular-nums">{num(r.visitCount)}</span>
-                  </div>
+          {stats && (
+            <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[13px] text-ink-400">
+              <span>{stats.players.total.toLocaleString()} accounts</span>
+              <span>{stats.players.newToday} new today</span>
+              {stats.moderation.openReports > 0 && (
+                <Link to="/players?tab=reports" className="text-warn hover:underline">
+                  {stats.moderation.openReports} open {stats.moderation.openReports === 1 ? 'report' : 'reports'}
                 </Link>
-              ))}
+              )}
+              {stats.players.bannedNow > 0 && (
+                <Link to="/players?tab=bans" className="hover:text-ink-100 hover:underline">{stats.players.bannedNow} banned</Link>
+              )}
             </div>
-          </Panel>
+          )}
+        </div>
+
+        {err && <div className="mx-4 mt-3 rounded-md border border-danger/40 px-3 py-2 text-[13px] text-danger">{err}</div>}
+        {!stats && !err && <div className="px-4 py-8 text-[13px] text-ink-400">Loading…</div>}
+        {stats && online.length === 0 && (
+          <div className="px-4 py-8 text-[13px] text-ink-400">Nobody is online right now.</div>
+        )}
+
+        <div className="pb-4">
+          {groups.map(g => (
+            <div key={g.key}>
+              <div className="flex items-baseline gap-2 px-4 pb-1 pt-3 text-xs text-ink-400">
+                {g.room ? (
+                  <>
+                    <Link to={`/rooms/${g.room.roomId}`} className="truncate text-[13px] font-semibold text-ink-50 hover:underline">{g.room.name}</Link>
+                    <span className="shrink-0">{[g.room.photonRegionId, g.room.isPrivate && 'private'].filter(Boolean).join(', ')}</span>
+                    <span className={`ml-auto shrink-0 tabular-nums ${g.room.maxCapacity > 0 && g.players.length >= g.room.maxCapacity ? 'text-warn' : ''}`}>
+                      {g.players.length}{g.room.maxCapacity > 0 ? `/${g.room.maxCapacity}` : ''}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-[13px] font-semibold text-ink-50">Not in a room</span>
+                    <span className="ml-auto tabular-nums">{g.players.length}</span>
+                  </>
+                )}
+              </div>
+              {g.players.map(p => {
+                const on = p.id === selected;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => select(p.id)}
+                    aria-current={on ? 'true' : undefined}
+                    className={`flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-[14px] md:py-1.5 md:text-[13.5px] ${
+                      on ? 'bg-sel shadow-[inset_2px_0_0_rgb(var(--brand-500))]' : 'hover:bg-ink-850'
+                    }`}
+                  >
+                    <span className="min-w-0 flex-1 truncate text-ink-50">
+                      {p.displayName || p.username}
+                      {p.isAdmin && <span className="ml-2 text-xs text-brand-300">admin</span>}
+                      {p.isJunior && <span className="ml-2 text-xs text-warn">junior</span>}
+                    </span>
+                    <span className="text-xs tabular-nums text-ink-400" title="Level">{p.level}</span>
+                    <span className="w-16 text-right text-xs text-ink-400" title={absoluteTime(p.lastSeenAt)}>{shortAgo(p.lastSeenAt)}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </div>
       </section>
 
-      <p className="text-[11px] text-ink-500">Server time: {stats ? new Date(stats.serverTime).toLocaleString() : '-'}</p>
-
-      {action && (
-        <QuickAction
-          action={action}
-          onCancel={() => setAction(null)}
-          onConfirm={runAction}
-        />
-      )}
+      {/* Selected player */}
+      <section className={`min-h-0 overflow-y-auto md:block ${selected ? 'block' : 'hidden'}`} aria-label="Player">
+        {selected ? (
+          <div className="mx-auto max-w-3xl px-4 py-4 sm:px-7 sm:py-6">
+            <button onClick={back} className="mb-3 inline-flex items-center gap-1.5 text-[14px] text-brand-300 md:hidden">
+              <ArrowLeft /> Live
+            </button>
+            <PlayerPanel
+              key={selected}
+              id={selected}
+              online={stats ? !!selectedOnline : undefined}
+              whereabouts={selectedOnline?.currentRoom ? (
+                <>in <Link to={`/rooms/${selectedOnline.currentRoom.roomId}`} className="text-brand-300 hover:underline">{selectedOnline.currentRoom.name}</Link></>
+              ) : undefined}
+              onChanged={load}
+              onDeleted={() => { select(null); load(); }}
+            />
+          </div>
+        ) : (
+          <div className="flex h-full items-center justify-center px-6 text-center text-[13.5px] text-ink-400">
+            Pick a player to see their account and moderation tools.
+          </div>
+        )}
+      </section>
     </div>
   );
 }
 
-function Stat({ label, value, sub, icon, tone }: { label: string; value: number | undefined; sub?: string; icon: React.ReactNode; tone: 'success' | 'warn' | 'brand' | 'neutral' }) {
-  const toneClass = {
-    success: 'text-success bg-success/10 border-success/25',
-    warn: 'text-warn bg-warn/10 border-warn/25',
-    brand: 'text-brand-200 bg-brand-500/10 border-brand-500/25',
-    neutral: 'text-ink-200 bg-ink-800/60 border-ink-700',
-  }[tone];
-  return (
-    <div className="card !rounded-lg p-4">
-      <div className="flex items-start justify-between gap-2">
-        <div className={`rounded-md border p-2 ${toneClass}`}>{icon}</div>
-        <div className="text-right">
-          <div className="text-[10px] uppercase tracking-widest text-ink-400">{label}</div>
-          <div className="mt-1 text-2xl font-semibold tabular-nums text-ink-50">{value?.toLocaleString() ?? '-'}</div>
-        </div>
-      </div>
-      {sub && <div className="mt-2 text-xs text-ink-400 truncate">{sub}</div>}
-    </div>
-  );
+function groupByRoom(online: Online[]): RoomGroup[] {
+  const map = new Map<string, RoomGroup>();
+  for (const p of online) {
+    const r = p.currentRoom;
+    const key = r ? `${r.roomId}:${r.subRoomId}:${r.roomInstanceId}` : 'none';
+    let g = map.get(key);
+    if (!g) { g = { key, room: r, players: [] }; map.set(key, g); }
+    g.players.push(p);
+  }
+  const groups = [...map.values()];
+  for (const g of groups) {
+    g.players.sort((a, b) => (a.displayName || a.username).localeCompare(b.displayName || b.username));
+  }
+  // Busiest rooms first; players outside a room last.
+  return groups.sort((a, b) => {
+    if (!a.room !== !b.room) return a.room ? -1 : 1;
+    return b.players.length - a.players.length;
+  });
 }
 
-function Panel({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
-  return (
-    <div className="card !rounded-lg overflow-hidden">
-      <div className="border-b border-ink-800 px-4 py-3">
-        <h2 className="text-sm font-semibold text-ink-50">{title}</h2>
-        <p className="text-xs text-ink-400">{subtitle}</p>
-      </div>
-      <div className="p-3">{children}</div>
-    </div>
-  );
-}
-
-function QuickAction({ action, onCancel, onConfirm }: { action: Exclude<ActionState, null>; onCancel: () => void; onConfirm: (reason: string) => void }) {
-  const [reason, setReason] = useState(action.kind === 'kick' ? 'Quick kick from live dashboard' : 'Quick ban from live dashboard');
-  return (
-    <div className="fixed inset-0 z-50 grid place-items-center bg-ink-950/70 px-4">
-      <div className="card !rounded-lg w-full max-w-md p-4">
-        <h2 className="text-sm font-semibold text-ink-50">
-          {action.kind === 'kick' ? 'Kick player' : 'Ban player for 1 day'}
-        </h2>
-        <p className="mt-1 text-xs text-ink-400">@{action.username}</p>
-        <label className="label block mt-4">Reason</label>
-        <textarea value={reason} onChange={e => setReason(e.target.value)} rows={3} className="input mt-1.5" />
-        <div className="mt-4 flex justify-end gap-2">
-          <button onClick={onCancel} className="btn-ghost text-xs">Cancel</button>
-          <button onClick={() => onConfirm(reason)} className={action.kind === 'kick' ? 'btn-secondary text-xs' : 'btn-danger text-xs'}>
-            {action.kind === 'kick' ? 'Kick' : 'Ban 1d'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
+// "4 min ago" is too wide for the list column; "4m" is enough.
+function shortAgo(iso: string | null | undefined): string {
+  const r = relativeTime(iso);
+  if (r === 'just now') return 'now';
+  return r.replace(/ ago$/, '').replace(/ (sec|min|hr|day|wk|mo|yr)$/, (_, u: string) => ({ sec: 's', min: 'm', hr: 'h', day: 'd', wk: 'w', mo: 'mo', yr: 'y' } as Record<string, string>)[u]);
 }

@@ -199,7 +199,7 @@ function TipEditor({
           {preview ? (
             <img src={preview} className="size-full object-cover" alt="" />
           ) : (
-            <span className="text-[10px] text-ink-500 px-1 text-center">{uploading ? 'Uploading…' : 'Pick image'}</span>
+            <span className="text-xs text-ink-500 px-1 text-center">{uploading ? 'Uploading…' : 'Pick image'}</span>
           )}
         </div>
         <input
@@ -243,7 +243,7 @@ function TipEditor({
                 Clear image
               </button>
             )}
-            <span className="font-mono text-[11px] text-ink-400 truncate flex-1" title={tip.imageName}>
+            <span className="font-mono text-xs text-ink-400 truncate flex-1" title={tip.imageName}>
               {tip.imageName || <span className="italic text-ink-600">no image</span>}
             </span>
           </div>

@@ -2,7 +2,8 @@ import { Players } from './Players';
 import { Bans } from './Bans';
 import { Reports } from './Reports';
 import { PageHeader } from '../components/PageHeader';
-import { Tabs, useTabParam } from '../components/Tabs';
+import { useId } from 'react';
+import { TabPanel, Tabs, useTabParam } from '../components/Tabs';
 
 // Unified moderation hub. The account directory (with its per-player
 // detail / ban / grant / gift / password modal), the active-ban list,
@@ -11,9 +12,10 @@ import { Tabs, useTabParam } from '../components/Tabs';
 // /bans and /reports routes redirect here with ?tab= preselected.
 export function Moderation() {
   const [tab, setTab] = useTabParam<'directory' | 'bans' | 'reports'>('directory', ['directory', 'bans', 'reports']);
+  const idBase = useId();
   return (
     <div>
-      <PageHeader title="Players" blurb="Search and moderate accounts, review active bans, and triage open reports." />
+      <PageHeader title={({ directory: 'Players', bans: 'Bans', reports: 'Reports' })[tab]} />
       <Tabs
         tabs={[
           { key: 'directory', label: 'Directory' },
@@ -22,10 +24,14 @@ export function Moderation() {
         ]}
         active={tab}
         onChange={setTab}
+        idBase={idBase}
+        className="md:hidden"
       />
-      {tab === 'directory' && <Players embedded />}
-      {tab === 'bans' && <Bans embedded />}
-      {tab === 'reports' && <Reports embedded />}
+      <TabPanel idBase={idBase} active={tab}>
+        {tab === 'directory' && <Players embedded />}
+        {tab === 'bans' && <Bans embedded />}
+        {tab === 'reports' && <Reports embedded />}
+      </TabPanel>
     </div>
   );
 }

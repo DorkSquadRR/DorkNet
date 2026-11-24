@@ -230,7 +230,7 @@ export function Charades({ embedded }: { embedded?: boolean } = {}) {
             {SLOTS.map(slot => (
               <label key={slot.key} className="block rounded-lg border border-ink-800 bg-ink-950/30 p-3">
                 <span className="text-sm font-semibold text-ink-100">{slot.title}</span>
-                <span className="mt-0.5 block text-[11px] text-ink-500">{slot.blurb}</span>
+                <span className="mt-0.5 block text-xs text-ink-500">{slot.blurb}</span>
                 <select
                   className="input mt-2 text-xs"
                   value={bindings[slot.key]}
@@ -338,13 +338,13 @@ function ListEditor({
         />
         {list.isBuiltIn && <span className="badge-admin shrink-0">built-in</span>}
         {liveSlots.map(s => <span key={s} className="badge-online shrink-0">live: {s}</span>)}
-        <span className="text-[11px] text-ink-500 shrink-0">{list.words.length} cards</span>
+        <span className="text-xs text-ink-500 shrink-0">{list.words.length} cards</span>
         <button onClick={() => setOpen(o => !o)} className="btn-secondary text-xs shrink-0">
           {open ? 'Collapse' : 'Edit'}
         </button>
       </div>
 
-      <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] text-ink-400">
+      <div className="mt-2 flex flex-wrap gap-1.5 text-xs text-ink-400">
         {DIFFICULTIES.map(d => counts.get(d.value)
           ? <span key={d.value} className="badge-neutral">{d.label}: {counts.get(d.value)}</span>
           : null)}
@@ -379,7 +379,7 @@ function ListEditor({
 
           <div className="rounded-lg border border-ink-800 bg-ink-950/30 p-3">
             <h4 className="text-xs font-semibold text-ink-200">Import from paste</h4>
-            <p className="mt-0.5 text-[11px] text-ink-500">
+            <p className="mt-0.5 text-xs text-ink-500">
               One phrase per line. Add <span className="font-mono">| easy</span>,{' '}
               <span className="font-mono">| hard</span>, <span className="font-mono">| veryhard</span> or{' '}
               <span className="font-mono">| icebreaker</span> after a line to set its difficulty.
@@ -416,7 +416,7 @@ function ListEditor({
       )}
 
       <div className="mt-4 flex items-center gap-3">
-        <span className="text-[11px] text-ink-600 flex-1">
+        <span className="text-xs text-ink-600 flex-1">
           Last saved {new Date(list.updatedAt).toLocaleString()}
         </span>
         <button onClick={onSave} className="btn-primary text-xs">Save</button>

@@ -1,47 +1,35 @@
 /** @type {import('tailwindcss').Config} */
+
+// Every palette colour is an RGB-channel CSS variable (see src/index.css),
+// so one class name works in both themes: the light theme redefines the
+// variables under :root, the dark theme under [data-theme="dark"]. The
+// `ink` scale is ordered by contrast, not lightness: ink-950 is the page
+// background and ink-50 the strongest text in either theme.
+const v = (name) => `rgb(var(--${name}) / <alpha-value>)`;
+const scale = (prefix, steps) => Object.fromEntries(steps.map((s) => [s, v(`${prefix}-${s}`)]));
+
 export default {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
-  darkMode: 'class',
+  darkMode: ['selector', '[data-theme="dark"]'],
   theme: {
     extend: {
       colors: {
-        ink: {
-          50:  '#f7f7f8',
-          100: '#ececef',
-          200: '#d3d4d9',
-          300: '#a9abb4',
-          400: '#7e818d',
-          500: '#5d606b',
-          600: '#43464f',
-          700: '#34363d',
-          800: '#23252b',
-          850: '#1b1d22',
-          900: '#131418',
-          950: '#0a0b0e',
-        },
-        brand: {
-          DEFAULT: '#0b95c7',
-          50:  '#ecfbff',
-          100: '#c8f3ff',
-          200: '#8bedff',
-          300: '#51e5ff',
-          400: '#22cfee',
-          500: '#0b95c7',
-          600: '#087aa8',
-          700: '#096083',
-          800: '#0a465f',
-          900: '#082f40',
-        },
-        success: '#3ecf8e',
-        warn:    '#f4b740',
-        danger:  '#ef5b6b',
+        ink: scale('ink', [50, 100, 200, 300, 400, 500, 600, 700, 800, 850, 900, 950]),
+        brand: { DEFAULT: v('brand-500'), ...scale('brand', [50, 100, 200, 300, 400, 500, 600, 700, 800, 900]) },
+        success: v('success'),
+        warn: v('warn'),
+        danger: v('danger'),
+        // Sidebar / mobile bar background and the selected-row tint.
+        bar: v('bar'),
+        sel: v('sel'),
       },
       fontFamily: {
-        sans: ['Inter', 'ui-sans-serif', 'system-ui', '-apple-system', 'Segoe UI', 'Roboto', 'sans-serif'],
-        mono: ['JetBrains Mono', 'SFMono-Regular', 'Menlo', 'monospace'],
+        sans: ['"IBM Plex Sans"', 'ui-sans-serif', 'system-ui', '-apple-system', '"Segoe UI"', 'Roboto', 'sans-serif'],
+        mono: ['"IBM Plex Mono"', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       boxShadow: {
-        card: '0 1px 0 rgba(0,0,0,0.05), 0 1px 3px rgba(0,0,0,0.10)',
+        // Only for things that float above the page (toasts, drawers, dialogs).
+        float: '0 8px 30px rgb(0 0 0 / 0.18)',
       },
     },
   },
