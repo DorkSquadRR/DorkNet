@@ -195,7 +195,7 @@ export function GiftPanel({ playerId }: { playerId: number }) {
           <button onClick={send} disabled={busy} className="btn-primary w-full text-xs">
             {busy ? 'Sending…' : 'Send gift'}
           </button>
-          <div className="text-[11px] text-ink-500">
+          <div className="text-xs text-ink-500">
             The recipient sees the gift box in their next HUD update (SignalR push) or when they next poll <code className="font-mono">/api/avatar/v2/gifts</code>.
           </div>
         </div>
@@ -250,9 +250,9 @@ function AvatarItemPicker({ selected, onSelect }: { selected: AvatarItem | null;
                   <td className="px-3 py-1.5">
                     <div className="text-ink-100 text-sm flex items-center gap-1.5">
                       {it.friendlyName || <span className="text-ink-500">unnamed</span>}
-                      {it.isVariant && <span className="badge-neutral text-[10px]">{it.color}</span>}
+                      {it.isVariant && <span className="badge-neutral text-xs">{it.color}</span>}
                     </div>
-                    <div className="font-mono text-[10px] text-ink-500">{it.desc}</div>
+                    <div className="font-mono text-xs text-ink-500">{it.desc}</div>
                   </td>
                   <td className="px-3 py-1.5 text-xs text-ink-300 whitespace-nowrap">{SLOT_NAMES[it.slot] ?? `slot ${it.slot}`}</td>
                 </tr>
@@ -373,7 +373,7 @@ function PendingGifts({ playerId, refreshKey }: { playerId: number; refreshKey: 
       )}
       {rows && rows.length > 0 && (
         <div className="table-scroll"><table className="w-full text-sm min-w-[560px]">
-          <thead className="text-[11px] uppercase tracking-wider text-ink-400 border-b border-ink-800">
+          <thead className="text-xs text-ink-400 border-b border-ink-800">
             <tr>
               <th className="text-left font-medium pb-2">#</th>
               <th className="text-left font-medium pb-2">Contents</th>

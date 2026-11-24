@@ -10,7 +10,7 @@ export function SettingsHome() {
   const [tab, setTab] = useTabParam<'server' | 'signup'>('server', ['server', 'signup']);
   return (
     <div>
-      <PageHeader title="Settings" blurb="Runtime server toggles and single-use signup invite codes." />
+      <PageHeader title={({ server: 'Settings', signup: 'Signup codes' })[tab]} />
       <Tabs
         tabs={[
           { key: 'server', label: 'Server' },
@@ -18,6 +18,7 @@ export function SettingsHome() {
         ]}
         active={tab}
         onChange={setTab}
+        className="md:hidden"
       />
       {tab === 'server' && <Settings embedded />}
       {tab === 'signup' && <SignupCodes embedded />}

@@ -165,7 +165,7 @@ export function Rooms() {
         {data && filtered.length === 0 && <Empty title="No rooms match" />}
         {filtered.length > 0 && (
           <div className="table-scroll"><table className="w-full text-sm min-w-[760px]">
-            <thead className="text-[11px] uppercase tracking-wider text-ink-400 bg-ink-900/50 border-b border-ink-800">
+            <thead className="text-xs text-ink-400 bg-ink-900/50 border-b border-ink-800">
               <tr>
                 <th className="text-left font-medium px-4 py-2.5">Image</th>
                 <th className="text-left font-medium px-4 py-2.5">#</th>
@@ -272,7 +272,7 @@ function RoomThumb({ room }: { room: Room }) {
           onError={() => setErrored(true)}
         />
       ) : (
-        <div className="flex h-full w-full items-center justify-center bg-ink-900 text-[10px] uppercase tracking-wide text-ink-500">
+        <div className="flex h-full w-full items-center justify-center bg-ink-900 text-xs text-ink-500">
           No image
         </div>
       )}
@@ -331,7 +331,7 @@ function PlayMenuTagsPanel({
             Filter chips shown in the watch Play menu.
           </p>
           {tags && (
-            <p className="mt-1 text-[11px] text-ink-500">
+            <p className="mt-1 text-xs text-ink-500">
               Last changed {new Date(tags.updatedAt).toLocaleString()}.
             </p>
           )}
@@ -431,7 +431,7 @@ function RecCenterDoorsPanel({
             Door titles and tag queries served through the 2020 gameconfig endpoint.
           </p>
           {settings && (
-            <p className="mt-1 text-[11px] text-ink-500">
+            <p className="mt-1 text-xs text-ink-500">
               Last changed {new Date(settings.updatedAt).toLocaleString()}.
             </p>
           )}
@@ -454,7 +454,7 @@ function RecCenterDoorsPanel({
       {settings && (
         <div className="mt-4 table-scroll">
           <table className="w-full min-w-[760px] text-sm">
-            <thead className="text-[11px] uppercase tracking-wider text-ink-400 bg-ink-900/50 border-y border-ink-800">
+            <thead className="text-xs text-ink-400 bg-ink-900/50 border-y border-ink-800">
               <tr>
                 <th className="text-left font-medium px-3 py-2">Key</th>
                 <th className="text-left font-medium px-3 py-2">Title</th>
@@ -472,7 +472,7 @@ function RecCenterDoorsPanel({
                       className="input font-mono text-xs"
                       placeholder="Shooters"
                     />
-                    <div className="mt-1 text-[11px] text-ink-500">Door.{door.key || 'Key'}.*</div>
+                    <div className="mt-1 text-xs text-ink-500">Door.{door.key || 'Key'}.*</div>
                   </td>
                   <td className="px-3 py-2 align-top">
                     <input
@@ -571,7 +571,7 @@ function BaseRoomsPanel({
         <div>
           <h2 className="text-sm font-semibold text-ink-50">Base rooms</h2>
           <p className="mt-1 text-xs text-ink-400">
-            Ordered rooms shown in the room-creation "base room" picker (<code className="font-mono text-[11px]">rooms/base</code>).
+            Ordered rooms shown in the room-creation "base room" picker (<code className="font-mono text-xs">rooms/base</code>).
             MakerRoom is the blank canvas; quests are excluded by default.
           </p>
         </div>
@@ -603,7 +603,7 @@ function BaseRoomsPanel({
             <button onClick={() => add(toAdd)} disabled={!toAdd} className="btn-secondary text-xs">
               <Plus /> Add
             </button>
-            <span className="ml-auto text-[11px] text-ink-500">{names.length} rooms</span>
+            <span className="ml-auto text-xs text-ink-500">{names.length} rooms</span>
           </div>
 
           <ol className="space-y-1">
@@ -614,9 +614,9 @@ function BaseRoomsPanel({
                   key={`${name}-${i}`}
                   className="flex items-center gap-2 rounded-md border border-ink-800 bg-ink-950/30 px-2 py-1.5"
                 >
-                  <span className="w-6 text-right text-[11px] tabular-nums text-ink-500">{i + 1}</span>
+                  <span className="w-6 text-right text-xs tabular-nums text-ink-500">{i + 1}</span>
                   <span className={`font-mono text-xs ${missing ? 'text-danger' : 'text-ink-100'}`}>{name}</span>
-                  {missing && <span className="badge-neutral text-[10px]">not found</span>}
+                  {missing && <span className="badge-neutral text-xs">not found</span>}
                   <div className="ml-auto flex items-center gap-1">
                     <button onClick={() => move(i, -1)} disabled={i === 0} className="btn-ghost text-xs" title="Move up">↑</button>
                     <button onClick={() => move(i, 1)} disabled={i === names.length - 1} className="btn-ghost text-xs" title="Move down">↓</button>
@@ -666,7 +666,7 @@ function TagListEditor({
     <div className="rounded-lg border border-ink-800 bg-ink-950/30 p-3">
       <div className="flex items-center justify-between gap-3">
         <span className="label">{label}</span>
-        <span className="text-[11px] text-ink-500">{tags.length}/{max}</span>
+        <span className="text-xs text-ink-500">{tags.length}/{max}</span>
       </div>
       <div className="mt-2 flex gap-2">
         <input

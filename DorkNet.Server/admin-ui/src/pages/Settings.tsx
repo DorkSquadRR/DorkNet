@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router';
 import { api, get } from '../lib/api';
 import { PageHeader } from '../components/PageHeader';
 import { useToast } from '../components/Toast';
+import { Switch } from '../components/Switch';
 import { Plus, RefreshCw, Trash } from '../components/Icons';
 
 interface ServerSettings {
@@ -197,6 +199,15 @@ export function Settings({ embedded }: { embedded?: boolean } = {}) {
   };
 
   useEffect(() => { void load(); }, []);
+
+  // Sidebar links (#game-config, #circuits, #weekly) jump to a section once
+  // everything has loaded and the section exists.
+  const location = useLocation();
+  const ready = !!(settings && weekly && gameConfigs && circuits);
+  useEffect(() => {
+    if (!ready || !location.hash) return;
+    document.getElementById(location.hash.slice(1))?.scrollIntoView({ block: 'start' });
+  }, [ready, location.hash]);
 
   const toggleSignups = async () => {
     if (!settings) return;
@@ -555,161 +566,47 @@ export function Settings({ embedded }: { embedded?: boolean } = {}) {
       )}
 
       {settings && (
-        <div className="card !p-5 max-w-2xl">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <h2 className="text-sm font-semibold text-ink-50">In-game signups</h2>
-              <p className="mt-1 text-xs text-ink-400">
-                When disabled, the watch's account-creation flow returns an error to the player instead of minting a new account.
-                Existing logins keep working — only brand-new signups are blocked.
-              </p>
-              <p className="mt-2 text-[11px] text-ink-500">
-                Last changed {new Date(settings.updatedAt).toLocaleString()}.
-              </p>
-            </div>
-            <button
-              onClick={toggleSignups}
+        <section className="max-w-2xl">
+          <h2 className="mb-1 text-[15px] font-semibold text-ink-50">Server</h2>
+          <div className="divide-y divide-ink-800 border-y border-ink-800">
+            <SettingRow
+              title="Allow new accounts"
+              hint="When off, players can't create accounts from the game."
+              checked={!settings.signupsDisabled}
+              onChange={toggleSignups}
               disabled={busy}
-              className={(settings.signupsDisabled ? 'btn-primary' : 'btn-danger') + ' text-xs shrink-0'}
-            >
-              {busy ? 'Working…' : settings.signupsDisabled ? 'Enable signups' : 'Disable signups'}
-            </button>
-          </div>
-          <div className="mt-4 text-xs">
-            {settings.signupsDisabled
-              ? <span className="badge-banned">Signups disabled</span>
-              : <span className="badge-online">Signups allowed</span>}
-          </div>
-        </div>
-      )}
-
-      {settings && (
-        <div className="card !p-5 max-w-2xl mt-5">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <h2 className="text-sm font-semibold text-ink-50">Everyone is friends</h2>
-              <p className="mt-1 text-xs text-ink-400">
-                When on, every account is treated as a friend of every other account, so players
-                don't have to search and friend-request each other on a small server. Nothing is
-                written to the database — it's synthesized live, and connected players get a refresh
-                signal so their friends list updates without relogging. Turn it off to instantly
-                revert to real friend lists. Blocks are still respected.
-              </p>
-              <p className="mt-2 text-[11px] text-ink-500">
-                Last changed {new Date(settings.updatedAt).toLocaleString()}.
-              </p>
-            </div>
-            <button
-              onClick={toggleGlobalFriends}
+            />
+            <SettingRow
+              title="Everyone is friends"
+              hint="Every player sees everyone else as a friend. Blocks still apply."
+              checked={settings.globalFriendsEnabled}
+              onChange={toggleGlobalFriends}
               disabled={busy}
-              className={(settings.globalFriendsEnabled ? 'btn-danger' : 'btn-primary') + ' text-xs shrink-0'}
-            >
-              {busy ? 'Working…' : settings.globalFriendsEnabled ? 'Turn off' : 'Make everyone friends'}
-            </button>
-          </div>
-          <div className="mt-4 text-xs">
-            {settings.globalFriendsEnabled
-              ? <span className="badge-online">Everyone is friends</span>
-              : <span className="badge-neutral">Normal friend lists</span>}
-          </div>
-        </div>
-      )}
-
-      {settings && (
-        <div className="card !p-5 max-w-2xl mt-5">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <h2 className="text-sm font-semibold text-ink-50">Everyone owns all avatar items</h2>
-              <p className="mt-1 text-xs text-ink-400">
-                When on, every account is reported as owning the entire avatar wardrobe catalog
-                (plus all permanent hair dyes), so the store shows everything as "owned" and every
-                item is equippable. Nothing is written to inventories — it's synthesized live, and
-                turning it off instantly reverts each player to the items they actually own. Players
-                pick up the change the next time the watch loads unlocked items (avatar menu open or
-                next boot). Color variants and player-made custom items aren't included.
-              </p>
-              <p className="mt-2 text-[11px] text-ink-500">
-                Last changed {new Date(settings.updatedAt).toLocaleString()}.
-              </p>
-            </div>
-            <button
-              onClick={toggleAllAvatarItems}
+            />
+            <SettingRow
+              title="Everyone owns every avatar item"
+              hint="The whole wardrobe shows as owned. Inventories aren't changed."
+              checked={settings.allAvatarItemsOwned}
+              onChange={toggleAllAvatarItems}
               disabled={busy}
-              className={(settings.allAvatarItemsOwned ? 'btn-danger' : 'btn-primary') + ' text-xs shrink-0'}
-            >
-              {busy ? 'Working…' : settings.allAvatarItemsOwned ? 'Turn off' : 'Give everyone all items'}
-            </button>
-          </div>
-          <div className="mt-4 text-xs">
-            {settings.allAvatarItemsOwned
-              ? <span className="badge-online">Everyone owns everything</span>
-              : <span className="badge-neutral">Normal wardrobes</span>}
-          </div>
-        </div>
-      )}
-
-      {settings && (
-        <div className="card !p-5 max-w-2xl mt-5">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <h2 className="text-sm font-semibold text-ink-50">Profanity filter</h2>
-              <p className="mt-1 text-xs text-ink-400">
-                The server-side filter behind <span className="font-mono">api/sanitize/*</span> that
-                the watch calls before letting a player submit a room name, invention name, or chat
-                message. Turn it off to stop censoring text entirely — every check returns "clean"
-                and input is passed through unchanged. Takes effect immediately.
-              </p>
-              <p className="mt-2 text-[11px] text-ink-500">
-                Last changed {new Date(settings.updatedAt).toLocaleString()}.
-              </p>
-            </div>
-            <button
-              onClick={toggleProfanity}
+            />
+            <SettingRow
+              title="Profanity filter"
+              hint="Filters room names, invention names and chat."
+              checked={!settings.profanityFilterDisabled}
+              onChange={toggleProfanity}
               disabled={busy}
-              className={(settings.profanityFilterDisabled ? 'btn-primary' : 'btn-danger') + ' text-xs shrink-0'}
-            >
-              {busy ? 'Working…' : settings.profanityFilterDisabled ? 'Enable filter' : 'Disable filter'}
-            </button>
-          </div>
-          <div className="mt-4 text-xs">
-            {settings.profanityFilterDisabled
-              ? <span className="badge-banned">Filter off — nothing censored</span>
-              : <span className="badge-online">Filter active</span>}
-          </div>
-        </div>
-      )}
-
-      {settings && (
-        <div className="card !p-5 max-w-2xl mt-5">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0 flex-1">
-              <h2 className="text-sm font-semibold text-ink-50">Imported-room version clamp</h2>
-              <p className="mt-1 text-xs text-ink-400">
-                Rooms imported from modern RecNet exports carry room-data version stamps far newer
-                than the 2023 client understands, so it refuses to load them with "update Rec Room
-                to visit this room". While the clamp is on, the CDN serves those blobs with their
-                version stamps lowered to the client's maximum — nothing stored is modified, and
-                already-compatible blobs pass through byte-for-byte. Leave it on unless a specific
-                room misbehaves with the clamp active.
-              </p>
-              <p className="mt-2 text-[11px] text-ink-500">
-                Last changed {new Date(settings.updatedAt).toLocaleString()}.
-              </p>
-            </div>
-            <button
-              onClick={toggleRoomBlobVersionClamp}
+            />
+            <SettingRow
+              title="Open rooms saved by newer clients"
+              hint="Lowers the version stamp on imported rooms so this build can load them."
+              checked={!settings.roomBlobVersionClampDisabled}
+              onChange={toggleRoomBlobVersionClamp}
               disabled={busy}
-              className={(settings.roomBlobVersionClampDisabled ? 'btn-primary' : 'btn-danger') + ' text-xs shrink-0'}
-            >
-              {busy ? 'Working…' : settings.roomBlobVersionClampDisabled ? 'Enable clamp' : 'Disable clamp'}
-            </button>
+            />
           </div>
-          <div className="mt-4 text-xs">
-            {settings.roomBlobVersionClampDisabled
-              ? <span className="badge-banned">Clamp off — modern imports will demand an update</span>
-              : <span className="badge-online">Clamp active — modern imports joinable</span>}
-          </div>
-        </div>
+          <p className="mt-2 text-xs text-ink-400">Last changed {new Date(settings.updatedAt).toLocaleString()}</p>
+        </section>
       )}
 
       {gameConfigs && (
@@ -734,14 +631,14 @@ export function Settings({ embedded }: { embedded?: boolean } = {}) {
       )}
 
       {weekly && (
-        <div className="card !p-5 max-w-5xl mt-5">
+        <div id="weekly" className="card !p-5 max-w-5xl mt-8 scroll-mt-4">
           <div className="flex flex-wrap items-start justify-between gap-4">
             <div className="min-w-0 flex-1">
               <h2 className="text-sm font-semibold text-ink-50">Weekly challenges</h2>
               <p className="mt-1 text-xs text-ink-400">
                 These are sent to the watch as the current challenge map. Players start each weekly challenge incomplete until their own progress is reported.
               </p>
-              <p className="mt-2 text-[11px] text-ink-500">
+              <p className="mt-2 text-xs text-ink-500">
                 Last changed {new Date(weekly.updatedAt).toLocaleString()}.
               </p>
             </div>
@@ -865,7 +762,7 @@ export function Settings({ embedded }: { embedded?: boolean } = {}) {
                 </select>
               </label>
               {selectedRewardOption && selectedRewardValue !== 'none' && (
-                <div className="md:col-span-3 rounded border border-ink-800 bg-ink-950/40 px-3 py-2 text-[11px] text-ink-400">
+                <div className="md:col-span-3 rounded border border-ink-800 bg-ink-950/40 px-3 py-2 text-xs text-ink-400">
                   <div className="font-mono break-all">
                     {selectedRewardOption.avatarItemDesc && `avatar: ${selectedRewardOption.avatarItemDesc}`}
                     {selectedRewardOption.consumableItemDesc && `consumable: ${selectedRewardOption.consumableItemDesc}`}
@@ -966,14 +863,32 @@ function WeeklyChallengeConfigForm({
           />
         </label>
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-ink-400">
+      <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-ink-400">
         <span className="badge-neutral">ct {selected.value}</span>
         <span>{selected.note}</span>
         {parsed.amount > 1 && <span className="badge-admin">wrapped by ct 1 count</span>}
       </div>
-      <div className="mt-3 rounded border border-ink-800 bg-ink-950 px-3 py-2 font-mono text-[11px] text-ink-400 break-all">
+      <div className="mt-3 rounded border border-ink-800 bg-ink-950 px-3 py-2 font-mono text-xs text-ink-400 break-all">
         {challenge.config}
       </div>
+    </div>
+  );
+}
+
+function SettingRow({ title, hint, checked, onChange, disabled }: {
+  title: string;
+  hint: string;
+  checked: boolean;
+  onChange: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <div className="flex items-center gap-4 py-3">
+      <div className="min-w-0 flex-1">
+        <div className="text-[13.5px] text-ink-50">{title}</div>
+        <div className="text-[13px] text-ink-400">{hint}</div>
+      </div>
+      <Switch checked={checked} onChange={onChange} disabled={disabled} label={title} />
     </div>
   );
 }
@@ -997,14 +912,14 @@ function DiscoveredGameConfigsPanel({
   };
 
   return (
-    <div className="card !p-5 max-w-5xl mt-5">
+    <div id="game-config" className="card !p-5 max-w-5xl mt-8 scroll-mt-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold text-ink-50">GameConfig</h2>
           <p className="mt-1 text-xs text-ink-400">
             Typed keys confirmed in the 2020.12 client decomp.
           </p>
-          <p className="mt-2 text-[11px] text-ink-500">
+          <p className="mt-2 text-xs text-ink-500">
             Last changed {new Date(settings.updatedAt).toLocaleString()}.
           </p>
         </div>
@@ -1021,7 +936,7 @@ function DiscoveredGameConfigsPanel({
 
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
         <div className="rounded-lg border border-ink-800 bg-ink-950/30 p-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-400">Social</h3>
+          <h3 className="text-xs font-semibold text-ink-400">Social</h3>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <NumberConfig
               label="Friends.PostGamePromptUnderFriendCount"
@@ -1037,7 +952,7 @@ function DiscoveredGameConfigsPanel({
         </div>
 
         <div className="rounded-lg border border-ink-800 bg-ink-950/30 p-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-400">Account gates</h3>
+          <h3 className="text-xs font-semibold text-ink-400">Account gates</h3>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <BoolConfig
               label="Screens.ForceVerification"
@@ -1053,7 +968,7 @@ function DiscoveredGameConfigsPanel({
         </div>
 
         <div className="rounded-lg border border-ink-800 bg-ink-950/30 p-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-400">Rewards</h3>
+          <h3 className="text-xs font-semibold text-ink-400">Rewards</h3>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <BoolConfig
               label="Rewards.UseRewardSelection"
@@ -1069,7 +984,7 @@ function DiscoveredGameConfigsPanel({
         </div>
 
         <div className="rounded-lg border border-ink-800 bg-ink-950/30 p-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-400">Room details</h3>
+          <h3 className="text-xs font-semibold text-ink-400">Room details</h3>
           <div className="mt-3">
             <BoolConfig
               label="RoomDetails.PhotoRollEnabled"
@@ -1080,7 +995,7 @@ function DiscoveredGameConfigsPanel({
         </div>
 
         <div className="rounded-lg border border-ink-800 bg-ink-950/30 p-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-400">Networking</h3>
+          <h3 className="text-xs font-semibold text-ink-400">Networking</h3>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <NumberConfig
               label="loadingNetworkTimeout"
@@ -1096,7 +1011,7 @@ function DiscoveredGameConfigsPanel({
         </div>
 
         <div className="rounded-lg border border-ink-800 bg-ink-950/30 p-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-400">Rendering / sync</h3>
+          <h3 className="text-xs font-semibold text-ink-400">Rendering / sync</h3>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <BoolConfig
               label="SynchronizedField.RemoveDefaultEntries"
@@ -1112,7 +1027,7 @@ function DiscoveredGameConfigsPanel({
         </div>
 
         <div className="rounded-lg border border-ink-800 bg-ink-950/30 p-4 lg:col-span-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-400">Split tests</h3>
+          <h3 className="text-xs font-semibold text-ink-400">Split tests</h3>
           <div className="mt-3 grid gap-3 lg:grid-cols-3">
             <JsonConfig
               label="splitTestSoftOverrides"
@@ -1162,7 +1077,7 @@ function CircuitsV2LimitsPanel({
   };
 
   return (
-    <div className="card !p-5 max-w-5xl mt-5">
+    <div id="circuits" className="card !p-5 max-w-5xl mt-8 scroll-mt-4">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold text-ink-50">CircuitsV2 limits</h2>
@@ -1173,7 +1088,7 @@ function CircuitsV2LimitsPanel({
             limits below about 10x past retail. Clients read these once
             when circuits start, so players must rejoin their room to pick up a change.
           </p>
-          <p className="mt-2 text-[11px] text-ink-500">
+          <p className="mt-2 text-xs text-ink-500">
             Last changed {new Date(settings.updatedAt).toLocaleString()}.
           </p>
         </div>
@@ -1191,10 +1106,10 @@ function CircuitsV2LimitsPanel({
       <div className="mt-5 grid gap-4 lg:grid-cols-2">
         {settings.network.map((entry, index) => (
           <div key={index} className="rounded-lg border border-ink-800 bg-ink-950/30 p-4 lg:col-span-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-400">
+            <h3 className="text-xs font-semibold text-ink-400">
               Network budget{settings.network.length > 1 ? ` — from ${entry.numPlayersForActivation} players` : ''}
             </h3>
-            <p className="mt-1 text-[11px] text-ink-500">
+            <p className="mt-1 text-xs text-ink-500">
               Each budget is spent over a rolling window measured in frames, so a window of 1 means
               per frame and 60 means roughly per second at 60fps. Widening a window makes the limit
               stricter, not looser — raise the budget instead.
@@ -1225,7 +1140,7 @@ function CircuitsV2LimitsPanel({
         ))}
 
         <div className="rounded-lg border border-ink-800 bg-ink-950/30 p-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-400">Circuit budget</h3>
+          <h3 className="text-xs font-semibold text-ink-400">Circuit budget</h3>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <NumberConfig
               label="Compute"
@@ -1261,7 +1176,7 @@ function CircuitsV2LimitsPanel({
         </div>
 
         <div className="rounded-lg border border-ink-800 bg-ink-950/30 p-4">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-ink-400">Cloud variables</h3>
+          <h3 className="text-xs font-semibold text-ink-400">Cloud variables</h3>
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
             <NumberConfig
               label="CloudValues"
@@ -1297,7 +1212,7 @@ function NumberConfig({
     <label className="block">
       <span className="label font-mono normal-case tracking-normal">{label}</span>
       <input className="input mt-1" type="number" value={value} onChange={(e) => onChange(e.target.value)} />
-      {hint && <span className="mt-1 block text-[11px] text-ink-500">{hint}</span>}
+      {hint && <span className="mt-1 block text-xs text-ink-500">{hint}</span>}
     </label>
   );
 }

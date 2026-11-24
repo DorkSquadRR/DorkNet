@@ -59,13 +59,38 @@ that outer check.
 
 ## Navigation
 
+The sidebar lists the sections below. The section you're in expands to
+show its sub-pages (the `?tab=` views and the settings anchors), so hub
+pages don't repeat that menu on desktop. On phones the sidebar is a
+drawer behind the menu button and the hub pages show their tabs inline.
+The "Find a player" box at the top of the sidebar (shortcut: `/`) opens
+the player directory filtered by name.
+
 | Section | Routes | Workflows |
 |---|---|---|
-| Overview | `/` | Live ops dashboard, online players, active sessions, quick kick/ban/broadcast actions |
-| Moderation | `/players` | Player directory, bans, reports, per-player ban/grant/gift/password/avatar/account actions |
-| Activity | `/activity` | Admin audit log, per-player request logs, QA test cases + GitHub issue linking |
-| Content | `/rooms`, `/rooms/:id`, `/import-room`, `/content` | Room list/detail, room import, instances, leaderboards, community board, loading tips, 3D Charades word lists |
-| Operations | `/broadcast`, `/settings` | Server broadcast, server toggles (signups, everyone-is-friends, profanity filter, imported-room version clamp), signup codes, weekly challenges, Play menu tags, Rec Center doors, game config values |
+| Live | `/`, `/?player=<id>` | Online players grouped by the room instance they're in, with the selected player's account, kick/ban/gift and full moderation tools beside the list. On a phone the list and the player are two screens. |
+| Players | `/players`, `?tab=bans`, `?tab=reports`, `?query=<name>` | Player directory, bans, reports, per-player ban/grant/gift/password/avatar/account actions |
+| Rooms | `/rooms`, `/rooms/:id`, `/import-room` | Room list/detail, room import, instances, leaderboards |
+| Content | `/content`, `?tab=tips`, `?tab=charades` | Community board, loading tips, 3D Charades word lists |
+| Broadcast | `/broadcast` | Server-wide message to every connected player |
+| Activity | `/activity`, `?tab=logs`, `?tab=testcases` | Admin audit log, per-player request logs, QA test cases + GitHub issue linking |
+| Settings | `/settings`, `#game-config`, `#circuits`, `#weekly`, `?tab=signup` | Server switches (signups, everyone-is-friends, all avatar items, profanity filter, imported-room version clamp), game config values, CircuitsV2 limits, weekly challenges, Play menu tags, Rec Center doors, signup codes |
+
+### Theme
+
+The admin UI has a light and a dark theme. It follows the operating
+system until an admin picks one with the sun/moon button at the bottom of
+the sidebar; the choice is kept in `localStorage` (`dorknet.admin.theme`)
+and applied by an inline script in `index.html` before first paint.
+
+All colours are RGB-channel CSS variables defined in
+`admin-ui/src/index.css` (`:root` for light, `[data-theme='dark']` for
+dark) and exposed to Tailwind under the existing names (`ink-*`,
+`brand-*`, `success`, `warn`, `danger`, plus `bar` and `sel`). The `ink`
+scale is ordered by contrast rather than lightness: `ink-950` is the page
+background and `ink-50` the strongest text in both themes, so one class
+name works in either theme. Status is shown as coloured text, not filled
+badges.
 
 Several older admin URLs are kept as redirects:
 

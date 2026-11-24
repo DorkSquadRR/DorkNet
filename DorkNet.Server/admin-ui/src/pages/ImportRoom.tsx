@@ -380,7 +380,7 @@ export function ImportRoom() {
             <div>
               <div className="text-sm font-semibold text-warn">Chromium-based browser required</div>
               <p className="text-xs text-ink-300 mt-1 max-w-prose">
-                The zip importer uploads multi-hundred-megabyte archives via <code className="font-mono text-[11px]">FormData</code> and uses streaming Blob slicing. Firefox and Safari both choke on this — Firefox's upload progress buffers
+                The zip importer uploads multi-hundred-megabyte archives via <code className="font-mono text-xs">FormData</code> and uses streaming Blob slicing. Firefox and Safari both choke on this — Firefox's upload progress buffers
                 stall over ~500 MB, and Safari hits a memory ceiling cloning the form body and aborts mid-upload. Use Chrome, Edge, Brave, Vivaldi, or any other Chromium-based browser for this page. (The rest of the admin works fine everywhere.)
               </p>
             </div>
@@ -481,11 +481,11 @@ export function ImportRoom() {
                 <span className="ml-auto tabular-nums text-ink-300">{serverElapsed}s elapsed</span>
               </div>
               {uploadProgress.phase && (
-                <p className="text-[11px] text-brand-200 mb-2 font-mono truncate">
+                <p className="text-xs text-brand-200 mb-2 font-mono truncate">
                   {uploadProgress.phase}
                 </p>
               )}
-              <p className="text-[11px] text-ink-400 mb-2">
+              <p className="text-xs text-ink-400 mb-2">
                 Unpacking, normalising every <code className="font-mono">.room</code> blob, inserting room + scene rows, persisting bundled <code className="font-mono">.htr</code> assets and preview images.
                 Multi-GB archives can take several minutes; the importer now runs as a background job and the SPA polls for status, so Cloudflare won't drop the connection mid-import.
               </p>
@@ -522,7 +522,7 @@ export function ImportRoom() {
                       return next;
                     });
                   }}
-                  className="btn-ghost text-[10px] uppercase tracking-widest"
+                  className="btn-ghost text-xs "
                 >
                   {preview.rooms.every(r => selectedFolders.has(r.folder)) ? 'Deselect all' : 'Select all'}
                 </button>
@@ -563,7 +563,7 @@ export function ImportRoom() {
                         </span>
                       )}
                       {r.latestModifiedAt && (
-                        <span className="text-[10px] text-ink-500 font-mono" title={r.latestModifiedAt}>
+                        <span className="text-xs text-ink-500 font-mono" title={r.latestModifiedAt}>
                           {r.latestModifiedAt.slice(0, 10)}
                         </span>
                       )}
@@ -583,7 +583,7 @@ export function ImportRoom() {
                       <details className="mt-2">
                         <summary className="cursor-pointer text-xs text-ink-400">Scene breakdown</summary>
                         <table className="w-full text-xs mt-1.5">
-                          <thead className="text-[10px] uppercase tracking-wider text-ink-500">
+                          <thead className="text-xs text-ink-500">
                             <tr>
                               <th className="text-left font-medium pb-1">Scene</th>
                               <th className="text-left font-medium pb-1">Blob</th>
@@ -596,7 +596,7 @@ export function ImportRoom() {
                             {r.subrooms.map(s => (
                               <tr key={s.scene}>
                                 <td className="py-1 text-ink-100">{s.scene}</td>
-                                <td className="py-1 font-mono text-[11px] text-ink-300">
+                                <td className="py-1 font-mono text-xs text-ink-300">
                                   {s.blobFilename ?? <span className="text-danger">no DataBlob in Subroom.json</span>}
                                   {s.blobFilename && !s.blobFound && <span className="text-danger ml-1">(missing!)</span>}
                                   {!s.hasSubroomJson && <span className="text-danger ml-1">(no Subroom.json)</span>}
@@ -637,13 +637,13 @@ export function ImportRoom() {
                       return next;
                     });
                   }}
-                  className="btn-ghost text-[10px] uppercase tracking-widest"
+                  className="btn-ghost text-xs "
                 >
                   {preview.inventions.every(inv => selectedFolders.has(inv.folder)) ? 'Deselect all' : 'Select all'}
                 </button>
               </summary>
               <table className="w-full text-sm mt-2">
-                <thead className="text-[11px] uppercase tracking-wider text-ink-400 border-b border-ink-800">
+                <thead className="text-xs text-ink-400 border-b border-ink-800">
                   <tr>
                     <th className="w-8 pb-1" />
                     <th className="text-left font-medium pb-1">Name</th>
@@ -682,7 +682,7 @@ export function ImportRoom() {
           {preview.unknownTopLevel.length > 0 && (
             <details>
               <summary className="cursor-pointer text-xs text-ink-500">{preview.unknownTopLevel.length} file(s) outside the schema</summary>
-              <ul className="text-[11px] text-ink-500 font-mono pl-3 mt-1 max-h-32 overflow-y-auto">
+              <ul className="text-xs text-ink-500 font-mono pl-3 mt-1 max-h-32 overflow-y-auto">
                 {preview.unknownTopLevel.map(f => <li key={f}>{f}</li>)}
               </ul>
             </details>
@@ -731,10 +731,10 @@ export function ImportRoom() {
             />
             <span className="text-xs leading-snug">
               <span className="text-ink-100">Wipe duplicates first</span>
-              <span className="block text-[11px] text-ink-500 mt-0.5">
+              <span className="block text-xs text-ink-500 mt-0.5">
                 Before uploading, delete any existing rooms by name + invention rows by id that
                 match the selected folders. Required when re-importing a refreshed zip — without
-                it, room re-imports reject with <code className="font-mono text-[10px]">duplicate_name</code>
+                it, room re-imports reject with <code className="font-mono text-xs">duplicate_name</code>
                 {' '}and invention re-imports auto-id, leaving placement refs in the room blob
                 pointing at orphans (visible in-game as missing/empty invention placements).
                 Dorms and seeded RR-Originals are preserved regardless.
@@ -759,7 +759,7 @@ export function ImportRoom() {
             />
             <span className="text-xs leading-snug">
               <span className="text-ink-100">Project modern-quaternion transforms to 2020 Euler + re-encode .room blobs</span>
-              <span className="block text-[11px] text-ink-500 mt-0.5">
+              <span className="block text-xs text-ink-500 mt-0.5">
                 Modern Rec Room writes rotations as quaternions (TransformData field 6) that the
                 2020.12 watch doesn't read — without projecting them to the legacy Euler
                 Vector3 (field 2), every shape loads at rotation (0, 0, 0). Recommended ON
@@ -781,9 +781,9 @@ export function ImportRoom() {
           </div>
           {result.rooms.length > 0 && (
             <>
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-300 mb-1.5">Rooms</h3>
+              <h3 className="text-xs font-semibold text-ink-300 mb-1.5">Rooms</h3>
               <table className="w-full text-sm mb-4">
-                <thead className="text-[11px] uppercase tracking-wider text-ink-400 border-b border-ink-800">
+                <thead className="text-xs text-ink-400 border-b border-ink-800">
                   <tr>
                     <th className="text-left font-medium pb-1">Room</th>
                     <th className="text-left font-medium pb-1">Result</th>
@@ -810,7 +810,7 @@ export function ImportRoom() {
                       </td>
                       <td className="py-1.5 text-right text-ink-200 tabular-nums">{r.sceneCount ?? '—'}</td>
                       <td className="py-1.5"><AssetCell breakdown={r.htrAssets} legacy={r.htrAssetsImported} /></td>
-                      <td className="py-1.5"><AssetCell breakdown={r.pvImages}  legacy={r.pvImagesImported} /></td>
+                      <td className="py-1.5"><AssetCell breakdown={r.pvImages} legacy={r.pvImagesImported} /></td>
                       <td className="py-1.5"><AssetCell breakdown={r.polaroids} /></td>
                       <td className="py-1.5"><AssetCell breakdown={r.history} /></td>
                     </tr>
@@ -821,7 +821,7 @@ export function ImportRoom() {
           )}
           {result.inventions.length > 0 && (
             <>
-              <h3 className="text-xs font-semibold uppercase tracking-widest text-ink-300 mb-1.5">Inventions</h3>
+              <h3 className="text-xs font-semibold text-ink-300 mb-1.5">Inventions</h3>
               <table className="w-full text-sm">
                 <tbody className="divide-y divide-ink-800">
                   {result.inventions.map(i => (
@@ -848,7 +848,7 @@ export function ImportRoom() {
 function Stat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="card !p-3">
-      <div className="text-[10px] uppercase tracking-widest text-ink-400">{label}</div>
+      <div className="text-xs text-ink-400">{label}</div>
       <div className="mt-0.5 text-lg font-semibold tabular-nums text-ink-50">
         {typeof value === 'number' ? value.toLocaleString() : value}
       </div>
@@ -883,7 +883,7 @@ function AssetCell({ breakdown, legacy }: { breakdown?: AssetBreakdown; legacy?:
 function Mini({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded border border-ink-800 px-2 py-1">
-      <div className="text-[10px] uppercase tracking-widest text-ink-500">{label}</div>
+      <div className="text-xs text-ink-500">{label}</div>
       <div className="text-sm text-ink-100 tabular-nums">{value}</div>
     </div>
   );

@@ -113,17 +113,14 @@ export function Login() {
   const ssoHref = `/api/auth/external/login?returnUrl=${encodeURIComponent(`/login?sso=1&to=${encodeURIComponent(from)}`)}`;
 
   return (
-    <div className="min-h-full flex items-center justify-center px-4 py-12 bg-[linear-gradient(135deg,#0a0b0e_0%,#0d1d25_48%,#131418_100%)]">
+    <div className="flex min-h-full items-center justify-center bg-bar px-4 py-12">
       <div className="w-full max-w-sm">
-        <div className="mb-8 flex flex-col items-center gap-2">
-          <BrandMark className="size-16 rounded-xl" />
-          <div className="text-center">
-            <h1 className="text-xl font-semibold text-ink-50">DorkNet Admin</h1>
-            <p className="text-xs text-ink-400">Sign in with an admin account.</p>
-          </div>
+        <div className="mb-6 flex items-center gap-2.5">
+          <BrandMark className="size-9" />
+          <h1 className="text-lg font-semibold text-ink-50">DorkNet admin</h1>
         </div>
 
-        <form onSubmit={onSubmit} className="card p-6 flex flex-col gap-4">
+        <form onSubmit={onSubmit} className="card flex flex-col gap-4 p-5">
           <div className="flex flex-col gap-1.5">
             <label className="label" htmlFor="username">Username</label>
             <input
@@ -148,22 +145,20 @@ export function Login() {
             />
           </div>
           {err && (
-            <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger">{err}</div>
+            <div className="rounded-md border border-danger/40 px-3 py-2 text-[13px] text-danger">{err}</div>
           )}
           <button type="submit" disabled={loading} className="btn-primary mt-1">
             {loading ? 'Signing in…' : 'Sign in'}
           </button>
           {sso && (
             <>
-              <div className="flex items-center gap-3 text-[11px] uppercase tracking-wide text-ink-500">
+              <div className="flex items-center gap-3 text-xs text-ink-500">
                 <span className="h-px flex-1 bg-ink-800" />or<span className="h-px flex-1 bg-ink-800" />
               </div>
               <a href={ssoHref} className="btn-secondary text-center">Sign in with {sso.provider}</a>
             </>
           )}
         </form>
-
-        <p className="mt-6 text-center text-[11px] text-ink-500">DorkNet private server · admin console</p>
       </div>
     </div>
   );

@@ -13,7 +13,7 @@ export function Moderation() {
   const [tab, setTab] = useTabParam<'directory' | 'bans' | 'reports'>('directory', ['directory', 'bans', 'reports']);
   return (
     <div>
-      <PageHeader title="Players" blurb="Search and moderate accounts, review active bans, and triage open reports." />
+      <PageHeader title={({ directory: 'Players', bans: 'Bans', reports: 'Reports' })[tab]} />
       <Tabs
         tabs={[
           { key: 'directory', label: 'Directory' },
@@ -22,6 +22,7 @@ export function Moderation() {
         ]}
         active={tab}
         onChange={setTab}
+        className="md:hidden"
       />
       {tab === 'directory' && <Players embedded />}
       {tab === 'bans' && <Bans embedded />}

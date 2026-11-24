@@ -37,7 +37,7 @@ export function Reports({ embedded }: { embedded?: boolean } = {}) {
         {data && data.length === 0 && <Empty title="No open reports" blurb="When a player reports another, it lands here." />}
         {data && data.length > 0 && (
           <div className="table-scroll"><table className="w-full text-sm min-w-[640px]">
-            <thead className="text-[11px] uppercase tracking-wider text-ink-400 bg-ink-900/50 border-b border-ink-800">
+            <thead className="text-xs text-ink-400 bg-ink-900/50 border-b border-ink-800">
               <tr>
                 <th className="text-left font-medium px-4 py-2.5">#</th>
                 <th className="text-left font-medium px-4 py-2.5">Reporter</th>
@@ -107,12 +107,12 @@ function ResolveModal({ report, onClose, onResolved }: { report: Report; onClose
           <div className="card !p-2"><div className="text-ink-400">Target</div><div className="text-ink-100">#{report.targetPlayerId}</div></div>
         </div>
         <div className="card !p-3">
-          <div className="text-[11px] uppercase tracking-widest text-ink-400">Reason</div>
+          <div className="text-xs text-ink-400">Reason</div>
           <div className="text-ink-100 mt-1">{report.reason || '—'}</div>
         </div>
         {report.context && (
           <div className="card !p-3">
-            <div className="text-[11px] uppercase tracking-widest text-ink-400">Context</div>
+            <div className="text-xs text-ink-400">Context</div>
             <div className="text-ink-200 text-xs mt-1 whitespace-pre-wrap">{report.context}</div>
           </div>
         )}

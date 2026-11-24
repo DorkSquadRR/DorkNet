@@ -23,7 +23,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastCtx.Provider value={{ push }}>
       {children}
-      <div className="pointer-events-none fixed bottom-6 right-6 z-50 flex flex-col gap-2">
+      <div className="pointer-events-none fixed inset-x-4 bottom-4 z-50 flex flex-col items-end gap-2 sm:inset-x-auto sm:bottom-6 sm:right-6">
         {items.map(t => (
           <ToastItem key={t.id} msg={t} />
         ))}
@@ -36,12 +36,12 @@ function ToastItem({ msg }: { msg: ToastMsg }) {
   const [open, setOpen] = useState(false);
   useEffect(() => { requestAnimationFrame(() => setOpen(true)); }, []);
   const colors =
-    msg.kind === 'success' ? 'bg-success/15 text-success border-success/30'
-    : msg.kind === 'error' ? 'bg-danger/15 text-danger border-danger/30'
-    : 'bg-ink-800 text-ink-100 border-ink-700';
+    msg.kind === 'success' ? 'border-success/40 text-success'
+    : msg.kind === 'error' ? 'border-danger/40 text-danger'
+    : 'border-ink-700 text-ink-100';
   return (
     <div
-      className={`pointer-events-auto min-w-[240px] max-w-sm rounded-lg border px-3.5 py-2 text-sm shadow-card transition-all duration-200 ${colors} ${open ? 'translate-x-0 opacity-100' : 'translate-x-2 opacity-0'}`}
+      className={`pointer-events-auto w-full max-w-sm rounded-md border bg-ink-950 px-3.5 py-2 text-[13.5px] shadow-float transition-all duration-200 sm:w-auto sm:min-w-[240px] ${colors} ${open ? 'translate-x-0 opacity-100' : 'translate-x-2 opacity-0'}`}
       role="status"
     >
       {msg.text}

@@ -13,7 +13,7 @@ export function Content() {
     'community', ['community', 'tips', 'charades']);
   return (
     <div>
-      <PageHeader title="Content" blurb="Player-facing content: the community board, loading-screen tips, and 3D Charades word lists." />
+      <PageHeader title={({ community: 'Community board', tips: 'Loading tips', charades: 'Charades words' })[tab]} />
       <Tabs
         tabs={[
           { key: 'community', label: 'Community board' },
@@ -22,6 +22,7 @@ export function Content() {
         ]}
         active={tab}
         onChange={setTab}
+        className="md:hidden"
       />
       {tab === 'community' && <CommunityBoard embedded />}
       {tab === 'tips' && <LoadingTips embedded />}

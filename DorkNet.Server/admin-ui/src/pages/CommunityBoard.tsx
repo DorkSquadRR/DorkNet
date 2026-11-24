@@ -288,7 +288,7 @@ function InstagramImageRow({
         {preview ? (
           <img src={preview} className="size-full object-cover" alt="" />
         ) : (
-          <span className="text-[10px] text-ink-500 px-1 text-center">{uploading ? 'Uploading…' : 'Pick image'}</span>
+          <span className="text-xs text-ink-500 px-1 text-center">{uploading ? 'Uploading…' : 'Pick image'}</span>
         )}
       </div>
       <input
@@ -308,7 +308,7 @@ function InstagramImageRow({
           >
             {uploading ? 'Uploading…' : preview ? 'Replace' : 'Upload'}
           </button>
-          <span className="font-mono text-[11px] text-ink-400 truncate flex-1" title={img.imageName}>
+          <span className="font-mono text-xs text-ink-400 truncate flex-1" title={img.imageName}>
             {img.imageName || <span className="italic text-ink-600">no image yet</span>}
           </span>
         </div>
@@ -556,7 +556,7 @@ function VideoRow({
           {thumbPreview ? (
             <img src={thumbPreview} className="size-full object-cover" alt="" />
           ) : (
-            <span className="text-[10px] text-ink-500 px-1 text-center">{uploadingThumb ? 'Uploading…' : 'Pick thumb'}</span>
+            <span className="text-xs text-ink-500 px-1 text-center">{uploadingThumb ? 'Uploading…' : 'Pick thumb'}</span>
           )}
         </div>
         <input
@@ -614,7 +614,7 @@ function VideoRow({
           {/* Auto-thumbnail toggle. Lives next to the upload button so
               the admin sets it BEFORE clicking — checking it after the
               upload is too late, the File reference is gone. */}
-          <label className="flex items-center gap-1.5 text-[11px] text-ink-300 cursor-pointer" title="Capture the first decoded frame from the uploaded video and store it as the thumbnail.">
+          <label className="flex items-center gap-1.5 text-xs text-ink-300 cursor-pointer" title="Capture the first decoded frame from the uploaded video and store it as the thumbnail.">
             <input
               type="checkbox"
               checked={autoThumb}
@@ -623,14 +623,14 @@ function VideoRow({
             />
             Auto-thumb from first frame
           </label>
-          <span className="font-mono text-[11px] text-ink-400 truncate flex-1" title={video.blobName}>
+          <span className="font-mono text-xs text-ink-400 truncate flex-1" title={video.blobName}>
             {video.blobName || <span className="italic text-ink-600">no video uploaded (use SourceUrl for external hosts)</span>}
           </span>
           {video.blobName && (
             <button
               type="button"
               onClick={() => onChange({ ...video, blobName: '' })}
-              className="btn-ghost text-[11px] py-0.5 px-1.5 text-danger"
+              className="btn-ghost text-xs py-0.5 px-1.5 text-danger"
               title="Clear uploaded video"
             >Clear</button>
           )}

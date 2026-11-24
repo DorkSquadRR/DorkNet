@@ -8,21 +8,25 @@ export function Tabs<T extends string>({
   tabs,
   active,
   onChange,
+  className = '',
 }: {
   tabs: ReadonlyArray<{ key: T; label: string }>;
   active: T;
   onChange: (key: T) => void;
+  className?: string;
 }) {
   return (
-    <div className="flex border-b border-ink-800 text-sm mb-4 overflow-x-auto">
+    <div className={`mb-4 flex overflow-x-auto border-b border-ink-800 text-[13.5px] ${className}`} role="tablist">
       {tabs.map(t => (
         <button
           key={t.key}
           onClick={() => onChange(t.key)}
-          className={`px-4 py-2 -mb-px border-b-2 whitespace-nowrap ${
+          role="tab"
+          aria-selected={active === t.key}
+          className={`-mb-px whitespace-nowrap border-b-2 px-3 py-2 ${
             active === t.key
-              ? 'border-brand-500 text-ink-50'
-              : 'border-transparent text-ink-300 hover:text-ink-100'
+              ? 'border-ink-50 font-medium text-ink-50'
+              : 'border-transparent text-ink-400 hover:text-ink-100'
           }`}
         >
           {t.label}

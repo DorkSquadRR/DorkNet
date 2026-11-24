@@ -1,9 +1,7 @@
 import logoUrl from '../assets/dorknet.svg';
 
-export function BrandMark({ className = 'size-8' }: { className?: string }) {
-  return (
-    <span className={`inline-flex shrink-0 items-center justify-center rounded-md bg-ink-950 ring-1 ring-brand-300/30 shadow-lg shadow-brand-900/30 ${className}`}>
-      <img src={logoUrl} alt="" className="h-full w-full object-contain p-0.5" />
-    </span>
-  );
+// The DorkNet logo, drawn as-is: it carries its own outline, so it reads on
+// both the light and the dark theme without a backing tile.
+export function BrandMark({ className = 'size-6' }: { className?: string }) {
+  return <img src={logoUrl} alt="" className={`shrink-0 object-contain ${className}`} />;
 }

@@ -144,7 +144,7 @@ export function SignupCodes({ embedded }: { embedded?: boolean } = {}) {
         )}
         {codes && codes.length > 0 && (
           <table className="w-full text-sm">
-            <thead className="text-left text-[11px] uppercase tracking-wide text-ink-500 border-b border-ink-800">
+            <thead className="text-left text-xs text-ink-500 border-b border-ink-800">
               <tr>
                 <th className="px-4 py-2">Code</th>
                 <th className="px-4 py-2">Descriptor</th>

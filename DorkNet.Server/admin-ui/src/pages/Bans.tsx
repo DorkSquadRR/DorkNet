@@ -66,7 +66,7 @@ function PlayerBans() {
       {!error && banned.length === 0 && <Empty title="No active player bans" blurb="Issued bans appear here until they expire or are lifted." />}
       {banned.length > 0 && (
         <div className="table-scroll"><table className="w-full text-sm min-w-[640px]">
-          <thead className="text-[11px] uppercase tracking-wider text-ink-400 bg-ink-900/50 border-b border-ink-800">
+          <thead className="text-xs text-ink-400 bg-ink-900/50 border-b border-ink-800">
             <tr>
               <th className="text-left font-medium px-4 py-2.5">Player</th>
               <th className="text-left font-medium px-4 py-2.5">Expires</th>
@@ -158,7 +158,7 @@ function IpBans() {
         {data && data.length === 0 && <Empty title="No IP bans" blurb="Add a CIDR above to start blocking ranges." />}
         {data && data.length > 0 && (
           <div className="table-scroll"><table className="w-full text-sm min-w-[640px]">
-            <thead className="text-[11px] uppercase tracking-wider text-ink-400 bg-ink-900/50 border-b border-ink-800">
+            <thead className="text-xs text-ink-400 bg-ink-900/50 border-b border-ink-800">
               <tr>
                 <th className="text-left font-medium px-4 py-2.5">CIDR</th>
                 <th className="text-left font-medium px-4 py-2.5">Reason</th>

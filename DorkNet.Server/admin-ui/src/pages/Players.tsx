@@ -8,7 +8,7 @@ import { Modal } from '../components/Modal';
 import { Confirm } from '../components/Confirm';
 import { useToast } from '../components/Toast';
 import { Empty } from '../components/Empty';
-import { PlayerAvatar } from '../components/PlayerAvatar';
+import { Tabs } from '../components/Tabs';
 import { RefreshCw, Search } from '../components/Icons';
 import { GiftPanel } from './Gift';
 import { PasswordResetCard } from './Passwords';
@@ -42,13 +42,12 @@ export function Players({ embedded }: { embedded?: boolean } = {}) {
 
   useEffect(() => { search(query); }, [query, search]);
 
-  useEffect(() => {
-    const next = params.get('query') ?? '';
-    if (next !== query) setQuery(next);
-  }, [params, query]);
+  // The sidebar's "Find a player" box navigates here with ?query=.
+  const urlQuery = params.get('query') ?? '';
+  useEffect(() => { setQuery(urlQuery); }, [urlQuery]);
 
   const refreshBtn = (
-    <button onClick={() => search(query)} className="btn-secondary text-xs" disabled={loading}>
+    <button onClick={() => search(query)} className="btn-secondary" disabled={loading}>
       <RefreshCw className={loading ? 'animate-spin' : ''} />
       Refresh
     </button>
@@ -56,44 +55,36 @@ export function Players({ embedded }: { embedded?: boolean } = {}) {
 
   return (
     <div>
-      {embedded ? (
-        <div className="flex justify-end mb-3">{refreshBtn}</div>
-      ) : (
-        <PageHeader
-          title="Players"
-          blurb="Search and moderate every account in the database."
-          actions={refreshBtn}
-        />
-      )}
+      {!embedded && <PageHeader title="Players" actions={refreshBtn} />}
 
-      <div className="card overflow-hidden">
-        <div className="border-b border-ink-800 p-3 flex items-center gap-2">
-          <div className="relative flex-1 max-w-xs">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-400" />
-            <input
-              value={query}
-              onChange={e => setQuery(e.target.value)}
-              placeholder="Search username or display name…"
-              className="input pl-8"
-            />
-          </div>
-          <div className="text-xs text-ink-400 ml-auto">
-            {rows ? `${rows.length} match${rows.length === 1 ? '' : 'es'}` : ''}
-          </div>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <div className="relative w-full sm:w-72">
+          <Search className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-400" />
+          <input
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+            placeholder="Search by name or username"
+            aria-label="Search players"
+            className="input pl-8"
+          />
         </div>
+        <span className="text-[13px] text-ink-400">
+          {rows ? `${rows.length}${rows.length === 200 ? '+' : ''} ${rows.length === 1 ? 'match' : 'matches'}` : ''}
+        </span>
+        {embedded && <div className="ml-auto">{refreshBtn}</div>}
+      </div>
 
-        {err && <div className="px-4 py-3 text-sm text-danger border-b border-danger/30 bg-danger/5">{err}</div>}
+      {err && <div className="mb-3 rounded-md border border-danger/40 px-3 py-2 text-[13px] text-danger">{err}</div>}
 
-        <div className="table-scroll">
-        <table className="w-full text-sm min-w-[640px]">
-          <thead className="text-[11px] uppercase tracking-wider text-ink-400 bg-ink-900/50 border-b border-ink-800">
+      <div className="table-scroll">
+        <table className="w-full min-w-[640px] text-[13.5px]">
+          <thead className="border-b border-ink-800 text-xs text-ink-400">
             <tr>
-              <th className="text-left font-medium px-4 py-2.5">Account</th>
-              <th className="text-left font-medium px-4 py-2.5">Status</th>
-              <th className="text-right font-medium px-4 py-2.5">Level</th>
-              <th className="text-left font-medium px-4 py-2.5">Last seen</th>
-              <th className="text-left font-medium px-4 py-2.5">Joined</th>
-              <th />
+              <th className="px-3 py-2 text-left font-medium">Name</th>
+              <th className="px-3 py-2 text-left font-medium">Status</th>
+              <th className="px-3 py-2 text-right font-medium">Level</th>
+              <th className="px-3 py-2 text-left font-medium">Last seen</th>
+              <th className="px-3 py-2 text-left font-medium">Joined</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-ink-800">
@@ -103,65 +94,87 @@ export function Players({ embedded }: { embedded?: boolean } = {}) {
                 className="table-row-hover cursor-pointer"
                 onClick={() => setSelectedId(p.id)}
               >
-                <td className="px-4 py-2.5">
-                  <div className="flex items-center gap-2.5">
-                    <PlayerAvatar name={p.profileImageName} displayName={p.displayName || p.username} size={32} />
-                    <div className="min-w-0">
-                      <div className="font-medium text-ink-50 truncate">{p.displayName || p.username}</div>
-                      <div className="text-xs text-ink-400 truncate">@{p.username} <span className="text-ink-600">·</span> #{p.id}</div>
-                    </div>
-                  </div>
+                <td className="px-3 py-2">
+                  <button
+                    type="button"
+                    onClick={e => { e.stopPropagation(); setSelectedId(p.id); }}
+                    className="text-left font-medium text-brand-300 hover:underline"
+                  >
+                    {p.displayName || p.username}
+                  </button>
+                  <span className="ml-2 text-xs text-ink-400">@{p.username}</span>
                 </td>
-                <td className="px-4 py-2.5">
-                  <div className="flex flex-wrap gap-1">
-                    {p.online && <span className="badge-online">Online</span>}
-                    {p.bannedUntil && new Date(p.bannedUntil) > new Date() && <span className="badge-banned">Banned</span>}
-                    {p.isAdmin && <span className="badge-admin">Admin</span>}
-                    {p.isDeveloper && <span className="badge-neutral">Dev</span>}
-                    {p.isCommunityTeam && <span className="badge-neutral">Community</span>}
-                    {p.isJunior && <span className="badge-junior">Junior</span>}
-                    {p.isVerified && <span className="badge-neutral">Verified</span>}
-                    {!p.online && !p.bannedUntil && !p.isAdmin && !p.isDeveloper && !p.isCommunityTeam && !p.isJunior && !p.isVerified && (
-                      <span className="text-xs text-ink-500">—</span>
-                    )}
-                  </div>
-                </td>
-                <td className="px-4 py-2.5 text-right tabular-nums text-ink-200">{p.level}</td>
-                <td className="px-4 py-2.5 text-ink-300 text-xs" title={absoluteTime(p.lastSeenAt)}>{relativeTime(p.lastSeenAt)}</td>
-                <td className="px-4 py-2.5 text-ink-300 text-xs" title={absoluteTime(p.createdAt)}>{relativeTime(p.createdAt)}</td>
-                <td className="px-4 py-2.5 text-right">
-                  <button className="btn-ghost text-xs">Open →</button>
-                </td>
+                <td className="px-3 py-2"><PlayerStatus p={p} /></td>
+                <td className="px-3 py-2 text-right tabular-nums text-ink-200">{p.level}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-ink-300" title={absoluteTime(p.lastSeenAt)}>{p.online ? 'now' : relativeTime(p.lastSeenAt)}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-ink-300" title={absoluteTime(p.createdAt)}>{shortDate(p.createdAt)}</td>
               </tr>
             ))}
             {rows && rows.length === 0 && (
-              <tr><td colSpan={6}><Empty title="No matches" blurb="Try a different name or clear the filter." /></td></tr>
+              <tr><td colSpan={5}><Empty title="No players match" blurb="Try part of the username or display name." /></td></tr>
             )}
             {!rows && !err && (
-              <tr><td colSpan={6} className="py-10 text-center text-xs text-ink-400">Loading players…</td></tr>
+              <tr><td colSpan={5} className="py-10 text-center text-[13px] text-ink-400">Loading players…</td></tr>
             )}
           </tbody>
         </table>
-        </div>
       </div>
 
       {selectedId !== null && (
-        <PlayerDetail
-          id={selectedId}
-          onClose={() => setSelectedId(null)}
-          onChanged={() => { setSelectedId(null); search(query); }}
-        />
+        <Modal title="Player" open onClose={() => setSelectedId(null)} size="xl">
+          <PlayerPanel
+            id={selectedId}
+            onChanged={() => search(query)}
+            onDeleted={() => { setSelectedId(null); search(query); }}
+          />
+        </Modal>
       )}
     </div>
   );
 }
 
-// ── Detail / edit modal ───────────────────────────────────────────────
+function isBanned(p: Pick<Player, 'bannedUntil'>): boolean {
+  return !!p.bannedUntil && new Date(p.bannedUntil) > new Date();
+}
 
-function PlayerDetail({ id, onClose, onChanged }: { id: number; onClose: () => void; onChanged: () => void }) {
+function shortDate(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  return Number.isFinite(d.getTime()) ? d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
+}
+
+// Status as coloured text: the state that matters most first, then roles.
+function PlayerStatus({ p }: { p: Player }) {
+  const parts: React.ReactNode[] = [];
+  if (isBanned(p)) parts.push(<span key="ban" className="text-danger" title={absoluteTime(p.bannedUntil)}>Banned</span>);
+  else if (p.online) parts.push(<span key="on" className="text-success">Online</span>);
+  else parts.push(<span key="off" className="text-ink-400">Offline</span>);
+  if (p.isAdmin) parts.push(<span key="admin" className="text-brand-300">Admin</span>);
+  if (p.isDeveloper) parts.push(<span key="dev" className="text-ink-300">Developer</span>);
+  if (p.isCommunityTeam) parts.push(<span key="ct" className="text-ink-300">Community team</span>);
+  if (p.isJunior) parts.push(<span key="jr" className="text-warn">Junior</span>);
+  return <span className="inline-flex flex-wrap gap-x-2.5">{parts}</span>;
+}
+
+// ── Player panel ──────────────────────────────────────────────────────
+// Everything about one account: identity, status, quick actions and the
+// moderation / grants / gift / profile tools. Rendered inline on the Live
+// page and inside a dialog on the Players directory.
+
+type PanelTab = 'overview' | 'mod' | 'grants' | 'gift' | 'profile';
+
+export function PlayerPanel({ id, whereabouts, onChanged, onDeleted }: {
+  id: number;
+  // Where the player is right now, if the caller knows (the Live page does).
+  whereabouts?: React.ReactNode;
+  onChanged?: () => void;
+  onDeleted?: () => void;
+}) {
+  const toast = useToast();
   const [data, setData] = useState<PlayerDetail | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [tab, setTab] = useState<'overview' | 'mod' | 'grants' | 'gift' | 'profile'>('overview');
+  const [tab, setTab] = useState<PanelTab>('overview');
+  const [kickOpen, setKickOpen] = useState(false);
 
   const reload = () => {
     setErr(null);
@@ -169,107 +182,117 @@ function PlayerDetail({ id, onClose, onChanged }: { id: number; onClose: () => v
       .then(setData)
       .catch(e => setErr((e as Error).message));
   };
-  useEffect(reload, [id]);
+  // A new player resets the panel to its overview.
+  useEffect(() => { setData(null); setTab('overview'); reload(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const changed = () => { reload(); onChanged?.(); };
+
+  if (err) return <div className="rounded-md border border-danger/40 px-3 py-2 text-[13px] text-danger">{err}</div>;
+  if (!data) return <div className="py-10 text-center text-[13px] text-ink-400">Loading…</div>;
+
+  const banned = isBanned(data);
+  const roles = [
+    data.isAdmin && 'Admin',
+    data.isDeveloper && 'Developer',
+    data.isCommunityTeam && 'Community team',
+    data.isVerified && 'Verified',
+    data.isJunior && 'Junior',
+  ].filter(Boolean) as string[];
 
   return (
-    <Modal title={`Player #${id}`} open onClose={onClose} size="xl">
-      {err && <div className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-xs text-danger mb-3">{err}</div>}
-      {!data && !err && <div className="py-10 text-center text-xs text-ink-400">Loading…</div>}
-      {data && (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="flex items-start gap-3 min-w-0">
-              <PlayerAvatar name={data.profileImageName} displayName={data.displayName || data.username} size={56} />
-              <div className="min-w-0">
-                <div className="text-lg font-semibold text-ink-50 truncate">{data.displayName || data.username}</div>
-                <div className="text-xs text-ink-400 truncate">@{data.username} · #{data.id} · {data.email ?? 'no email'}</div>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {data.online && <span className="badge-online">Online</span>}
-                  {data.bannedUntil && new Date(data.bannedUntil) > new Date() && (
-                    <span className="badge-banned" title={absoluteTime(data.bannedUntil)}>Banned · expires {relativeTime(data.bannedUntil)}</span>
-                  )}
-                  {data.isAdmin && <span className="badge-admin">Admin</span>}
-                  {data.isDeveloper && <span className="badge-neutral">Developer</span>}
-                  {data.isCommunityTeam && <span className="badge-neutral">Community Team</span>}
-                  {data.isVerified && <span className="badge-neutral">Verified</span>}
-                  {data.isJunior && <span className="badge-junior">Junior</span>}
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-3 gap-2 text-xs">
-              <Stat label="Level" value={num(data.level)} />
-              <Stat label="XP" value={num(data.xp)} />
-              <Stat label="Last IP" value={data.lastIp ?? '—'} mono />
-            </div>
-          </div>
+    <div>
+      <h1 className="text-[22px] font-semibold tracking-tight text-ink-50">{data.displayName || data.username}</h1>
+      <div className="mt-0.5 flex flex-wrap gap-x-4 gap-y-0.5 text-[13px] text-ink-400">
+        <span>@{data.username}</span>
+        <span>#{data.id}</span>
+        <span>Level {data.level}</span>
+        <span>Joined {shortDate(data.createdAt)}</span>
+        {roles.length > 0 && <span className="text-ink-300">{roles.join(', ')}</span>}
+      </div>
+      <div className="mt-2 text-[13.5px]">
+        {banned ? (
+          <><span className="text-danger">Banned</span> <span className="text-ink-300">until {absoluteTime(data.bannedUntil)}</span></>
+        ) : data.online ? (
+          <><span className="text-success">Online</span>{whereabouts && <span className="text-ink-300"> {whereabouts}</span>}</>
+        ) : (
+          <><span className="text-ink-400">Offline</span><span className="text-ink-300">, last seen {relativeTime(data.lastSeenAt)}</span></>
+        )}
+      </div>
 
-          <div className="flex border-b border-ink-800 text-sm">
-            {(['overview', 'mod', 'grants', 'gift', 'profile'] as const).map(t => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={`px-3 py-2 -mb-px border-b-2 capitalize ${tab === t ? 'border-brand-500 text-ink-50' : 'border-transparent text-ink-300 hover:text-ink-100'}`}
-              >
-                {t === 'mod' ? 'Moderation' : t}
-              </button>
-            ))}
-          </div>
+      <div className="mt-3 grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap">
+        <button onClick={() => setKickOpen(true)} className="btn-secondary py-2 sm:py-1.5" disabled={!data.online}>Kick</button>
+        <button onClick={() => setTab('mod')} className="btn-secondary py-2 text-danger sm:py-1.5">{banned ? 'Unban' : 'Ban'}</button>
+        <button onClick={() => setTab('gift')} className="btn-secondary py-2 sm:py-1.5">Send gift</button>
+        <button onClick={() => setTab('grants')} className="btn-secondary py-2 sm:py-1.5">Grant</button>
+      </div>
 
-          {tab === 'overview' && <OverviewTab data={data} />}
-          {tab === 'mod'      && <ModerationTab data={data} onChanged={onChanged} />}
-          {tab === 'grants'   && <GrantsTab    data={data} onChanged={reload} />}
-          {tab === 'gift'     && <GiftPanel    playerId={data.id} />}
-          {tab === 'profile'  && <ProfileTab   data={data} onChanged={reload} onDeleted={onChanged} />}
-        </div>
-      )}
-    </Modal>
-  );
-}
+      <Tabs
+        className="mt-5"
+        tabs={[
+          { key: 'overview', label: 'Overview' },
+          { key: 'mod', label: 'Moderation' },
+          { key: 'grants', label: 'Grants' },
+          { key: 'gift', label: 'Gift' },
+          { key: 'profile', label: 'Profile' },
+        ]}
+        active={tab}
+        onChange={setTab}
+      />
 
-function Stat({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
-  return (
-    <div className="card !p-2 text-center">
-      <div className="text-[10px] uppercase tracking-widest text-ink-400">{label}</div>
-      <div className={`text-sm font-medium text-ink-50 ${mono ? 'font-mono text-xs' : ''}`}>{value}</div>
+      {tab === 'overview' && <OverviewTab data={data} />}
+      {tab === 'mod'      && <ModerationTab data={data} onChanged={changed} />}
+      {tab === 'grants'   && <GrantsTab    data={data} onChanged={changed} />}
+      {tab === 'gift'     && <GiftPanel    playerId={data.id} />}
+      {tab === 'profile'  && <ProfileTab   data={data} onChanged={changed} onDeleted={() => onDeleted?.()} />}
+
+      <Confirm
+        open={kickOpen}
+        onClose={() => setKickOpen(false)}
+        title="Kick player"
+        body={`Boot @${data.username} from their current session? They can reconnect straight away.`}
+        confirmLabel="Kick"
+        onConfirm={async () => {
+          try {
+            await api(`/players/${data.id}/kick`, { method: 'POST', body: { Reason: '' } });
+            toast.push(`Kicked @${data.username}`, 'success');
+            changed();
+          } catch (e) {
+            toast.push((e as Error).message, 'error');
+          }
+        }}
+      />
     </div>
   );
 }
 
 function OverviewTab({ data }: { data: PlayerDetail }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+    <dl className="grid grid-cols-[110px_minmax(0,1fr)] gap-x-4 gap-y-2 text-[13.5px] sm:grid-cols-[130px_minmax(0,1fr)]">
       <Field label="Display name" value={data.displayName} />
-      <Field label="Username"     value={`@${data.username}`} />
-      <Field label="Email"        value={data.email ?? '—'} />
-      <Field label="Joined"       value={absoluteTime(data.createdAt)} />
-      <Field label="Last seen"    value={absoluteTime(data.lastSeenAt)} />
-      <Field label="Last IP"      value={data.lastIp ?? '—'} mono />
-      <Field label="Bio" full value={data.bio || <span className="text-ink-500">no bio</span>} />
-      <div className="card !p-3 md:col-span-2">
-        <div className="text-[11px] uppercase tracking-widest text-ink-400 mb-2">Wallet</div>
-        {data.balances.length === 0 ? (
-          <div className="text-xs text-ink-500">No currency balances on file.</div>
-        ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-            {data.balances.map(b => (
-              <div key={b.currencyType} className="rounded border border-ink-800 px-3 py-2">
-                <div className="text-[10px] uppercase tracking-widest text-ink-400">{currencyName(b.currencyType)}</div>
-                <div className="text-sm font-medium text-ink-50 tabular-nums">{num(b.balance)}</div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
+      <Field label="Username" value={`@${data.username}`} />
+      <Field label="Email" value={data.email ?? <span className="text-ink-500">none</span>} />
+      <Field label="Joined" value={absoluteTime(data.createdAt)} />
+      <Field label="Last seen" value={absoluteTime(data.lastSeenAt)} />
+      <Field label="XP" value={num(data.xp)} />
+      <Field label="Last IP" value={data.lastIp ?? '—'} mono />
+      <Field label="Wallet" value={
+        data.balances.length === 0
+          ? <span className="text-ink-500">no balances</span>
+          : <span className="flex flex-wrap gap-x-4">{data.balances.map(b => (
+              <span key={b.currencyType}><span className="tabular-nums">{num(b.balance)}</span> <span className="text-ink-400">{currencyName(b.currencyType)}</span></span>
+            ))}</span>
+      } />
+      <Field label="Bio" value={data.bio || <span className="text-ink-500">no bio</span>} />
+    </dl>
   );
 }
 
-function Field({ label, value, full, mono }: { label: string; value: React.ReactNode; full?: boolean; mono?: boolean }) {
+function Field({ label, value, mono }: { label: string; value: React.ReactNode; mono?: boolean }) {
   return (
-    <div className={`card !p-3 ${full ? 'md:col-span-2' : ''}`}>
-      <div className="text-[10px] uppercase tracking-widest text-ink-400">{label}</div>
-      <div className={`mt-0.5 text-sm text-ink-100 ${mono ? 'font-mono text-xs' : ''}`}>{value}</div>
-    </div>
+    <>
+      <dt className="text-ink-400">{label}</dt>
+      <dd className={`min-w-0 break-words text-ink-100 ${mono ? 'font-mono text-xs leading-5' : ''}`}>{value}</dd>
+    </>
   );
 }
 
@@ -319,7 +342,7 @@ function ModerationTab({ data, onChanged }: { data: PlayerDetail; onChanged: () 
             </button>
           )}
         </div>
-        {data.isAdmin && <p className="text-[11px] text-warn mt-2">Demote this admin first.</p>}
+        {data.isAdmin && <p className="text-xs text-warn mt-2">Demote this admin first.</p>}
       </div>
 
       <div className="card !p-4">
@@ -586,7 +609,7 @@ function ProfileTab({ data, onChanged, onDeleted }: { data: PlayerDetail; onChan
         <p className="text-xs text-ink-400 mb-3">
           Wipes the player's equipped outfit and inventory back to the 2020 starter set.
           Use this when the watch crashes loading the avatar — usually means an item
-          GUID in their inventory has no matching <code className="text-[11px]">outfits_assets_*.bundle</code> on disk
+          GUID in their inventory has no matching <code className="text-xs">outfits_assets_*.bundle</code> on disk
           (the build can't load it and Unity's Addressables tears down the local player).
         </p>
         <button
@@ -610,8 +633,8 @@ function ProfileTab({ data, onChanged, onDeleted }: { data: PlayerDetail; onChan
           className="btn-danger text-xs"
           disabled={data.isAdmin || data.id === 1}
         >Remove account</button>
-        {data.isAdmin && <p className="text-[11px] text-warn mt-2">Demote this admin before removing the account.</p>}
-        {data.id === 1 && <p className="text-[11px] text-warn mt-2">The system account cannot be removed.</p>}
+        {data.isAdmin && <p className="text-xs text-warn mt-2">Demote this admin before removing the account.</p>}
+        {data.id === 1 && <p className="text-xs text-warn mt-2">The system account cannot be removed.</p>}
       </div>
 
       <DeleteAccountModal
@@ -678,7 +701,7 @@ function DeleteAccountModal({ open, data, onClose, onDeleted }: {
           This removes <span className="font-mono">@{data.username}</span> and cannot be undone from the admin UI.
         </p>
         <label className="block">
-          <span className="block text-[11px] uppercase tracking-widest text-ink-400 mb-1">Type username</span>
+          <span className="block text-xs text-ink-400 mb-1">Type username</span>
           <input
             value={confirmUsername}
             onChange={e => setConfirmUsername(e.target.value)}
@@ -687,7 +710,7 @@ function DeleteAccountModal({ open, data, onClose, onDeleted }: {
           />
         </label>
         <label className="block">
-          <span className="block text-[11px] uppercase tracking-widest text-ink-400 mb-1">Type confirmation phrase</span>
+          <span className="block text-xs text-ink-400 mb-1">Type confirmation phrase</span>
           <input
             value={confirmPhrase}
             onChange={e => setConfirmPhrase(e.target.value)}
@@ -696,7 +719,7 @@ function DeleteAccountModal({ open, data, onClose, onDeleted }: {
           />
         </label>
         <label className="block">
-          <span className="block text-[11px] uppercase tracking-widest text-ink-400 mb-1">Reason</span>
+          <span className="block text-xs text-ink-400 mb-1">Reason</span>
           <input
             value={reason}
             onChange={e => setReason(e.target.value)}

@@ -12,7 +12,7 @@ export function Activity() {
     'audit', ['audit', 'logs', 'testcases']);
   return (
     <div>
-      <PageHeader title="Activity" blurb="Admin audit trail, per-player HTTP request logs, and QA test cases." />
+      <PageHeader title={({ audit: 'Audit log', logs: 'Player requests', testcases: 'Test cases' })[tab]} />
       <Tabs
         tabs={[
           { key: 'audit', label: 'Audit log' },
@@ -21,6 +21,7 @@ export function Activity() {
         ]}
         active={tab}
         onChange={setTab}
+        className="md:hidden"
       />
       {tab === 'audit' && <Audit embedded />}
       {tab === 'logs' && <PlayerLogs embedded />}

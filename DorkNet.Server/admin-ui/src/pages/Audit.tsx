@@ -41,7 +41,7 @@ export function Audit({ embedded }: { embedded?: boolean } = {}) {
         {data && data.length === 0 && <Empty title="No audit entries yet" />}
         {data && data.length > 0 && (
           <div className="table-scroll"><table className="w-full text-sm min-w-[640px]">
-            <thead className="text-[11px] uppercase tracking-wider text-ink-400 bg-ink-900/50 border-b border-ink-800 sticky top-0">
+            <thead className="text-xs text-ink-400 bg-ink-900/50 border-b border-ink-800 sticky top-0">
               <tr>
                 <th className="text-left font-medium px-4 py-2.5">When</th>
                 <th className="text-left font-medium px-4 py-2.5">Admin</th>
