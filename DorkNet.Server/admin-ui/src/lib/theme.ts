@@ -13,7 +13,22 @@ function current(): Theme {
 
 const listeners = new Set<() => void>();
 
+// An explicit pick, remembered in memory too so it still wins over the OS
+// setting for this tab when storage is unavailable.
+let explicitChoice = false;
+
+function hasExplicitChoice(): boolean {
+  if (explicitChoice) return true;
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved === 'light' || saved === 'dark';
+  } catch {
+    return false;
+  }
+}
+
 export function setTheme(theme: Theme): void {
+  explicitChoice = true;
   document.documentElement.setAttribute('data-theme', theme);
   try { localStorage.setItem(STORAGE_KEY, theme); } catch { /* private mode: still applies for this tab */ }
   listeners.forEach(fn => fn());
@@ -24,9 +39,7 @@ function subscribe(fn: () => void): () => void {
   // Follow the OS setting until the admin picks a theme explicitly.
   const media = window.matchMedia('(prefers-color-scheme: dark)');
   const onSystem = () => {
-    let saved: string | null = null;
-    try { saved = localStorage.getItem(STORAGE_KEY); } catch { /* ignore */ }
-    if (saved === 'light' || saved === 'dark') return;
+    if (hasExplicitChoice()) return;
     document.documentElement.setAttribute('data-theme', media.matches ? 'dark' : 'light');
     fn();
   };

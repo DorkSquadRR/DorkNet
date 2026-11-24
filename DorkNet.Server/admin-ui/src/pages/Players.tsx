@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { api, get } from '../lib/api';
 import type { Player, PlayerDetail } from '../lib/types';
@@ -8,7 +8,7 @@ import { Modal } from '../components/Modal';
 import { Confirm } from '../components/Confirm';
 import { useToast } from '../components/Toast';
 import { Empty } from '../components/Empty';
-import { Tabs } from '../components/Tabs';
+import { TabPanel, Tabs } from '../components/Tabs';
 import { RefreshCw, Search } from '../components/Icons';
 import { GiftPanel } from './Gift';
 import { PasswordResetCard } from './Passwords';
@@ -175,15 +175,28 @@ export function PlayerPanel({ id, whereabouts, onChanged, onDeleted }: {
   const [err, setErr] = useState<string | null>(null);
   const [tab, setTab] = useState<PanelTab>('overview');
   const [kickOpen, setKickOpen] = useState(false);
+  const idBase = useId();
+
+  // Responses are only applied while their player is still the one shown,
+  // so a slow answer for a previous selection can never land under (and
+  // aim the panel's actions at) the current one.
+  const currentId = useRef(id);
+  currentId.current = id;
 
   const reload = () => {
+    const forId = id;
     setErr(null);
-    get<PlayerDetail>(`/players/${id}`)
-      .then(setData)
-      .catch(e => setErr((e as Error).message));
+    get<PlayerDetail>(`/players/${forId}`)
+      .then(d => { if (currentId.current === forId) setData(d); })
+      .catch(e => { if (currentId.current === forId) setErr((e as Error).message); });
   };
-  // A new player resets the panel to its overview.
-  useEffect(() => { setData(null); setTab('overview'); reload(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A new player resets the panel: overview tab, no open confirmation.
+  useEffect(() => {
+    setData(null);
+    setTab('overview');
+    setKickOpen(false);
+    reload();
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const changed = () => { reload(); onChanged?.(); };
 
@@ -237,13 +250,16 @@ export function PlayerPanel({ id, whereabouts, onChanged, onDeleted }: {
         ]}
         active={tab}
         onChange={setTab}
+        idBase={idBase}
       />
 
-      {tab === 'overview' && <OverviewTab data={data} />}
-      {tab === 'mod'      && <ModerationTab data={data} onChanged={changed} />}
-      {tab === 'grants'   && <GrantsTab    data={data} onChanged={changed} />}
-      {tab === 'gift'     && <GiftPanel    playerId={data.id} />}
-      {tab === 'profile'  && <ProfileTab   data={data} onChanged={changed} onDeleted={() => onDeleted?.()} />}
+      <TabPanel idBase={idBase} active={tab}>
+        {tab === 'overview' && <OverviewTab data={data} />}
+        {tab === 'mod'      && <ModerationTab data={data} onChanged={changed} />}
+        {tab === 'grants'   && <GrantsTab    data={data} onChanged={changed} />}
+        {tab === 'gift'     && <GiftPanel    playerId={data.id} />}
+        {tab === 'profile'  && <ProfileTab   data={data} onChanged={changed} onDeleted={() => onDeleted?.()} />}
+      </TabPanel>
 
       <Confirm
         open={kickOpen}

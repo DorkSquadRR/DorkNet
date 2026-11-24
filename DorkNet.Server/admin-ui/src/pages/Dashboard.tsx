@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router';
 import { get } from '../lib/api';
 import type { Stats } from '../lib/types';
@@ -27,15 +27,21 @@ export function Dashboard() {
   const navigate = useNavigate();
   const selected = Number(params.get('player')) || null;
 
+  // Polling, the refresh button and post-moderation refreshes can overlap
+  // when /stats is slow; only the newest request's answer is applied.
+  const latest = useRef(0);
   const load = useCallback(async () => {
+    const seq = ++latest.current;
     setLoading(true);
     try {
-      setStats(await get<Stats>('/stats'));
+      const next = await get<Stats>('/stats');
+      if (seq !== latest.current) return;
+      setStats(next);
       setErr(null);
     } catch (e) {
-      setErr((e as Error).message);
+      if (seq === latest.current) setErr((e as Error).message);
     } finally {
-      setLoading(false);
+      if (seq === latest.current) setLoading(false);
     }
   }, []);
 

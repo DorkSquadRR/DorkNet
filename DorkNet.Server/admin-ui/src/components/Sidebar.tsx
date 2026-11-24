@@ -92,26 +92,47 @@ export function Sidebar({ open, onClose, onNavigate, onLogout, name }: {
   name: string;
 }) {
   const searchRef = useRef<HTMLInputElement>(null);
+  const drawerRef = useRef<HTMLDivElement>(null);
   const reports = useOpenReports();
 
+  // The open drawer is a modal dialog: focus moves in, Tab stays inside,
+  // Escape closes it, and focus returns to whatever opened it.
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const opener = document.activeElement as HTMLElement | null;
+    const focusables = () => Array.from(
+      drawerRef.current?.querySelectorAll<HTMLElement>('a[href], button:not([disabled]), input:not([disabled])') ?? [],
+    );
+    focusables()[0]?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { onClose(); return; }
+      if (e.key !== 'Tab') return;
+      const items = focusables();
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const inside = drawerRef.current?.contains(document.activeElement);
+      if (e.shiftKey && (document.activeElement === first || !inside)) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (document.activeElement === last || !inside)) { e.preventDefault(); first.focus(); }
+    };
     document.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prev;
+      if (opener?.isConnected) opener.focus();
     };
   }, [open, onClose]);
 
-  // "/" jumps to the player search from anywhere that isn't a text field.
+  // "/" jumps to the player search from anywhere that isn't a text field,
+  // unless a dialog is open (focus belongs to the dialog then).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey) return;
       const el = e.target as HTMLElement | null;
       if (el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
       if (!searchRef.current || searchRef.current.offsetParent === null) return;
       e.preventDefault();
       searchRef.current.focus();
@@ -129,14 +150,17 @@ export function Sidebar({ open, onClose, onNavigate, onLogout, name }: {
         onClick={onClose}
         aria-hidden="true"
       />
-      <aside
-        className={`md:hidden fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r border-ink-800 bg-bar shadow-float transition-transform duration-200 ${open ? 'translate-x-0' : '-translate-x-full'}`}
+      <div
+        ref={drawerRef}
+        role="dialog"
+        aria-modal={open ? 'true' : undefined}
+        aria-label="Navigation"
         aria-hidden={!open}
         inert={!open}
-        aria-label="Navigation"
+        className={`md:hidden fixed inset-y-0 left-0 z-50 flex w-72 max-w-[85vw] flex-col border-r border-ink-800 bg-bar shadow-float transition-transform duration-200 ${open ? 'translate-x-0' : '-translate-x-full'}`}
       >
         <SidebarBody {...props} onClose={onClose} mobile />
-      </aside>
+      </div>
       {/* Desktop rail */}
       <aside className="hidden md:flex w-56 shrink-0 flex-col border-r border-ink-800 bg-bar" aria-label="Navigation">
         <SidebarBody {...props} searchRef={searchRef} />

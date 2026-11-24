@@ -2,7 +2,8 @@ import { CommunityBoard } from './CommunityBoard';
 import { LoadingTips } from './LoadingTips';
 import { Charades } from './Charades';
 import { PageHeader } from '../components/PageHeader';
-import { Tabs, useTabParam } from '../components/Tabs';
+import { useId } from 'react';
+import { TabPanel, Tabs, useTabParam } from '../components/Tabs';
 
 // The player-facing content surfaces the watch pulls at runtime — the
 // community board and loading-screen tips shown on dorm load, plus the 3D
@@ -11,6 +12,7 @@ import { Tabs, useTabParam } from '../components/Tabs';
 export function Content() {
   const [tab, setTab] = useTabParam<'community' | 'tips' | 'charades'>(
     'community', ['community', 'tips', 'charades']);
+  const idBase = useId();
   return (
     <div>
       <PageHeader title={({ community: 'Community board', tips: 'Loading tips', charades: 'Charades words' })[tab]} />
@@ -22,11 +24,14 @@ export function Content() {
         ]}
         active={tab}
         onChange={setTab}
+        idBase={idBase}
         className="md:hidden"
       />
-      {tab === 'community' && <CommunityBoard embedded />}
-      {tab === 'tips' && <LoadingTips embedded />}
-      {tab === 'charades' && <Charades embedded />}
+      <TabPanel idBase={idBase} active={tab}>
+        {tab === 'community' && <CommunityBoard embedded />}
+        {tab === 'tips' && <LoadingTips embedded />}
+        {tab === 'charades' && <Charades embedded />}
+      </TabPanel>
     </div>
   );
 }
