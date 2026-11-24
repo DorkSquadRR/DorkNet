@@ -164,8 +164,11 @@ function PlayerStatus({ p }: { p: Player }) {
 
 type PanelTab = 'overview' | 'mod' | 'grants' | 'gift' | 'profile';
 
-export function PlayerPanel({ id, whereabouts, onChanged, onDeleted }: {
+export function PlayerPanel({ id, online, whereabouts, onChanged, onDeleted }: {
   id: number;
+  // Live presence from a caller that polls it (the Live page); overrides
+  // the value loaded with the account so Online and Kick stay current.
+  online?: boolean;
   // Where the player is right now, if the caller knows (the Live page does).
   whereabouts?: React.ReactNode;
   onChanged?: () => void;
@@ -201,10 +204,18 @@ export function PlayerPanel({ id, whereabouts, onChanged, onDeleted }: {
 
   const changed = () => { reload(); onChanged?.(); };
 
-  if (err) return <div className="rounded-md border border-danger/40 px-3 py-2 text-[13px] text-danger">{err}</div>;
+  if (err) {
+    return (
+      <div className="flex flex-wrap items-center gap-3 rounded-md border border-danger/40 px-3 py-2 text-[13px] text-danger">
+        <span className="min-w-0 flex-1">Couldn't load this player: {err}</span>
+        <button onClick={reload} className="btn-secondary">Retry</button>
+      </div>
+    );
+  }
   if (!data) return <div className="py-10 text-center text-[13px] text-ink-400">Loading…</div>;
 
   const banned = isBanned(data);
+  const isOnline = online ?? data.online;
   const roles = [
     data.isAdmin && 'Admin',
     data.isDeveloper && 'Developer',
@@ -226,7 +237,7 @@ export function PlayerPanel({ id, whereabouts, onChanged, onDeleted }: {
       <div className="mt-2 text-[13.5px]">
         {banned ? (
           <><span className="text-danger">Banned</span> <span className="text-ink-300">until {absoluteTime(data.bannedUntil)}</span></>
-        ) : data.online ? (
+        ) : isOnline ? (
           <><span className="text-success">Online</span>{whereabouts && <span className="text-ink-300"> {whereabouts}</span>}</>
         ) : (
           <><span className="text-ink-400">Offline</span><span className="text-ink-300">, last seen {relativeTime(data.lastSeenAt)}</span></>
@@ -234,7 +245,7 @@ export function PlayerPanel({ id, whereabouts, onChanged, onDeleted }: {
       </div>
 
       <div className="mt-3 grid grid-cols-2 gap-1.5 sm:flex sm:flex-wrap">
-        <button onClick={() => setKickOpen(true)} className="btn-secondary py-2 sm:py-1.5" disabled={!data.online}>Kick</button>
+        <button onClick={() => setKickOpen(true)} className="btn-secondary py-2 sm:py-1.5" disabled={!isOnline}>Kick</button>
         <button onClick={() => setTab('mod')} className="btn-secondary py-2 text-danger sm:py-1.5">{banned ? 'Unban' : 'Ban'}</button>
         <button onClick={() => setTab('gift')} className="btn-secondary py-2 sm:py-1.5">Send gift</button>
         <button onClick={() => setTab('grants')} className="btn-secondary py-2 sm:py-1.5">Grant</button>

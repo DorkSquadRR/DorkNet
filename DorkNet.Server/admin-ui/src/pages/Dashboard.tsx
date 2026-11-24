@@ -46,7 +46,10 @@ export function Dashboard() {
         setErr(null);
       }
     } catch (e) {
-      if (seq > applied.current) setErr((e as Error).message);
+      if (seq > applied.current) {
+        applied.current = seq;
+        setErr((e as Error).message);
+      }
     } finally {
       inFlight.current--;
       if (inFlight.current === 0) setLoading(false);
@@ -173,6 +176,7 @@ export function Dashboard() {
             <PlayerPanel
               key={selected}
               id={selected}
+              online={stats ? !!selectedOnline : undefined}
               whereabouts={selectedOnline?.currentRoom ? (
                 <>in <Link to={`/rooms/${selectedOnline.currentRoom.roomId}`} className="text-brand-300 hover:underline">{selectedOnline.currentRoom.name}</Link></>
               ) : undefined}
